@@ -1,5 +1,6 @@
 import streamlit as st
 
+from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
 from topic_fetcher import fetch_topics
 
@@ -27,7 +28,7 @@ if mode == "Live":
 
 function = st.sidebar.selectbox(
     "Test function",
-    ["01 · Topic Fetcher", "02 · Scriptwriter"],
+    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio"],
     key="test_function",
 )
 
@@ -39,6 +40,10 @@ if "script_data" not in st.session_state:
     st.session_state.script_data = None
 if "approved_script" not in st.session_state:
     st.session_state.approved_script = None
+if "audio_data" not in st.session_state:
+    st.session_state.audio_data = None
+if "approved_audio" not in st.session_state:
+    st.session_state.approved_audio = None
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
@@ -66,6 +71,8 @@ def render_topic_fetcher():
             )
         st.session_state.selected_topic = None
         st.session_state.script_data = None
+        st.session_state.audio_data = None
+        st.session_state.approved_audio = None
 
     st.markdown(
         f"<span class='badge'>{len(st.session_state.topics)} topics</span>",
@@ -141,6 +148,8 @@ def render_scriptwriter():
                 language=language.casefold(),
             )
         st.session_state.approved_script = None
+        st.session_state.audio_data = None
+        st.session_state.approved_audio = None
 
     script = st.session_state.script_data
     if not script:
@@ -165,6 +174,8 @@ def render_scriptwriter():
         try:
             approved = apply_script_edits(script, edited_voiceovers)
             st.session_state.approved_script = approved
+            st.session_state.audio_data = None
+            st.session_state.approved_audio = None
         except ValueError as exc:
             st.error(str(exc))
 
@@ -173,7 +184,72 @@ def render_scriptwriter():
         st.caption("The Audio function is not implemented yet, so no audio API call is made at this stage.")
 
 
+
+def render_audio():
+    st.header("03 · Audio")
+
+    script = st.session_state.approved_script
+    if not script:
+        st.info("Approve a Scriptwriter result first. Audio only accepts the approved narration handoff.")
+        return
+
+    languages = ["English", "Hindi", "Telugu"]
+    stored = str(script.get("language_used") or "english").casefold()
+    default_language = stored if stored in {"english", "hindi", "telugu"} else "english"
+    language = st.selectbox(
+        "Language",
+        languages,
+        index=["english", "hindi", "telugu"].index(default_language),
+        key="audio_language",
+    )
+    st.caption("HYPE COMMENTATOR · female Indian voice · native Edge-TTS word timings")
+
+    if st.button("Generate audio", type="primary", use_container_width=True):
+        selected = dict(script)
+        selected["language_used"] = language.casefold()
+        with st.spinner("Generating voiceover…"):
+            try:
+                st.session_state.audio_data = generate_audio(selected)
+                st.session_state.approved_audio = None
+            except (RuntimeError, ValueError) as exc:
+                st.error(str(exc))
+                st.session_state.audio_data = None
+                st.session_state.approved_audio = None
+
+    audio = st.session_state.audio_data
+    if not audio:
+        return
+
+    st.divider()
+    st.subheader("Audio review")
+    correction = " · one speed correction applied" if audio["duration_corrected"] else ""
+    st.caption(
+        f'{audio["voice"]} · {audio["rate_percent"]:+.0f}% · '
+        f'{audio["total_duration"]:.2f}s total{correction}'
+    )
+
+    for scene in audio["scenes"]:
+        st.markdown(
+            f'**Slide {scene["scene"]}** · {scene["duration"]:.2f}s · '
+            f'{len(scene["timings"])} word timings'
+        )
+        st.audio(scene["path"], format="audio/mp3")
+        st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
+
+    if st.button("Approve audio", type="primary", use_container_width=True):
+        try:
+            st.session_state.approved_audio = approve_audio(audio)
+        except ValueError as exc:
+            st.error(str(exc))
+
+    if st.session_state.approved_audio:
+        st.success("Audio approved and stored as the handoff for Function 04 · Visuals.")
+        st.caption("No Visuals call is made yet. The next function will consume this approved audio payload.")
+
+
 if function == "01 · Topic Fetcher":
     render_topic_fetcher()
-else:
+elif function == "02 · Scriptwriter":
     render_scriptwriter()
+else:
+    render_audio()
