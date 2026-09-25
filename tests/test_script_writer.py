@@ -8,7 +8,6 @@ def valid_result(scene1="Gill suffers a fresh injury scare before India’s ODI.
             "India captain hit in nets",
             "Gill fitness update",
         ],
-        "recommended_title_index": 1,
         "seo_description": "Shubman Gill faces an injury scare before India’s next ODI.",
         "pinned_comment": "How serious do you think this could be?",
         "script": [
