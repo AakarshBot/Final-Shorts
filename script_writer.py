@@ -263,6 +263,7 @@ def write_script(story, language: str = "english") -> dict:
             if valid:
                 result["provider_used"] = model
                 result["delivery_profile"] = "HYPE COMMENTATOR"
+                result["language_used"] = str(language or "english").strip().lower()
                 result["source_title"] = _clean(
                     getattr(story, "title", "")
                     if hasattr(story, "__dataclass_fields__")
