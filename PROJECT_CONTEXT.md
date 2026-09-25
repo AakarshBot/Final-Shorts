@@ -20,8 +20,8 @@ Only the current function is implemented. Do not scaffold later functions.
 - Test and Live modes are separate.
 - Live exists in the dashboard but is disabled until the factory is built.
 - Test is an independent-function test desk.
-- For now Test exposes only Topic Fetcher.
-- The Topic Fetcher must be testable from Streamlit before Function 02 is started.
+- Test exposes each completed function independently; currently Topic Fetcher and Scriptwriter.
+- Each function must be testable from Streamlit before the next function is started.
 
 ## Non-negotiables
 - Keep the code simple and direct.
@@ -47,11 +47,28 @@ Only the current function is implemented. Do not scaffold later functions.
 - Google News is the primary source.
 - GDELT is a fallback only when the primary source does not produce enough topics.
 
-## Scriptwriter baseline
-The Scriptwriter in the old `AakarshBot/viral-shorts-factory` is the behavioral base for Function 02. Its current output is considered the desired 10/10 baseline by the project owner. Preserve the story-to-script behavior; do not redesign the editorial output before auditing which current rules/providers are actually necessary.
+## Scriptwriter contract
+The old `AakarshBot/viral-shorts-factory` Scriptwriter is the behavioral baseline. Its current output is considered the desired 10/10 baseline by the project owner.
+
+Function 02 rules:
+- Sports only.
+- Regular Shorts only; no Top-5 or Deep-Dive architecture.
+- One sports persona: HYPE COMMENTATOR.
+- Primary writer: Groq `openai/gpt-oss-120b`.
+- Logical recovery: Groq `openai/gpt-oss-20b` only when the primary call fails or its output fails local validation.
+- Keep 4–5 scenes.
+- Scene 1 targets 10–12 words, hard maximum 14.
+- Target roughly 22–27 seconds; never exceed 30 seconds.
+- Complete, information-dense story using only supplied evidence.
+- No invented facts/quotes/motives/numbers/predictions, filler, CTA, generic setup, or retention bait.
+- Generate exactly 3 titles, but do not show them during Scriptwriter manual QC. Preserve them in the output for a later pre-upload title-choice step.
+- Keep visual metadata per scene: primary_entity, visual_intent, specific_search_prompt, sport_or_topic_category. Visual entity grounding is a later function.
+- No hook scoring.
+- Human QC shows one editable voiceover box per scene and an Approve action. Approval marks the script as the handoff for Audio; Audio itself is not implemented yet.
+- Do not copy code from the old factory; reproduce only the agreed behavior.
 
 ## Last completed
 Function 01 — Topic Fetching accepted for now.
 
 ## Next gate
-Complete the old Scriptwriter audit, identify removable providers/rules with the project owner, then rebuild Function 02 from scratch with only the agreed behavior and expose it as an independent Streamlit Test function.
+Run Function 02 from Streamlit against real selected sports stories, inspect the generated scripts and manual-edit/approve flow, then refine only Scriptwriter before Function 03.
