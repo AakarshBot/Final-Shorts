@@ -28,7 +28,6 @@ SCHEMA = {
     "type": "object",
     "properties": {
         "titles": {"type": "array", "items": {"type": "string"}},
-        "recommended_title_index": {"type": "integer"},
         "seo_description": {"type": "string"},
         "pinned_comment": {"type": "string"},
         "script": {
@@ -60,8 +59,7 @@ SCHEMA = {
     },
     "required": [
         "titles",
-        "recommended_title_index",
-        "seo_description",
+            "seo_description",
         "pinned_comment",
         "script",
     ],
@@ -159,12 +157,6 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     if not isinstance(titles, list) or len(titles) != 3 or any(not _clean(x) for x in titles):
         return False, "Exactly three non-empty titles are required."
 
-    try:
-        index = int(result.get("recommended_title_index"))
-    except (TypeError, ValueError):
-        return False, "The recommended title index is invalid."
-    if index not in (1, 2, 3):
-        return False, "The recommended title index is invalid."
 
     scenes = result.get("script")
     if not isinstance(scenes, list) or len(scenes) not in (4, 5):
