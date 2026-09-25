@@ -56,7 +56,7 @@ def test_audio_cache_avoids_second_tts_call(monkeypatch, tmp_path):
 
     monkeypatch.setattr(audio.edge_tts, "Communicate", FakeCommunicate)
     monkeypatch.setattr(audio, "_probe_duration", lambda path: 1.0)
-    audio.CACHE_DIR = tmp_path / "cache"
+    monkeypatch.setattr(audio, "CACHE_DIR", tmp_path / "cache")
     out = tmp_path / "out"
 
     first = generate_audio(approved_script(), out)
@@ -85,6 +85,7 @@ def test_audio_retries_transient_failure_once(monkeypatch, tmp_path):
 
     monkeypatch.setattr(audio.edge_tts, "Communicate", FakeCommunicate)
     monkeypatch.setattr(audio, "_probe_duration", lambda path: 1.0)
+    monkeypatch.setattr(audio, "CACHE_DIR", tmp_path / "cache")
     result = generate_audio(approved_script(), tmp_path)
 
     assert result["total_duration"] == 2.0
