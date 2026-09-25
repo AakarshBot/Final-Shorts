@@ -1,7 +1,9 @@
 # Final Shorts — Project Context
 
 ## Current stage
-Function 01 — Topic Fetching
+Function 02 — Scriptwriter
+
+Topic Fetcher is accepted for now. Dashboard UI improvements are parked for later.
 
 ## Factory order
 01. Topic Fetching
@@ -45,8 +47,11 @@ Only the current function is implemented. Do not scaffold later functions.
 - Google News is the primary source.
 - GDELT is a fallback only when the primary source does not produce enough topics.
 
+## Scriptwriter baseline
+The Scriptwriter in the old `AakarshBot/viral-shorts-factory` is the behavioral base for Function 02. Its current output is considered the desired 10/10 baseline by the project owner. Preserve the story-to-script behavior; do not redesign the editorial output before auditing which current rules/providers are actually necessary.
+
 ## Last completed
-Fresh repository baseline with only the first function and its testing dashboard.
+Function 01 — Topic Fetching accepted for now.
 
 ## Next gate
-Run the Topic Fetcher from Streamlit against live feeds, inspect the actual results, then refine only Function 01 before moving to Function 02.
+Complete the old Scriptwriter audit, identify removable providers/rules with the project owner, then rebuild Function 02 from scratch with only the agreed behavior and expose it as an independent Streamlit Test function.
