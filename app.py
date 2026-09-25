@@ -181,7 +181,7 @@ def render_scriptwriter():
 
     if st.session_state.approved_script:
         st.success("Script approved and stored as the handoff for Function 03 · Audio.")
-        st.caption("The Audio function is not implemented yet, so no audio API call is made at this stage.")
+        st.caption("Audio has been approved. No Visuals call is made until Function 04 is implemented.")
 
 
 
