@@ -11,20 +11,12 @@ st.markdown("""
 [data-testid="stAppViewContainer"] {background:#0b0d10;color:#f5f7fa;}
 .block-container {max-width:1180px;padding-top:2rem;padding-bottom:3rem;}
 .card {background:#15191f;border:1px solid #292f38;border-radius:18px;padding:20px;margin:10px 0;}
-.muted {color:#8e98a7;font-size:.9rem;}
 .badge {display:inline-block;padding:5px 10px;border-radius:999px;background:#222831;border:1px solid #353d48;font-size:.78rem;}
 </style>
 """, unsafe_allow_html=True)
 
 st.title("Final Shorts")
 st.caption("Free Shorts factory · independent function testing")
-
-mode = st.sidebar.radio("Mode", ["Test", "Live"], key="mode")
-if mode == "Live":
-    st.sidebar.warning("Live is disabled while the factory is being built.")
-    st.header("Live")
-    st.info("Live production will be enabled after the individual functions are built and tested.")
-    st.stop()
 
 function = st.sidebar.selectbox(
     "Test function",
@@ -71,6 +63,7 @@ def render_topic_fetcher():
             )
         st.session_state.selected_topic = None
         st.session_state.script_data = None
+        st.session_state.approved_script = None
         st.session_state.audio_data = None
         st.session_state.approved_audio = None
 
@@ -91,6 +84,9 @@ def render_topic_fetcher():
             if st.button("Select story", key=f"topic-select-{index}", use_container_width=True):
                 st.session_state.selected_topic = index
                 st.session_state.script_data = None
+                st.session_state.approved_script = None
+                st.session_state.audio_data = None
+                st.session_state.approved_audio = None
 
     if st.session_state.selected_topic is not None:
         index = st.session_state.selected_topic
@@ -122,7 +118,12 @@ def render_scriptwriter():
         key="script_story",
     )
     selected_index = labels.index(selected_label)
-    st.session_state.selected_topic = selected_index
+    if selected_index != st.session_state.selected_topic:
+        st.session_state.selected_topic = selected_index
+        st.session_state.script_data = None
+        st.session_state.approved_script = None
+        st.session_state.audio_data = None
+        st.session_state.approved_audio = None
     topic = st.session_state.topics[selected_index]
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -181,8 +182,6 @@ def render_scriptwriter():
 
     if st.session_state.approved_script:
         st.success("Script approved and stored as the handoff for Function 03 · Audio.")
-        st.caption("Audio has been approved. No Visuals call is made until Function 04 is implemented.")
-
 
 
 def render_audio():
@@ -244,7 +243,6 @@ def render_audio():
 
     if st.session_state.approved_audio:
         st.success("Audio approved and stored as the handoff for Function 04 · Visuals.")
-        st.caption("No Visuals call is made yet. The next function will consume this approved audio payload.")
 
 
 if function == "01 · Topic Fetcher":
