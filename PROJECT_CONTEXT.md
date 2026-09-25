@@ -1,7 +1,7 @@
 # Final Shorts — Project Context
 
 ## Current stage
-Function 02 — Scriptwriter
+Function 03 — Audio
 
 Topic Fetcher is accepted for now. Dashboard UI improvements are parked for later.
 
@@ -20,7 +20,7 @@ Only the current function is implemented. Do not scaffold later functions.
 - Test and Live modes are separate.
 - Live exists in the dashboard but is disabled until the factory is built.
 - Test is an independent-function test desk.
-- Test exposes each completed function independently; currently Topic Fetcher and Scriptwriter.
+- Test exposes each completed function independently; currently Topic Fetcher, Scriptwriter and Audio.
 - Each function must be testable from Streamlit before the next function is started.
 
 ## Non-negotiables
@@ -67,8 +67,23 @@ Function 02 rules:
 - Human QC shows one editable voiceover box per scene and an Approve action. Approval marks the script as the handoff for Audio; Audio itself is not implemented yet.
 - Do not copy code from the old factory; reproduce only the agreed behavior.
 
+## Audio contract
+Function 03 rules:
+- Input is only the approved Scriptwriter handoff.
+- One direct Audio module; no runtime patching or provider-wrapper chain.
+- Edge-TTS is the only speech provider.
+- HYPE COMMENTATOR uses the female Indian voice for the selected language, with +8% rate and +4Hz pitch.
+- Generate scenes with a maximum of two concurrent TTS requests.
+- Cache audio and word timings by narration text, language, voice settings and rate.
+- Capture native Edge-TTS WordBoundary timings and validate them against the encoded duration.
+- Retry only transient failures, with one bounded retry/backoff.
+- Measure real encoded duration with ffprobe.
+- If the full Short exceeds 30 seconds, apply one measured speed correction and regenerate once. Fail closed if it still exceeds the limit.
+- No WhisperX, second ASR pass, extra LLM call, BGM/SFX mixing, voice cloning, pronunciation AI, or alternate TTS provider in the normal path.
+- Human Audio approval stores the verified payload as the handoff for Visuals.
+
 ## Last completed
-Function 01 — Topic Fetching accepted for now.
+Function 02 — Scriptwriter.
 
 ## Next gate
-Run Function 02 from Streamlit against real selected sports stories, inspect the generated scripts and manual-edit/approve flow, then refine only Scriptwriter before Function 03.
+Run Function 03 from Streamlit with approved English/Hindi/Telugu scripts, listen to every scene, verify word timings and total duration, approve the audio handoff, then move to Function 04.
