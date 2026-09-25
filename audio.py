@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -96,7 +97,11 @@ def _normalise_timings(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return result
 
 
-def _validate_timings(text: str, timings: list[dict[str, Any]], duration: float) -> None:
+def _validate_timings(
+    text: str,
+    timings: list[dict[str, Any]],
+    duration: float,
+) -> None:
     if not timings:
         raise RuntimeError("Edge-TTS returned no word-boundary timings.")
     expected = _word_count(text)
@@ -139,7 +144,7 @@ async def _synthesise_once(
     language: str,
     rate_percent: float,
     path: Path,
-) -> list[dict[str, Any]]:
+) -> tuple[list[dict[str, Any]], float]:
     timings: list[dict[str, Any]] = []
     communicate = edge_tts.Communicate(
         text,
@@ -165,7 +170,7 @@ async def _synthesise_once(
     timings = _normalise_timings(timings)
     duration = _probe_duration(path)
     _validate_timings(text, timings, duration)
-    return timings
+    return timings, duration
 
 
 async def _scene(
@@ -204,41 +209,55 @@ async def _scene(
 
     async with semaphore:
         for attempt in range(1, MAX_ATTEMPTS + 1):
-            temp_path: Path | None = None
+            temp_audio: Path | None = None
             try:
                 CACHE_DIR.mkdir(parents=True, exist_ok=True)
                 output_dir.mkdir(parents=True, exist_ok=True)
+
                 fd, raw_path = tempfile.mkstemp(
                     prefix=f"voiceover_{scene_number}_",
                     suffix=".mp3",
                     dir=output_dir,
                 )
-                Path(raw_path).unlink(missing_ok=True)
-                temp_path = Path(raw_path)
-                await asyncio.wait_for(
-                    _synthesise_once(text, language, rate_percent, temp_path),
+                os.close(fd)
+                temp_audio = Path(raw_path)
+
+                timings, duration = await asyncio.wait_for(
+                    _synthesise_once(
+                        text,
+                        language,
+                        rate_percent,
+                        temp_audio,
+                    ),
                     timeout=45,
                 )
-                duration = _probe_duration(temp_path)
 
-                cache_temp = CACHE_DIR / f".{key}.mp3.tmp"
-                meta_temp = CACHE_DIR / f".{key}.json.tmp"
-                shutil.copy2(temp_path, cache_temp)
+                cache_fd, cache_raw = tempfile.mkstemp(
+                    prefix=f".{key}_",
+                    suffix=".mp3.tmp",
+                    dir=CACHE_DIR,
+                )
+                os.close(cache_fd)
+                meta_fd, meta_raw = tempfile.mkstemp(
+                    prefix=f".{key}_",
+                    suffix=".json.tmp",
+                    dir=CACHE_DIR,
+                )
+                os.close(meta_fd)
+
+                cache_temp = Path(cache_raw)
+                meta_temp = Path(meta_raw)
+                shutil.copy2(temp_audio, cache_temp)
                 meta_temp.write_text(
                     json.dumps(
-                        {"duration": duration, "timings": _normalise_timings(
-                            json.loads(json.dumps([]))
-                        )},
+                        {"duration": duration, "timings": timings},
                         ensure_ascii=False,
                     ),
                     encoding="utf-8",
                 )
-                timings = _normalise_timings(
-                    json.loads(meta_temp.read_text(encoding="utf-8")).get("timings") or []
-                )
                 cache_temp.replace(cache_audio)
-                meta_temp.unlink(missing_ok=True)
-                temp_path.replace(output_path)
+                meta_temp.replace(cache_meta)
+                temp_audio.replace(output_path)
 
                 return {
                     "scene": scene_number,
@@ -248,10 +267,12 @@ async def _scene(
                     "from_cache": False,
                 }
             except Exception as exc:
-                if temp_path:
-                    temp_path.unlink(missing_ok=True)
+                if temp_audio:
+                    temp_audio.unlink(missing_ok=True)
                 if attempt >= MAX_ATTEMPTS or not _retryable(exc):
-                    raise RuntimeError(f"Scene {scene_number} audio failed: {exc}") from exc
+                    raise RuntimeError(
+                        f"Scene {scene_number} audio failed: {exc}"
+                    ) from exc
                 await asyncio.sleep(1.0 * attempt)
 
     raise RuntimeError(f"Scene {scene_number} audio failed.")
