@@ -3,9 +3,13 @@
 import json
 import os
 import re
+from pathlib import Path
 from difflib import SequenceMatcher
 
 import requests
+from dotenv import load_dotenv
+
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
