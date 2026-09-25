@@ -3,11 +3,15 @@
 A simple, free-tier YouTube Shorts factory built one independently testable function at a time.
 
 ## Current
-Function 01 — Topic Fetching
 
-The Streamlit dashboard has two modes:
-- **Test**: independent function testing. Currently Topic Fetcher only.
-- **Live**: present but disabled during development.
+Functions 01–03 are implemented and accepted:
+- **01 — Topic Fetching**
+- **02 — Scriptwriter**
+- **03 — Audio**
+
+The next function is **04 — Visuals**.
+
+The Streamlit dashboard is currently a Test desk for independent function testing. Live production is intentionally not present until the full factory exists.
 
 Run locally:
 
