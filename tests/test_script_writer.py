@@ -1,8 +1,13 @@
 from script_writer import apply_script_edits, write_script
 
+
 def valid_result(scene1="Gill suffers a fresh injury scare before India’s ODI."):
     return {
-        "titles": ["Gill injury scare before ODI", "India captain hit in nets", "Gill fitness update"],
+        "titles": [
+            "Gill injury scare before ODI",
+            "India captain hit in nets",
+            "Gill fitness update",
+        ],
         "recommended_title_index": 1,
         "seo_description": "Shubman Gill faces an injury scare before India’s next ODI.",
         "pinned_comment": "How serious do you think this could be?",
@@ -46,7 +51,7 @@ def valid_result(scene1="Gill suffers a fresh injury scare before India’s ODI.
 def test_writer_uses_one_primary_groq_call(monkeypatch):
     calls = []
 
-    def fake_request(model, system_prompt, story_text, timeout=30):
+    def fake_request(model, prompt, story):
         calls.append(model)
         return valid_result()
 
@@ -61,33 +66,39 @@ def test_writer_uses_one_primary_groq_call(monkeypatch):
 
     assert calls == ["openai/gpt-oss-120b"]
     assert result["delivery_profile"] == "HYPE COMMENTATOR"
+    assert result["source_title"] == "Shubman Gill injury scare in nets"
     assert len(result["titles"]) == 3
     assert len(result["script"]) == 4
 
 
-def test_writer_falls_back_to_groq_20b_on_provider_failure(monkeypatch):
+def test_writer_uses_20b_only_when_primary_fails(monkeypatch):
     calls = []
 
-    def fake_request(model, system_prompt, story_text, timeout=30):
+    def fake_request(model, prompt, story):
         calls.append(model)
         if model == "openai/gpt-oss-120b":
             raise RuntimeError("primary unavailable")
         return valid_result()
 
     monkeypatch.setattr("script_writer._request", fake_request)
-    result = write_script({"title": "India cricket injury update", "description": "A player faces an injury scare."})
+    result = write_script(
+        {
+            "title": "India cricket injury update",
+            "description": "A player faces an injury scare.",
+        }
+    )
 
     assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
     assert result["provider_used"] == "openai/gpt-oss-20b"
 
 
-def test_writer_repairs_a_bad_first_draft(monkeypatch):
+def test_writer_uses_20b_when_primary_output_fails_validation(monkeypatch):
     calls = []
 
-    def fake_request(model, system_prompt, story_text, timeout=30):
-        calls.append(story_text)
-        if len(calls) == 1:
-            return valid_result(scene1="Before the first ODI, Shubman Gill suffered an injury scare during a lengthy training session.")
+    def fake_request(model, prompt, story):
+        calls.append(model)
+        if model == "openai/gpt-oss-120b":
+            return valid_result("Wait until the end because this changes everything.")
         return valid_result()
 
     monkeypatch.setattr("script_writer._request", fake_request)
@@ -95,11 +106,11 @@ def test_writer_repairs_a_bad_first_draft(monkeypatch):
         {"title": "Gill injury scare", "description": "Shubman Gill was hit in training before the ODI."}
     )
 
-    assert len(calls) == 2
-    assert result["repair_applied"] is True
+    assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    assert result["provider_used"] == "openai/gpt-oss-20b"
 
 
-def test_approved_edits_preserve_titles_and_validate_structure():
+def test_approved_edits_preserve_titles_and_mark_audio_handoff():
     original = valid_result()
     edited = apply_script_edits(
         original,
@@ -114,18 +125,24 @@ def test_approved_edits_preserve_titles_and_validate_structure():
     assert edited["titles"] == original["titles"]
     assert edited["script"][0]["voiceover"].startswith("Gill faces")
     assert edited["human_script_edited"] is True
+    assert edited["approved_for_audio"] is True
 
 
 def test_writer_rejects_retention_bait(monkeypatch):
-    monkeypatch.setattr(
-        "script_writer._request",
-        lambda *args, **kwargs: valid_result(
+    def fake_request(model, prompt, story):
+        return valid_result(
             "Wait until the end because this injury update changes everything."
-        ),
-    )
+        )
+
+    monkeypatch.setattr("script_writer._request", fake_request)
 
     try:
-        write_script({"title": "India cricket injury update", "description": "A player faces an injury scare."})
+        write_script(
+            {
+                "title": "India cricket injury update",
+                "description": "A player faces an injury scare.",
+            }
+        )
     except RuntimeError as exc:
         assert "failed" in str(exc).lower()
     else:
