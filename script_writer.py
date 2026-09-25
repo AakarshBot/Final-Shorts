@@ -390,25 +390,21 @@ def apply_script_edits(script: dict, voiceovers: list[str]) -> dict:
     if len(voiceovers) != len(scenes):
         raise ValueError("The number of edited scenes does not match the script.")
 
+    original_voiceovers = [
+        _clean(scene.get("voiceover"))
+        for scene in scenes
+        if isinstance(scene, dict)
+    ]
     for scene, voiceover in zip(scenes, voiceovers):
         scene["voiceover"] = _clean(voiceover)
 
-    valid, reason = _validate(
-        result,
-        _story_text(
-            {
-                "research_evidence_text": result.get("source_evidence", ""),
-                "title": result.get("source_title", ""),
-            }
-        ),
-    )
+    valid, reason = _validate(result, _clean(result.get("source_evidence")))
     if not valid:
-        # Human edits are validated for structure/filler locally. Source-originality
-        # can only be rechecked when the original story evidence is supplied.
-        structural_only = [scene.get("voiceover", "") for scene in scenes]
-        if any(not _clean(value) for value in structural_only):
-            raise ValueError(reason)
-    result["human_script_edited"] = voiceovers != [
-        scene.get("voiceover", "") for scene in script.get("script", [])
+        raise ValueError(f"Edited script failed local validation: {reason}")
+
+    result["human_script_edited"] = original_voiceovers != [
+        _clean(scene.get("voiceover"))
+        for scene in scenes
+        if isinstance(scene, dict)
     ]
     return result
