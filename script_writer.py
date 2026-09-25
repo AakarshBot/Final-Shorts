@@ -336,27 +336,40 @@ def write_script(story, language: str = "english") -> dict:
                 result["provider_used"] = model
                 result["delivery_profile"] = "HYPE COMMENTATOR"
                 result["sport_or_topic_category"] = "Sports"
+                result["source_title"] = _clean(
+                    getattr(story, "title", "")
+                    if hasattr(story, "__dataclass_fields__")
+                    else dict(story or {}).get("title")
+                )
+                result["source_evidence"] = story_text
                 return result
 
             # One repair call on the same model only when the generated draft needs
             # a bounded structural/content correction.
-            repair_payload = (
+            repair_prompt = (
+                _REPAIR_PROMPT
+                + "\nLANGUAGE:\n"
+                + language_instruction
+            )
+            repair_input = (
                 "SELECTED SPORTS STORY:\n"
                 + story_text
                 + "\n\nDRAFT TO REPAIR:\n"
                 + json.dumps(result, ensure_ascii=False)
-                + "\n\n"
-                + _REPAIR_PROMPT
-                + "\nLANGUAGE:\n"
-                + language_instruction
             )
-            repaired = _request(model, _REPAIR_PROMPT + "\nLANGUAGE:\n" + language_instruction, repair_payload)
+            repaired = _request(model, repair_prompt, repair_input)
             repaired_valid, repaired_reason = _validate(repaired, story_text)
             if repaired_valid:
                 repaired["provider_used"] = model
                 repaired["delivery_profile"] = "HYPE COMMENTATOR"
                 repaired["sport_or_topic_category"] = "Sports"
                 repaired["repair_applied"] = True
+                repaired["source_title"] = _clean(
+                    getattr(story, "title", "")
+                    if hasattr(story, "__dataclass_fields__")
+                    else dict(story or {}).get("title")
+                )
+                repaired["source_evidence"] = story_text
                 return repaired
 
             last_error = repaired_reason or reason
