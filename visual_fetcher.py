@@ -1393,7 +1393,7 @@ def _dedupe(assets):
 
 
 
-def crawl_visuals(story, manual_query=""):
+def crawl_visuals(story):
     """Fetch the 10–15 image web pool for one selected sports story."""
     title = _topic_value(story, "title")
     description = _topic_value(story, "description")
@@ -1409,8 +1409,7 @@ def crawl_visuals(story, manual_query=""):
         )
 
     automatic_queries = build_queries(title, description, entity)
-    manual_query = _clean(manual_query, 260)
-    search_queries = [manual_query] if manual_query else list(automatic_queries)
+    search_queries = list(automatic_queries)
 
     page_requests = [{
         "url": original_url,
@@ -1426,7 +1425,7 @@ def crawl_visuals(story, manual_query=""):
         search_queries,
         original_url,
         title,
-        "" if manual_query else entity,
+        entity,
     ) if search_queries else []
 
     for page in related_pages:
@@ -1502,7 +1501,7 @@ def crawl_visuals(story, manual_query=""):
 
     selected = _dedupe(assets)
 
-    if len(selected) < SUCCESS and entity and not manual_query:
+    if len(selected) < SUCCESS and entity:
         profile_pages = _collect_profile_pages(entity)
         profile_requests = [
             {
@@ -1576,7 +1575,6 @@ def crawl_visuals(story, manual_query=""):
         "original_story_url": original_url,
         "automatic_queries": automatic_queries,
         "queries_used": search_queries,
-        "manual_query": manual_query,
         "pages_scraped": len(page_requests),
         "related_pages": len(related_pages),
         "profile_pages": sum(1 for page in page_requests if page.get("profile")),
@@ -1588,19 +1586,28 @@ def crawl_visuals(story, manual_query=""):
 
 
 def manual_crawl_visuals(query):
-    """Scrape current publisher pages returned for one manual news query."""
+    """Scrape publisher pages for a manual query with optional historical targeting."""
     query = _clean(query, 260)
     if not query:
         raise ValueError("Manual scraper requires a search query.")
 
-    related_pages = _collect_related_pages([query], "", "", "")
+    plan = _manual_query_plan(query)
+    queries = plan["queries"]
+    historical = plan["historical"]
+    related_pages = _collect_related_pages(
+        queries,
+        "",
+        "",
+        "",
+        historical=historical,
+    )
     page_requests = [
         {
             "url": page["url"],
             "title": page.get("title", ""),
             "publisher": page.get("source", ""),
             "published_at": page.get("published_at", ""),
-            "query": query,
+            "query": page.get("query", ""),
             "entity": "",
             "story_title": "",
         }
@@ -1627,10 +1634,10 @@ def manual_crawl_visuals(query):
             "static_assets": int(result.get("static_assets") or 0),
             "static_error": str(result.get("static_error") or ""),
             "error": str(result.get("error") or ""),
-            "query": query,
+            "query": request.get("query") or query,
         })
         for asset in result.get("assets") or []:
-            asset["query"] = query
+            asset["query"] = asset.get("query") or request.get("query") or query
             asset["article_title"] = asset.get("article_title") or request.get("title", "")
             asset["source_page_url"] = asset.get("source_page_url") or request["url"]
             asset["publisher"] = asset.get("publisher") or request.get("publisher", "")
@@ -1642,19 +1649,20 @@ def manual_crawl_visuals(query):
         else "underfilled" if selected
         else "no_images"
     )
-
     print(
         f"   [Visual Fetcher] manual_query={query!r} "
-        f"pages={len(related_pages)} final_pool={len(selected)}/{TARGET} state={failure_state}",
+        f"queries={len(queries)} historical={historical} "
+        f"pages={len(related_pages)} final_pool={len(selected)}/{TARGET} "
+        f"state={failure_state}",
         flush=True,
     )
-
     return {
         "assets": selected,
         "target": TARGET,
         "success_threshold": SUCCESS,
         "manual_query": query,
-        "queries_used": [query],
+        "search_queries": queries,
+        "historical": historical,
         "pages_scraped": len(page_requests),
         "related_pages": len(related_pages),
         "failure_state": failure_state,
@@ -1662,12 +1670,4 @@ def manual_crawl_visuals(query):
     }
 
 
-def same_query(query, used_queries):
-    value = _clean(query, 260).casefold()
-    return bool(value) and any(
-        value == _clean(item, 260).casefold()
-        for item in (used_queries or [])
-    )
-
-
-__all__ = ["TARGET", "SUCCESS", "build_queries", "crawl_visuals", "manual_crawl_visuals", "same_query"]
+__all__ = ["TARGET", "SUCCESS", "build_queries", "crawl_visuals", "manual_crawl_visuals"]
