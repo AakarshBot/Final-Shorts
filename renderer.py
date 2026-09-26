@@ -604,7 +604,7 @@ def build_preview_bundle(
                 render_frame(
                     base,
                     index / FPS,
-                    subtitle_data,
+                    PREVIEW_SUBTITLE_DATA,
                     headline_text,
                     headline_enabled,
                 )
