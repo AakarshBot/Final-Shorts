@@ -909,6 +909,57 @@ def _render_live_visuals(slide_count: int):
                 slide_count,
             )
 
+    with st.expander("Option 5 · Ranked Scene Search", expanded=False):
+        st.caption("Runs the approved Scriptwriter scene searches together. This does not replace the automatic or manual scrapers.")
+        script = st.session_state.get("live_approved_script")
+        if not isinstance(script, dict):
+            st.info("Approve the Live Scriptwriter result first.")
+        else:
+            selected_index = st.session_state.get("live_selected_topic")
+            topics = st.session_state.get("live_topics") or []
+            if selected_index is None or not 0 <= selected_index < len(topics):
+                st.info("Choose a Live story first.")
+            else:
+                topic = topics[selected_index]
+                ranked_story = _live_story(topic)
+                ranked_story["script"] = script.get("script") or []
+                run = st.button(
+                    "Run ranked search",
+                    type="primary",
+                    width="stretch",
+                    key="live-run-ranked-search",
+                )
+                if run:
+                    with st.spinner("Running scene searches in parallel…"):
+                        try:
+                            st.session_state.live_ranked_visual_result = ranked_visual_search(ranked_story)
+                        except Exception as exc:
+                            st.session_state.live_ranked_visual_result = {
+                                "error": f"{type(exc).__name__}: {exc}"
+                            }
+                result = st.session_state.get("live_ranked_visual_result") or {}
+                if result.get("error"):
+                    st.error(result["error"])
+                elif result:
+                    lanes = result.get("lanes") or []
+                    for start in range(0, len(lanes), 3):
+                        row = lanes[start:start + 3]
+                        cols = st.columns(len(row), gap="medium")
+                        for col, lane in zip(cols, row):
+                            with col:
+                                st.markdown(f'**Slide {lane["scene"]}**')
+                                st.code(lane["query"])
+                                st.caption(f'{len(lane.get("assets") or [])} ranked images')
+                    st.caption(
+                        f'{len(result.get("assets") or [])} unique images · '
+                        f'{int(result.get("pages_scraped") or 0)} pages'
+                    )
+                    _render_live_asset_pool(
+                        list(result.get("assets") or []),
+                        "ranked",
+                        slide_count,
+                    )
+
     ready = all(
         slide in st.session_state.live_visual_assignments
         for slide in range(1, slide_count + 1)
@@ -1864,9 +1915,10 @@ def _render_ranked_visual_search():
         return
 
     lanes = result.get("lanes") or []
-    if lanes:
-        cols = st.columns(min(3, len(lanes)), gap="medium")
-        for col, lane in zip(cols, lanes):
+    for start in range(0, len(lanes), 3):
+        row = lanes[start:start + 3]
+        cols = st.columns(len(row), gap="medium")
+        for col, lane in zip(cols, row):
             with col:
                 st.markdown(f'**Slide {lane["scene"]}**')
                 st.code(lane["query"])
