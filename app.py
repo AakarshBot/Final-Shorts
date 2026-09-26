@@ -247,6 +247,7 @@ def render_visuals():
             except Exception as exc:
                 st.session_state.visual_result = {
                     "error": f"{type(exc).__name__}: {exc}"
+                }
 
     result = st.session_state.get("visual_result") or {}
     if result.get("error"):
