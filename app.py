@@ -238,16 +238,15 @@ def render_visuals():
 
     story_key = story["url"]
     if story_key != st.session_state.get("visual_loaded_story"):
-        st.session_state.visual_loaded_story = story_key
         st.session_state.visual_result = None
         st.session_state.visual_manual_query = ""
         with st.spinner("Scraping the selected story and related publisher pages…"):
             try:
                 st.session_state.visual_result = crawl_visuals(story)
+                st.session_state.visual_loaded_story = story_key
             except Exception as exc:
                 st.session_state.visual_result = {
                     "error": f"{type(exc).__name__}: {exc}"
-                }
 
     result = st.session_state.get("visual_result") or {}
     if result.get("error"):
