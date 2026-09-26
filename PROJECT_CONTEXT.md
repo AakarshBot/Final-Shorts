@@ -6,7 +6,7 @@ Functions 01–03 are implemented, tested, and accepted for development use:
 2. Scriptwriter
 3. Audio
 
-The next function to build is Function 04 — Visuals. Do not start Renderer, Metadata, or Upload yet.
+Function 04 — Visuals Phase 1 is implemented and awaiting manual dashboard validation. Do not start Renderer, Metadata, or Upload yet.
 
 ## Factory order
 01. Topic Fetching
@@ -116,5 +116,17 @@ README.md
 ## Last completed
 Function 03 — Audio. Manual test passed.
 
+## Current development
+Function 04 — Visuals Phase 1 is implemented:
+- Original selected story URL is the first web source.
+- Two compact automatic visual-search queries are derived from the selected headline/evidence.
+- Related publisher pages are scraped in one shared Chromium session.
+- Images are filtered for decodeability, size, obvious non-photo assets, and duplicates.
+- A conditional entity/profile search is used only when the first pass returns fewer than 10 images.
+- The Test dashboard displays 10–15 scraped images when available.
+- A manual keyword/phrase/query reruns the same web crawler against the same original story URL and only that manual query.
+- The automatic visual queries used are displayed in the Test dashboard so manual queries can be chosen deliberately.
+- No AI visual gate is added in Phase 1; human review remains available in the dashboard.
+
 ## Next gate
-Function 04 — Visuals is ready to start in the next chat.
+Manually test Function 04 with current sports headlines, including at least one cricketer/action story. Record image count, source diversity, query quality, and whether manual queries return useful new images before extending the function.
