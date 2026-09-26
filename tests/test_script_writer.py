@@ -68,6 +68,53 @@ def test_writer_sends_title_and_description_as_story_evidence(monkeypatch):
     assert "Shubman Gill was struck during training before the ODI." in captured[0]
 
 
+def test_writer_retries_when_shorts_metadata_is_generic(monkeypatch):
+    calls = []
+
+    def fake_request(model, prompt, story):
+        calls.append(model)
+        result = valid_result()
+        if model == "openai/gpt-oss-120b":
+            result["titles"] = [
+                "Latest Sports Update",
+                "Big Update On Gill",
+                "What You Need To Know",
+            ]
+        return result
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    result = write_script(
+        {
+            "title": "Shubman Gill injury scare in nets",
+            "description": "Shubman Gill was struck during practice ahead of the ODI.",
+        }
+    )
+
+    assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    assert result["provider_used"] == "openai/gpt-oss-20b"
+
+
+def test_writer_rejects_story_unrelated_title(monkeypatch):
+    def fake_request(model, prompt, story):
+        result = valid_result()
+        result["titles"][0] = "Premier League Transfer Sparks Surprise"
+        return result
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+
+    try:
+        write_script(
+            {
+                "title": "Shubman Gill injury scare",
+                "description": "Shubman Gill was hit in training before the ODI.",
+            }
+        )
+    except RuntimeError as exc:
+        assert "failed" in str(exc).lower()
+    else:
+        raise AssertionError("Unrelated title should not pass validation.")
+
+
 def test_writer_uses_one_primary_groq_call(monkeypatch):
     calls = []
 
