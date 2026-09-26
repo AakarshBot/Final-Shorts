@@ -11,6 +11,7 @@ def valid_result(scene1="Gill suffers a fresh injury scare before India’s ODI.
         ],
         "seo_description": "Shubman Gill faces an injury scare before India’s next ODI.",
         "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
+        "comment": "What do you make of Gill's injury scare before the ODI?",
         "script": [
             {
                 "voiceover": scene1,
@@ -70,6 +71,7 @@ def test_writer_uses_one_primary_groq_call(monkeypatch):
     assert len(result["titles"]) == 3
     assert 3 <= len(result["headline"].split()) <= 4
     assert result["hashtags"]
+    assert result["comment"]
     assert len(result["script"]) == 4
 
 
@@ -110,6 +112,27 @@ def test_writer_uses_20b_when_primary_output_fails_validation(monkeypatch):
 
     assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
     assert result["provider_used"] == "openai/gpt-oss-20b"
+
+
+def test_writer_rejects_missing_comment(monkeypatch):
+    def fake_request(model, prompt, story):
+        result = valid_result()
+        result.pop("comment")
+        return result
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+
+    try:
+        write_script(
+            {
+                "title": "Gill injury scare",
+                "description": "Shubman Gill was hit in training before the ODI.",
+            }
+        )
+    except RuntimeError as exc:
+        assert "failed" in str(exc).lower()
+    else:
+        raise AssertionError("Missing upload comment should not pass.")
 
 
 def test_writer_rejects_headline_with_wrong_word_count(monkeypatch):
