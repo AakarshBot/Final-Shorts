@@ -89,6 +89,8 @@ RULES:
 - Include the essential event, key people or teams, important supported facts, necessary context and immediate consequence when supported.
 - Every scene must add useful new information.
 - No filler, generic setup, CTA, retention bait or production instructions.
+- Never tell the viewer to wait, keep watching, stay tuned, stick around, do not scroll or skip, or promise a later reveal.
+- Never use phrases such as "wait until the end", "wait for it", "watch till the end", "keep watching", "stay tuned", "don't scroll", "don't skip", "find out later", or "we'll reveal it later".
 - Scene 1 is a crisp factual hook: target 10–12 words, hard maximum 14.
 - Curiosity must come from a real supported fact, never withheld information.
 - Target about 22–27 seconds of natural narration and never exceed 30 seconds.
@@ -107,11 +109,26 @@ RULES:
 FORBIDDEN = (
     r"\bwait (?:until|till|for) (?:the )?end\b",
     r"\bwait for it\b",
+    r"\bwatch (?:to|until|till) (?:the )?end\b",
+    r"\bkeep watching\b",
     r"\bstay tuned\b",
-    r"\bdon['’]?t go anywhere\b",
+    r"\bstick around\b",
+    r"\bstay with (?:us|me)\b",
+    r"\bdon['’]?t (?:go anywhere|scroll|skip)\b",
     r"\byou (?:won['’]?t|will not) believe\b",
     r"\byou['’]?ll never guess\b",
     r"\bfind out later\b",
+    r"\bmore (?:on|about) (?:this|that) later\b",
+    r"\blater in (?:the|this) (?:video|short)\b",
+    r"\bwe(?:['’]?ll| will) (?:reveal|show|find out|get to)\b",
+    r"\byou need to (?:see|watch) this\b",
+    r"\bdon['’]?t blink\b",
+    r"\bwatch what happens\b",
+    r"\bsee what happens\b",
+    r"\bbut that['’]?s not all\b",
+    r"\bthat['’]?s not all\b",
+    r"\bmore is coming\b",
+    r"\bthe best part is still to come\b",
 )
 
 GENERIC_OPENERS = (

@@ -12,7 +12,7 @@ load_dotenv()
 from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
 from topic_fetcher import fetch_topics
-from visual_fetcher import crawl_visuals, manual_crawl_visuals
+from visual_fetcher import crawl_visuals, manual_crawl_visuals, ranked_visual_search
 from visual_search import search_images
 from visual_generator import generate_images
 from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle, render_production_video
@@ -183,6 +183,8 @@ if "live_real_image_result" not in st.session_state:
     st.session_state.live_real_image_result = None
 if "live_ai_image_result" not in st.session_state:
     st.session_state.live_ai_image_result = None
+if "live_ranked_visual_result" not in st.session_state:
+    st.session_state.live_ranked_visual_result = None
 if "live_script_language" not in st.session_state:
     st.session_state.live_script_language = "english"
 if "live_headline_enabled" not in st.session_state:
@@ -455,6 +457,7 @@ def _live_reset_downstream():
         "live_manual_visual_result": None,
         "live_real_image_result": None,
         "live_ai_image_result": None,
+        "live_ranked_visual_result": None,
         "live_visual_crops": {},
         "live_visual_deleted": set(),
         "live_visual_assignments": {},
@@ -905,6 +908,57 @@ def _render_live_visuals(slide_count: int):
                 "ai",
                 slide_count,
             )
+
+    with st.expander("Option 5 · Ranked Scene Search", expanded=False):
+        st.caption("Runs the approved Scriptwriter scene searches together. This does not replace the automatic or manual scrapers.")
+        script = st.session_state.get("live_approved_script")
+        if not isinstance(script, dict):
+            st.info("Approve the Live Scriptwriter result first.")
+        else:
+            selected_index = st.session_state.get("live_selected_topic")
+            topics = st.session_state.get("live_topics") or []
+            if selected_index is None or not 0 <= selected_index < len(topics):
+                st.info("Choose a Live story first.")
+            else:
+                topic = topics[selected_index]
+                ranked_story = _live_story(topic)
+                ranked_story["script"] = script.get("script") or []
+                run = st.button(
+                    "Run ranked search",
+                    type="primary",
+                    width="stretch",
+                    key="live-run-ranked-search",
+                )
+                if run:
+                    with st.spinner("Running scene searches in parallel…"):
+                        try:
+                            st.session_state.live_ranked_visual_result = ranked_visual_search(ranked_story)
+                        except Exception as exc:
+                            st.session_state.live_ranked_visual_result = {
+                                "error": f"{type(exc).__name__}: {exc}"
+                            }
+                result = st.session_state.get("live_ranked_visual_result") or {}
+                if result.get("error"):
+                    st.error(result["error"])
+                elif result:
+                    lanes = result.get("lanes") or []
+                    for start in range(0, len(lanes), 3):
+                        row = lanes[start:start + 3]
+                        cols = st.columns(len(row), gap="medium")
+                        for col, lane in zip(cols, row):
+                            with col:
+                                st.markdown(f'**Slide {lane["scene"]}**')
+                                st.code(lane["query"])
+                                st.caption(f'{len(lane.get("assets") or [])} ranked images')
+                    st.caption(
+                        f'{len(result.get("assets") or [])} unique images · '
+                        f'{int(result.get("pages_scraped") or 0)} pages'
+                    )
+                    _render_live_asset_pool(
+                        list(result.get("assets") or []),
+                        "ranked",
+                        slide_count,
+                    )
 
     ready = all(
         slide in st.session_state.live_visual_assignments
@@ -1611,6 +1665,7 @@ def render_topic_fetcher():
                         st.session_state.manual_visual_result = None
                         st.session_state.real_image_result = None
                         st.session_state.ai_image_result = None
+                        st.session_state.ranked_visual_result = None
                         st.session_state.visual_result = None
                         st.session_state.visual_loaded_story = None
                         st.session_state.visual_crops = {}
@@ -1820,6 +1875,77 @@ def render_visuals_crawler():
     _render_visual_asset_grid(assets, "auto-crawler")
 
 
+def _render_ranked_visual_search():
+    st.subheader("Ranked Scene Search")
+    st.caption("Runs the approved Scriptwriter visual searches together. The existing scrapers remain unchanged.")
+
+    approved_script = st.session_state.get("approved_script")
+    if not isinstance(approved_script, dict):
+        st.info("Approve the Scriptwriter first so each scene has a specific visual search prompt.")
+        return
+    if not st.session_state.topics or st.session_state.selected_topic is None:
+        st.info("Select a story first.")
+        return
+
+    topic = st.session_state.topics[st.session_state.selected_topic]
+    story = {
+        "title": topic.title,
+        "description": topic.description,
+        "url": topic.url,
+        "source": topic.source,
+        "published_at": topic.published_at.isoformat(),
+        "script": approved_script.get("script") or [],
+    }
+
+    if st.button("Run ranked search", type="primary", width="stretch", key="ranked-visual-search"):
+        with st.spinner("Running scene searches in parallel…"):
+            try:
+                st.session_state.ranked_visual_result = ranked_visual_search(story)
+                st.session_state.visual_crops = {}
+            except Exception as exc:
+                st.session_state.ranked_visual_result = {
+                    "error": f"{type(exc).__name__}: {exc}"
+                }
+
+    result = st.session_state.get("ranked_visual_result") or {}
+    if result.get("error"):
+        st.error(result["error"])
+        return
+    if not result:
+        return
+
+    lanes = result.get("lanes") or []
+    for start in range(0, len(lanes), 3):
+        row = lanes[start:start + 3]
+        cols = st.columns(len(row), gap="medium")
+        for col, lane in zip(cols, row):
+            with col:
+                st.markdown(f'**Slide {lane["scene"]}**')
+                st.code(lane["query"])
+                st.caption(
+                    f'{len(lane.get("assets") or [])} ranked images'
+                    + (f' · {lane.get("visual_intent")}' if lane.get("visual_intent") else "")
+                )
+
+    assets = list(result.get("assets") or [])
+    st.caption(
+        f'{len(assets)} unique images in the combined ranked pool · '
+        f'{int(result.get("pages_scraped") or 0)} pages scraped'
+    )
+    diagnostics = list(result.get("diagnostics") or [])
+    with st.expander("Ranked search diagnostics", expanded=not bool(assets)):
+        if diagnostics:
+            st.code(json.dumps(diagnostics, indent=2, ensure_ascii=False), language="text")
+        else:
+            st.caption("No search diagnostics were returned.")
+
+    if assets:
+        st.markdown('<div class="section-head"><div><div class="eyebrow">RANKED MEDIA BOARD</div><div class="section-title">Combined visual candidates</div></div><div class="section-count">highest-scoring first</div></div>', unsafe_allow_html=True)
+        _render_visual_asset_grid(assets, "ranked-search")
+    else:
+        st.warning("The ranked search returned no usable images.")
+
+
 def _render_manual_crawler():
     st.subheader("Manual Scraper")
     st.caption("Manual query only. Searches current publisher pages and scrapes their images.")
@@ -1980,6 +2106,7 @@ def render_visuals():
             "Option 2 · Manual Scraper",
             "Option 3 · Real Image Search",
             "Option 4 · AI Generation",
+            "Option 5 · Ranked Scene Search",
         ],
         default="Option 1 · Automatic Scraper",
         key="visual_test_mode",
@@ -1991,8 +2118,10 @@ def render_visuals():
         _render_manual_crawler()
     elif mode.startswith("Option 3"):
         _render_manual_real_images()
-    else:
+    elif mode.startswith("Option 4"):
         _render_manual_ai_images()
+    else:
+        _render_ranked_visual_search()
 
 
 def render_subtitles():
@@ -2079,7 +2208,7 @@ def render_renderer_test():
         st.markdown("**Opening**")
         if opening and Path(opening).exists():
             st.video(str(opening), width=320)
-        st.caption("Optional headline enters from the left, then clears before subtitles appear.")
+        st.caption("Optional headline enters from the left while spoken captions remain visible.")
 
     with right:
         st.markdown("**Final overlay**")

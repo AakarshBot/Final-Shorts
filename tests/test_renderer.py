@@ -58,6 +58,22 @@ def test_renderer_uses_supplied_headline(monkeypatch):
     assert seen == ["Gill Injury Scare"]
 
 
+def test_renderer_shows_headline_and_subtitles_together(monkeypatch):
+    calls = []
+    monkeypatch.setattr(renderer, "_draw_headline", lambda *args: calls.append("headline"))
+    monkeypatch.setattr(renderer, "_draw_subtitles", lambda *args: calls.append("subtitles"))
+    base = renderer.make_sample_background()
+
+    renderer.render_frame(
+        base,
+        0.50,
+        headline_text="Gill Injury Scare",
+        headline_enabled=True,
+    )
+
+    assert calls == ["headline", "subtitles"]
+
+
 def test_headline_wraps_three_and_six_word_inputs_without_overflow():
     for text in ("BIG CRICKET NEWS", "BIG CRICKET NEWS FROM INDIA TODAY"):
         font, clean, lines = renderer._fit_headline_font(text)
@@ -151,7 +167,7 @@ def test_headline_and_subtitles_do_not_overlap():
     assert ImageChops.difference(headline_frame, subtitle_frame).getbbox()
 
 
-def test_subtitles_start_after_headline(monkeypatch):
+def test_subtitles_remain_visible_during_headline(monkeypatch):
     seen = []
 
     def fake_draw(base, subtitle_data, t):
@@ -161,14 +177,13 @@ def test_subtitles_start_after_headline(monkeypatch):
     base = renderer.make_sample_background()
 
     renderer.render_frame(base, 0.30, headline_enabled=True)
-    assert seen == []
-
     renderer.render_frame(
         base,
         renderer.HEADLINE_SECONDS + 0.30,
         headline_enabled=True,
     )
-    assert seen == [renderer.HEADLINE_SECONDS + 0.30]
+
+    assert seen == [0.30, renderer.HEADLINE_SECONDS + 0.30]
 
 
 def test_headline_marker_and_subtitle_style_are_brand_consistent():

@@ -44,6 +44,12 @@ def test_same_subject_different_event_is_kept():
     assert len(chosen) == 2
 
 
+def test_interest_signals_raise_topic_score():
+    generic = make_topic("India cricket wins match")
+    pull = make_topic("Shubman Gill reacts after historic record")
+    assert topic_fetcher._score(pull) > topic_fetcher._score(generic)
+
+
 def test_freshness_and_sports_relevance_are_enforced():
     rows = [
         make_topic("Old cricket record story", hours=80),
