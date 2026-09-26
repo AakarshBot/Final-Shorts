@@ -724,7 +724,7 @@ def crawl_visuals(story, manual_query=""):
 
     if len(selected) < SUCCESS and entity and not manual_query:
         fallback_pages = _collect_related_pages(
-            [f"{entity} profile", f"{entity} cricket action"],
+            [f"{entity} profile", f"{entity} action"],
             original_url,
         )
         fallback_requests = [
