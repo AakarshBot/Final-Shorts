@@ -32,3 +32,16 @@ python -m playwright install chromium
 ### Visuals
 
 The Visuals test desk has four independent options. Option 1 is the automatic scraper/crawler and starts when a headline is selected. Option 2 is the standalone manual scraper. It uses an AI query planner: a name-only query searches normally, while a contextual query generates up to two useful variants and searches older publisher pages as well. Option 3 searches Commons, DuckDuckGo, Wikipedia, Openverse, and any configured Pixabay/Pexels/Unsplash APIs. Option 4 generates images with Hugging Face Inference Providers and Cloudflare Workers AI.
+
+
+### Renderer Test
+
+Function 06 adds an isolated visual preview desk. It uses only generated filler content and a generic local sample image; it does not call the Topic Fetcher, Scriptwriter, Audio, Visuals, or any AI/API provider.
+
+The test previews:
+- the optional first-second headline entrance
+- Clean Editorial
+- Micro Glass
+- Broadcast / Data
+
+Add logo.png beside app.py to use the real logo. The renderer falls back to a small placeholder when the file is absent.
