@@ -18,69 +18,166 @@ from uploader import upload_video
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
+STAGES = [
+    {"key": "01 · Topic Fetcher", "number": "01", "icon": "🗞️", "label": "Topics", "desc": "Find the story"},
+    {"key": "02 · Scriptwriter", "number": "02", "icon": "✍️", "label": "Script", "desc": "Write the Short"},
+    {"key": "03 · Audio", "number": "03", "icon": "🎙️", "label": "Audio", "desc": "Create voice"},
+    {"key": "04 · Visuals", "number": "04", "icon": "🖼️", "label": "Visuals", "desc": "Source imagery"},
+    {"key": "05 · Subtitles", "number": "05", "icon": "💬", "label": "Subs", "desc": "Build captions"},
+    {"key": "06 · Renderer", "number": "06", "icon": "🎬", "label": "Render", "desc": "Build video"},
+    {"key": "07 · Upload QC", "number": "07", "icon": "🚀", "label": "Upload", "desc": "Publish"},
+]
+
 st.markdown("""
 <style>
-[data-testid="stAppViewContainer"] {background:#0b0d10;color:#f5f7fa;}
-.block-container {max-width:1180px;padding-top:2rem;padding-bottom:3rem;}
-.card {background:#15191f;border:1px solid #292f38;border-radius:18px;padding:20px;margin:10px 0;}
-.badge {display:inline-block;padding:5px 10px;border-radius:999px;background:#222831;border:1px solid #353d48;font-size:.78rem;}
+:root{--bg:#0a0c10;--text:#f6f7fb;--muted:#8d96a6;--line:rgba(255,255,255,.09);}
+[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 10% 0%,rgba(93,104,120,.13),transparent 28%),radial-gradient(circle at 90% 10%,rgba(69,81,102,.10),transparent 30%),var(--bg);color:var(--text);}
+[data-testid="stHeader"]{background:transparent;}
+section[data-testid="stSidebar"]{display:none;}
+footer,#MainMenu{visibility:hidden;}
+.block-container{max-width:1480px;padding:1.25rem 2rem 3rem;}
+.card{background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.018));border:1px solid var(--line);border-radius:22px;padding:20px;margin:10px 0;box-shadow:0 18px 50px rgba(0,0,0,.22);}
+.badge{display:inline-block;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;}
+.eyebrow{color:var(--muted);font-size:.72rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;}
+.hero-title{font-size:clamp(2.4rem,5vw,5rem);line-height:.94;font-weight:900;letter-spacing:-.05em;margin:0;}
+.hero-subtitle{color:#aab1be;font-size:1rem;max-width:600px;margin-top:.8rem;}
+.st-key-landing-test,.st-key-landing-live{min-height:520px;border-radius:30px;padding:34px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.12);}
+.st-key-landing-test{background:radial-gradient(circle at 75% 15%,rgba(255,255,255,.11),transparent 24%),repeating-linear-gradient(0deg,rgba(255,255,255,.026) 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,rgba(0,0,0,.055) 0 1px,transparent 1px 5px),linear-gradient(145deg,#4c525b,#242930);box-shadow:inset 0 0 120px rgba(0,0,0,.22),0 30px 70px rgba(0,0,0,.26);}
+.st-key-landing-live{background:radial-gradient(circle at 78% 18%,rgba(255,255,255,.25),transparent 20%),radial-gradient(circle at 18% 82%,rgba(0,212,255,.28),transparent 28%),repeating-linear-gradient(120deg,rgba(255,255,255,.035) 0 2px,transparent 2px 7px),linear-gradient(135deg,#241241,#65206e 48%,#123a73);box-shadow:inset 0 0 140px rgba(255,47,139,.16),0 30px 80px rgba(85,38,165,.28);}
+.st-key-landing-test button,.st-key-landing-live button{min-height:58px;border-radius:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
+.st-key-landing-test button{background:rgba(12,14,18,.68);border-color:rgba(255,255,255,.2);}
+.st-key-landing-live button{background:linear-gradient(90deg,rgba(255,47,139,.88),rgba(108,69,255,.92));border-color:rgba(255,255,255,.22);}
+.st-key-stage-shell{background:rgba(14,18,24,.74);border:1px solid var(--line);border-radius:24px;padding:12px 10px 6px;backdrop-filter:blur(18px);}
+.st-key-stage-content{background:linear-gradient(145deg,rgba(255,255,255,.038),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:24px;padding:20px 22px 26px;margin-top:14px;}
+.stage-rail-label{font-size:.65rem;color:var(--muted);text-align:center;letter-spacing:.12em;text-transform:uppercase;margin-top:6px;}
+.stage-rail-line{height:2px;background:linear-gradient(90deg,rgba(255,255,255,.12),rgba(255,255,255,.03));margin:0 8%;}
+.live-glow{height:4px;border-radius:999px;background:linear-gradient(90deg,#ff2f8b,#6c45ff,#00d4ff);box-shadow:0 0 26px rgba(255,47,139,.35);}
+.live-card{min-height:154px;border-radius:22px;border:1px solid rgba(255,255,255,.10);background:linear-gradient(145deg,rgba(255,255,255,.05),rgba(255,255,255,.015));padding:20px;}
+.muted{color:var(--muted);}
 </style>
 """, unsafe_allow_html=True)
 
-st.title("Final Shorts")
-st.caption("Free Shorts factory · independent function testing")
+if "app_mode" not in st.session_state:
+    st.session_state.app_mode = "home"
+if "test_stage" not in st.session_state:
+    st.session_state.test_stage = "01 · Topic Fetcher"
 
-function = st.sidebar.selectbox(
-    "Test function",
-    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio", "04 · Visuals", "05 · Subtitles", "06 · Renderer", "07 · Upload QC"],
-    key="test_function",
-)
+def _render_home():
+    st.markdown('<div class="eyebrow">FINAL SHORTS · CONTROL CENTER</div>',unsafe_allow_html=True)
+    st.markdown('<div class="hero-title">Make the next Short.</div>',unsafe_allow_html=True)
+    st.markdown('<div class="hero-subtitle">Choose your workspace. Test is the build lab; Live is the production control room.</div>',unsafe_allow_html=True)
+    st.space("medium")
+    left,right=st.columns(2,gap="small")
+    with left:
+        with st.container(key="landing-test"):
+            st.markdown('<div class="eyebrow">01 · BUILD LAB</div>',unsafe_allow_html=True)
+            st.markdown('<div style="font-size:3.1rem;font-weight:900;letter-spacing:-.05em;">TEST</div>',unsafe_allow_html=True)
+            st.markdown('<div style="font-size:1.05rem;color:#d6d9df;max-width:430px;">Inspect every stage, test handoffs, and tune the factory without touching production.</div>',unsafe_allow_html=True)
+            st.space("large")
+            st.markdown('<span class="badge">7 stages</span> <span class="badge">manual review</span>',unsafe_allow_html=True)
+            st.space("large")
+            if st.button("Open Test Lab  →",key="open-test",width="stretch"):
+                st.session_state.app_mode="test"
+                st.rerun()
+    with right:
+        with st.container(key="landing-live"):
+            st.markdown('<div class="eyebrow">02 · PRODUCTION</div>',unsafe_allow_html=True)
+            st.markdown('<div style="font-size:3.1rem;font-weight:900;letter-spacing:-.05em;">LIVE</div>',unsafe_allow_html=True)
+            st.markdown('<div style="font-size:1.05rem;color:#f1eaf8;max-width:430px;">One clean control room for the real Shorts pipeline, from story selection through upload.</div>',unsafe_allow_html=True)
+            st.space("large")
+            st.markdown('<span class="badge">production</span> <span class="badge">public / private</span>',unsafe_allow_html=True)
+            st.space("large")
+            if st.button("Open Live Control Room  →",key="open-live",width="stretch"):
+                st.session_state.app_mode="live"
+                st.rerun()
 
-if "topics" not in st.session_state:
-    st.session_state.topics = []
-if "selected_topic" not in st.session_state:
-    st.session_state.selected_topic = None
-if "script_data" not in st.session_state:
-    st.session_state.script_data = None
-if "approved_script" not in st.session_state:
-    st.session_state.approved_script = None
-if "audio_data" not in st.session_state:
-    st.session_state.audio_data = None
-if "approved_audio" not in st.session_state:
-    st.session_state.approved_audio = None
-if "visual_result" not in st.session_state:
-    st.session_state.visual_result = None
-if "visual_loaded_story" not in st.session_state:
-    st.session_state.visual_loaded_story = None
-if "manual_visual_result" not in st.session_state:
-    st.session_state.manual_visual_result = None
-if "real_image_result" not in st.session_state:
-    st.session_state.real_image_result = None
-if "ai_image_result" not in st.session_state:
-    st.session_state.ai_image_result = None
-if "subtitle_data" not in st.session_state:
-    st.session_state.subtitle_data = None
-if "approved_subtitles" not in st.session_state:
-    st.session_state.approved_subtitles = None
+def _stage_status(stage_key:str)->tuple[str,str]:
+    checks={
+        "01 · Topic Fetcher":"Topics" if st.session_state.topics else "Waiting",
+        "02 · Scriptwriter":"Approved" if st.session_state.approved_script else "Waiting",
+        "03 · Audio":"Approved" if st.session_state.approved_audio else "Waiting",
+        "04 · Visuals":"Loaded" if st.session_state.visual_result else "Waiting",
+        "05 · Subtitles":"Approved" if st.session_state.approved_subtitles else "Waiting",
+        "06 · Renderer":"Preview" if st.session_state.renderer_previews else "Waiting",
+        "07 · Upload QC":"Uploaded" if st.session_state.upload_result else "Waiting",
+    }
+    return ("ready",checks.get(stage_key,"Waiting"))
 
-if "rendered_video_path" not in st.session_state:
-    st.session_state.rendered_video_path = None
-if "upload_qc_approved" not in st.session_state:
-    st.session_state.upload_qc_approved = False
-if "upload_result" not in st.session_state:
-    st.session_state.upload_result = None
-if "upload_title_choice" not in st.session_state:
-    st.session_state.upload_title_choice = 0
-if "upload_title_options" not in st.session_state:
-    st.session_state.upload_title_options = []
-if "upload_description" not in st.session_state:
-    st.session_state.upload_description = ""
-if "upload_hashtags" not in st.session_state:
-    st.session_state.upload_hashtags = ""
-if "upload_comment" not in st.session_state:
-    st.session_state.upload_comment = ""
-if "upload_qc" not in st.session_state:
-    st.session_state.upload_qc = None
+def _render_test_nav():
+    home_col,title_col,status_col=st.columns([.18,1,.38],gap="medium")
+    with home_col:
+        if st.button("← Home",key="test-home",width="stretch"):
+            st.session_state.app_mode="home"
+            st.rerun()
+    with title_col:
+        st.markdown('<div class="eyebrow">BUILD LAB</div>',unsafe_allow_html=True)
+        st.markdown('<h1 style="margin:0;">TEST</h1>',unsafe_allow_html=True)
+    with status_col:
+        completed=sum(_stage_status(stage["key"])[1]!="Waiting" for stage in STAGES)
+        st.markdown(f'<div style="text-align:right;"><span class="badge">{completed} / 7 active</span></div>',unsafe_allow_html=True)
+    st.space("small")
+    with st.container(key="stage-shell"):
+        nav_cols=st.columns(7,gap="small")
+        for col,stage_info in zip(nav_cols,STAGES):
+            with col:
+                active=st.session_state.test_stage==stage_info["key"]
+                clicked=st.button(
+                    f'{stage_info["icon"]} {stage_info["number"]}',
+                    key=f'stage-nav-{stage_info["number"]}',
+                    type="primary" if active else "secondary",
+                    width="stretch",
+                    help=f'{stage_info["label"]} · {stage_info["desc"]}',
+                )
+                st.markdown(
+                    f'<div class="stage-rail-label" style="color:{"#f6f7fb" if active else "#7d8694"};">{stage_info["label"]}</div>',
+                    unsafe_allow_html=True,
+                )
+                if clicked:
+                    st.session_state.test_stage=stage_info["key"]
+                    st.rerun()
+    st.markdown('<div class="stage-rail-line"></div>',unsafe_allow_html=True)
+
+def render_live_dashboard():
+    st.markdown('<div class="eyebrow">PRODUCTION CONTROL ROOM</div>',unsafe_allow_html=True)
+    left,right=st.columns([1,.32],gap="large")
+    with left:
+        st.markdown('<h1 style="margin:0;font-size:3.2rem;">LIVE</h1>',unsafe_allow_html=True)
+        st.markdown('<div class="hero-subtitle">A single production surface for the completed factory. The visual layer is ready; production orchestration remains separate from the stage implementations.</div>',unsafe_allow_html=True)
+    with right:
+        if st.button("← Home",key="live-home",width="stretch"):
+            st.session_state.app_mode="home"
+            st.rerun()
+    st.space("small")
+    st.markdown('<div class="live-glow"></div>',unsafe_allow_html=True)
+    st.space("medium")
+    story=(
+        st.session_state.topics[st.session_state.selected_topic]
+        if st.session_state.selected_topic is not None
+        and 0 <= st.session_state.selected_topic < len(st.session_state.topics)
+        else None
+    )
+    st.markdown('<div class="eyebrow">CURRENT PIPELINE</div>',unsafe_allow_html=True)
+    cols=st.columns(4,gap="small")
+    live_cards=[
+        ("01","Story",story.title if story else "No story selected"),
+        ("02","Script","Approved" if st.session_state.approved_script else "Waiting"),
+        ("03","Audio","Approved" if st.session_state.approved_audio else "Waiting"),
+        ("04","Media","Loaded" if st.session_state.visual_result else "Waiting"),
+    ]
+    for col,(number,label,value) in zip(cols,live_cards):
+        with col:
+            st.markdown(f'<div class="live-card"><div class="eyebrow">{number} · {label}</div><div style="font-size:1.12rem;font-weight:800;">{value}</div></div>',unsafe_allow_html=True)
+    st.space("medium")
+    st.markdown('<div class="eyebrow">FACTORY</div>',unsafe_allow_html=True)
+    pipeline_cols=st.columns(7,gap="small")
+    for col,stage_info in zip(pipeline_cols,STAGES):
+        _,label=_stage_status(stage_info["key"])
+        dot="●" if label!="Waiting" else "○"
+        with col:
+            st.markdown(f'<div class="live-card" style="min-height:120px;text-align:center;"><div style="font-size:1.8rem;">{stage_info["icon"]}</div><div class="eyebrow">{stage_info["number"]}</div><div style="font-weight:800;">{stage_info["label"]}</div><div class="muted">{dot} {label}</div></div>',unsafe_allow_html=True)
+    st.space("medium")
+    st.markdown('<div class="card"><div class="eyebrow">LIVE MODE</div><div style="font-size:1.1rem;font-weight:800;margin-bottom:.4rem;">Production orchestration is the next integration layer.</div><div class="muted">The completed function contracts are preserved. This control-room UI does not alter or duplicate those functions.</div></div>',unsafe_allow_html=True)
+
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
@@ -160,27 +257,10 @@ def render_scriptwriter():
         st.info("Run the Topic Fetcher first, then select a story here.")
         return
 
-    labels = [
-        f"{i + 1:02d} · {topic.title}"
-        for i, topic in enumerate(st.session_state.topics)
-    ]
-    current = st.session_state.selected_topic
-    default_index = current if isinstance(current, int) and current < len(labels) else 0
-    selected_label = st.selectbox(
-        "Story",
-        labels,
-        index=default_index,
-        key="script_story",
-    )
-    selected_index = labels.index(selected_label)
-    if selected_index != st.session_state.selected_topic:
-        st.session_state.selected_topic = selected_index
-        st.session_state.script_data = None
-        st.session_state.approved_script = None
-        st.session_state.audio_data = None
-        st.session_state.approved_audio = None
-        st.session_state.subtitle_data = None
-        st.session_state.approved_subtitles = None
+    selected_index = st.session_state.selected_topic
+    if selected_index is None or not 0 <= selected_index < len(st.session_state.topics):
+        st.info("Choose a story in 01 · Topic Fetcher first.")
+        return
     topic = st.session_state.topics[selected_index]
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -188,11 +268,13 @@ def render_scriptwriter():
     st.caption(topic.description or "The Topic Fetcher did not provide a longer description.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    language = st.selectbox(
+    language = st.pills(
         "Language",
         ["English", "Hindi", "Telugu"],
+        default="English",
         key="script_language",
-    )
+        label_visibility="collapsed",
+    ) or "English"
 
     if st.button("Generate script", type="primary", use_container_width=True):
         with st.spinner("Writing the Short…"):
@@ -275,25 +357,10 @@ def render_visuals_crawler():
         st.info("Run the Topic Fetcher first, then select a story for Visuals.")
         return
 
-    labels = [
-        f"{i + 1:02d} · {topic.title}"
-        for i, topic in enumerate(st.session_state.topics)
-    ]
-    current = st.session_state.selected_topic
-    default_index = current if isinstance(current, int) and current < len(labels) else 0
-    selected_label = st.selectbox(
-        "Headline",
-        labels,
-        index=default_index,
-        key="visual_story",
-    )
-    selected_index = labels.index(selected_label)
-    if selected_index != st.session_state.selected_topic:
-        st.session_state.selected_topic = selected_index
-        st.session_state.script_data = None
-        st.session_state.approved_script = None
-        st.session_state.audio_data = None
-        st.session_state.approved_audio = None
+    selected_index = st.session_state.selected_topic
+    if selected_index is None or not 0 <= selected_index < len(st.session_state.topics):
+        st.info("Choose a story in 01 · Topic Fetcher first.")
+        return
     topic = st.session_state.topics[selected_index]
 
     story = {
@@ -557,7 +624,7 @@ def _render_manual_ai_images():
 
 def render_visuals():
     st.header("04 · Visuals")
-    mode = st.radio(
+    mode = st.pills(
         "Visual test",
         [
             "Option 1 · Automatic Scraper",
@@ -565,9 +632,10 @@ def render_visuals():
             "Option 3 · Real Image Search",
             "Option 4 · AI Generation",
         ],
-        horizontal=True,
+        default="Option 1 · Automatic Scraper",
         key="visual_test_mode",
-    )
+        label_visibility="collapsed",
+    ) or "Option 1 · Automatic Scraper"
     if mode.startswith("Option 1"):
         render_visuals_crawler()
     elif mode.startswith("Option 2"):
@@ -724,16 +792,18 @@ def render_upload_qc():
             )
         st.session_state.upload_title_options = edited_titles
 
-        choice = st.radio(
+        choice = st.pills(
             "Title to upload",
             list(range(len(edited_titles))),
-            index=min(
+            default=min(
                 int(st.session_state.upload_title_choice),
                 len(edited_titles) - 1,
             ),
             format_func=lambda index: edited_titles[index],
             key="upload_title_choice",
         )
+        if choice is None:
+            choice = 0
 
         st.text_area(
             "Description",
@@ -833,12 +903,13 @@ def render_audio():
     languages = ["English", "Hindi", "Telugu"]
     stored = str(script.get("language_used") or "english").casefold()
     default_language = stored if stored in {"english", "hindi", "telugu"} else "english"
-    language = st.selectbox(
+    language = st.pills(
         "Language",
         languages,
-        index=["english", "hindi", "telugu"].index(default_language),
+        default=default_language.title(),
         key="audio_language",
-    )
+        label_visibility="collapsed",
+    ) or default_language.title()
     st.caption("HYPE COMMENTATOR · female Indian voice · native Edge-TTS word timings")
 
     if st.button("Generate audio", type="primary", use_container_width=True):
@@ -886,17 +957,30 @@ def render_audio():
     if st.session_state.approved_audio:
         st.success("Audio approved and stored as the handoff for Function 04 · Visuals.")
 
-if function == "01 · Topic Fetcher":
-    render_topic_fetcher()
-elif function == "02 · Scriptwriter":
-    render_scriptwriter()
-elif function == "03 · Audio":
-    render_audio()
-elif function == "04 · Visuals":
-    render_visuals()
-elif function == "05 · Subtitles":
-    render_subtitles()
-elif function == "06 · Renderer":
-    render_renderer_test()
-elif function == "07 · Upload QC":
-    render_upload_qc()
+if st.session_state.app_mode == "home":
+    _render_home()
+elif st.session_state.app_mode == "test":
+    _render_test_nav()
+    with st.container(key="stage-content"):
+        stage = st.session_state.test_stage
+        stage_info = next(item for item in STAGES if item["key"] == stage)
+        st.markdown(
+            f'<div class="eyebrow">{stage_info["number"]} · {stage_info["label"]}</div>',
+            unsafe_allow_html=True,
+        )
+        if stage == "01 · Topic Fetcher":
+            render_topic_fetcher()
+        elif stage == "02 · Scriptwriter":
+            render_scriptwriter()
+        elif stage == "03 · Audio":
+            render_audio()
+        elif stage == "04 · Visuals":
+            render_visuals()
+        elif stage == "05 · Subtitles":
+            render_subtitles()
+        elif stage == "06 · Renderer":
+            render_renderer_test()
+        elif stage == "07 · Upload QC":
+            render_upload_qc()
+elif st.session_state.app_mode == "live":
+    render_live_dashboard()
