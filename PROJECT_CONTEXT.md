@@ -51,7 +51,7 @@ Only completed functions should exist in the repository. Do not scaffold future 
 - Cluster multiple publisher headlines describing the same event.
 - Keep genuinely different events separate even when the same person appears.
 - Return up to 20 topics.
-- Find 20 more uses a different query set and excludes already returned topics/events.
+- Find 20 more uses a different query set, excludes already returned topics/events, and appends new topics to the existing dashboard pool.
 - Google News is the primary source.
 - GDELT is a fallback only when the primary source does not produce enough topics.
 
