@@ -22,7 +22,7 @@ def approved_audio(language="english"):
         "scenes": [
             {
                 "scene": 1,
-                "duration": 1.4,
+                "duration": 1.8,
                 "timings": [
                     {"word": "India", "start": 0.0, "end": 0.3},
                     {"word": "won", "start": 0.3, "end": 0.6},
