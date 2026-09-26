@@ -984,16 +984,22 @@ def render_upload_qc():
             video_path.write_bytes(uploaded.getbuffer())
             st.session_state.rendered_video_path = str(video_path)
 
-    if not video_path or not video_path.is_file():
-        st.info("The rendered video will appear here after the Renderer hands it off.")
-        return
-
-    st.video(str(video_path), width=520)
-
     titles = list(st.session_state.get("upload_title_options") or script.get("titles") or [])
     if not titles:
         st.error("No Scriptwriter title candidates are available.")
         return
+
+    if not str(st.session_state.get("upload_description") or "").strip():
+        st.session_state.upload_description = str(script.get("seo_description") or "")
+    if not str(st.session_state.get("upload_hashtags") or "").strip():
+        st.session_state.upload_hashtags = " ".join(str(x) for x in (script.get("hashtags") or []))
+    if not str(st.session_state.get("upload_comment") or "").strip():
+        st.session_state.upload_comment = str(script.get("comment") or "")
+
+    if video_path and video_path.is_file():
+        st.video(str(video_path), width=520)
+    else:
+        st.info("Metadata is ready for QC. The rendered video will appear here after the Renderer hands it off.")
 
     if not st.session_state.upload_qc_approved:
         st.subheader("Metadata")
@@ -1078,6 +1084,10 @@ def render_upload_qc():
                     + result["comment_error"]
                 )
         st.link_button("Open YouTube video", result["url"], width="stretch")
+        return
+
+    if not video_path or not video_path.is_file():
+        st.caption("Upload choices become available after a rendered video is present.")
         return
 
     st.subheader("Upload")
