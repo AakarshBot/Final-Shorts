@@ -50,6 +50,72 @@ def test_crawl_prefers_scriptwriter_visual_prompt(monkeypatch):
     assert calls[0][0][0] == "Shubman Gill batting India"
 
 
+def test_ranked_visual_search_runs_scene_queries_together(monkeypatch):
+    calls = []
+
+    def fake_related(queries, original_url, story_title="", entity="", historical=False):
+        calls.append((queries, historical))
+        return [
+            {
+                "url": f"https://example.com/{index}",
+                "title": query,
+                "source": "Example",
+                "published_at": "",
+                "query": query,
+            }
+            for index, query in enumerate(queries, 1)
+        ]
+
+    def fake_crawl(requests):
+        return [
+            {
+                "assets": [{
+                    "bytes": b"image",
+                    "hash": str(index),
+                    "source_image_url": f"https://example.com/image-{index}",
+                    "source_page_url": request["url"],
+                    "publisher": "Example",
+                    "article_title": request["title"],
+                    "query": request["query"],
+                    "score": 90 - index,
+                    "action_score": 2,
+                }],
+                "url": request["url"],
+                "title": request["title"],
+            }
+            for index, request in enumerate(requests, 1)
+        ]
+
+    monkeypatch.setattr(visual_fetcher, "_collect_related_pages", fake_related)
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl)
+
+    story = _story()
+    story["script"] = [
+        {
+            "primary_entity": "Shubman Gill",
+            "visual_intent": "batting in an ODI",
+            "specific_search_prompt": "Shubman Gill batting India",
+        },
+        {
+            "primary_entity": "West Indies",
+            "visual_intent": "team training session",
+            "specific_search_prompt": "West Indies training cricket",
+        },
+    ]
+
+    result = visual_fetcher.ranked_visual_search(story)
+
+    assert calls == [
+        (["Shubman Gill batting India", "West Indies training cricket"], False)
+    ]
+    assert [lane["scene"] for lane in result["lanes"]] == [1, 2]
+    assert [lane["query"] for lane in result["lanes"]] == [
+        "Shubman Gill batting India",
+        "West Indies training cricket",
+    ]
+    assert len(result["assets"]) == 2
+
+
 def test_context_can_rescue_a_valid_article_title():
     context = (
         "Virat Kohli and Rohit Sharma were both discussed after India's latest "
