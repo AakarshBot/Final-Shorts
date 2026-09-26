@@ -182,6 +182,29 @@ def _title_match(query, title, entity=""):
     return min(1.0, overlap * 0.75 + entity_overlap * 0.25)
 
 
+def _context_match(query, context, entity=""):
+    query_tokens = _tokens(query)
+    context_tokens = _tokens(context)
+    entity_tokens = _tokens(entity)
+    if not query_tokens or not context_tokens:
+        return 0.0
+
+    query_overlap = len(query_tokens & context_tokens) / len(query_tokens)
+    if entity_tokens:
+        entity_overlap = len(entity_tokens & context_tokens) / len(entity_tokens)
+        if entity_overlap < 0.75 and not (
+            len(entity_tokens & context_tokens) >= 1 and len(entity_tokens) >= 2
+        ):
+            return 0.0
+    else:
+        entity_overlap = 0.0
+
+    threshold = 0.75 if len(query_tokens) <= 4 else 0.50
+    if query_overlap < threshold:
+        return 0.0
+    return min(1.0, query_overlap * 0.80 + entity_overlap * 0.20)
+
+
 def _related_article_score(query, article_title, story_title, entity=""):
     title_tokens = _tokens(article_title)
     query_tokens = _tokens(query)
@@ -602,6 +625,8 @@ def _browser_script():
         .map(el => el.textContent || el.innerHTML || '').filter(Boolean).slice(0, 12);
       const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
         .map(el => el.textContent || '').filter(Boolean).slice(0, 12);
+      const articleNode = document.querySelector('article') || document.querySelector('main');
+      const articleText = (articleNode?.innerText || '').slice(0, 3500);
       return {
         title: document.querySelector('meta[property="og:title"]')?.content || document.title || '',
         meta,
@@ -610,6 +635,7 @@ def _browser_script():
         backgrounds,
         noscripts,
         jsonLd,
+        articleText,
         finalUrl: location.href
       };
     }
@@ -694,9 +720,20 @@ async def _browser_page(context, request):
         entity = _clean(request.get("entity"), 180)
         story_title = _clean(request.get("story_title"), 600)
         if query:
+            page_context = _clean(
+                " ".join(
+                    [
+                        str((data.get("meta") or {}).get("description") or ""),
+                        str((data.get("meta") or {}).get("og:description") or ""),
+                        str(data.get("articleText") or ""),
+                    ]
+                ),
+                4500,
+            )
             page_match = max(
                 _title_match(query, page_title, entity),
                 _related_article_score(query, page_title, story_title, entity),
+                _context_match(query, page_context, entity),
             )
             if request.get("profile") and entity:
                 page_match = max(
@@ -711,7 +748,7 @@ async def _browser_page(context, request):
                     "candidate_count": 0,
                     "dom_image_count": len(data.get("images") or []),
                     "network_image_count": len(network_responses),
-                    "error": "page-title-mismatch",
+                    "error": "page-relevance-mismatch",
                 }
         candidates = []
 
