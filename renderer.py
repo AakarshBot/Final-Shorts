@@ -19,10 +19,22 @@ SOURCE_LABEL = "SPORTS DESK"
 FINAL_STYLE_NAME = "Editorial Highlight"
 
 HEADLINE_MAX_WIDTH = 860
-HEADLINE_MAX_SIZE = 118
-HEADLINE_MIN_SIZE = 42
+HEADLINE_MAX_SIZE = 150
+HEADLINE_MIN_SIZE = 48
+HEADLINE_MARKER_WIDTH = 132
+HEADLINE_MARKER_HEIGHT = 10
+HEADLINE_MARKER_GAP = 22
+
+SUBTITLE_MAX_WIDTH = 900
+SUBTITLE_MAX_SIZE = 70
+SUBTITLE_MIN_SIZE = 54
+SUBTITLE_WORD_SPACING = 14
+SUBTITLE_ACTIVE_PAD_X = 14
+SUBTITLE_ACTIVE_PAD_Y = 8
+SUBTITLE_Y = 1390
 
 ACCENT = (255, 205, 66)
+BRAND_BLUE = (35, 105, 255)
 WHITE = (249, 250, 252)
 DARK = (5, 7, 10)
 
@@ -212,17 +224,43 @@ def _paste_source(base: Image.Image) -> None:
 
 def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
     font, clean, text_width = _fit_headline_font(text, language)
+    group_width = HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP + text_width
     progress = min(1.0, max(0.0, t / 0.45))
     eased = 1 - (1 - progress) ** 3
-    start_x = -text_width - 80
-    final_x = 72
-    x = int(start_x + (final_x - start_x) * eased)
+    start_group_x = -group_width - 80
+    final_group_x = 72 - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
+    group_x = int(
+        start_group_x + (final_group_x - start_group_x) * eased
+    )
+    marker_x = group_x
+    text_x = group_x + HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP
     y = 560
 
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
+
+    line_y = y + max(8, font.size // 2)
+    split = int(HEADLINE_MARKER_WIDTH * 0.58)
+    draw.rectangle(
+        (
+            marker_x,
+            line_y,
+            marker_x + split,
+            line_y + HEADLINE_MARKER_HEIGHT,
+        ),
+        fill=BRAND_BLUE,
+    )
+    draw.rectangle(
+        (
+            marker_x + split,
+            line_y,
+            marker_x + HEADLINE_MARKER_WIDTH,
+            line_y + HEADLINE_MARKER_HEIGHT,
+        ),
+        fill=ACCENT,
+    )
     draw.text(
-        (x, y),
+        (text_x, y),
         clean,
         font=font,
         fill=WHITE,
@@ -294,6 +332,25 @@ def validate_subtitle_handoff(subtitle_data: dict) -> bool:
     return bool(subtitle_data.get("cues"))
 
 
+def _fit_subtitle_font(
+    words: list[dict],
+    language: str,
+):
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    text = " ".join(str(word.get("text") or "").upper() for word in words).strip()
+    if not text:
+        return subtitle_font(SUBTITLE_MAX_SIZE, language)
+
+    for size in range(SUBTITLE_MAX_SIZE, SUBTITLE_MIN_SIZE - 1, -1):
+        font = subtitle_font(size, language)
+        width, _ = _measure(probe, text, font)
+        width += SUBTITLE_WORD_SPACING * max(0, len(words) - 1)
+        if width + SUBTITLE_ACTIVE_PAD_X * 2 <= SUBTITLE_MAX_WIDTH:
+            return font
+
+    return subtitle_font(SUBTITLE_MIN_SIZE, language)
+
+
 def _draw_subtitles(
     base: Image.Image,
     subtitle_data: dict,
@@ -305,35 +362,52 @@ def _draw_subtitles(
 
     words = cue["words"]
     language = subtitle_data.get("language") or "english"
-    font = subtitle_font(58, language)
+    font = _fit_subtitle_font(words, language)
     draw = ImageDraw.Draw(base)
 
     pieces = []
     total_width = 0
-    spacing = 16
     for word in words:
-        text = str(word["text"])
-        width, _ = _measure(draw, text, font)
-        pieces.append((text, width))
+        text = str(word["text"]).upper()
+        width, height = _measure(draw, text, font)
+        pieces.append((text, width, height))
         total_width += width
-    total_width += spacing * max(0, len(pieces) - 1)
+    total_width += SUBTITLE_WORD_SPACING * max(0, len(pieces) - 1)
 
     cursor = (WIDTH - total_width) // 2
-    y = 1450
+    y = SUBTITLE_Y
 
-    for index, (text, width) in enumerate(pieces):
+    for index, (text, width, height) in enumerate(pieces):
         start = float(words[index]["start"])
         end = float(words[index]["end"])
         active = start <= t < end
+
+        if active:
+            pad_x = SUBTITLE_ACTIVE_PAD_X
+            pad_y = SUBTITLE_ACTIVE_PAD_Y
+            draw.rounded_rectangle(
+                (
+                    cursor - pad_x,
+                    y - pad_y,
+                    cursor + width + pad_x,
+                    y + height + pad_y,
+                ),
+                radius=10,
+                fill=BRAND_BLUE,
+            )
+            text_fill = ACCENT
+        else:
+            text_fill = WHITE
+
         draw.text(
             (cursor, y),
             text,
             font=font,
-            fill=ACCENT if active else WHITE,
+            fill=text_fill,
             stroke_width=5,
             stroke_fill=DARK,
         )
-        cursor += width + spacing
+        cursor += width + SUBTITLE_WORD_SPACING
 
 
 def render_frame(
