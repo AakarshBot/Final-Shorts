@@ -753,6 +753,20 @@ def _render_live_visuals(slide_count: int):
                 st.session_state.live_visual_result = None
                 st.rerun()
         else:
+            asset_count = len(result.get("assets") or [])
+            threshold = int(result.get("success_threshold") or 10)
+            if asset_count < threshold:
+                st.warning(
+                    f"Automatic scraper returned {asset_count} images. "
+                    "You can retry it or use another visual source."
+                )
+                if st.button(
+                    "Retry automatic scrape",
+                    width="stretch",
+                    key="live-retry-auto-visuals-underfilled",
+                ):
+                    st.session_state.live_visual_result = None
+                    st.rerun()
             st.caption(
                 f'{len(result.get("assets") or [])} images · '
                 f'{int(result.get("pages_scraped") or 0)} pages'
@@ -909,7 +923,7 @@ def _render_live_visuals(slide_count: int):
                     st.session_state.live_rendered_video_path = str(output)
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
-                    st.session_state.live_stage = "04 · Upload"
+                    st.session_state.live_stage = "05 · Upload"
                     st.rerun()
                 except (RuntimeError, ValueError, OSError) as exc:
                     st.session_state.live_render_error = str(exc)
@@ -944,8 +958,9 @@ def _render_live_script():
             width="stretch",
             key="live-retry-script",
         ):
+            selected_index = st.session_state.get("live_selected_topic")
             _live_reset_downstream()
-            st.session_state.live_selected_topic = st.session_state.get("live_selected_topic")
+            st.session_state.live_selected_topic = selected_index
             st.session_state.live_stage = "02 · Script"
             st.rerun()
         return
@@ -1001,12 +1016,8 @@ def _render_live_script():
                 st.session_state.live_script_error = str(exc)
                 st.rerun()
             st.session_state.live_approved_script = approved
-            try:
-                with st.spinner("Creating audio and subtitle handoffs…"):
-                    _live_generate_audio_and_subtitles()
-                st.session_state.live_stage = "03 · Visuals + Render"
-            except (RuntimeError, ValueError, OSError) as exc:
-                st.session_state.live_handoff_error = str(exc)
+            st.session_state.live_handoff_error = ""
+            st.session_state.live_stage = "03 · Audio + Subs"
             st.rerun()
 
     if st.session_state.live_approved_script:
@@ -1287,11 +1298,11 @@ def render_live_dashboard():
                 st.rerun()
         return
 
-    live_stage_order = ["01 · Story", "02 · Script", "03 · Visuals + Render", "04 · Upload"]
-    live_stage_labels = ["STORY", "SCRIPT", "VISUALS + RENDER", "UPLOAD"]
+    live_stage_order = ["01 · Story", "02 · Script", "03 · Audio + Subs", "04 · Visuals + Render", "05 · Upload"]
+    live_stage_labels = ["STORY", "SCRIPT", "AUDIO + SUBS", "VISUALS + RENDER", "UPLOAD"]
     current_stage = live_stage_order.index(st.session_state.live_stage)
 
-    stage_cols = st.columns(4, gap="small")
+    stage_cols = st.columns(len(live_stage_order), gap="small")
     for stage_index, (label, stage_key) in enumerate(zip(live_stage_labels, live_stage_order)):
         with stage_cols[stage_index]:
             state_label = "✓ COMPLETE" if stage_index < current_stage else "● ACTIVE" if stage_index == current_stage else "LOCKED"
@@ -1358,7 +1369,35 @@ def render_live_dashboard():
         _render_live_script()
         return
 
-    if st.session_state.live_stage == "03 · Visuals + Render":
+    if st.session_state.live_stage == "03 · Audio + Subs":
+        script = st.session_state.live_approved_script
+        if not isinstance(script, dict):
+            st.warning("Approve the Scriptwriter before generating Audio.")
+            return
+        if not isinstance(st.session_state.live_approved_audio, dict) or not isinstance(st.session_state.live_subtitle_data, dict):
+            if st.session_state.live_handoff_error:
+                st.error(st.session_state.live_handoff_error)
+            else:
+                with st.spinner("Generating Audio and Subtitles…"):
+                    try:
+                        _live_generate_audio_and_subtitles()
+                        st.session_state.live_stage = "04 · Visuals + Render"
+                        st.rerun()
+                    except (RuntimeError, ValueError, OSError) as exc:
+                        st.session_state.live_handoff_error = str(exc)
+                        st.rerun()
+            if st.session_state.live_handoff_error:
+                if st.button("Retry Audio / Subtitles", type="primary", key="live-retry-handoffs-stage"):
+                    st.session_state.live_handoff_error = ""
+                    st.session_state.live_approved_audio = None
+                    st.session_state.live_subtitle_data = None
+                    st.rerun()
+            return
+        st.success("Audio and subtitles are approved. Moving to Visuals.")
+        st.session_state.live_stage = "04 · Visuals + Render"
+        st.rerun()
+
+    if st.session_state.live_stage == "04 · Visuals + Render":
         script = st.session_state.live_approved_script
         audio_ready = isinstance(st.session_state.live_approved_audio, dict)
         subtitle_ready = isinstance(st.session_state.live_subtitle_data, dict)
@@ -1379,7 +1418,7 @@ def render_live_dashboard():
         _render_live_visuals(len(script.get("script") or []) if isinstance(script, dict) else 0)
         return
 
-    if st.session_state.live_stage == "04 · Upload":
+    if st.session_state.live_stage == "05 · Upload":
         _render_live_upload()
         return
 
