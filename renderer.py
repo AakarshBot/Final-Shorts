@@ -175,6 +175,8 @@ def _headline_lines(
     current_width = 0
 
     for word, word_width in zip(words, measurements):
+        if word_width > max_line_width:
+            raise ValueError("Headline contains a word that is too wide to fit.")
         next_width = (
             current_width
             + word_width
