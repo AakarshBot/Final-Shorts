@@ -7,7 +7,7 @@ Functions 01–04 are implemented, tested, and accepted for development use:
 3. Audio
 4. Visuals — Phase 1 (scraping) + Phase 2 (manual real-image search and manual AI generation)
 
-Function 04 Visuals Phase 1 is complete and Phase 2 now provides three independent visual test options. Do not start Renderer, Metadata, or Upload until Visuals is complete.
+Function 04 Visuals Phase 1 is complete and Phase 2 now provides four independent visual test options. Do not start Renderer, Metadata, or Upload until Visuals is complete.
 
 ## Factory order
 01. Topic Fetching
@@ -125,6 +125,7 @@ Function 04 — Visuals Phase 2 is implemented:
 - No semantic, licensing or monetization filtering is active in Phase 2.
 - The two new manual paths run their configured providers independently and fail safely per provider.
 - Automatic discovery uses the exact selected headline plus entity/context queries.
+- The manual scraper accepts arbitrary people, events or phrases and searches current publisher pages without requiring a selected headline.
 - Google News RSS and DDGS/Bing/Yahoo discovery run as complementary free search lanes.
 - Related publisher pages are relevance-filtered, freshness-filtered and host-diversified before scraping.
 - If the first pass is still underfilled, real web profile/action pages are searched separately.
