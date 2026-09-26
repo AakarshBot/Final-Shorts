@@ -3,6 +3,7 @@
 import json
 import os
 import re
+from html import unescape
 from pathlib import Path
 from difflib import SequenceMatcher
 
@@ -186,6 +187,42 @@ def _limit_source_text(text: str) -> str:
     return clean[:head].rstrip() + "\n\n[ARTICLE CONTINUES]\n\n" + clean[-tail:].lstrip()
 
 
+def _article_body_from_html(html_text: str) -> str:
+    raw = str(html_text or "")
+
+    for match in re.finditer(
+        r"<script[^>]*type=[\"']application/ld\+json[\"'][^>]*>(.*?)</script>",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        try:
+            payload = json.loads(unescape(match.group(1).strip()))
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+
+        stack = payload if isinstance(payload, list) else [payload]
+        while stack:
+            item = stack.pop()
+            if isinstance(item, dict):
+                body = _clean(item.get("articleBody"))
+                if body:
+                    return body
+                stack.extend(
+                    value
+                    for value in item.values()
+                    if isinstance(value, (dict, list))
+                )
+            elif isinstance(item, list):
+                stack.extend(item)
+
+    paragraphs = []
+    for paragraph in re.findall(r"<p\b[^>]*>(.*?)</p>", raw, flags=re.IGNORECASE | re.DOTALL):
+        text = _clean(unescape(re.sub(r"<[^>]+>", " ", paragraph)))
+        if text:
+            paragraphs.append(text)
+    return "\n".join(paragraphs)
+
+
 def _extract_article(url: str) -> tuple[str, str]:
     target = _clean(url)
     if not target:
@@ -202,18 +239,35 @@ def _extract_article(url: str) -> tuple[str, str]:
     )
     response.raise_for_status()
 
-    extracted = trafilatura.extract(
-        response.text,
-        url=str(response.url or target),
-        favor_recall=True,
-        include_comments=False,
-        include_tables=False,
-        output_format="txt",
-    )
-    text = _clean(extracted)
-    if len(text) < MIN_ARTICLE_CHARS:
-        return "", str(response.url or target)
-    return text, str(response.url or target)
+    resolved_url = str(response.url or target)
+    candidates = [
+        trafilatura.extract(
+            response.text,
+            url=resolved_url,
+            favor_recall=True,
+            include_comments=False,
+            include_tables=False,
+            output_format="txt",
+        ),
+        _article_body_from_html(response.text),
+    ]
+    for candidate in candidates:
+        text = _clean(candidate)
+        if len(text) >= MIN_ARTICLE_CHARS:
+            return text, resolved_url
+
+    try:
+        extracted = DDGS(timeout=5).extract(
+            resolved_url,
+            fmt="text_plain",
+        )
+        text = _clean(extracted.get("content") if isinstance(extracted, dict) else "")
+        if len(text) >= MIN_ARTICLE_CHARS:
+            return text, str(extracted.get("url") or resolved_url)
+    except Exception:
+        pass
+
+    return "", resolved_url
 
 
 def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
@@ -222,8 +276,54 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
     if not query:
         return "", ""
 
+    keywords = _story_title_keywords(query)
+    minimum_overlap = 2 if len(keywords) >= 2 else 1
+    blocked_domains = (
+        "twitter.", "x.com", "facebook.", "instagram.", "youtube.", "google."
+    )
+
+    def candidate_urls(results):
+        candidates = []
+        for result in results or []:
+            url = _clean(result.get("url") or result.get("href"))
+            title = _clean(result.get("title"))
+            if not url or url == original_url:
+                continue
+            domain = _source_domain(url)
+            if not domain or domain == original_domain:
+                continue
+            if any(blocked in domain for blocked in blocked_domains):
+                continue
+            candidate_keywords = _story_title_keywords(title)
+            overlap = len(keywords & candidate_keywords)
+            if keywords and overlap < minimum_overlap:
+                continue
+            candidates.append((overlap, url))
+        return sorted(candidates, key=lambda item: item[0], reverse=True)
+
     try:
-        results = DDGS(timeout=5).news(
+        search = DDGS(timeout=5)
+        results = search.news(
+            query=query,
+            region="in-en",
+            safesearch="off",
+            timelimit="w",
+            max_results=5,
+        )
+        candidates = candidate_urls(results)
+    except Exception:
+        candidates = []
+
+    for _, url in candidates:
+        try:
+            extracted, resolved_url = _extract_article(url)
+            if extracted:
+                return extracted, resolved_url
+        except (requests.RequestException, OSError, ValueError):
+            continue
+
+    try:
+        results = DDGS(timeout=5).text(
             query=query,
             region="in-en",
             safesearch="off",
@@ -233,26 +333,7 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
     except Exception:
         return "", ""
 
-    keywords = _story_title_keywords(query)
-    candidates = []
-    minimum_overlap = 2 if len(keywords) >= 2 else 1
-    for result in results or []:
-        url = _clean(result.get("url") or result.get("href"))
-        title = _clean(result.get("title"))
-        if not url or url == original_url:
-            continue
-        domain = _source_domain(url)
-        if not domain or domain == original_domain:
-            continue
-        if any(blocked in domain for blocked in ("twitter.", "x.com", "facebook.", "instagram.", "youtube.", "google.")):
-            continue
-        candidate_keywords = _story_title_keywords(title)
-        overlap = len(keywords & candidate_keywords)
-        if keywords and overlap < minimum_overlap:
-            continue
-        candidates.append((overlap, url))
-
-    for _, url in sorted(candidates, key=lambda item: item[0], reverse=True):
+    for _, url in candidate_urls(results):
         try:
             extracted, resolved_url = _extract_article(url)
             if extracted:
@@ -268,27 +349,35 @@ def _research_story(story) -> str:
     description = _story_value(story, "description")
     original_url = _story_value(story, "url")
 
-    sections = []
-    extracted, resolved_url = "", ""
     if original_url:
+        extracted, resolved_url = "", ""
         try:
             extracted, resolved_url = _extract_article(original_url)
         except (requests.RequestException, OSError, ValueError):
             extracted = ""
 
-    if extracted:
-        source_label = resolved_url or original_url
-        sections.append(f"[PRIMARY ARTICLE — {source_label}]\n{extracted}")
-    else:
+        if extracted:
+            return _limit_source_text(
+                f"[SELECTED STORY]\n{title}\n\n"
+                f"[PRIMARY ARTICLE — {resolved_url or original_url}]\n{extracted}\n\n"
+                f"[TOPIC FETCHER SUMMARY]\n{description}"
+            )
+
         fallback, fallback_url = _fallback_article(title, original_url)
         if fallback:
-            sections.append(f"[CORROBORATING ARTICLE — {fallback_url}]\n{fallback}")
+            return _limit_source_text(
+                f"[SELECTED STORY]\n{title}\n\n"
+                f"[CORROBORATING ARTICLE — {fallback_url}]\n{fallback}\n\n"
+                f"[TOPIC FETCHER SUMMARY]\n{description}"
+            )
 
+        return ""
+
+    sections = []
+    if title:
+        sections.append(f"[SELECTED STORY]\n{title}")
     if description:
         sections.append(f"[TOPIC FETCHER SUMMARY]\n{description}")
-    if title:
-        sections.insert(0, f"[SELECTED STORY]\n{title}")
-
     return _limit_source_text("\n\n".join(sections))
 
 
@@ -492,9 +581,15 @@ def _request(model: str, prompt: str, story: str) -> dict:
 def write_script(story, language: str = "english") -> dict:
     """Generate one sports Shorts script and return its later-stage metadata too."""
     source = _research_story(story)
-    if not source:
+    has_story_url = bool(_story_value(story, "url"))
+    if not source and not has_story_url:
         source = _source_text(story)
     if not source:
+        if has_story_url:
+            raise RuntimeError(
+                "Story research failed: the selected article could not be extracted "
+                "and no corroborating full article was reachable."
+            )
         raise ValueError("The selected story contains no usable evidence.")
 
     instruction = (

@@ -339,7 +339,187 @@ def test_writer_research_uses_full_article_before_generation(monkeypatch):
     )
 
     assert "[PRIMARY ARTICLE — https://example.com/story]" in captured[0]
-    assert "He returned after treatment and continued batting." in captured[0]
+    assert "returned after treatment" in captured[0]
+
+
+def test_writer_research_uses_ddgs_extract_when_page_extractors_fail(monkeypatch):
+    class FakeResponse:
+        url = "https://example.com/story"
+        text = "<html><body>not enough article text</body></html>"
+
+        def raise_for_status(self):
+            return None
+
+    article = (
+        "Shubman Gill was hit in training before the ODI. "
+        "India are assessing his availability after the incident. "
+        "The coaching staff reviewed his condition before the next session. "
+    ) * 8
+
+    class FakeDDGS:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def extract(self, url, fmt):
+            assert url == "https://example.com/story"
+            assert fmt == "text_plain"
+            return {"url": url, "content": article}
+
+    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: "")
+    monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
+
+    captured = []
+
+    def fake_request(model, prompt, story):
+        captured.append(story)
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    write_script(
+        {
+            "title": "Shubman Gill injury scare",
+            "description": "Gill was hit during training.",
+            "url": "https://example.com/story",
+        }
+    )
+
+    assert "[PRIMARY ARTICLE — https://example.com/story]" in captured[0]
+    assert "India are assessing his availability" in captured[0]
+
+
+def test_writer_research_reads_jsonld_article_body_when_trafilatura_is_thin(monkeypatch):
+    class FakeResponse:
+        url = "https://example.com/story"
+
+        def raise_for_status(self):
+            return None
+
+        text = """<html><head>
+        <script type="application/ld+json">
+        {"@type":"NewsArticle","articleBody":"Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. "}
+        </script>
+        </head><body><p>Thin page.</p></body></html>"""
+
+    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: "")
+
+    captured = []
+
+    def fake_request(model, prompt, story):
+        captured.append(story)
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    write_script(
+        {
+            "title": "Shubman Gill injury scare",
+            "description": "Gill was hit during training.",
+            "url": "https://example.com/story",
+        }
+    )
+
+    assert "[PRIMARY ARTICLE — https://example.com/story]" in captured[0]
+    assert "India are assessing his availability" in captured[0]
+
+
+def test_writer_research_uses_text_search_when_news_fallback_is_empty(monkeypatch):
+    class FakeResponse:
+        def __init__(self, url, text):
+            self.url = url
+            self.text = text
+
+        def raise_for_status(self):
+            return None
+
+    urls = []
+
+    def fake_get(url, **kwargs):
+        urls.append(url)
+        if url == "https://example.com/story":
+            return FakeResponse(url, "<html><body><p>Thin page.</p></body></html>")
+        return FakeResponse(
+            url,
+            "<html><body>" +
+            "<p>" + (
+                "Shubman Gill was hit in training before the ODI. "
+                "India are assessing his availability after the incident. "
+                "The coaching staff reviewed his condition before the next session. "
+            ) * 8 + "</p></body></html>",
+        )
+
+    class FakeDDGS:
+        calls = []
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def news(self, **kwargs):
+            self.calls.append("news")
+            return []
+
+        def text(self, **kwargs):
+            self.calls.append("text")
+            return [{
+                "title": "Shubman Gill injury update before ODI",
+                "href": "https://other.com/gill-story",
+            }]
+
+    monkeypatch.setattr("script_writer.requests.get", fake_get)
+    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: "")
+    monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
+
+    captured = []
+
+    def fake_request(model, prompt, story):
+        captured.append(story)
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    write_script(
+        {
+            "title": "Shubman Gill injury scare",
+            "description": "Gill was hit during training.",
+            "url": "https://example.com/story",
+        }
+    )
+
+    assert "https://other.com/gill-story" in captured[0]
+    assert "India are assessing his availability" in captured[0]
+    assert "text" in FakeDDGS.calls
+
+
+def test_writer_does_not_generate_from_teaser_when_article_research_fails(monkeypatch):
+    called = False
+
+    def fake_request(model, prompt, story):
+        nonlocal called
+        called = True
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    monkeypatch.setattr(
+        "script_writer._extract_article",
+        lambda url: ("", "https://example.com/story"),
+    )
+    monkeypatch.setattr(
+        "script_writer._fallback_article",
+        lambda title, url: ("", ""),
+    )
+
+    try:
+        write_script(
+            {
+                "title": "Shubman Gill injury scare",
+                "description": "Gill was hit during training before the ODI.",
+                "url": "https://example.com/story",
+            }
+        )
+    except RuntimeError as exc:
+        assert "story research failed" in str(exc).lower()
+    else:
+        raise AssertionError("A reachable story URL must not silently degrade to its teaser.")
+    assert called is False
 
 
 def test_writer_research_falls_back_to_another_article_when_primary_is_thin(monkeypatch):
@@ -377,7 +557,11 @@ def test_writer_research_falls_back_to_another_article_when_primary_is_thin(monk
         lambda html, **kwargs: (
             ""
             if "thin page" in html
-            else "Shubman Gill was hit in training before the ODI and returned to continue his session."
+            else (
+                "Shubman Gill was hit in training before the ODI and returned to continue "
+                "his session. The coaching staff reviewed his condition before the next "
+                "session while India assessed his availability for the match. "
+            ) * 5
         ),
     )
     monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
