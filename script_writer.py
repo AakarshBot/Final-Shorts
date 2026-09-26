@@ -173,7 +173,12 @@ def _source_domain(url: str) -> str:
 
 
 def _limit_source_text(text: str) -> str:
-    clean = _clean(text)
+    lines = [
+        _clean(line)
+        for line in str(text or "").splitlines()
+        if _clean(line)
+    ]
+    clean = "\n".join(lines)
     if len(clean) <= MAX_SOURCE_CHARS:
         return clean
     head = int(MAX_SOURCE_CHARS * 0.72)
