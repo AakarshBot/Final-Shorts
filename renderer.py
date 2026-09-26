@@ -21,9 +21,9 @@ FINAL_STYLE_NAME = "Editorial Highlight"
 HEADLINE_MAX_WIDTH = 860
 HEADLINE_MAX_SIZE = 150
 HEADLINE_MIN_SIZE = 48
-HEADLINE_MARKER_WIDTH = 132
-HEADLINE_MARKER_HEIGHT = 10
-HEADLINE_MARKER_GAP = 22
+HEADLINE_MARKER_WIDTH = 56
+HEADLINE_MARKER_HEIGHT = 8
+HEADLINE_MARKER_GAP = 16
 
 SUBTITLE_MAX_WIDTH = 900
 SUBTITLE_MAX_SIZE = 70
@@ -134,7 +134,7 @@ def headline_font(size: int = HEADLINE_MAX_SIZE, language: str = "english"):
     return _font(_font_candidates("headline", language), size)
 
 
-def subtitle_font(size: int = 58, language: str = "english"):
+def subtitle_font(size: int = SUBTITLE_MAX_SIZE, language: str = "english"):
     return _font(_font_candidates("subtitle", language), size)
 
 
