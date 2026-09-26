@@ -1,6 +1,5 @@
 import hashlib
 import json
-from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 
