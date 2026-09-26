@@ -226,6 +226,13 @@ def _absolute(value, base_url):
     return _usable_url(urljoin(base_url, value))
 
 
+def _network_image_key(url):
+    parsed = urlparse(_clean(url, 3000))
+    if not parsed.scheme or not parsed.netloc:
+        return ""
+    return f"{parsed.scheme.casefold()}://{parsed.netloc.casefold()}{parsed.path}"
+
+
 def _bad_image_url(url):
     blob = _clean(url, 3000).casefold()
     return any(term in blob for term in BAD_IMAGE_TERMS)
@@ -381,8 +388,11 @@ async def _browser_page(context, request):
     def remember_response(response):
         try:
             if response.request.resource_type == "image" and response.ok:
-                if len(network_responses) < 60:
+                if len(network_responses) < 120:
                     network_responses.setdefault(response.url, response)
+                    key = _network_image_key(response.url)
+                    if key:
+                        network_responses.setdefault(key, response)
         except Exception:
             pass
 
@@ -512,6 +522,7 @@ async def _browser_page(context, request):
         assets = []
         seen_hashes = set()
         direct_download_failures = 0
+        direct_invalid_images = 0
         network_fallback_hits = 0
         for candidate in unique[: IMAGES_PER_PAGE * 4]:
             try:
@@ -528,15 +539,20 @@ async def _browser_page(context, request):
                 direct_download_failures += 1
                 data_bytes = b""
 
-            if not data_bytes:
-                network_response = network_responses.get(candidate["url"])
-                if network_response is not None:
+            if not _image_bytes_ok(data_bytes):
+                direct_invalid_images += 1
+                for key in (candidate["url"], _network_image_key(candidate["url"])):
+                    network_response = network_responses.get(key)
+                    if network_response is None:
+                        continue
                     try:
-                        data_bytes = await network_response.body()
-                        if data_bytes:
-                            network_fallback_hits += 1
+                        fallback_bytes = await network_response.body()
                     except Exception:
-                        data_bytes = b""
+                        fallback_bytes = b""
+                    if _image_bytes_ok(fallback_bytes):
+                        data_bytes = fallback_bytes
+                        network_fallback_hits += 1
+                        break
 
             if not _image_bytes_ok(data_bytes):
                 continue
@@ -582,6 +598,7 @@ async def _browser_page(context, request):
             "dom_image_count": len(data.get("images") or []),
             "network_image_count": len(network_responses),
             "direct_download_failures": direct_download_failures,
+            "direct_invalid_images": direct_invalid_images,
             "network_fallback_hits": network_fallback_hits,
             "error": "",
         }
