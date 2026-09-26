@@ -188,6 +188,7 @@ def render_scriptwriter():
         st.session_state.approved_script = None
         st.session_state.audio_data = None
         st.session_state.approved_audio = None
+        st.session_state.renderer_previews = None
 
     script = st.session_state.script_data
     if not script:
@@ -225,6 +226,7 @@ def render_scriptwriter():
             st.session_state.approved_script = approved
             st.session_state.audio_data = None
             st.session_state.approved_audio = None
+            st.session_state.renderer_previews = None
         except ValueError as exc:
             st.error(str(exc))
 
