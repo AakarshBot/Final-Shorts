@@ -20,13 +20,17 @@ from PIL import Image, UnidentifiedImageError
 
 TARGET = 15
 SUCCESS = 10
-MAX_RELATED_PAGES = 6
-IMAGES_PER_PAGE = 5
+MAX_RELATED_PAGES = 10
+PROFILE_PAGES = 4
+PROFILE_IMAGES = 5
+IMAGES_PER_PAGE = 6
 MIN_SIDE = 500
 MAX_IMAGE_BYTES = 8_000_000
-SEARCH_RESULTS = 8
+SEARCH_RESULTS = 15
 SEARCH_TIMEOUT = 8
 PAGE_TIMEOUT_MS = 10_000
+MAX_AGE_HOURS = 72
+QUERY_COUNT = 3
 
 STOPWORDS = {
     "the", "a", "an", "and", "or", "of", "to", "in", "on", "at", "for",
@@ -34,10 +38,12 @@ STOPWORDS = {
     "about", "this", "that", "these", "those", "is", "are", "was", "were",
     "be", "been", "being", "has", "have", "had", "will", "would", "could",
     "should", "says", "said", "report", "reports", "latest", "news", "story",
-    "update", "today", "ahead", "versus", "vs", "v",
+    "update", "today", "ahead", "versus", "vs", "v", "video", "photos",
+    "photo", "images", "image", "pictures", "picture",
     "survive", "survives", "suffer", "suffers", "faces", "face", "gets", "get",
     "appears", "announce", "announces", "likely", "may",
 }
+
 BAD_IMAGE_TERMS = {
     "logo", "icon", "favicon", "sprite", "tracking", "pixel", "avatar",
     "placeholder", "advert", "banner", "social-share", "share-image",
