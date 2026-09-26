@@ -79,6 +79,8 @@ if "upload_hashtags" not in st.session_state:
     st.session_state.upload_hashtags = ""
 if "upload_comment" not in st.session_state:
     st.session_state.upload_comment = ""
+if "upload_qc" not in st.session_state:
+    st.session_state.upload_qc = None
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
@@ -207,6 +209,10 @@ def render_scriptwriter():
         st.session_state.audio_data = None
         st.session_state.approved_audio = None
         st.session_state.renderer_previews = None
+        st.session_state.rendered_video_path = None
+        st.session_state.upload_qc_approved = False
+        st.session_state.upload_result = None
+        st.session_state.upload_qc = None
 
     script = st.session_state.script_data
     if not script:
@@ -247,6 +253,8 @@ def render_scriptwriter():
             st.session_state.renderer_previews = None
             st.session_state.upload_qc_approved = False
             st.session_state.upload_result = None
+            st.session_state.rendered_video_path = None
+            st.session_state.upload_qc = None
             for index in range(1, 4):
                 st.session_state.pop(f"upload-title-{index}", None)
             st.session_state.pop("upload_video_file", None)
