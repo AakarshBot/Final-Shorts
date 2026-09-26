@@ -5,9 +5,9 @@ Functions 01–04 are implemented, tested, and accepted for development use:
 1. Topic Fetching
 2. Scriptwriter
 3. Audio
-4. Visuals — Phase 1 (scraping)
+4. Visuals — Phase 1 (scraping) + Phase 2 (manual real-image search and manual AI generation)
 
-Function 04 Visuals Phase 1 (scraping) is complete and has passed live dashboard validation. Do not start Renderer, Metadata, or Upload until the next Visuals phase is explicitly defined.
+Function 04 Visuals Phase 1 is complete and Phase 2 now provides three independent visual test options. Do not start Renderer, Metadata, or Upload until Visuals is complete.
 
 ## Factory order
 01. Topic Fetching
@@ -92,7 +92,7 @@ Function 03 rules:
 - Treat the current `main` branch as the clean working baseline.
 - Do not re-open or redesign Functions 01–03 unless a concrete regression is found.
 - Do not copy the old visual-fetch runtime architecture into this repo.
-- Function 04 should be a new, direct visual-fetch module with focused tests and a Streamlit test desk.
+- Function 04 remains a direct visual module with focused tests and a Streamlit test desk. Phase 2 is manual-query-only: real-image search and AI generation are separate options.
 - Start by auditing the user's existing visual-fetch requirements and available free sources, then implement only the smallest useful Visuals function.
 - Keep manual visual approval gates.
 - Keep the factory free-tier only.
@@ -134,6 +134,15 @@ Function 04 — Visuals Phase 1 (scraping) is complete:
 - The Test dashboard shows the automatic queries used and exposes crawler diagnostics.
 - No AI visual-verification call is used in Phase 1; human review remains the final image-selection gate.
 - Visuals uses only free services. DDGS is a discovery dependency; Playwright/Chromium is the browser scraper.
+
+## Visuals Phase 2 contract
+- Option 1: existing Phase 1 scraper/crawler.
+- Option 2: manual query → real-image sources → image download → basic image validation/deduplication → dashboard.
+- Option 2 real sources: Commons, DuckDuckGo, Wikipedia, Openverse, plus Pixabay/Pexels/Unsplash when their API keys are configured.
+- Option 2 has no semantic, licensing, monetization or identity filter in this phase.
+- Option 3: manual prompt → configured AI image providers → dashboard.
+- Current AI providers: Hugging Face Inference Providers with FLUX.1-schnell and Cloudflare Workers AI with FLUX.1-schnell.
+- Option 2 and Option 3 never trigger automatically.
 
 ## Next gate
 Do not redesign Functions 01–04 based on working-path cleanup alone. The next development task is the explicitly defined next Visuals phase or Function 05 — Renderer, after the project owner decides the handoff contract.
