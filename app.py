@@ -574,7 +574,7 @@ def render_renderer_test():
         st.markdown("**Final overlay**")
         if final and Path(final).exists():
             st.video(str(final), width=300)
-        st.caption("Clean bold captions · one active-word highlight · logo top-right · source bottom-right")
+        st.caption("Large kinetic captions · blue active-word capsule · yellow keyword highlight · logo top-right · source bottom-right")
 
 
 def render_audio():
