@@ -78,11 +78,15 @@ def render_topic_fetcher():
 
     if fetch or more:
         with st.spinner("Fetching current sports stories…"):
-            st.session_state.topics = fetch_topics(
+            existing_topics = list(st.session_state.topics) if more else []
+            new_topics = fetch_topics(
                 profiles[desk],
                 more=more,
-                exclude_topics=st.session_state.topics if more else [],
+                exclude_topics=existing_topics,
                 limit=20,
+            )
+            st.session_state.topics = (
+                existing_topics + new_topics if more else new_topics
             )
         st.session_state.selected_topic = None
         st.session_state.script_data = None
