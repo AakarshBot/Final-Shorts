@@ -590,7 +590,7 @@ def render_renderer_test():
     )
 
     st.caption(
-        f"{FINAL_STYLE_NAME} · Anton block headline · clean word-highlight captions"
+        f"{FINAL_STYLE_NAME} · Oswald Bold block headline · clean word-highlight captions"
     )
 
     if st.button("Build preview", type="primary", use_container_width=True):

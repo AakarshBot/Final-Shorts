@@ -27,8 +27,8 @@ def test_headline_is_single_line_and_dynamic():
     assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size == renderer.HEADLINE_MAX_SIZE
     assert short_width <= renderer.HEADLINE_MAX_WIDTH
     assert long_width <= renderer.HEADLINE_MAX_WIDTH
-    assert renderer.HEADLINE_MAX_SIZE >= 220
-    assert renderer.get_headline_font_path().name == "Anton-Regular.ttf"
+    assert renderer.HEADLINE_MAX_SIZE >= 250
+    assert renderer.get_headline_font_path().name == "Oswald-Bold.ttf"
     assert renderer.get_headline_font_path().exists()
     assert long_font.size < short_font.size
 

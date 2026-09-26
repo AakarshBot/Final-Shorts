@@ -110,7 +110,7 @@ tests/test_visual_search.py
 tests/test_visual_generator.py
 tests/test_renderer.py
 renderer.py
-fonts/Anton-Regular.ttf
+fonts/Oswald-Bold.ttf
 fonts/OFL.txt
 requirements.txt
 PROJECT_CONTEXT.md
@@ -152,7 +152,7 @@ Function 06 currently exists as an isolated final preview desk and does not cons
 
 Final visual system:
 - one canonical **Editorial Highlight** style
-- headline uses the bundled Anton block display face, single line, dynamically fitted to the safe width, with a moving blue/yellow brand marker
+- headline uses the bundled Oswald Bold block display face, single line, dynamically fitted to the safe width, with a moving blue/yellow brand marker
 - subtitle styling uses a large bold sans-serif, dark outline, white phrase text and a yellow active word; there is no caption background capsule
 - subtitles use word-level timing, stable phrase layout and restrained word emphasis in the lower-middle safe area
 - logo is the real local `logo.png`, top-right
