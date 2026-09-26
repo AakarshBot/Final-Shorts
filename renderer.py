@@ -188,11 +188,11 @@ def _headline_lines(
             current.append(word)
             current_width = next_width
 
-        if len(lines) >= HEADLINE_MAX_LINES:
-            raise ValueError("Headline is too long to fit on screen.")
-
     if current:
         lines.append(current)
+
+    if len(lines) > HEADLINE_MAX_LINES:
+        raise ValueError("Headline is too long to fit on screen.")
 
     return lines
 
