@@ -23,7 +23,7 @@ Only completed functions should exist in the repository. Do not scaffold future 
 
 ## Dashboard
 - The dashboard is currently a Test desk only while the factory is built.
-- Test exposes each completed function independently: Topic Fetcher, Scriptwriter, Audio and Visuals.
+- Test exposes the completed function desks plus an isolated Function 06 Renderer preview desk.
 - Function handoffs are human-approved in the dashboard.
 - No Live-production screen is present yet; it will be added when the production pipeline actually exists.
 - Dashboard visual polish is parked. Change only functional test behavior while building the factory.
@@ -110,6 +110,8 @@ tests/test_audio.py
 tests/test_visual_fetcher.py
 tests/test_visual_search.py
 tests/test_visual_generator.py
+tests/test_renderer.py
+renderer.py
 requirements.txt
 PROJECT_CONTEXT.md
 README.md
