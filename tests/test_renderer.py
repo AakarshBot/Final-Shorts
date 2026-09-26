@@ -73,15 +73,24 @@ def test_renderer_paths_point_to_expected_local_assets():
     assert Path(renderer.get_headline_font_path()).parent.name == "fonts"
 
 
-def test_default_headline_is_short_and_fits_and_keeps_all_words():
-    assert len(renderer.HEADLINE_TEXT.split()) == 4
+def test_headline_uses_one_line_dynamic_font_fit():
+    text = "THIS HEADLINE SHOULD FIT"
+    font, clean, width = renderer._fit_headline_font(text)
 
-    font, lines = renderer._headline_layout(renderer.HEADLINE_TEXT)
-    probe = renderer.ImageDraw.Draw(renderer.Image.new("RGB", (1, 1)))
+    assert clean.split() == text.split()
+    assert width <= 860
+    assert font.size >= 42
 
-    assert len(lines) <= 2
-    assert " ".join(lines).split() == renderer.HEADLINE_TEXT.split()
-    assert all(renderer._measure(probe, line, font)[0] <= 860 for line in lines)
+
+def test_longer_headline_gets_smaller_font_without_wrapping():
+    short_font, _, _ = renderer._fit_headline_font("GAME CHANGED")
+    long_font, clean, _ = renderer._fit_headline_font(
+        "THIS IS A MUCH LONGER HEADLINE",
+    )
+
+    assert long_font.size < short_font.size
+    assert len(clean.split()) == 6
+
 
 
 def test_subtitles_wait_until_headline_has_disappeared(monkeypatch):
