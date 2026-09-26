@@ -5,6 +5,11 @@ from PIL import Image, ImageChops, ImageDraw
 import renderer
 
 
+def test_production_upload_encode_settings_are_youtube_ready():
+    assert renderer.FPS == 24
+    assert renderer.HEADLINE_SECONDS == 1.35
+
+
 def test_renderer_frame_is_vertical_and_independent():
     base = renderer.make_sample_background()
     frame = renderer.render_frame(base, 0.9)

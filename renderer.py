@@ -13,9 +13,9 @@ from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
 WIDTH = 1080
 HEIGHT = 1920
-FPS = 15
+FPS = 24
 
-HEADLINE_SECONDS = 1.15
+HEADLINE_SECONDS = 1.35
 HEADLINE_TEXT = "THE GAME JUST CHANGED"
 SOURCE_LABEL = "SPORTS DESK"
 FINAL_STYLE_NAME = "Editorial Highlight"
@@ -603,9 +603,23 @@ def write_preview_video(frames, path: Path) -> Path:
             "-preset",
             "veryfast",
             "-crf",
-            "24",
+            "20",
+            "-profile:v",
+            "high",
+            "-level:v",
+            "4.2",
+            "-bf",
+            "2",
+            "-g",
+            str(FPS * 2),
             "-pix_fmt",
             "yuv420p",
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-colorspace",
+            "bt709",
             "-movflags",
             "+faststart",
             str(path),
@@ -751,7 +765,11 @@ def _mux_audio(
             "-c:a",
             "aac",
             "-b:a",
-            "128k",
+            "192k",
+            "-ar",
+            "48000",
+            "-ac",
+            "2",
             "-shortest",
             str(output_path),
         ],

@@ -126,6 +126,39 @@ def test_upload_sets_private_metadata_and_skips_comments(tmp_path):
     assert result["comment_posted"] is False
 
 
+def test_refresh_failure_explains_reauthorization(monkeypatch, tmp_path):
+    token = tmp_path / "token.json"
+    token.write_text("{}", encoding="utf-8")
+
+    class FakeCredentials:
+        scopes = [
+            uploader.YOUTUBE_UPLOAD_SCOPE,
+            uploader.YOUTUBE_COMMENT_SCOPE,
+        ]
+        expired = True
+        refresh_token = "refresh-token"
+        valid = False
+
+        def refresh(self, request):
+            raise uploader.RefreshError("invalid_grant: Token has been expired or revoked.")
+
+    monkeypatch.setattr(
+        uploader.Credentials,
+        "from_authorized_user_file",
+        classmethod(lambda cls, path: FakeCredentials()),
+    )
+
+    try:
+        uploader._load_credentials(token, require_comments=True)
+    except RuntimeError as exc:
+        message = str(exc)
+        assert "Re-authorize token.json" in message
+        assert "expired, revoked, or no longer valid" in message
+        assert "invalid_grant" in message
+    else:
+        raise AssertionError("Refresh failure should explain reauthorization.")
+
+
 def test_public_upload_requires_upload_and_comment_scopes(monkeypatch, tmp_path):
     token = tmp_path / "token.json"
     token.write_text("{}", encoding="utf-8")

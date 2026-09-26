@@ -733,6 +733,11 @@ def _render_live_visual_board(slide_count: int):
 
 
 def _render_live_visuals(slide_count: int):
+    if st.session_state.live_visuals_approved:
+        st.success("Visuals approved and final render completed.")
+        st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
+        return
+
     _render_live_visual_board(slide_count)
     assigned = len(st.session_state.live_visual_assignments)
     st.caption(
