@@ -18,17 +18,22 @@ HEADLINE_TEXT = "THE GAME JUST CHANGED"
 SOURCE_LABEL = "SPORTS DESK"
 FINAL_STYLE_NAME = "Editorial Highlight"
 
-HEADLINE_MAX_WIDTH = 980
+HEADLINE_SAFE_MARGIN = 60
+HEADLINE_MAX_WIDTH = WIDTH - (HEADLINE_SAFE_MARGIN * 2)
 HEADLINE_MAX_SIZE = 260
 HEADLINE_MIN_SIZE = 120
+HEADLINE_STROKE_WIDTH = 6
+HEADLINE_MAX_LINES = 3
 HEADLINE_MARKER_WIDTH = 56
 HEADLINE_MARKER_HEIGHT = 8
 HEADLINE_MARKER_GAP = 16
 HEADLINE_LINE_GAP = 8
 
-SUBTITLE_MAX_WIDTH = 900
+SUBTITLE_SAFE_MARGIN = 64
+SUBTITLE_MAX_WIDTH = WIDTH - (SUBTITLE_SAFE_MARGIN * 2)
 SUBTITLE_MAX_SIZE = 70
 SUBTITLE_MIN_SIZE = 54
+SUBTITLE_STROKE_WIDTH = 5
 SUBTITLE_WORD_SPACING = 10
 SUBTITLE_LINE_GAP = 14
 SUBTITLE_Y = 1390
@@ -135,8 +140,18 @@ def subtitle_font(size: int = SUBTITLE_MAX_SIZE, language: str = "english"):
     return _font(_font_candidates("subtitle", language), size)
 
 
-def _measure(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
-    box = draw.textbbox((0, 0), text, font=font, stroke_width=0)
+def _measure(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font,
+    stroke_width: int = 0,
+) -> tuple[int, int]:
+    box = draw.textbbox(
+        (0, 0),
+        text,
+        font=font,
+        stroke_width=stroke_width,
+    )
     return box[2] - box[0], box[3] - box[1]
 
 
@@ -149,32 +164,37 @@ def _headline_lines(
     if not words:
         return []
 
-    measurements = [_measure(draw, word, font)[0] for word in words]
-    spacing = HEADLINE_MARKER_GAP
+    measurements = [
+        _measure(draw, word, font, HEADLINE_STROKE_WIDTH)[0]
+        for word in words
+    ]
+    max_line_width = HEADLINE_MAX_WIDTH - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
 
-    def line_width(start: int, end: int) -> int:
-        return (
-            sum(measurements[start:end])
-            + spacing * max(0, end - start - 1)
+    lines: list[list[str]] = []
+    current: list[str] = []
+    current_width = 0
+
+    for word, word_width in zip(words, measurements):
+        next_width = (
+            current_width
+            + word_width
+            + (HEADLINE_MARKER_GAP if current else 0)
         )
+        if current and next_width > max_line_width:
+            lines.append(current)
+            current = [word]
+            current_width = word_width
+        else:
+            current.append(word)
+            current_width = next_width
 
-    first_line_max = HEADLINE_MAX_WIDTH - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
+        if len(lines) >= HEADLINE_MAX_LINES:
+            raise ValueError("Headline is too long to fit on screen.")
 
-    if line_width(0, len(words)) <= first_line_max:
-        return [words]
+    if current:
+        lines.append(current)
 
-    candidates = []
-    for split in range(1, len(words)):
-        top = line_width(0, split)
-        bottom = line_width(split, len(words))
-        if top <= first_line_max and bottom <= HEADLINE_MAX_WIDTH:
-            candidates.append((max(top, bottom), abs(top - bottom), split))
-
-    if not candidates:
-        raise ValueError("Headline is too long to fit in two lines.")
-
-    _, _, split = min(candidates)
-    return [words[:split], words[split:]]
+    return lines
 
 
 def _fit_headline_font(
@@ -250,12 +270,17 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
 
-    line_widths = []
-    line_heights = []
-    for line in lines:
-        width, height = _measure(draw, " ".join(line), font)
-        line_widths.append(width)
-        line_heights.append(height)
+    line_boxes = [
+        draw.textbbox(
+            (0, 0),
+            " ".join(line),
+            font=font,
+            stroke_width=HEADLINE_STROKE_WIDTH,
+        )
+        for line in lines
+    ]
+    line_widths = [box[2] - box[0] for box in line_boxes]
+    line_heights = [box[3] - box[1] for box in line_boxes]
 
     text_block_width = max(line_widths)
     text_block_height = (
@@ -266,7 +291,7 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
     progress = min(1.0, max(0.0, t / 0.45))
     eased = 1 - (1 - progress) ** 3
     start_group_x = -group_width - 80
-    final_group_x = max(24, (WIDTH - group_width) // 2)
+    final_group_x = (WIDTH - group_width) // 2
     group_x = int(
         start_group_x + (final_group_x - start_group_x) * eased
     )
@@ -275,7 +300,8 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
     text_x = group_x + HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP
     y = 560
 
-    line_y = y + max(8, font.size // 2)
+    first_height = line_heights[0]
+    line_y = y + max(8, (first_height - HEADLINE_MARKER_HEIGHT) // 2)
     split = int(HEADLINE_MARKER_WIDTH * 0.58)
     draw.rectangle(
         (
@@ -301,12 +327,13 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
         line_text = " ".join(line)
         line_width = line_widths[row]
         line_x = text_x + (text_block_width - line_width) // 2
+        box = line_boxes[row]
         draw.text(
-            (line_x, cursor_y),
+            (line_x - box[0], cursor_y - box[1]),
             line_text,
             font=font,
             fill=WHITE,
-            stroke_width=6,
+            stroke_width=HEADLINE_STROKE_WIDTH,
             stroke_fill=DARK,
         )
         cursor_y += line_heights[row] + HEADLINE_LINE_GAP
@@ -382,7 +409,12 @@ def _subtitle_lines(
         return []
 
     measurements = [
-        _measure(draw, str(word.get("text") or ""), font)[0]
+        _measure(
+            draw,
+            str(word.get("text") or ""),
+            font,
+            SUBTITLE_STROKE_WIDTH,
+        )[0]
         for word in words
     ]
 
@@ -443,7 +475,12 @@ def _draw_subtitles(
     font, lines = _fit_subtitle_layout(words, language)
 
     measurements = {
-        index: _measure(draw, str(word["text"]), font)
+        index: draw.textbbox(
+            (0, 0),
+            str(word["text"]),
+            font=font,
+            stroke_width=SUBTITLE_STROKE_WIDTH,
+        )
         for index, word in enumerate(words)
     }
 
@@ -452,7 +489,10 @@ def _draw_subtitles(
     for line in lines:
         line_end = line_start + len(line)
         line_heights.append(
-            max(measurements[index][1] for index in range(line_start, line_end))
+            max(
+                measurements[index][3] - measurements[index][1]
+                for index in range(line_start, line_end)
+            )
         )
         line_start = line_end
     total_height = sum(line_heights) + SUBTITLE_LINE_GAP * max(0, len(lines) - 1)
@@ -460,29 +500,30 @@ def _draw_subtitles(
 
     word_index = 0
     for row, line in enumerate(lines):
-        line_width = sum(measurements[word_index + offset][0] for offset in range(len(line)))
-        line_width += SUBTITLE_WORD_SPACING * max(0, len(line) - 1)
+        widths = [
+            measurements[word_index + offset][2] - measurements[word_index + offset][0]
+            for offset in range(len(line))
+        ]
+        line_width = sum(widths) + SUBTITLE_WORD_SPACING * max(0, len(line) - 1)
         cursor = (WIDTH - line_width) // 2
 
         for offset, word in enumerate(line):
             index = word_index + offset
             text = str(word["text"])
-            width, height = measurements[index]
+            box = measurements[index]
+            width = box[2] - box[0]
             start = float(word["start"])
             end = float(word["end"])
             active = start <= t < end
 
-            if active:
-                text_fill = ACCENT
-            else:
-                text_fill = WHITE
+            text_fill = ACCENT if active else WHITE
 
             draw.text(
-                (cursor, y),
+                (cursor - box[0], y - box[1]),
                 text,
                 font=font,
                 fill=text_fill,
-                stroke_width=5,
+                stroke_width=SUBTITLE_STROKE_WIDTH,
                 stroke_fill=DARK,
             )
             cursor += width + SUBTITLE_WORD_SPACING
