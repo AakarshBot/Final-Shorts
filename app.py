@@ -1,11 +1,16 @@
 import json
 
+from dotenv import load_dotenv
 import streamlit as st
+
+load_dotenv()
 
 from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
 from topic_fetcher import fetch_topics
 from visual_fetcher import crawl_visuals, same_query
+from visual_search import search_images
+from visual_generator import generate_images
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
@@ -45,6 +50,10 @@ if "visual_loaded_story" not in st.session_state:
     st.session_state.visual_loaded_story = None
 if "visual_manual_query" not in st.session_state:
     st.session_state.visual_manual_query = ""
+if "real_image_result" not in st.session_state:
+    st.session_state.real_image_result = None
+if "ai_image_result" not in st.session_state:
+    st.session_state.ai_image_result = None
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
@@ -199,8 +208,7 @@ def render_scriptwriter():
         st.success("Script approved and stored as the handoff for Function 03 · Audio.")
 
 
-def render_visuals():
-    st.header("04 · Visuals")
+def render_visuals_crawler():
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first, then select a story for Visuals.")
         return
@@ -282,10 +290,15 @@ def render_visuals():
     metrics = st.columns(3)
     metrics[0].metric("Images", len(result.get("assets") or []))
     metrics[1].metric("Pages", int(result.get("pages_scraped") or 0))
-    metrics[2].metric("Status", "Ready" if len(result.get("assets") or []) >= result.get("success_threshold", 10) else "Underfilled")
+    metrics[2].metric(
+        "Status",
+        "Ready"
+        if len(result.get("assets") or []) >= result.get("success_threshold", 10)
+        else "Underfilled",
+    )
 
     st.subheader("Manual web query")
-    st.caption("Enter a new keyword or phrase. The same crawler will keep the original story URL as the anchor and search only this manual query.")
+    st.caption("The original story stays the anchor; this adds one manual crawler query.")
     with st.form("visual_manual_query_form"):
         manual_query = st.text_input(
             "Keyword / phrase / query",
@@ -303,7 +316,7 @@ def render_visuals():
         if not manual_query:
             st.warning("Enter a query first.")
         elif same_query(manual_query, automatic_queries):
-            st.warning("That query was already used by the factory for this story. Use a different query.")
+            st.warning("That query was already used by the factory. Use a different query.")
         else:
             with st.spinner("Scraping the manual query…"):
                 try:
@@ -328,16 +341,133 @@ def render_visuals():
             with col:
                 st.image(asset["bytes"], width="stretch")
                 publisher = asset.get("publisher") or "Web source"
-                query = asset.get("query") or "original story URL"
                 size = f'{asset.get("width", 0)}×{asset.get("height", 0)}'
                 action = int(asset.get("action_score") or 0)
                 st.caption(
-                    f"{publisher} · {size} · action {action}\n{asset.get('article_title') or ''}"
+                    f"{publisher} · {size} · action {action}\n"
+                    f"{asset.get('article_title') or ''}"
                 )
-                st.caption(f"Search: {query}")
                 source_url = str(asset.get("source_page_url") or "").strip()
                 if source_url:
                     st.link_button("Open source", source_url, use_container_width=True)
+
+
+def _render_manual_real_images():
+    st.subheader("Option 2 · Real Image Search")
+    st.caption("Manual query only. Searches all configured real-image sources in parallel.")
+    with st.form("real_image_search_form"):
+        query = st.text_input(
+            "Manual query",
+            placeholder="e.g. Ben Stokes batting",
+            key="real_image_query",
+        )
+        search = st.form_submit_button(
+            "Search real images",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if search:
+        query = query.strip()
+        if not query:
+            st.warning("Enter a query first.")
+        else:
+            with st.spinner("Searching real-image sources…"):
+                st.session_state.real_image_result = search_images(query)
+
+    result = st.session_state.get("real_image_result") or {}
+    if not result:
+        return
+    if result.get("errors"):
+        st.caption("Some sources failed; successful sources are still shown.")
+
+    assets = result.get("assets") or []
+    st.caption(
+        f"{len(assets)} images · "
+        + " · ".join(
+            f"{name} {count}"
+            for name, count in (result.get("providers") or {}).items()
+            if count
+        )
+    )
+    if not assets:
+        st.warning("No usable images were returned.")
+        return
+
+    for start in range(0, len(assets), 3):
+        cols = st.columns(3, gap="medium")
+        for col, asset in zip(cols, assets[start:start + 3]):
+            with col:
+                st.image(asset["bytes"], width="stretch")
+                st.caption(asset.get("source") or "Web")
+                source_url = str(asset.get("source_page_url") or "").strip()
+                if source_url:
+                    st.link_button("Open source", source_url, use_container_width=True)
+
+
+def _render_manual_ai_images():
+    st.subheader("Option 3 · AI Generation")
+    st.caption("Manual query only. Each configured AI provider runs independently.")
+    with st.form("ai_image_form"):
+        query = st.text_input(
+            "Manual prompt",
+            placeholder="e.g. Ben Stokes hitting a six in a packed stadium",
+            key="ai_image_query",
+        )
+        generate = st.form_submit_button(
+            "Generate images",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if generate:
+        query = query.strip()
+        if not query:
+            st.warning("Enter a prompt first.")
+        else:
+            with st.spinner("Generating images…"):
+                st.session_state.ai_image_result = generate_images(query)
+
+    result = st.session_state.get("ai_image_result") or {}
+    if not result:
+        return
+    if result.get("errors"):
+        st.caption("Some AI providers failed; successful providers are still shown.")
+
+    assets = result.get("assets") or []
+    st.caption(
+        f"{len(assets)} generated · "
+        + " · ".join(
+            name for name, count in (result.get("providers") or {}).items() if count
+        )
+    )
+    if not assets:
+        st.warning("No configured AI provider returned an image.")
+        return
+
+    for asset in assets:
+        st.image(asset["bytes"], width="stretch")
+        st.caption(f'{asset.get("source") or "AI"} · {asset.get("model") or ""}'.strip(" ·"))
+
+
+def render_visuals():
+    st.header("04 · Visuals")
+    mode = st.radio(
+        "Visual test",
+        [
+            "Option 1 · Scraper / Crawler",
+            "Option 2 · Real Image Search",
+            "Option 3 · AI Generation",
+        ],
+        horizontal=True,
+        key="visual_test_mode",
+    )
+    if mode.startswith("Option 1"):
+        render_visuals_crawler()
+    elif mode.startswith("Option 2"):
+        _render_manual_real_images()
+    else:
+        _render_manual_ai_images()
 
 
 def render_audio():
