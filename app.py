@@ -247,6 +247,9 @@ def render_scriptwriter():
             st.session_state.renderer_previews = None
             st.session_state.upload_qc_approved = False
             st.session_state.upload_result = None
+            for index in range(1, 4):
+                st.session_state.pop(f"upload-title-{index}", None)
+            st.session_state.pop("upload_video_file", None)
             st.session_state.upload_title_options = list(approved.get("titles") or [])
             st.session_state.upload_title_choice = 0
             st.session_state.upload_description = str(approved.get("seo_description") or "")
