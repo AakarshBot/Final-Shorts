@@ -52,8 +52,8 @@ def test_subtitles_create_absolute_timestamps_across_scenes():
     assert result["cues"][0]["end"] == 1.0
 
     scene_one_duration = approved_audio()["scenes"][0]["duration"]
-    assert result["cues"][1]["start"] == scene_one_duration + 0.1
-    assert result["cues"][1]["end"] == scene_one_duration + 1.2
+    assert result["cues"][1]["start"] == pytest.approx(scene_one_duration + 0.1)
+    assert result["cues"][1]["end"] == pytest.approx(scene_one_duration + 1.2)
 
 
 def test_subtitles_preserve_script_punctuation_when_audio_word_matches():
