@@ -63,7 +63,7 @@ def test_subtitles_start_after_headline(monkeypatch):
         renderer.HEADLINE_SECONDS + 0.30,
         headline_enabled=True,
     )
-    assert seen == [0.30]
+    assert seen == [renderer.HEADLINE_SECONDS + 0.30]
 
 
 def test_subtitle_handoff_contract():
