@@ -192,7 +192,7 @@ def _render_visual_asset_grid(assets: list[dict], result_key: str):
                         asset.get("article_title")
                         or asset.get("dimensions")
                         or (
-                            f'{int(asset.get("width") or 0)}×{int(asset.get("height") or 0)}px'
+                            f'{asset.get("width")}×{asset.get("height")}px'
                             if asset.get("width") and asset.get("height")
                             else ""
                         )
