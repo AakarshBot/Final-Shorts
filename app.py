@@ -182,6 +182,8 @@ if "live_real_image_result" not in st.session_state:
     st.session_state.live_real_image_result = None
 if "live_ai_image_result" not in st.session_state:
     st.session_state.live_ai_image_result = None
+if "live_script_language" not in st.session_state:
+    st.session_state.live_script_language = "english"
 if "live_visual_crops" not in st.session_state:
     st.session_state.live_visual_crops = {}
 if "live_visual_deleted" not in st.session_state:
@@ -473,27 +475,37 @@ def _live_start_story(index: int):
     st.session_state.live_selected_topic = index
     story = _live_story(topic)
 
-    def run_script():
-        return write_script(story, language="english")
+    try:
+        script = write_script(
+            story,
+            language=st.session_state.get("live_script_language", "english"),
+        )
+        st.session_state.live_script_data = script
+    except Exception as exc:
+        st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
 
-    def run_visuals():
-        return crawl_visuals(story)
-
-    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="live-start") as executor:
-        script_future = executor.submit(run_script)
-        visual_future = executor.submit(run_visuals)
-        try:
-            st.session_state.live_script_data = script_future.result()
-        except Exception as exc:
-            st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
-        try:
-            st.session_state.live_visual_result = visual_future.result()
-        except Exception as exc:
-            st.session_state.live_visual_result = {
-                "error": f"{type(exc).__name__}: {exc}"
-            }
-
+    visual_story = dict(story)
     script = st.session_state.live_script_data
+    if isinstance(script, dict):
+        scenes = script.get("script") or []
+        first_scene = scenes[0] if scenes and isinstance(scenes[0], dict) else {}
+        visual_story["primary_entity"] = str(
+            first_scene.get("primary_entity") or ""
+        ).strip()
+        visual_story["specific_search_prompt"] = str(
+            first_scene.get("specific_search_prompt") or ""
+        ).strip()
+        visual_story["visual_intent"] = str(
+            first_scene.get("visual_intent") or ""
+        ).strip()
+
+    try:
+        st.session_state.live_visual_result = crawl_visuals(visual_story)
+    except Exception as exc:
+        st.session_state.live_visual_result = {
+            "error": f"{type(exc).__name__}: {exc}"
+        }
+
     if isinstance(script, dict):
         st.session_state.live_upload_titles = list(script.get("titles") or [])
         st.session_state.live_upload_description = str(script.get("seo_description") or "")
@@ -948,26 +960,15 @@ def _render_live_script():
             width="stretch",
             key="live-approve-script",
         ):
-            approved = json.loads(json.dumps(script, ensure_ascii=False))
-            original_scenes = script.get("script") or []
-            for scene, voiceover, original in zip(
-                approved.get("script") or [],
-                edited_voiceovers,
-                original_scenes,
-            ):
-                scene["voiceover"] = str(voiceover or "").strip()
-            approved["headline"] = str(edited_headline or "").strip()
-            approved["human_script_edited"] = any(
-                str(scene.get("voiceover") or "").strip()
-                != str(original.get("voiceover") or "").strip()
-                for scene, original in zip(
-                    approved.get("script") or [],
-                    original_scenes,
+            try:
+                approved = apply_script_edits(
+                    script,
+                    edited_voiceovers,
+                    headline=edited_headline,
                 )
-            ) or str(approved.get("headline") or "").strip() != str(
-                script.get("headline") or ""
-            ).strip()
-            approved["approved_for_audio"] = True
+            except ValueError as exc:
+                st.session_state.live_script_error = str(exc)
+                st.rerun()
             st.session_state.live_approved_script = approved
             try:
                 with st.spinner("Creating audio and subtitle handoffs…"):
@@ -1234,16 +1235,34 @@ def render_live_dashboard():
         return
 
     if not st.session_state.live_topics:
-        profile = st.session_state.live_topics_profile
-        if not profile:
-            return
-        with st.spinner("Finding the top 20 stories…"):
-            st.session_state.live_topics = fetch_topics(
-                profile,
-                more=False,
-                exclude_topics=[],
-                limit=20,
-            )
+        st.warning("No stories were returned for this desk.")
+        if st.button(
+            "Retry story search",
+            type="primary",
+            width="stretch",
+            key="live-retry-topics",
+        ):
+            profile = st.session_state.live_topics_profile
+            if profile:
+                with st.spinner("Searching for current sports stories…"):
+                    st.session_state.live_topics = fetch_topics(
+                        profile,
+                        more=False,
+                        exclude_topics=[],
+                        limit=20,
+                    )
+                st.rerun()
+        return
+
+    language_choice = st.pills(
+        "Script language",
+        ["English", "Hindi", "Telugu"],
+        default=st.session_state.get("live_script_language", "english").title(),
+        key="live-script-language-choice",
+        label_visibility="collapsed",
+    )
+    if language_choice:
+        st.session_state.live_script_language = language_choice.casefold()
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Top 20 stories</div></div><div class="section-count">headline + rating</div></div>', unsafe_allow_html=True)
 
@@ -1277,12 +1296,11 @@ def render_live_dashboard():
                         _live_start_story(index)
                         st.rerun()
 
-    if len(topics) >= 20:
-        if st.button(
-            "Find 20 more unique stories",
-            width="stretch",
-            key="live-find-more",
-        ):
+    if st.button(
+        "Find 20 more unique stories",
+        width="stretch",
+        key="live-find-more",
+    ):
             with st.spinner("Searching for 20 additional unique stories…"):
                 existing = list(st.session_state.live_topics)
                 new_topics = fetch_topics(
@@ -1312,11 +1330,13 @@ def render_live_dashboard():
     subtitles_ready = isinstance(st.session_state.live_subtitle_data, dict)
 
     status_cols = st.columns(4, gap="small")
+    live_visual_result = st.session_state.get("live_visual_result") or {}
+    live_visuals_ready = bool(live_visual_result.get("assets")) and not live_visual_result.get("error")
     status_values = [
         ("Script", "Approved" if script_approved else "Waiting"),
         ("Audio", "Ready" if audio_ready else "Waiting"),
         ("Subtitles", "Ready" if subtitles_ready else "Waiting"),
-        ("Visuals", "Ready" if st.session_state.live_visual_result else "Scraping"),
+        ("Visuals", "Ready" if live_visuals_ready else "Scraping"),
     ]
     for col, (label, value) in zip(status_cols, status_values):
         with col:
@@ -1351,6 +1371,28 @@ def render_topic_fetcher():
         key="topic_desk",
         label_visibility="collapsed",
     ) or "Cricket India / Asia"
+    previous_desk = st.session_state.get("topic_desk_profile")
+    if previous_desk and previous_desk != profiles[desk]:
+        st.session_state.topics = []
+        st.session_state.selected_topic = None
+        st.session_state.script_data = None
+        st.session_state.approved_script = None
+        st.session_state.audio_data = None
+        st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
+        st.session_state.visual_result = None
+        st.session_state.visual_loaded_story = None
+        st.session_state.renderer_previews = None
+        st.session_state.rendered_video_path = None
+        st.session_state.upload_qc_approved = False
+        st.session_state.upload_result = None
+        st.session_state.upload_qc = None
+        st.session_state.manual_visual_result = None
+        st.session_state.real_image_result = None
+        st.session_state.ai_image_result = None
+        st.session_state.visual_crops = {}
+    st.session_state.topic_desk_profile = profiles[desk]
     col1, col2 = st.columns(2)
     with col1:
         fetch = st.button("Fetch topics", type="primary", width="stretch")
@@ -1433,6 +1475,21 @@ def render_topic_fetcher():
                         st.session_state.approved_script = None
                         st.session_state.audio_data = None
                         st.session_state.approved_audio = None
+                        st.session_state.subtitle_data = None
+                        st.session_state.approved_subtitles = None
+                        st.session_state.renderer_previews = None
+                        st.session_state.rendered_video_path = None
+                        st.session_state.upload_qc_approved = False
+                        st.session_state.upload_result = None
+                        st.session_state.upload_qc = None
+                        st.session_state.upload_title_options = []
+                        st.session_state.upload_title_choice = 0
+                        st.session_state.upload_description = ""
+                        st.session_state.upload_hashtags = ""
+                        st.session_state.upload_comment = ""
+                        st.session_state.manual_visual_result = None
+                        st.session_state.real_image_result = None
+                        st.session_state.ai_image_result = None
                         st.session_state.visual_result = None
                         st.session_state.visual_loaded_story = None
                         st.session_state.visual_crops = {}
@@ -1489,6 +1546,8 @@ def render_scriptwriter():
         st.session_state.approved_script = None
         st.session_state.audio_data = None
         st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
         st.session_state.renderer_previews = None
         st.session_state.rendered_video_path = None
         st.session_state.upload_qc_approved = False
