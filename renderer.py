@@ -347,7 +347,7 @@ def _subtitle_lines(
             + SUBTITLE_WORD_SPACING * max(0, end - start - 1)
         )
 
-    if line_width(0, len(words)) + SUBTITLE_ACTIVE_PAD_X * 2 <= SUBTITLE_MAX_WIDTH:
+    if line_width(0, len(words)) <= SUBTITLE_MAX_WIDTH:
         return [words]
 
     candidates = []
@@ -355,8 +355,8 @@ def _subtitle_lines(
         top = line_width(0, split)
         bottom = line_width(split, len(words))
         if (
-            top + SUBTITLE_ACTIVE_PAD_X * 2 <= SUBTITLE_MAX_WIDTH
-            and bottom + SUBTITLE_ACTIVE_PAD_X * 2 <= SUBTITLE_MAX_WIDTH
+            top <= SUBTITLE_MAX_WIDTH
+            and bottom <= SUBTITLE_MAX_WIDTH
         ):
             candidates.append((max(top, bottom), abs(top - bottom), split))
 
