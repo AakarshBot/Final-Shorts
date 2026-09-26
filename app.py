@@ -54,6 +54,28 @@ footer,#MainMenu{visibility:hidden;}
 .live-glow{height:4px;border-radius:999px;background:linear-gradient(90deg,#ff2f8b,#6c45ff,#00d4ff);box-shadow:0 0 26px rgba(255,47,139,.35);}
 .live-card{min-height:154px;border-radius:22px;border:1px solid rgba(255,255,255,.10);background:linear-gradient(145deg,rgba(255,255,255,.05),rgba(255,255,255,.015));padding:20px;}
 .muted{color:var(--muted);}
+.section-head{display:flex;align-items:end;justify-content:space-between;margin:.5rem 0 1rem;}
+.section-title{font-size:1.45rem;font-weight:900;letter-spacing:-.03em;}
+.section-count{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
+.topic-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+.topic-rank{font-size:.72rem;color:#8f98a7;font-weight:800;letter-spacing:.12em;}
+.topic-rating{font-size:1rem;letter-spacing:.08em;color:#ffd45a;text-shadow:0 0 18px rgba(255,210,80,.14);}
+.topic-title{font-size:1.2rem;line-height:1.12;font-weight:900;letter-spacing:-.025em;margin:.15rem 0 .55rem;}
+.topic-meta{font-size:.76rem;color:#8992a0;line-height:1.4;}
+.topic-accent{width:64px;height:3px;border-radius:999px;margin:.8rem 0 .9rem;background:linear-gradient(90deg,#ff2f8b,#6c45ff,#00d4ff);box-shadow:0 0 18px rgba(108,69,255,.22);}
+.topic-description{min-height:52px;font-size:.88rem;line-height:1.55;color:#c9ced7;margin-bottom:1rem;}
+.st-key-topic-card-0,.st-key-topic-card-1,.st-key-topic-card-2,.st-key-topic-card-3,.st-key-topic-card-4,.st-key-topic-card-5,.st-key-topic-card-6,.st-key-topic-card-7,.st-key-topic-card-8,.st-key-topic-card-9,.st-key-topic-card-10,.st-key-topic-card-11,.st-key-topic-card-12,.st-key-topic-card-13,.st-key-topic-card-14,.st-key-topic-card-15,.st-key-topic-card-16,.st-key-topic-card-17,.st-key-topic-card-18,.st-key-topic-card-19{
+    background:linear-gradient(145deg,rgba(255,255,255,.052),rgba(255,255,255,.014));
+    border:1px solid rgba(255,255,255,.09);
+    border-radius:22px;
+    padding:18px 18px 16px;
+    min-height:245px;
+    box-shadow:0 16px 46px rgba(0,0,0,.18);
+}
+.st-key-topic-card-0 button,.st-key-topic-card-1 button,.st-key-topic-card-2 button,.st-key-topic-card-3 button,.st-key-topic-card-4 button,.st-key-topic-card-5 button,.st-key-topic-card-6 button,.st-key-topic-card-7 button,.st-key-topic-card-8 button,.st-key-topic-card-9 button,.st-key-topic-card-10 button,.st-key-topic-card-11 button,.st-key-topic-card-12 button,.st-key-topic-card-13 button,.st-key-topic-card-14 button,.st-key-topic-card-15 button,.st-key-topic-card-16 button,.st-key-topic-card-17 button,.st-key-topic-card-18 button,.st-key-topic-card-19 button{
+    border-radius:12px;
+    font-weight:800;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -230,24 +252,67 @@ def render_topic_fetcher():
         unsafe_allow_html=True,
     )
 
-    for index, topic in enumerate(st.session_state.topics):
-        with st.container(border=True):
-            st.markdown(f"**{index + 1:02d}  {topic.title}**")
-            st.caption(
-                f"{topic.source or 'Unknown source'} · "
-                f"{topic.published_at.strftime('%d %b %Y, %H:%M UTC')}"
-            )
-            if topic.description:
-                st.caption(topic.description[:260])
-            if st.button("Select story", key=f"topic-select-{index}", use_container_width=True):
-                st.session_state.selected_topic = index
-                st.session_state.script_data = None
-                st.session_state.approved_script = None
-                st.session_state.audio_data = None
-                st.session_state.approved_audio = None
-                st.session_state.visual_result = None
-                st.session_state.visual_loaded_story = None
-        
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose the next story</div></div><div class="section-count">'
+        + f'{len(st.session_state.topics)} stories'
+        + '</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    topics = st.session_state.topics
+    for start in range(0, len(topics), 2):
+        row = st.columns(2, gap="medium")
+        for col, (index, topic) in zip(
+            row,
+            enumerate(topics[start:start + 2], start=start),
+        ):
+            with col:
+                rating = max(
+                    1,
+                    min(
+                        5,
+                        round(float(topic.score or 0.0) / 8.0 * 5.0),
+                    ),
+                )
+                stars = "★" * rating + "☆" * (5 - rating)
+                source = topic.source or "Sports desk"
+                published = topic.published_at.strftime("%d %b · %H:%M UTC")
+                with st.container(key=f"topic-card-{index}"):
+                    st.markdown(
+                        f'''
+                        <div class="topic-top">
+                            <span class="topic-rank">#{index + 1:02d}</span>
+                            <span class="topic-rating">{stars}</span>
+                        </div>
+                        <div class="topic-title">{topic.title}</div>
+                        <div class="topic-meta">{source} · {published}</div>
+                        <div class="topic-accent"></div>
+                        ''',
+                        unsafe_allow_html=True,
+                    )
+                    if topic.description:
+                        st.markdown(
+                            f'<div class="topic-description">{topic.description[:220]}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    else:
+                        st.markdown(
+                            '<div class="topic-description muted">Fresh sports story · ready for Scriptwriter.</div>',
+                            unsafe_allow_html=True,
+                        )
+                    if st.button(
+                        "Select story  →",
+                        key=f"topic-select-{index}",
+                        width="stretch",
+                    ):
+                        st.session_state.selected_topic = index
+                        st.session_state.script_data = None
+                        st.session_state.approved_script = None
+                        st.session_state.audio_data = None
+                        st.session_state.approved_audio = None
+                        st.session_state.visual_result = None
+                        st.session_state.visual_loaded_story = None
+
     if st.session_state.selected_topic is not None:
         index = st.session_state.selected_topic
         if index < len(st.session_state.topics):
