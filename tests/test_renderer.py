@@ -34,6 +34,25 @@ def test_headline_is_large_and_dynamic():
     assert len(long_lines) >= len(short_lines)
 
 
+def test_renderer_uses_supplied_headline(monkeypatch):
+    seen = []
+
+    def fake_draw(base, text, t, language):
+        seen.append(text)
+
+    monkeypatch.setattr(renderer, "_draw_headline", fake_draw)
+    base = renderer.make_sample_background()
+
+    renderer.render_frame(
+        base,
+        0.30,
+        headline_text="Gill Injury Scare",
+        headline_enabled=True,
+    )
+
+    assert seen == ["Gill Injury Scare"]
+
+
 def test_headline_and_subtitles_do_not_overlap():
     base = renderer.make_sample_background()
 
