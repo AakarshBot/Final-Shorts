@@ -331,7 +331,11 @@ def _copied(source, narration) -> bool:
 
 
 def _story_title_keywords(source: str) -> set[str]:
-    title_part = str(source or "").strip().split("\n\n", 1)[0]
+    first_block = str(source or "").strip().split("\n\n", 1)[0]
+    if first_block.startswith("[SELECTED STORY]"):
+        title_part = first_block.split("\n", 1)[1] if "\n" in first_block else ""
+    else:
+        title_part = first_block
     words = re.findall(r"\b[\w]+\b", title_part.casefold(), flags=re.UNICODE)
     return {
         word
