@@ -1438,12 +1438,11 @@ def render_live_dashboard():
                 enumerate(topics[start:start + 2], start=start),
             ):
                 with col:
-                    rating = max(1, min(5, round(float(topic.score or 0.0) / 8.0 * 5.0)))
-                    stars = "★" * rating + "☆" * (5 - rating)
                     with st.container(key=f"live-topic-{index}"):
                         st.markdown(
-                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span><span class="topic-rating">{stars}</span></div>'
-                            f'<div class="topic-title">{topic.title}</div>',
+                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
+                            f'<div class="topic-title">{topic.title}</div>'
+                            f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',
                             unsafe_allow_html=True,
                         )
                         if st.button("Select story →", width="stretch", key=f"live-select-story-{index}"):
@@ -1622,14 +1621,6 @@ def render_topic_fetcher():
             enumerate(topics[start:start + 2], start=start),
         ):
             with col:
-                rating = max(
-                    1,
-                    min(
-                        5,
-                        round(float(topic.score or 0.0) / 8.0 * 5.0),
-                    ),
-                )
-                stars = "★" * rating + "☆" * (5 - rating)
                 source = topic.source or "Sports desk"
                 published = topic.published_at.strftime("%d %b · %H:%M UTC")
                 with st.container(key=f"topic-card-{index}"):
@@ -1639,7 +1630,6 @@ def render_topic_fetcher():
                         f'''
                         <div class="topic-top">
                             <span class="topic-rank">STORY {index + 1:02d}</span>
-                            <span class="topic-rating" title="{rating}/5">{stars}</span>
                         </div>
                         <div class="topic-title">{topic.title}</div>
                         <div class="topic-meta">{source} · {published}</div>
