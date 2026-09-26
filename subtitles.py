@@ -195,11 +195,19 @@ def approve_subtitles(subtitles: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(subtitles, dict) or not subtitles.get("scenes"):
         raise ValueError("No generated subtitles are available for approval.")
     combined_path = Path(str(subtitles.get("srt_path") or ""))
-    if not combined_path.exists() or combined_path.stat().st_size == 0:
+    try:
+        valid_combined = combined_path.is_file() and combined_path.stat().st_size > 0
+    except OSError:
+        valid_combined = False
+    if not valid_combined:
         raise ValueError("The combined subtitle file is missing or empty.")
     for scene in subtitles["scenes"]:
         path = Path(str(scene.get("path") or ""))
-        if not path.exists() or path.stat().st_size == 0:
+        try:
+            valid_scene = path.is_file() and path.stat().st_size > 0
+        except OSError:
+            valid_scene = False
+        if not valid_scene:
             raise ValueError(
                 f"Subtitle file for scene {scene.get('scene')} is missing or empty."
             )
