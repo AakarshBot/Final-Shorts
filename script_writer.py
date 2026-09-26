@@ -199,7 +199,7 @@ def _copied(source, narration) -> bool:
 
 def _story_title_keywords(source: str) -> set[str]:
     title_part = str(source or "").strip().split("\n\n", 1)[0]
-    words = re.findall(r"\b[\w]+(?:['’][\w]+)?\b", title_part.casefold(), flags=re.UNICODE)
+    words = re.findall(r"\b[\w]+\b", title_part.casefold(), flags=re.UNICODE)
     return {
         word
         for word in words
@@ -236,8 +236,8 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
         return False, "The three Shorts titles must be different."
     for title in titles:
         clean_title = _clean(title)
-        if not 20 <= len(clean_title) <= 80:
-            return False, "Each Shorts title must be between 20 and 80 characters."
+        if not 12 <= len(clean_title) <= 80:
+            return False, "Each Shorts title must be between 12 and 80 characters."
         if _metadata_is_generic_title(clean_title):
             return False, "The Shorts title uses a generic metadata phrase."
         if not _metadata_mentions_story(clean_title, source):
