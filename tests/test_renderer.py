@@ -167,7 +167,7 @@ def test_headline_and_subtitles_do_not_overlap():
     assert ImageChops.difference(headline_frame, subtitle_frame).getbbox()
 
 
-def test_subtitles_start_after_headline(monkeypatch):
+def test_subtitles_remain_visible_during_headline(monkeypatch):
     seen = []
 
     def fake_draw(base, subtitle_data, t):
@@ -177,14 +177,13 @@ def test_subtitles_start_after_headline(monkeypatch):
     base = renderer.make_sample_background()
 
     renderer.render_frame(base, 0.30, headline_enabled=True)
-    assert seen == []
-
     renderer.render_frame(
         base,
         renderer.HEADLINE_SECONDS + 0.30,
         headline_enabled=True,
     )
-    assert seen == [renderer.HEADLINE_SECONDS + 0.30]
+
+    assert seen == [0.30, renderer.HEADLINE_SECONDS + 0.30]
 
 
 def test_headline_marker_and_subtitle_style_are_brand_consistent():
