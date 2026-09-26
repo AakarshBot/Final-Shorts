@@ -110,7 +110,6 @@ tests/test_audio.py
 tests/test_visual_fetcher.py
 tests/test_visual_search.py
 tests/test_visual_generator.py
-tests/test_subtitles.py
 requirements.txt
 PROJECT_CONTEXT.md
 README.md
