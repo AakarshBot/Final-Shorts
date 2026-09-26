@@ -235,6 +235,15 @@ def _preview_image(asset):
     return image
 
 
+def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
+    aspect = 9 / 16
+    width = min(image.width, max(1, int(image.height * aspect)))
+    height = min(image.height, max(1, int(width / aspect)))
+    left = max(0, (image.width - width) // 2)
+    top = max(0, (image.height - height) // 2)
+    return (left, left + width, top, top + height)
+
+
 def _visual_asset_key(result_key: str, index: int, asset: dict) -> str:
     identity = (
         str(asset.get("source_page_url") or asset.get("url") or "")
@@ -261,7 +270,7 @@ def _crop_visual_dialog(
 
     st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
-    st.caption("Free-size crop · drag the rectangle over the exact framing you want. The original visual stays untouched.")
+    st.caption("9:16 crop · drag the frame to position it, or drag a corner to show more or less of the full image. The original visual stays untouched.")
 
     from streamlit_cropper import st_cropper
 
@@ -269,8 +278,9 @@ def _crop_visual_dialog(
     cropped = st_cropper(
         image,
         realtime_update=True,
+        default_coords=_largest_9x16_crop_coords(image),
         box_color="#8B5CF6",
-        aspect_ratio=None,
+        aspect_ratio=(9, 16),
         return_type="image",
         key=f"cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
         stroke_width=2,
