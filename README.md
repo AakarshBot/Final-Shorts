@@ -4,13 +4,14 @@ A simple, free-tier YouTube Shorts factory built one independently testable func
 
 ## Current
 
-Functions 01–04 are implemented and accepted:
+Functions 01–05 are implemented and accepted:
 - **01 — Topic Fetching**
 - **02 — Scriptwriter**
 - **03 — Audio**
-- **04 — Visuals Phase 1 (scraping) + Phase 2 (manual real/AI image testing)**
+- **04 — Visuals Phase 1 + Phase 2**
+- **05 — Subtitles**
 
-Visuals Phase 1 has been live-tested successfully. The next function is **05 — Renderer** only after its handoff is defined.
+Visuals Phase 1 and Phase 2 are complete. Subtitles now sits between Audio/Visuals and **06 — Renderer**.
 
 The Streamlit dashboard is currently a Test desk for independent function testing. Live production is intentionally not present until the full factory exists.
 
@@ -31,7 +32,11 @@ python -m playwright install chromium
 
 ### Visuals
 
-The Visuals test desk has four independent options. Option 1 is the automatic Phase 1 scraper/crawler and starts when a headline is selected. Option 2 is the standalone manual Phase 1 scraper. It uses an AI query planner: a name-only query searches normally, while a contextual query generates up to two useful variants and searches older publisher pages as well. Option 3 searches Commons, DuckDuckGo, Wikipedia, Openverse, and any configured Pixabay/Pexels/Unsplash APIs. Option 4 generates images with Hugging Face Inference Providers and Cloudflare Workers AI.
+The Visuals test desk has four independent options. Option 1 is the automatic scraper/crawler and starts when a headline is selected. Option 2 is the standalone manual scraper. It uses an AI query planner: a name-only query searches normally, while a contextual query generates up to two useful variants and searches older publisher pages as well. Option 3 searches Commons, DuckDuckGo, Wikipedia, Openverse, and any configured Pixabay/Pexels/Unsplash APIs. Option 4 generates images with Hugging Face Inference Providers and Cloudflare Workers AI.
+
+### Subtitles
+
+Function 05 converts approved Edge-TTS word timings into readable SRT cues. It creates one SRT per scene and one combined SRT for the Renderer, with no AI call.
 
 Optional .env keys:
 
