@@ -103,7 +103,7 @@ def _parse_date(value: str) -> datetime:
     except (TypeError, ValueError):
         dt = None
     if dt is None:
-        return datetime.now(timezone.utc)
+        return datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS + 1)
     return dt.astimezone(timezone.utc)
 
 
@@ -232,12 +232,14 @@ def fetch_topics(
     existing = list(exclude_topics or [])
     seen_urls = {topic.url for topic in existing}
 
-    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
-        batches = pool.map(_fetch_google, queries)
-
     rows = []
-    for batch in batches:
-        rows.extend(batch)
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        futures = [pool.submit(_fetch_google, query) for query in queries]
+        for future in futures:
+            try:
+                rows.extend(future.result())
+            except (requests.RequestException, ET.ParseError, ValueError):
+                continue
 
     rows = _prepare(rows, seen_urls)
     chosen = _select(rows, limit, seen_urls, existing)
