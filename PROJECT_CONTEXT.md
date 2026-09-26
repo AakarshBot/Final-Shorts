@@ -225,12 +225,20 @@ Important:
 
 ## Current development target — Dashboard UI enhancement
 
-The next chat/session should focus on:
-- Reworking the dashboard into the clean production-facing UI.
-- Separating the Test experience from the eventual Live production experience.
-- Improving navigation, hierarchy, cards, progress presentation and QC presentation without changing the underlying completed function logic.
-- Carrying the existing Scriptwriter → Audio → Visuals → Subtitles → Renderer → Upload handoffs into the new UI.
-- Keeping the final upload lane as a human-controlled, low-friction Public/Private choice after the single manual Upload QC gate.
+Dashboard UI v1 is implemented in `app.py` and does not alter the factory function implementations.
+
+Current UI direction:
+- Landing screen is split into a grey textured **TEST** build-lab panel and a vibrant textured **LIVE** production panel.
+- Selecting either panel opens its corresponding workspace.
+- Test uses a horizontal seven-stage clickable rail instead of a sidebar function dropdown.
+- Stage icons/numbers are directly clickable and open the selected stage in the main workspace.
+- Avoid dropdowns wherever a compact button/pill choice works.
+- Topic desk, Scriptwriter language, Visual mode, Audio language, and Upload title selection use pill/button-style controls.
+- Story selection is inherited from the selected Topic Fetcher story rather than repeated in downstream stages.
+- Live has a production control-room visual surface using existing session-state status only; it does not duplicate or alter the completed factory functions.
+- The dashboard uses responsive columns, bordered containers, cards, textured backgrounds, safe spacing, and a restrained dark control-room visual system.
+
+The next dashboard iteration should refine the visual design and production-facing layout further without reopening completed functions or adding new factory logic.
 
 Do not reopen completed functions unless the UI work exposes a concrete integration regression.
 
