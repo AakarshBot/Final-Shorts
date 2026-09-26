@@ -779,9 +779,23 @@ def crawl_visuals(story, manual_query=""):
 
     results = _crawl_pages(page_requests)
     assets = []
+    diagnostics = []
+
     for index, result in enumerate(results):
+        request = page_requests[index]
+        diagnostics.append({
+            "url": result.get("url") or request["url"],
+            "title": result.get("title") or request.get("title", ""),
+            "assets": len(result.get("assets") or []),
+            "candidates": int(result.get("candidate_count") or 0),
+            "dom_images": int(result.get("dom_image_count") or 0),
+            "network_images": int(result.get("network_image_count") or 0),
+            "direct_download_failures": int(result.get("direct_download_failures") or 0),
+            "network_fallback_hits": int(result.get("network_fallback_hits") or 0),
+            "error": str(result.get("error") or ""),
+            "query": request.get("query") or "original story URL",
+        })
         for asset in result.get("assets") or []:
-            request = page_requests[index]
             asset["article_title"] = asset.get("article_title") or request.get("title", "")
             asset["source_page_url"] = asset.get("source_page_url") or request["url"]
             asset["publisher"] = asset.get("publisher") or request.get("publisher", "")
@@ -815,6 +829,18 @@ def crawl_visuals(story, manual_query=""):
         if fallback_requests:
             fallback_results = _crawl_pages(fallback_requests)
             for request, result in zip(fallback_requests, fallback_results):
+                diagnostics.append({
+                    "url": result.get("url") or request["url"],
+                    "title": result.get("title") or request.get("title", ""),
+                    "assets": len(result.get("assets") or []),
+                    "candidates": int(result.get("candidate_count") or 0),
+                    "dom_images": int(result.get("dom_image_count") or 0),
+                    "network_images": int(result.get("network_image_count") or 0),
+                    "direct_download_failures": int(result.get("direct_download_failures") or 0),
+                    "network_fallback_hits": int(result.get("network_fallback_hits") or 0),
+                    "error": str(result.get("error") or ""),
+                    "query": request.get("query") or "fallback",
+                })
                 for asset in result.get("assets") or []:
                     asset["article_title"] = asset.get("article_title") or request["title"]
                     asset["source_page_url"] = asset.get("source_page_url") or request["url"]
@@ -822,6 +848,17 @@ def crawl_visuals(story, manual_query=""):
                     asset["query"] = asset.get("query") or request["query"]
                     assets.append(asset)
             selected = _dedupe(assets)
+
+    failure_state = (
+        "ready" if len(selected) >= SUCCESS
+        else "underfilled" if selected
+        else "no_images"
+    )
+    print(
+        f"   [Visual Fetcher] pages={len(page_requests)} final_pool={len(selected)}/{TARGET} "
+        f"state={failure_state}",
+        flush=True,
+    )
 
     return {
         "assets": selected,
@@ -833,13 +870,9 @@ def crawl_visuals(story, manual_query=""):
         "manual_query": manual_query,
         "pages_scraped": len(page_requests),
         "related_pages": max(0, len(page_requests) - 1),
-        "failure_state": (
-            "ready" if len(selected) >= SUCCESS
-            else "underfilled" if selected
-            else "no_images"
-        ),
+        "failure_state": failure_state,
+        "diagnostics": diagnostics,
     }
-
 
 def same_query(query, used_queries):
     value = _clean(query, 260).casefold()
