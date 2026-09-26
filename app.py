@@ -3,6 +3,7 @@ import streamlit as st
 from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
 from topic_fetcher import fetch_topics
+from visual_fetcher import crawl_visuals, same_query
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
@@ -20,7 +21,7 @@ st.caption("Free Shorts factory · independent function testing")
 
 function = st.sidebar.selectbox(
     "Test function",
-    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio"],
+    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio", "04 · Visuals"],
     key="test_function",
 )
 
@@ -182,6 +183,137 @@ def render_scriptwriter():
 
     if st.session_state.approved_script:
         st.success("Script approved and stored as the handoff for Function 03 · Audio.")
+
+
+def render_visuals():
+    st.header("04 · Visuals")
+    if not st.session_state.topics:
+        st.info("Run the Topic Fetcher first, then select a story for Visuals.")
+        return
+
+    labels = [
+        f"{i + 1:02d} · {topic.title}"
+        for i, topic in enumerate(st.session_state.topics)
+    ]
+    current = st.session_state.selected_topic
+    default_index = current if isinstance(current, int) and current < len(labels) else 0
+    selected_label = st.selectbox(
+        "Headline",
+        labels,
+        index=default_index,
+        key="visual_story",
+    )
+    selected_index = labels.index(selected_label)
+    topic = st.session_state.topics[selected_index]
+
+    story = {
+        "title": topic.title,
+        "description": topic.description,
+        "url": topic.url,
+        "source": topic.source,
+        "published_at": topic.published_at.isoformat(),
+    }
+    approved_script = st.session_state.get("approved_script")
+    if (
+        isinstance(approved_script, dict)
+        and str(approved_script.get("source_title") or "").strip() == topic.title.strip()
+    ):
+        scenes = approved_script.get("script") or []
+        if scenes and isinstance(scenes[0], dict):
+            story["primary_entity"] = str(
+                scenes[0].get("primary_entity") or ""
+            ).strip()
+
+    story_key = story["url"]
+    if story_key != st.session_state.get("visual_loaded_story"):
+        st.session_state.visual_loaded_story = story_key
+        st.session_state.visual_result = None
+        st.session_state.visual_manual_query = ""
+        with st.spinner("Scraping the selected story and related publisher pages…"):
+            try:
+                st.session_state.visual_result = crawl_visuals(story)
+            except Exception as exc:
+                st.session_state.visual_result = {
+                    "error": f"{type(exc).__name__}: {exc}"
+                }
+
+    result = st.session_state.get("visual_result") or {}
+    if result.get("error"):
+        st.error(result["error"])
+        return
+    if not result:
+        return
+
+    st.markdown(f"**{topic.title}**")
+    st.caption(f"Original story: {result.get('original_story_url', topic.url)}")
+
+    automatic_queries = list(result.get("automatic_queries") or [])
+    st.markdown("**Factory visual queries used**")
+    if automatic_queries:
+        for query in automatic_queries:
+            st.code(query)
+    else:
+        st.caption("No secondary search query was needed.")
+
+    metrics = st.columns(3)
+    metrics[0].metric("Images", len(result.get("assets") or []))
+    metrics[1].metric("Pages", int(result.get("pages_scraped") or 0))
+    metrics[2].metric("Status", "Ready" if len(result.get("assets") or []) >= result.get("success_threshold", 10) else "Underfilled")
+
+    st.subheader("Manual web query")
+    st.caption("Enter a new keyword or phrase. The same crawler will keep the original story URL as the anchor and search only this manual query.")
+    with st.form("visual_manual_query_form"):
+        manual_query = st.text_input(
+            "Keyword / phrase / query",
+            value=st.session_state.get("visual_manual_query") or "",
+            placeholder="e.g. Shubman Gill batting India",
+        )
+        run_manual = st.form_submit_button(
+            "Run manual query",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if run_manual:
+        manual_query = manual_query.strip()
+        if not manual_query:
+            st.warning("Enter a query first.")
+        elif same_query(manual_query, automatic_queries):
+            st.warning("That query was already used by the factory for this story. Use a different query.")
+        else:
+            with st.spinner("Scraping the manual query…"):
+                try:
+                    st.session_state.visual_result = crawl_visuals(
+                        story,
+                        manual_query=manual_query,
+                    )
+                    st.session_state.visual_manual_query = manual_query
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"{type(exc).__name__}: {exc}")
+
+    assets = list(result.get("assets") or [])
+    if not assets:
+        st.warning("The crawler found no usable images.")
+        return
+
+    st.subheader("Scraped images")
+    for start in range(0, len(assets), 3):
+        cols = st.columns(3, gap="medium")
+        for col, asset in zip(cols, assets[start:start + 3]):
+            with col:
+                st.image(asset["bytes"], width="stretch")
+                publisher = asset.get("publisher") or "Web source"
+                query = asset.get("query") or "original story URL"
+                size = f'{asset.get("width", 0)}×{asset.get("height", 0)}'
+                action = int(asset.get("action_score") or 0)
+                st.caption(
+                    f"{publisher} · {size} · action {action}\n{asset.get('article_title') or ''}"
+                )
+                st.caption(f"Search: {query}")
+                source_url = str(asset.get("source_page_url") or "").strip()
+                if source_url:
+                    st.link_button("Open source", source_url, use_container_width=True)
 
 
 def render_audio():
