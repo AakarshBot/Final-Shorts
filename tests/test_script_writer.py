@@ -1,4 +1,4 @@
-from script_writer import apply_script_edits, write_script
+from script_writer import MAX_WORDS, SCENE_1_MAX_WORDS, apply_script_edits, write_script
 
 
 def valid_result(scene1="Gill suffers a fresh injury scare before India’s ODI."):
@@ -400,7 +400,6 @@ def test_writer_research_falls_back_to_another_article_when_primary_is_thin(monk
 
 
 def test_writer_keeps_existing_retention_limits():
-    assert 4 in (4, 5)
-    assert 5 in (4, 5)
-    assert 14 == 14
-    assert 75 == 75
+    assert SCENE_1_MAX_WORDS == 14
+    assert MAX_WORDS == 75
+    assert "exactly 4 or 5 narration scenes" in __import__("script_writer").SYSTEM_PROMPT
