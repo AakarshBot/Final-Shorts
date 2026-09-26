@@ -356,8 +356,10 @@ def _render_manual_crawler():
     st.caption(
         f'{len(result.get("assets") or [])} images · '
         f'{int(result.get("pages_scraped") or 0)} pages · '
-        f'query: {result.get("manual_query") or ""}'
+        f'{"historical search" if result.get("historical") else "current search"}'
     )
+    for query in result.get("search_queries") or []:
+        st.code(query)
     diagnostics = list(result.get("diagnostics") or [])
     with st.expander("Crawler diagnostics", expanded=not bool(result.get("assets"))):
         if diagnostics:
