@@ -192,7 +192,7 @@ Rules:
                 break
 
         return {
-            "historical": bool(plan.get("historical")) and len(queries) > 1,
+            "historical": bool(plan.get("historical")),
             "queries": queries or [query],
         }
     except Exception:
