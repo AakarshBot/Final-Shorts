@@ -48,8 +48,6 @@ if "visual_result" not in st.session_state:
     st.session_state.visual_result = None
 if "visual_loaded_story" not in st.session_state:
     st.session_state.visual_loaded_story = None
-if "visual_manual_query" not in st.session_state:
-    st.session_state.visual_manual_query = ""
 if "manual_visual_result" not in st.session_state:
     st.session_state.manual_visual_result = None
 if "real_image_result" not in st.session_state:
@@ -88,7 +86,6 @@ def render_topic_fetcher():
         st.session_state.approved_audio = None
         st.session_state.visual_result = None
         st.session_state.visual_loaded_story = None
-        st.session_state.visual_manual_query = ""
 
     st.markdown(
         f"<span class='badge'>{len(st.session_state.topics)} topics</span>",
@@ -444,7 +441,7 @@ def _render_manual_real_images():
 
 
 def _render_manual_ai_images():
-    st.subheader("Option 3 · AI Generation")
+    st.subheader("Option 4 · AI Generation")
     st.caption("Manual query only. Each configured AI provider runs independently.")
     with st.form("ai_image_form"):
         query = st.text_input(
