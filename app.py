@@ -1,3 +1,5 @@
+import json
+
 import streamlit as st
 
 from audio import approve_audio, generate_audio
@@ -266,6 +268,16 @@ def render_visuals():
             st.code(query)
     else:
         st.caption("No secondary search query was needed.")
+
+    diagnostics = list(result.get("diagnostics") or [])
+    with st.expander("Crawler diagnostics", expanded=not bool(result.get("assets"))):
+        if diagnostics:
+            st.code(
+                json.dumps(diagnostics, indent=2, ensure_ascii=False),
+                language="text",
+            )
+        else:
+            st.caption("No page diagnostics were returned.")
 
     metrics = st.columns(3)
     metrics[0].metric("Images", len(result.get("assets") or []))
