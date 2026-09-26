@@ -948,22 +948,29 @@ def _render_live_script():
                 st.rerun()
 
     if st.session_state.get("live_script_error"):
-        st.error(
-            "Scriptwriter failed: "
-            + st.session_state.live_script_error
-        )
-        if st.button(
-            "Retry Scriptwriter",
-            type="primary",
-            width="stretch",
-            key="live-retry-script",
-        ):
-            selected_index = st.session_state.get("live_selected_topic")
-            _live_reset_downstream()
-            st.session_state.live_selected_topic = selected_index
-            st.session_state.live_stage = "02 · Script"
-            st.rerun()
-        return
+        if isinstance(script, dict):
+            st.error(
+                "Script approval failed: "
+                + st.session_state.live_script_error
+            )
+            st.caption("Correct the highlighted edit and approve the script again.")
+        else:
+            st.error(
+                "Scriptwriter failed: "
+                + st.session_state.live_script_error
+            )
+            if st.button(
+                "Retry Scriptwriter",
+                type="primary",
+                width="stretch",
+                key="live-retry-script",
+            ):
+                selected_index = st.session_state.get("live_selected_topic")
+                _live_reset_downstream()
+                st.session_state.live_selected_topic = selected_index
+                st.session_state.live_stage = "02 · Script"
+                st.rerun()
+            return
 
     if not isinstance(script, dict):
         st.info("Preparing the Scriptwriter stage…")
@@ -1016,6 +1023,7 @@ def _render_live_script():
                 st.session_state.live_script_error = str(exc)
                 st.rerun()
             st.session_state.live_approved_script = approved
+            st.session_state.live_script_error = ""
             st.session_state.live_handoff_error = ""
             st.session_state.live_stage = "03 · Audio + Subs"
             st.rerun()
