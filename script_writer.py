@@ -31,6 +31,7 @@ SCHEMA = {
         "titles": {"type": "array", "items": {"type": "string"}},
         "seo_description": {"type": "string"},
         "hashtags": {"type": "array", "items": {"type": "string"}},
+        "comment": {"type": "string"},
         "script": {
             "type": "array",
             "items": {
@@ -63,6 +64,7 @@ SCHEMA = {
         "titles",
         "seo_description",
         "hashtags",
+        "comment",
         "script",
     ],
     "additionalProperties": False,
@@ -90,6 +92,7 @@ RULES:
 - Generate exactly 3 title candidates. They are stored for later title selection.
 - Generate a concise SEO description.
 - Generate 3–5 relevant hashtags, each beginning with #, with no spaces inside a hashtag.
+- Generate one concise viewer comment for the eventual public upload. Keep it natural and discussion-oriented, using only supported story facts.
 - Every scene must include a supported primary visual entity, visual intent, specific search prompt and sports category.
 - Return only JSON matching the supplied schema.
 """
@@ -173,6 +176,9 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
         or any(not _clean(x).startswith("#") for x in hashtags)
     ):
         return False, "At least one valid hashtag is required."
+
+    if not _clean(result.get("comment")):
+        return False, "A non-empty comment is required."
 
     scenes = result.get("script")
     if not isinstance(scenes, list) or len(scenes) not in (4, 5):
