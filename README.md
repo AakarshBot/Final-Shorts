@@ -44,6 +44,6 @@ The test previews:
 - Micro Glass
 - Broadcast / Data
 
-Add logo.png beside app.py to use the real logo. The renderer falls back to a small placeholder when the file is absent.
+Add your logo.png beside app.py. The renderer uses that file directly; it does not draw a placeholder logo.
 
 For the intended display look, add fonts/BebasNeue-Regular.ttf. The subtitle renderer can use fonts/Montserrat-ExtraBold.ttf when present and otherwise falls back automatically.
