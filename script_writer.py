@@ -122,6 +122,13 @@ FORBIDDEN = (
     r"\blater in (?:the|this) (?:video|short)\b",
     r"\bwe(?:['’]?ll| will) (?:reveal|show|find out|get to)\b",
     r"\byou need to (?:see|watch) this\b",
+    r"\bdon['’]?t blink\b",
+    r"\bwatch what happens\b",
+    r"\bsee what happens\b",
+    r"\bbut that['’]?s not all\b",
+    r"\bthat['’]?s not all\b",
+    r"\bmore is coming\b",
+    r"\bthe best part is still to come\b",
 )
 
 GENERIC_OPENERS = (
