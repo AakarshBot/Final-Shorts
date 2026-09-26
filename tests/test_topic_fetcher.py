@@ -102,3 +102,36 @@ def test_more_results_do_not_repeat_an_existing_event(monkeypatch):
         more=True, exclude_topics=existing, limit=20
     )
     assert [t.title for t in topics] == [new_rows[1].title]
+
+
+def test_invalid_dates_are_not_treated_as_fresh():
+    rows = [
+        topic_fetcher.Topic(
+            "Cricket record story",
+            "Test",
+            topic_fetcher._parse_date("not-a-date"),
+            "https://example.com/invalid-date",
+            "",
+        )
+    ]
+    assert topic_fetcher._prepare(rows, set()) == []
+
+
+def test_one_failed_google_query_does_not_abort_the_fetch(monkeypatch):
+    import requests
+
+    good = make_topic("India cricket record update")
+    calls = []
+
+    def fake_google(query):
+        calls.append(query)
+        if query == topic_fetcher.QUERIES["cricket_india_asia"][0]:
+            raise requests.RequestException("temporary")
+        return [good]
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: [])
+
+    result = topic_fetcher.fetch_topics(limit=20)
+    assert result and result[0].title == good.title
+    assert len(calls) == len(topic_fetcher.QUERIES["cricket_india_asia"])
