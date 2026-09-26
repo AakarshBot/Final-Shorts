@@ -74,6 +74,30 @@ def test_headline_marker_and_subtitle_style_are_brand_consistent():
     assert renderer.SUBTITLE_MAX_SIZE > 58
     assert renderer.SUBTITLE_MAX_WIDTH >= 860
     assert renderer.SUBTITLE_Y < 1450
+    assert renderer.SUBTITLE_LINE_GAP > 0
+
+
+def test_subtitle_layout_uses_second_line_only_when_needed():
+    draw = renderer.ImageDraw.Draw(renderer.Image.new("RGB", (1, 1)))
+    words = renderer.PREVIEW_SUBTITLE_DATA["cues"][0]["words"]
+
+    font, one_line = renderer._fit_subtitle_layout(words, "english")
+    assert font.size >= renderer.SUBTITLE_MIN_SIZE
+    assert len(one_line) == 1
+
+    long_words = [
+        {"text": "This", "start": 0.0, "end": 0.2},
+        {"text": "is", "start": 0.2, "end": 0.4},
+        {"text": "a", "start": 0.4, "end": 0.6},
+        {"text": "very", "start": 0.6, "end": 0.8},
+        {"text": "long", "start": 0.8, "end": 1.0},
+        {"text": "sports", "start": 1.0, "end": 1.2},
+        {"text": "update", "start": 1.2, "end": 1.4},
+        {"text": "today", "start": 1.4, "end": 1.6},
+    ]
+    font, two_lines = renderer._fit_subtitle_layout(long_words, "english")
+    assert len(two_lines) == 2
+    assert sum(len(line) for line in two_lines) == len(long_words)
 
 
 def test_subtitle_handoff_contract():
