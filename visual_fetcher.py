@@ -44,6 +44,16 @@ STOPWORDS = {
     "appears", "announce", "announces", "likely", "may",
 }
 
+BLOCKED_HOSTS = {
+    "facebook.com", "instagram.com", "x.com", "twitter.com",
+    "youtube.com", "tiktok.com",
+}
+
+BAD_PATH_PARTS = {
+    "/search", "/tag/", "/tags/", "/category/", "/categories/",
+    "/author/", "/authors/", "/topic/", "/topics/", "/feed", "/rss", "/sitemap",
+}
+
 BAD_IMAGE_TERMS = {
     "logo", "icon", "favicon", "sprite", "tracking", "pixel", "avatar",
     "placeholder", "advert", "banner", "social-share", "share-image",
