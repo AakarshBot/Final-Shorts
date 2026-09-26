@@ -1,5 +1,6 @@
 import hashlib
 import json
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from pathlib import Path
 
@@ -15,7 +16,7 @@ from topic_fetcher import fetch_topics
 from visual_fetcher import crawl_visuals, manual_crawl_visuals
 from visual_search import search_images
 from visual_generator import generate_images
-from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle
+from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle, render_production_video
 from subtitles import generate_subtitles
 from uploader import upload_video
 
@@ -83,6 +84,10 @@ div[class*="st-key-selected-story-"]{background:linear-gradient(145deg,rgba(34,2
 div[class*="st-key-visual-card-"]{background:linear-gradient(145deg,rgba(255,255,255,.048),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 14px 38px rgba(0,0,0,.18);overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
 div[class*="st-key-visual-card-"]:hover{transform:translateY(-2px);border-color:rgba(139,92,246,.32);box-shadow:0 20px 44px rgba(0,0,0,.23);}
 div[class*="st-key-visual-card-"] img{border-radius:9px;}
+div[class*="st-key-live-choice-"]{min-height:300px;border-radius:24px;padding:30px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.15);background:radial-gradient(circle at 80% 15%,rgba(255,255,255,.16),transparent 22%),linear-gradient(135deg,#21122f,#57205f 46%,#123a70);box-shadow:inset 0 0 120px rgba(244,63,138,.10),0 26px 64px rgba(0,0,0,.22);}
+div[class*="st-key-live-cricket-"]{min-height:220px;background:radial-gradient(circle at 80% 15%,rgba(255,255,255,.10),transparent 22%),linear-gradient(145deg,#1b2030,#2b1747 54%,#173b62);}
+div[class*="st-key-live-slide-"]{min-height:370px;border-radius:14px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.012));padding:12px;box-shadow:0 14px 34px rgba(0,0,0,.15);}
+
 .visual-source{font-size:.66rem;font-weight:850;color:#aab3c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
 .visual-detail{font-size:.62rem;color:#707b89;line-height:1.35;}
 .visual-crop-label{font-size:.58rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#8eeaf7;margin:.55rem 0 .3rem;}
@@ -145,6 +150,66 @@ if "real_image_result" not in st.session_state:
 if "ai_image_result" not in st.session_state:
     st.session_state.ai_image_result = None
 
+if "live_desk" not in st.session_state:
+    st.session_state.live_desk = None
+if "live_cricket_profile" not in st.session_state:
+    st.session_state.live_cricket_profile = None
+if "live_topics" not in st.session_state:
+    st.session_state.live_topics = []
+if "live_selected_topic" not in st.session_state:
+    st.session_state.live_selected_topic = None
+if "live_topics_profile" not in st.session_state:
+    st.session_state.live_topics_profile = None
+if "live_script_data" not in st.session_state:
+    st.session_state.live_script_data = None
+if "live_approved_script" not in st.session_state:
+    st.session_state.live_approved_script = None
+if "live_script_error" not in st.session_state:
+    st.session_state.live_script_error = ""
+if "live_audio_data" not in st.session_state:
+    st.session_state.live_audio_data = None
+if "live_approved_audio" not in st.session_state:
+    st.session_state.live_approved_audio = None
+if "live_subtitle_data" not in st.session_state:
+    st.session_state.live_subtitle_data = None
+if "live_handoff_error" not in st.session_state:
+    st.session_state.live_handoff_error = ""
+if "live_visual_result" not in st.session_state:
+    st.session_state.live_visual_result = None
+if "live_manual_visual_result" not in st.session_state:
+    st.session_state.live_manual_visual_result = None
+if "live_real_image_result" not in st.session_state:
+    st.session_state.live_real_image_result = None
+if "live_ai_image_result" not in st.session_state:
+    st.session_state.live_ai_image_result = None
+if "live_visual_crops" not in st.session_state:
+    st.session_state.live_visual_crops = {}
+if "live_visual_deleted" not in st.session_state:
+    st.session_state.live_visual_deleted = set()
+if "live_visual_assignments" not in st.session_state:
+    st.session_state.live_visual_assignments = {}
+if "live_visuals_approved" not in st.session_state:
+    st.session_state.live_visuals_approved = False
+if "live_rendered_video_path" not in st.session_state:
+    st.session_state.live_rendered_video_path = None
+if "live_render_error" not in st.session_state:
+    st.session_state.live_render_error = ""
+if "live_upload_qc_approved" not in st.session_state:
+    st.session_state.live_upload_qc_approved = False
+if "live_upload_qc" not in st.session_state:
+    st.session_state.live_upload_qc = None
+if "live_upload_result" not in st.session_state:
+    st.session_state.live_upload_result = None
+if "live_upload_titles" not in st.session_state:
+    st.session_state.live_upload_titles = []
+if "live_upload_title_choice" not in st.session_state:
+    st.session_state.live_upload_title_choice = 0
+if "live_upload_description" not in st.session_state:
+    st.session_state.live_upload_description = ""
+if "live_upload_hashtags" not in st.session_state:
+    st.session_state.live_upload_hashtags = ""
+if "live_upload_comment" not in st.session_state:
+    st.session_state.live_upload_comment = ""
 def _asset_to_image(value):
     try:
         if isinstance(value, Image.Image):
@@ -178,7 +243,12 @@ def _visual_asset_key(result_key: str, index: int, asset: dict) -> str:
 
 
 @st.dialog("Crop visual", width="large")
-def _crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
+def _crop_visual_dialog(
+    asset_key: str,
+    image_bytes: bytes,
+    label: str,
+    crop_store: str = "visual_crops",
+):
     image = _asset_to_image(image_bytes)
     if image is None:
         st.error("This visual could not be opened for cropping.")
@@ -190,11 +260,12 @@ def _crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
 
     from streamlit_cropper import st_cropper
 
+    store = st.session_state.setdefault(crop_store, {})
     cropped = st_cropper(
         image,
         realtime_update=True,
         box_color="#8B5CF6",
-        aspect_ratio=None,
+        aspect_ratio=9 / 16,
         return_type="image",
         key=f"cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
         stroke_width=2,
@@ -212,7 +283,12 @@ def _crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
         if st.button("Save crop", type="primary", width="stretch"):
             buffer = BytesIO()
             cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
-            st.session_state.visual_crops[asset_key] = buffer.getvalue()
+            crop_bytes = buffer.getvalue()
+            store[asset_key] = crop_bytes
+            assignments = st.session_state.get("live_visual_assignments") or {}
+            for assignment in assignments.values():
+                if assignment.get("asset_key") == asset_key:
+                    assignment["bytes"] = crop_bytes
             st.rerun()
 
 
@@ -343,47 +419,921 @@ def _render_test_nav():
                     st.rerun()
     st.markdown('<div class="stage-rail-line"></div>',unsafe_allow_html=True)
 
+def _live_story_key(topic) -> str:
+    return hashlib.sha1(
+        f"{topic.title}|{topic.url}".encode("utf-8")
+    ).hexdigest()[:12]
+
+
+def _live_reset_downstream():
+    for key, value in {
+        "live_selected_topic": None,
+        "live_script_data": None,
+        "live_approved_script": None,
+        "live_script_error": "",
+        "live_audio_data": None,
+        "live_approved_audio": None,
+        "live_subtitle_data": None,
+        "live_handoff_error": "",
+        "live_visual_result": None,
+        "live_manual_visual_result": None,
+        "live_real_image_result": None,
+        "live_ai_image_result": None,
+        "live_visual_crops": {},
+        "live_visual_deleted": set(),
+        "live_visual_assignments": {},
+        "live_visuals_approved": False,
+        "live_rendered_video_path": None,
+        "live_render_error": "",
+        "live_upload_qc_approved": False,
+        "live_upload_qc": None,
+        "live_upload_result": None,
+        "live_upload_titles": [],
+        "live_upload_title_choice": 0,
+        "live_upload_description": "",
+        "live_upload_hashtags": "",
+        "live_upload_comment": "",
+    }.items():
+        st.session_state[key] = value
+
+
+def _live_story(topic) -> dict:
+    return {
+        "title": topic.title,
+        "description": topic.description,
+        "url": topic.url,
+        "source": topic.source,
+        "published_at": topic.published_at.isoformat(),
+    }
+
+
+def _live_start_story(index: int):
+    topic = st.session_state.live_topics[index]
+    _live_reset_downstream()
+    st.session_state.live_selected_topic = index
+    story = _live_story(topic)
+
+    def run_script():
+        return write_script(story, language="english")
+
+    def run_visuals():
+        return crawl_visuals(story)
+
+    with ThreadPoolExecutor(max_workers=2, thread_name_prefix="live-start") as executor:
+        script_future = executor.submit(run_script)
+        visual_future = executor.submit(run_visuals)
+        try:
+            st.session_state.live_script_data = script_future.result()
+        except Exception as exc:
+            st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+        try:
+            st.session_state.live_visual_result = visual_future.result()
+        except Exception as exc:
+            st.session_state.live_visual_result = {
+                "error": f"{type(exc).__name__}: {exc}"
+            }
+
+    script = st.session_state.live_script_data
+    if isinstance(script, dict):
+        st.session_state.live_upload_titles = list(script.get("titles") or [])
+        st.session_state.live_upload_description = str(script.get("seo_description") or "")
+        st.session_state.live_upload_hashtags = " ".join(
+            str(item) for item in (script.get("hashtags") or [])
+        )
+        st.session_state.live_upload_comment = str(script.get("comment") or "")
+
+
+def _live_generate_audio_and_subtitles():
+    approved_script = st.session_state.live_approved_script
+    if not isinstance(approved_script, dict):
+        return
+
+    st.session_state.live_handoff_error = ""
+    st.session_state.live_audio_data = None
+    st.session_state.live_approved_audio = None
+    st.session_state.live_subtitle_data = None
+
+    audio = generate_audio(
+        approved_script,
+        output_dir="output/live/audio",
+    )
+    approved_audio = approve_audio(audio)
+    subtitles = generate_subtitles(approved_script, approved_audio)
+
+    st.session_state.live_audio_data = audio
+    st.session_state.live_approved_audio = approved_audio
+    st.session_state.live_subtitle_data = subtitles
+
+
+def _live_fit_preview(value, width=360, height=640):
+    image = _asset_to_image(value)
+    if image is None:
+        return None
+
+    target_ratio = width / height
+    current_ratio = image.width / image.height
+    if current_ratio > target_ratio:
+        crop_width = max(1, int(image.height * target_ratio))
+        left = (image.width - crop_width) // 2
+        image = image.crop((left, 0, left + crop_width, image.height))
+    elif current_ratio < target_ratio:
+        crop_height = max(1, int(image.width / target_ratio))
+        top = (image.height - crop_height) // 2
+        image = image.crop((0, top, image.width, top + crop_height))
+
+    return image.resize((width, height), Image.Resampling.LANCZOS)
+
+
+def _live_asset_key(result_key: str, index: int, asset: dict) -> str:
+    return _visual_asset_key(f"live-{result_key}", index, asset)
+
+
+def _live_delete_asset(result_key: str, index: int, asset: dict):
+    asset_key = _live_asset_key(result_key, index, asset)
+    st.session_state.live_visual_deleted.add(asset_key)
+    for slide, assignment in list(st.session_state.live_visual_assignments.items()):
+        if assignment.get("asset_key") == asset_key:
+            del st.session_state.live_visual_assignments[slide]
+    st.session_state.live_visual_crops.pop(asset_key, None)
+
+
+def _live_attach_asset(result_key: str, index: int, asset: dict, slide: int):
+    raw = asset.get("bytes")
+    if not isinstance(raw, (bytes, bytearray)):
+        st.warning("This visual has no usable image payload.")
+        return
+
+    asset_key = _live_asset_key(result_key, index, asset)
+    cropped = st.session_state.live_visual_crops.get(asset_key)
+    selected_bytes = bytes(cropped) if cropped else bytes(raw)
+    st.session_state.live_visual_assignments[slide] = {
+        "asset_key": asset_key,
+        "result_key": result_key,
+        "source": str(
+            asset.get("publisher")
+            or asset.get("source")
+            or asset.get("model")
+            or "Web source"
+        ),
+        "label": str(
+            asset.get("article_title")
+            or asset.get("model")
+            or "Selected visual"
+        ),
+        "bytes": selected_bytes,
+    }
+    st.session_state.live_visuals_approved = False
+
+
+def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: int):
+    visible_assets = [
+        (index, asset)
+        for index, asset in enumerate(assets)
+        if _live_asset_key(result_key, index, asset)
+        not in st.session_state.live_visual_deleted
+    ]
+
+    if not visible_assets:
+        st.caption("No images are currently available from this option.")
+        return
+
+    for start in range(0, len(visible_assets), 3):
+        cols = st.columns(3, gap="medium")
+        for col, (index, asset) in zip(cols, visible_assets[start:start + 3]):
+            with col:
+                asset_key = _live_asset_key(result_key, index, asset)
+                source = str(
+                    asset.get("publisher")
+                    or asset.get("source")
+                    or asset.get("model")
+                    or "Web source"
+                )
+                label = str(
+                    asset.get("article_title")
+                    or asset.get("model")
+                    or "Selected visual"
+                )
+                with st.container(key=f"live-visual-card-{result_key}-{index}"):
+                    preview_bytes = st.session_state.live_visual_crops.get(asset_key)
+                    preview = _live_fit_preview(
+                        preview_bytes if preview_bytes else asset.get("bytes")
+                    )
+                    if preview is not None:
+                        st.image(preview, width="stretch")
+                    st.markdown(
+                        f'<div class="visual-source">{source}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if label:
+                        st.markdown(
+                            f'<div class="visual-detail">{label}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    if preview_bytes:
+                        st.markdown(
+                            '<div class="visual-crop-label">9:16 CROP SAVED</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                    choose_col, crop_col, delete_col = st.columns(3, gap="small")
+                    with choose_col:
+                        with st.popover("Choose for slide"):
+                            selected_slide = st.selectbox(
+                                "Slide",
+                                list(range(1, slide_count + 1)),
+                                index=0,
+                                key=f"live-attach-slide-{asset_key}",
+                            )
+                            if st.button(
+                                "Attach",
+                                type="primary",
+                                width="stretch",
+                                key=f"live-attach-{asset_key}",
+                            ):
+                                _live_attach_asset(
+                                    result_key,
+                                    index,
+                                    asset,
+                                    selected_slide,
+                                )
+                                st.rerun()
+                    with crop_col:
+                        raw = asset.get("bytes")
+                        if st.button(
+                            "Crop",
+                            width="stretch",
+                            key=f"live-crop-{asset_key}",
+                        ):
+                            if isinstance(raw, (bytes, bytearray)):
+                                _crop_visual_dialog(
+                                    asset_key,
+                                    bytes(raw),
+                                    source,
+                                    crop_store="live_visual_crops",
+                                )
+                            else:
+                                st.warning("This visual does not have a crop-ready payload.")
+                    with delete_col:
+                        if st.button(
+                            "Delete",
+                            width="stretch",
+                            key=f"live-delete-{asset_key}",
+                        ):
+                            _live_delete_asset(result_key, index, asset)
+                            st.rerun()
+
+
+def _render_live_visual_board(slide_count: int):
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">VISUAL BOARD</div>'
+        '<div class="section-title">Attach one visual to every slide</div></div>'
+        f'<div class="section-count">{slide_count} slides required</div>',
+        unsafe_allow_html=True,
+    )
+
+    cols = st.columns(slide_count, gap="small")
+    for slide in range(1, slide_count + 1):
+        with cols[slide - 1]:
+            assignment = st.session_state.live_visual_assignments.get(slide)
+            with st.container(key=f"live-slide-{slide}"):
+                st.markdown(
+                    f'<div class="eyebrow">SLIDE {slide}</div>',
+                    unsafe_allow_html=True,
+                )
+                preview = (
+                    _live_fit_preview(assignment["bytes"], 300, 533)
+                    if assignment
+                    else None
+                )
+                if preview is not None:
+                    st.image(preview, width="stretch")
+                    st.caption(assignment.get("source") or "Attached visual")
+                else:
+                    st.markdown(
+                        '<div style="min-height:260px;display:flex;align-items:center;'
+                        'justify-content:center;border:1px dashed rgba(255,255,255,.12);'
+                        'border-radius:10px;color:#657080;">EMPTY</div>',
+                        unsafe_allow_html=True,
+                    )
+
+
+def _render_live_visuals(slide_count: int):
+    _render_live_visual_board(slide_count)
+    assigned = len(st.session_state.live_visual_assignments)
+    st.caption(
+        f"{assigned}/{slide_count} slides attached. "
+        "Attached images remain in their original pools until you delete them."
+    )
+
+    with st.expander("Option 1 · Automatic Scraper", expanded=True):
+        result = st.session_state.get("live_visual_result") or {}
+        if result.get("error"):
+            st.error(result["error"])
+        else:
+            st.caption(
+                f'{len(result.get("assets") or [])} images · '
+                f'{int(result.get("pages_scraped") or 0)} pages'
+            )
+            _render_live_asset_pool(
+                list(result.get("assets") or []),
+                "auto",
+                slide_count,
+            )
+
+    with st.expander("Option 2 · Manual Scraper", expanded=False):
+        st.caption("Manual query only. This searches publisher pages and scrapes their images.")
+        with st.form("live-manual-crawler-form"):
+            query = st.text_input(
+                "Manual query",
+                placeholder="e.g. Ben Stokes batting",
+                key="live-manual-crawler-query",
+            )
+            run = st.form_submit_button(
+                "Run manual scrape",
+                type="primary",
+                width="stretch",
+            )
+        if run:
+            query = query.strip()
+            if not query:
+                st.warning("Enter a query first.")
+            else:
+                with st.spinner("Searching and scraping publisher pages…"):
+                    try:
+                        st.session_state.live_manual_visual_result = manual_crawl_visuals(query)
+                    except Exception as exc:
+                        st.session_state.live_manual_visual_result = {
+                            "error": f"{type(exc).__name__}: {exc}"
+                        }
+        result = st.session_state.get("live_manual_visual_result") or {}
+        if result.get("error"):
+            st.error(result["error"])
+        elif result:
+            st.caption(
+                f'{len(result.get("assets") or [])} images · '
+                f'{int(result.get("pages_scraped") or 0)} pages'
+            )
+            _render_live_asset_pool(
+                list(result.get("assets") or []),
+                "manual",
+                slide_count,
+            )
+
+    with st.expander("Option 3 · Real Image Search", expanded=False):
+        st.caption("Manual query only. Searches the configured real-image providers.")
+        with st.form("live-real-image-form"):
+            query = st.text_input(
+                "Manual query",
+                placeholder="e.g. Ben Stokes batting",
+                key="live-real-image-query",
+            )
+            run = st.form_submit_button(
+                "Search real images",
+                type="primary",
+                width="stretch",
+            )
+        if run:
+            query = query.strip()
+            if not query:
+                st.warning("Enter a query first.")
+            else:
+                with st.spinner("Searching real-image sources…"):
+                    try:
+                        st.session_state.live_real_image_result = search_images(query)
+                    except Exception as exc:
+                        st.session_state.live_real_image_result = {
+                            "error": f"{type(exc).__name__}: {exc}"
+                        }
+        result = st.session_state.get("live_real_image_result") or {}
+        if result.get("error"):
+            st.error(result["error"])
+        elif result:
+            st.caption(f'{len(result.get("assets") or [])} images')
+            _render_live_asset_pool(
+                list(result.get("assets") or []),
+                "real",
+                slide_count,
+            )
+
+    with st.expander("Option 4 · AI Generation", expanded=False):
+        st.caption("Manual prompt only. Uses the configured AI image providers.")
+        with st.form("live-ai-image-form"):
+            query = st.text_input(
+                "Manual prompt",
+                placeholder="e.g. Ben Stokes hitting a six in a packed stadium",
+                key="live-ai-image-query",
+            )
+            run = st.form_submit_button(
+                "Generate images",
+                type="primary",
+                width="stretch",
+            )
+        if run:
+            query = query.strip()
+            if not query:
+                st.warning("Enter a prompt first.")
+            else:
+                with st.spinner("Generating images…"):
+                    try:
+                        st.session_state.live_ai_image_result = generate_images(query)
+                    except Exception as exc:
+                        st.session_state.live_ai_image_result = {
+                            "error": f"{type(exc).__name__}: {exc}"
+                        }
+        result = st.session_state.get("live_ai_image_result") or {}
+        if result.get("error"):
+            st.error(result["error"])
+        elif result:
+            st.caption(f'{len(result.get("assets") or [])} images')
+            _render_live_asset_pool(
+                list(result.get("assets") or []),
+                "ai",
+                slide_count,
+            )
+
+    ready = all(
+        slide in st.session_state.live_visual_assignments
+        for slide in range(1, slide_count + 1)
+    )
+    if ready:
+        if not st.session_state.live_visuals_approved:
+            if st.button(
+                "Approve visuals and render",
+                type="primary",
+                width="stretch",
+                key="live-approve-visuals",
+            ):
+                assigned = [
+                    st.session_state.live_visual_assignments[slide]
+                    for slide in range(1, slide_count + 1)
+                ]
+                story = st.session_state.live_topics[
+                    st.session_state.live_selected_topic
+                ]
+                story_id = _live_story_key(story)
+                output = Path("output/live") / f"{story_id}.mp4"
+                try:
+                    with st.spinner("Rendering the final Short…"):
+                        render_production_video(
+                            st.session_state.live_approved_script,
+                            st.session_state.live_approved_audio,
+                            st.session_state.live_subtitle_data,
+                            assigned,
+                            output_path=output,
+                            headline_text=st.session_state.live_approved_script.get("headline", ""),
+                            source_label=story.source or "SPORTS DESK",
+                        )
+                    st.session_state.live_rendered_video_path = str(output)
+                    st.session_state.live_visuals_approved = True
+                    st.session_state.live_render_error = ""
+                    st.rerun()
+                except (RuntimeError, ValueError, OSError) as exc:
+                    st.session_state.live_render_error = str(exc)
+        else:
+            st.success("Visuals approved and final render completed.")
+    else:
+        st.info("Attach every slide before Visuals can be approved.")
+
+    if st.session_state.live_render_error:
+        st.error(st.session_state.live_render_error)
+
+
+def _render_live_script():
+    script = st.session_state.get("live_script_data")
+    if st.session_state.get("live_script_error"):
+        st.error(
+            "Scriptwriter failed: "
+            + st.session_state.live_script_error
+        )
+        return
+
+    if not isinstance(script, dict):
+        st.info("Generating the script and automatic visual pool…")
+        return
+
+    story = st.session_state.live_topics[st.session_state.live_selected_topic]
+    story_id = _live_story_key(story)
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">SCRIPT QC</div>'
+        '<div class="section-title">Edit once, approve once</div></div>'
+        '<div class="section-count">no second script QC</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "Edit the narration and the 3–4 word opening headline. Your edits are handed directly to Audio after approval."
+    )
+
+    edited_headline = st.text_input(
+        "Opening headline",
+        value=str(script.get("headline") or ""),
+        max_chars=48,
+        key=f"live-script-headline-{story_id}",
+    )
+
+    edited_voiceovers = []
+    for index, scene in enumerate(script.get("script") or [], 1):
+        edited_voiceovers.append(
+            st.text_area(
+                f"Slide {index} narration",
+                value=str(scene.get("voiceover") or ""),
+                height=110,
+                key=f"live-script-scene-{story_id}-{index}",
+            )
+        )
+
+    if not st.session_state.live_approved_script:
+        if st.button(
+            "Approve script and hand to Audio",
+            type="primary",
+            width="stretch",
+            key="live-approve-script",
+        ):
+            approved = json.loads(json.dumps(script, ensure_ascii=False))
+            original_scenes = script.get("script") or []
+            for scene, voiceover, original in zip(
+                approved.get("script") or [],
+                edited_voiceovers,
+                original_scenes,
+            ):
+                scene["voiceover"] = str(voiceover or "").strip()
+            approved["headline"] = str(edited_headline or "").strip()
+            approved["human_script_edited"] = any(
+                str(scene.get("voiceover") or "").strip()
+                != str(original.get("voiceover") or "").strip()
+                for scene, original in zip(
+                    approved.get("script") or [],
+                    original_scenes,
+                )
+            ) or str(approved.get("headline") or "").strip() != str(
+                script.get("headline") or ""
+            ).strip()
+            approved["approved_for_audio"] = True
+            st.session_state.live_approved_script = approved
+            try:
+                with st.spinner("Creating audio and subtitle handoffs…"):
+                    _live_generate_audio_and_subtitles()
+            except (RuntimeError, ValueError, OSError) as exc:
+                st.session_state.live_handoff_error = str(exc)
+            st.rerun()
+
+    if st.session_state.live_approved_script:
+        st.success("Script approved. Audio and subtitle handoffs are ready.")
+        if st.session_state.live_handoff_error:
+            st.error(st.session_state.live_handoff_error)
+            if st.button(
+                "Retry Audio / Subtitles",
+                key="live-retry-handoffs",
+            ):
+                try:
+                    with st.spinner("Retrying audio and subtitle handoffs…"):
+                        _live_generate_audio_and_subtitles()
+                except (RuntimeError, ValueError, OSError) as exc:
+                    st.session_state.live_handoff_error = str(exc)
+                st.rerun()
+
+
+def _render_live_upload():
+    video_path = Path(st.session_state.live_rendered_video_path)
+    script = st.session_state.live_approved_script
+    story = st.session_state.live_topics[st.session_state.live_selected_topic]
+    story_id = _live_story_key(story)
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">UPLOAD QC</div>'
+        '<div class="section-title">Final video and publish metadata</div></div>'
+        '<div class="section-count">one approval</div>',
+        unsafe_allow_html=True,
+    )
+
+    if video_path.is_file():
+        st.video(str(video_path), width=520)
+
+    titles = list(
+        st.session_state.live_upload_titles
+        or script.get("titles")
+        or []
+    )
+    if not titles:
+        st.error("Scriptwriter did not return three title candidates.")
+        return
+
+    st.caption("Edit the three title candidates, choose the one to publish, then approve the metadata once.")
+    edited_titles = []
+    for index, title in enumerate(titles[:3], 1):
+        edited_titles.append(
+            st.text_input(
+                f"Title option {index}",
+                value=str(title),
+                max_chars=100,
+                key=f"live-upload-title-{story_id}-{index}",
+            )
+        )
+    st.session_state.live_upload_titles = edited_titles
+
+    choice = st.selectbox(
+        "Title to publish",
+        list(range(len(edited_titles))),
+        index=min(
+            int(st.session_state.live_upload_title_choice),
+            len(edited_titles) - 1,
+        ),
+        format_func=lambda index: edited_titles[index] or f"Title option {index + 1}",
+        key=f"live-upload-choice-{story_id}",
+    )
+    st.session_state.live_upload_title_choice = choice
+
+    st.text_area(
+        "Description",
+        key=f"live-upload-description-{story_id}",
+        value=st.session_state.live_upload_description,
+        height=150,
+    )
+    st.text_input(
+        "Hashtags",
+        key=f"live-upload-hashtags-{story_id}",
+        value=st.session_state.live_upload_hashtags,
+    )
+    st.text_area(
+        "Public comment",
+        key=f"live-upload-comment-{story_id}",
+        value=st.session_state.live_upload_comment,
+        height=100,
+    )
+
+    if not st.session_state.live_upload_qc_approved:
+        if st.button(
+            "Approve metadata",
+            type="primary",
+            width="stretch",
+            key="live-approve-upload-qc",
+        ):
+            st.session_state.live_upload_description = st.session_state[
+                f"live-upload-description-{story_id}"
+            ]
+            st.session_state.live_upload_hashtags = st.session_state[
+                f"live-upload-hashtags-{story_id}"
+            ]
+            st.session_state.live_upload_comment = st.session_state[
+                f"live-upload-comment-{story_id}"
+            ]
+            st.session_state.live_upload_qc = {
+                "title": edited_titles[choice].strip(),
+                "description": st.session_state.live_upload_description,
+                "hashtags": st.session_state.live_upload_hashtags,
+                "comment": st.session_state.live_upload_comment,
+            }
+            st.session_state.live_upload_qc_approved = True
+            st.session_state.live_upload_result = None
+            st.rerun()
+        return
+
+    qc = st.session_state.live_upload_qc or {}
+    st.success("Metadata approved.")
+    st.write(f"**Title:** {qc.get('title') or ''}")
+    st.write(f"**Description:** {qc.get('description') or ''}")
+    st.write(f"**Hashtags:** {qc.get('hashtags') or ''}")
+    st.write(f"**Comment:** {qc.get('comment') or ''}")
+
+    result = st.session_state.live_upload_result
+    if result:
+        st.success(
+            f"Upload successful · Video ID: \`{result.get('video_id')}\`"
+        )
+        if result.get("url"):
+            st.link_button("Open YouTube video", result["url"], width="stretch")
+        if result.get("requested_privacy") == "public":
+            if result.get("comment_posted"):
+                st.success("Public upload comment added to YouTube.")
+            elif result.get("comment_error"):
+                st.warning(
+                    "The video was uploaded publicly, but the comment was not accepted: "
+                    + str(result["comment_error"])
+                )
+        return
+
+    col1, col2 = st.columns(2, gap="medium")
+    with col1:
+        public = st.button(
+            "Upload Public",
+            type="primary",
+            width="stretch",
+            key="live-upload-public",
+        )
+    with col2:
+        private = st.button(
+            "Upload Private",
+            width="stretch",
+            key="live-upload-private",
+        )
+
+    if not (public or private):
+        return
+
+    privacy = "public" if public else "private"
+    try:
+        with st.spinner(f"Uploading video as {privacy}…"):
+            st.session_state.live_upload_result = upload_video(
+                video_path,
+                qc.get("title", ""),
+                qc.get("description", ""),
+                qc.get("hashtags", ""),
+                qc.get("comment", ""),
+                privacy,
+            )
+    except (RuntimeError, ValueError, OSError) as exc:
+        st.error(str(exc))
+        return
+    st.rerun()
+
+
 def render_live_dashboard():
     st.markdown('<div class="eyebrow">PRODUCTION CONTROL ROOM</div>',unsafe_allow_html=True)
-    left,right=st.columns([1,.32],gap="large")
+    left,right=st.columns([1,.22],gap="large")
     with left:
         st.markdown('<h1 style="margin:0;font-size:3.2rem;">LIVE</h1>',unsafe_allow_html=True)
-        st.markdown('<div class="hero-subtitle">A single production surface for the completed factory. The visual layer is ready; production orchestration remains separate from the stage implementations.</div>',unsafe_allow_html=True)
+        st.markdown(
+            '<div class="hero-subtitle">Choose a desk, choose a story, then move through the finished factory in one continuous production flow.</div>',
+            unsafe_allow_html=True,
+        )
     with right:
-        if st.button("← Home",key="live-home",width="stretch"):
-            st.session_state.app_mode="home"
+        controls = st.columns(2, gap="small")
+        with controls[0]:
+            if st.button("New Short", key="live-new-short", width="stretch"):
+                _live_reset_downstream()
+                st.session_state.live_desk = None
+                st.session_state.live_cricket_profile = None
+                st.session_state.live_topics = []
+                st.session_state.live_topics_profile = None
+                st.rerun()
+        with controls[1]:
+            if st.button("← Home",key="live-home",width="stretch"):
+                st.session_state.app_mode="home"
+                st.rerun()
+
+    if st.session_state.live_desk is None:
+        st.space("medium")
+        st.markdown('<div class="section-head"><div><div class="eyebrow">START PRODUCTION</div><div class="section-title">Choose your sports desk</div></div></div>', unsafe_allow_html=True)
+        left, right = st.columns(2, gap="small")
+        with left:
+            with st.container(key="live-choice-cricket"):
+                st.markdown('<div class="eyebrow">01 · CRICKET</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">CRICKET</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:1.02rem;color:#f1eaf8;max-width:430px;">India / Asia stories and global cricket stories.</div>', unsafe_allow_html=True)
+                st.space("medium")
+                if st.button("Choose Cricket →", type="primary", width="stretch", key="live-choose-cricket"):
+                    st.session_state.live_desk = "cricket"
+                    st.rerun()
+        with right:
+            with st.container(key="live-choice-niche"):
+                st.markdown('<div class="eyebrow">02 · NICHE SPORTS</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">NICHE</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:1.02rem;color:#f1eaf8;max-width:430px;">Tennis, badminton, motorsport, athletics, hockey, chess and more.</div>', unsafe_allow_html=True)
+                st.space("medium")
+                if st.button("Choose Niche Sports →", type="primary", width="stretch", key="live-choose-niche"):
+                    st.session_state.live_desk = "niche"
+                    st.session_state.live_cricket_profile = None
+                    st.session_state.live_topics_profile = None
+                    st.session_state.live_topics = []
+                    profile = "niche_sports"
+                    with st.spinner("Finding the top 20 niche-sports stories…"):
+                        st.session_state.live_topics = fetch_topics(
+                            profile,
+                            more=False,
+                            exclude_topics=[],
+                            limit=20,
+                        )
+                    st.session_state.live_topics_profile = profile
+                    st.rerun()
+        return
+
+    if st.session_state.live_desk == "cricket" and st.session_state.live_cricket_profile is None:
+        st.space("medium")
+        st.markdown('<div class="section-head"><div><div class="eyebrow">CRICKET DESK</div><div class="section-title">Choose the cricket lane</div></div></div>', unsafe_allow_html=True)
+        left, right = st.columns(2, gap="small")
+        cricket_choices = [
+            ("live-cricket-india", "01 · INDIA / ASIA", "INDIA / ASIA", "cricket_india_asia"),
+            ("live-cricket-global", "02 · GLOBAL", "GLOBAL", "cricket_global"),
+        ]
+        for col, (key, eyebrow, title, profile) in zip((left, right), cricket_choices):
+            with col:
+                with st.container(key=key):
+                    st.markdown(f'<div class="eyebrow">{eyebrow}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div style="font-size:2.7rem;font-weight:900;letter-spacing:-.05em;">{title}</div>', unsafe_allow_html=True)
+                    if st.button(f"Choose {title} →", type="primary", width="stretch", key=f"{key}-button"):
+                        st.session_state.live_cricket_profile = profile
+                        st.session_state.live_topics = []
+                        with st.spinner("Finding the top 20 cricket stories…"):
+                            st.session_state.live_topics = fetch_topics(
+                                profile,
+                                more=False,
+                                exclude_topics=[],
+                                limit=20,
+                            )
+                        st.session_state.live_topics_profile = profile
+                        st.rerun()
+        return
+
+    if not st.session_state.live_topics:
+        profile = st.session_state.live_topics_profile
+        if not profile:
+            return
+        with st.spinner("Finding the top 20 stories…"):
+            st.session_state.live_topics = fetch_topics(
+                profile,
+                more=False,
+                exclude_topics=[],
+                limit=20,
+            )
+
+    st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Top 20 stories</div></div><div class="section-count">headline + rating</div></div>', unsafe_allow_html=True)
+
+    topics = st.session_state.live_topics
+    for start in range(0, len(topics), 2):
+        row = st.columns(2, gap="medium")
+        for col, (index, topic) in zip(
+            row,
+            enumerate(topics[start:start + 2], start=start),
+        ):
+            with col:
+                rating = max(
+                    1,
+                    min(
+                        5,
+                        round(float(topic.score or 0.0) / 8.0 * 5.0),
+                    ),
+                )
+                stars = "★" * rating + "☆" * (5 - rating)
+                with st.container(key=f"live-topic-{index}"):
+                    st.markdown(
+                        f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span><span class="topic-rating">{stars}</span></div>'
+                        f'<div class="topic-title">{topic.title}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(
+                        "Select story →",
+                        width="stretch",
+                        key=f"live-select-story-{index}",
+                    ):
+                        _live_start_story(index)
+                        st.rerun()
+
+    if len(topics) >= 20:
+        if st.button(
+            "Find 20 more unique stories",
+            width="stretch",
+            key="live-find-more",
+        ):
+            with st.spinner("Searching for 20 additional unique stories…"):
+                existing = list(st.session_state.live_topics)
+                new_topics = fetch_topics(
+                    st.session_state.live_topics_profile,
+                    more=True,
+                    exclude_topics=existing,
+                    limit=20,
+                )
+                st.session_state.live_topics = existing + new_topics
             st.rerun()
-    st.space("small")
+
+    selected_index = st.session_state.live_selected_topic
+    if selected_index is None or not 0 <= selected_index < len(topics):
+        return
+
+    topic = topics[selected_index]
+    story_id = _live_story_key(topic)
+
     st.markdown('<div class="live-glow"></div>',unsafe_allow_html=True)
     st.space("medium")
-    story=(
-        st.session_state.topics[st.session_state.selected_topic]
-        if st.session_state.selected_topic is not None
-        and 0 <= st.session_state.selected_topic < len(st.session_state.topics)
-        else None
-    )
-    st.markdown('<div class="eyebrow">CURRENT PIPELINE</div>',unsafe_allow_html=True)
-    cols=st.columns(4,gap="small")
-    live_cards=[
-        ("01","Story",story.title if story else "No story selected"),
-        ("02","Script","Approved" if st.session_state.approved_script else "Waiting"),
-        ("03","Audio","Approved" if st.session_state.approved_audio else "Waiting"),
-        ("04","Media","Loaded" if st.session_state.visual_result else "Waiting"),
-    ]
-    for col,(number,label,value) in zip(cols,live_cards):
-        with col:
-            st.markdown(f'<div class="live-card"><div class="eyebrow">{number} · {label}</div><div style="font-size:1.12rem;font-weight:800;">{value}</div></div>',unsafe_allow_html=True)
-    st.space("medium")
-    st.markdown('<div class="eyebrow">FACTORY</div>',unsafe_allow_html=True)
-    pipeline_cols=st.columns(7,gap="small")
-    for col,stage_info in zip(pipeline_cols,STAGES):
-        _,label=_stage_status(stage_info["key"])
-        dot="●" if label!="Waiting" else "○"
-        with col:
-            st.markdown(f'<div class="live-card" style="min-height:120px;text-align:center;"><div style="font-size:1.8rem;">{stage_info["icon"]}</div><div class="eyebrow">{stage_info["number"]}</div><div style="font-weight:800;">{stage_info["label"]}</div><div class="muted">{dot} {label}</div></div>',unsafe_allow_html=True)
-    st.space("medium")
-    st.markdown('<div class="card"><div class="eyebrow">LIVE MODE</div><div style="font-size:1.1rem;font-weight:800;margin-bottom:.4rem;">Production orchestration is the next integration layer.</div><div class="muted">The completed function contracts are preserved. This control-room UI does not alter or duplicate those functions.</div></div>',unsafe_allow_html=True)
 
+    st.markdown('<div class="section-head"><div><div class="eyebrow">02 · SCRIPTWRITER</div><div class="section-title">Script review</div></div><div class="section-count">manual QC</div></div>', unsafe_allow_html=True)
+    _render_live_script()
+
+    script_approved = isinstance(st.session_state.live_approved_script, dict)
+    audio_ready = isinstance(st.session_state.live_approved_audio, dict)
+    subtitles_ready = isinstance(st.session_state.live_subtitle_data, dict)
+
+    status_cols = st.columns(4, gap="small")
+    status_values = [
+        ("Script", "Approved" if script_approved else "Waiting"),
+        ("Audio", "Ready" if audio_ready else "Waiting"),
+        ("Subtitles", "Ready" if subtitles_ready else "Waiting"),
+        ("Visuals", "Ready" if st.session_state.live_visual_result else "Scraping"),
+    ]
+    for col, (label, value) in zip(status_cols, status_values):
+        with col:
+            st.markdown(
+                f'<div class="live-card" style="min-height:90px;"><div class="eyebrow">{label}</div><div style="font-weight:850;">{value}</div></div>',
+                unsafe_allow_html=True,
+            )
+
+    if script_approved and audio_ready and subtitles_ready:
+        st.space("medium")
+        st.markdown('<div class="section-head"><div><div class="eyebrow">04 · VISUALS</div><div class="section-title">Choose the imagery</div></div><div class="section-count">manual visual approval</div></div>', unsafe_allow_html=True)
+        _render_live_visuals(len(st.session_state.live_approved_script.get("script") or []))
+
+    if st.session_state.live_rendered_video_path and st.session_state.live_visuals_approved:
+        st.space("medium")
+        st.markdown('<div class="section-head"><div><div class="eyebrow">06–07 · RENDER + UPLOAD</div><div class="section-title">Preview and publish</div></div></div>', unsafe_allow_html=True)
+        _render_live_upload()
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",

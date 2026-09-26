@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from pathlib import Path
+import math
 import shutil
 import subprocess
 
@@ -255,13 +257,14 @@ def _paste_logo(base: Image.Image) -> None:
     )
 
 
-def _paste_source(base: Image.Image) -> None:
+def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
     draw = ImageDraw.Draw(base)
     font = _font((), 24)
-    width, _ = _measure(draw, SOURCE_LABEL, font)
+    label = str(source_label or SOURCE_LABEL).strip() or SOURCE_LABEL
+    width, _ = _measure(draw, label, font)
     draw.text(
         (WIDTH - width - 42, HEIGHT - 86),
-        SOURCE_LABEL,
+        label,
         font=font,
         fill=(210, 216, 224),
     )
@@ -540,6 +543,7 @@ def render_frame(
     subtitle_data: dict = PREVIEW_SUBTITLE_DATA,
     headline_text: str = HEADLINE_TEXT,
     headline_enabled: bool = True,
+    source_label: str | None = None,
 ) -> Image.Image:
     if not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
@@ -560,7 +564,10 @@ def render_frame(
         _draw_subtitles(frame, subtitle_data, t)
 
     _paste_logo(frame)
-    _paste_source(frame)
+    if source_label is None:
+        _paste_source(frame)
+    else:
+        _paste_source(frame, source_label)
     return frame.convert("RGB")
 
 
@@ -674,6 +681,178 @@ def build_preview_bundle(
 
     return videos
 
+
+
+
+def _fit_visual_to_frame(value: bytes | bytearray | Image.Image) -> Image.Image:
+    if isinstance(value, Image.Image):
+        image = value.convert("RGB")
+    elif isinstance(value, (bytes, bytearray)):
+        try:
+            with Image.open(BytesIO(bytes(value))) as source:
+                image = source.convert("RGB")
+        except (OSError, ValueError) as exc:
+            raise ValueError("A visual asset could not be decoded.") from exc
+    else:
+        raise ValueError("Each visual must contain image bytes.")
+
+    target_ratio = WIDTH / HEIGHT
+    current_ratio = image.width / image.height
+    if current_ratio > target_ratio:
+        crop_width = max(1, int(image.height * target_ratio))
+        left = (image.width - crop_width) // 2
+        image = image.crop((left, 0, left + crop_width, image.height))
+    elif current_ratio < target_ratio:
+        crop_height = max(1, int(image.width / target_ratio))
+        top = (image.height - crop_height) // 2
+        image = image.crop((0, top, image.width, top + crop_height))
+
+    return image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+
+
+def _mux_audio(
+    silent_video: Path,
+    audio_scenes: list[dict],
+    output_path: Path,
+) -> Path:
+    inputs = ["-i", str(silent_video)]
+    filter_inputs = []
+
+    for index, scene in enumerate(audio_scenes, 1):
+        audio_path = Path(str(scene.get("path") or ""))
+        if not audio_path.is_file() or audio_path.stat().st_size <= 0:
+            raise ValueError(
+                f"Audio file for scene {scene.get('scene') or index} is missing."
+            )
+        inputs.extend(["-i", str(audio_path)])
+        filter_inputs.append(f"[{index}:a]")
+
+    filter_complex = (
+        "".join(filter_inputs)
+        + f"concat=n={len(audio_scenes)}:v=0:a=1[a]"
+    )
+
+    process = subprocess.run(
+        [
+            "ffmpeg",
+            "-hide_banner",
+            "-loglevel",
+            "error",
+            "-y",
+            *inputs,
+            "-filter_complex",
+            filter_complex,
+            "-map",
+            "0:v:0",
+            "-map",
+            "[a]",
+            "-c:v",
+            "copy",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "128k",
+            "-shortest",
+            str(output_path),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if process.returncode != 0:
+        raise RuntimeError(
+            process.stderr.strip() or "ffmpeg failed to attach the audio."
+        )
+    return output_path
+
+
+def render_production_video(
+    approved_script: dict,
+    approved_audio: dict,
+    subtitle_data: dict,
+    visuals: list[dict],
+    output_path: str | Path,
+    headline_text: str | None = None,
+    source_label: str | None = None,
+) -> Path:
+    """Render the approved production handoff with supplied slide visuals and audio."""
+    if (
+        not isinstance(approved_script, dict)
+        or approved_script.get("approved_for_audio") is not True
+    ):
+        raise ValueError("Renderer requires the approved Scriptwriter handoff.")
+
+    if (
+        not isinstance(approved_audio, dict)
+        or approved_audio.get("approved_for_visuals") is not True
+    ):
+        raise ValueError("Renderer requires the approved Audio handoff.")
+
+    if not validate_subtitle_handoff(subtitle_data):
+        raise ValueError("Renderer requires a valid subtitle handoff.")
+
+    script_scenes = approved_script.get("script")
+    audio_scenes = approved_audio.get("scenes")
+    if (
+        not isinstance(script_scenes, list)
+        or not isinstance(audio_scenes, list)
+        or len(script_scenes) != len(audio_scenes)
+        or len(visuals) != len(script_scenes)
+        or not script_scenes
+    ):
+        raise ValueError("Script, audio and visual scene counts must match.")
+
+    prepared_visuals = []
+    for index, visual in enumerate(visuals, 1):
+        if not isinstance(visual, dict):
+            raise ValueError(f"Visual {index} is malformed.")
+        prepared_visuals.append(
+            _fit_visual_to_frame(visual.get("bytes"))
+        )
+
+    durations = []
+    for index, scene in enumerate(audio_scenes, 1):
+        try:
+            duration = float(scene["duration"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise ValueError(f"Audio scene {index} has no usable duration.") from exc
+        if duration <= 0:
+            raise ValueError(f"Audio scene {index} has an invalid duration.")
+        durations.append(duration)
+
+    total_duration = sum(durations)
+    output = Path(output_path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    silent_video = output.with_name(f"{output.stem}.silent.mp4")
+
+    def frames():
+        frame_count = max(1, int(math.ceil(total_duration * FPS)))
+        elapsed = 0.0
+        scene_index = 0
+        for frame_index in range(frame_count):
+            t = frame_index / FPS
+            while (
+                scene_index < len(durations) - 1
+                and t >= elapsed + durations[scene_index]
+            ):
+                elapsed += durations[scene_index]
+                scene_index += 1
+            yield render_frame(
+                prepared_visuals[scene_index],
+                t,
+                subtitle_data,
+                headline_text or HEADLINE_TEXT,
+                True,
+                source_label,
+            )
+
+    try:
+        write_preview_video(frames(), silent_video)
+        return _mux_audio(silent_video, audio_scenes, output)
+    finally:
+        try:
+            silent_video.unlink()
+        except FileNotFoundError:
+            pass
 
 def get_logo_path() -> Path:
     return Path(__file__).resolve().parent / "logo.png"

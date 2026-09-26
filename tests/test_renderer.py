@@ -222,3 +222,69 @@ def test_invalid_subtitle_handoff_is_rejected():
 def test_renderer_paths_point_to_expected_local_assets():
     assert renderer.get_logo_path().name == "logo.png"
     assert Path(renderer.get_headline_font_path()).parent.name == "fonts"
+
+def test_production_renderer_uses_approved_handoffs(monkeypatch, tmp_path):
+    from io import BytesIO
+
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+
+    visual_buffer = BytesIO()
+    Image.new("RGB", (1200, 800), "white").save(visual_buffer, format="JPEG")
+
+    script = {
+        "approved_for_audio": True,
+        "script": [{"voiceover": "A factual opening sentence."}],
+        "headline": "Gill Injury Scare",
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
+    }
+    subtitles = {
+        "schema": "final-shorts.subtitles.v1",
+        "language": "english",
+        "cues": [{
+            "start": 0.0,
+            "end": 0.5,
+            "words": [{"text": "A", "start": 0.0, "end": 0.2}],
+        }],
+    }
+    visuals = [{"bytes": visual_buffer.getvalue()}]
+
+    silent = []
+
+    def fake_preview(frames, path):
+        list(frames)
+        path.write_bytes(b"silent")
+        silent.append(path)
+        return path
+
+    def fake_mux(silent_video, audio_scenes, output):
+        assert silent_video in silent
+        assert audio_scenes == audio["scenes"]
+        output.write_bytes(b"final")
+        return output
+
+    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
+    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
+
+    output = tmp_path / "final.mp4"
+    result = renderer.render_production_video(
+        script,
+        audio,
+        subtitles,
+        visuals,
+        output,
+        headline_text="Gill Injury Scare",
+        source_label="Test Sports Desk",
+    )
+
+    assert result == output
+    assert output.read_bytes() == b"final"
+    assert not silent[0].exists()
+
+
+def test_production_visuals_are_normalised_to_vertical_frame():
+    image = renderer._fit_visual_to_frame(Image.new("RGB", (1600, 900), "white"))
+    assert image.size == (renderer.WIDTH, renderer.HEIGHT)
