@@ -3,13 +3,14 @@ from script_writer import apply_script_edits, write_script
 
 def valid_result(scene1="Gill suffers a fresh injury scare before India’s ODI."):
     return {
+        "headline": "Gill Injury Scare",
         "titles": [
             "Gill injury scare before ODI",
             "India captain hit in nets",
             "Gill fitness update",
         ],
         "seo_description": "Shubman Gill faces an injury scare before India’s next ODI.",
-        "pinned_comment": "How serious do you think this could be?",
+        "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
         "script": [
             {
                 "voiceover": scene1,
@@ -67,6 +68,8 @@ def test_writer_uses_one_primary_groq_call(monkeypatch):
     assert result["delivery_profile"] == "HYPE COMMENTATOR"
     assert result["source_title"] == "Shubman Gill injury scare in nets"
     assert len(result["titles"]) == 3
+    assert 3 <= len(result["headline"].split()) <= 4
+    assert result["hashtags"]
     assert len(result["script"]) == 4
 
 
@@ -109,7 +112,28 @@ def test_writer_uses_20b_when_primary_output_fails_validation(monkeypatch):
     assert result["provider_used"] == "openai/gpt-oss-20b"
 
 
-def test_approved_edits_preserve_titles_and_mark_audio_handoff():
+def test_writer_rejects_headline_with_wrong_word_count(monkeypatch):
+    def fake_request(model, prompt, story):
+        result = valid_result()
+        result["headline"] = "Gill Injury Scare Before ODI"
+        return result
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+
+    try:
+        write_script(
+            {
+                "title": "Gill injury scare",
+                "description": "Shubman Gill was hit in training before the ODI.",
+            }
+        )
+    except RuntimeError as exc:
+        assert "failed" in str(exc).lower()
+    else:
+        raise AssertionError("Invalid headline should not pass.")
+
+
+def test_approved_edits_preserve_titles_and_metadata_and_mark_audio_handoff():
     original = valid_result()
     edited = apply_script_edits(
         original,
@@ -122,6 +146,8 @@ def test_approved_edits_preserve_titles_and_mark_audio_handoff():
     )
 
     assert edited["titles"] == original["titles"]
+    assert edited["hashtags"] == original["hashtags"]
+    assert edited["headline"] == original["headline"]
     assert edited["script"][0]["voiceover"].startswith("Gill faces")
     assert edited["human_script_edited"] is True
     assert edited["approved_for_audio"] is True
