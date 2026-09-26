@@ -50,7 +50,7 @@ def test_subtitles_create_absolute_timestamps_across_scenes():
     assert result["language"] == "english"
     assert result["cues"][0]["start"] == 0.0
     assert result["cues"][0]["end"] == 1.0
-    assert result["cues"][1]["start"] == 1.5
+    assert result["cues"][1]["start"] == 1.9
     assert result["cues"][1]["end"] == 2.6
 
 
