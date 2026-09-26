@@ -19,8 +19,9 @@ def test_build_queries_is_small_and_entity_focused():
         _story()["description"],
         "Shubman Gill",
     )
-    assert len(queries) == 2
-    assert all("Shubman Gill" in query for query in queries)
+    assert len(queries) == 3
+    assert queries[0] == _story()["title"]
+    assert all("Shubman Gill" in query for query in queries[1:])
 
 
 def test_original_story_url_is_first_and_manual_run_uses_only_manual_query(monkeypatch):
@@ -82,3 +83,70 @@ def test_crawl_exposes_page_diagnostics(monkeypatch):
     assert result["failure_state"] == "no_images"
     assert result["diagnostics"][0]["candidates"] == 7
     assert result["diagnostics"][0]["network_fallback_hits"] == 3
+
+
+def test_related_search_uses_ddgs_and_google_and_filters_unrelated(monkeypatch):
+    calls = []
+
+    def fake_ddgs(query, *args, **kwargs):
+        calls.append(("ddgs", query))
+        return [{
+            "title": "Shubman Gill survives injury scare before West Indies ODI",
+            "url": "https://example.com/related",
+        }]
+
+    def fake_google(query):
+        calls.append(("google", query))
+        return [{
+            "title": "Unrelated football story",
+            "url": "https://example.com/unrelated",
+            "published_at": datetime.now(timezone.utc).isoformat(),
+        }]
+
+    monkeypatch.setattr(visual_fetcher, "_ddgs_news", fake_ddgs)
+    monkeypatch.setattr(visual_fetcher, "_google_news_rss", fake_google)
+
+    pages = visual_fetcher._collect_related_pages(
+        ["Shubman Gill survives injury scare"],
+        "https://example.com/original",
+        _story()["title"],
+        "Shubman Gill",
+    )
+    assert [page["url"] for page in pages] == ["https://example.com/related"]
+    assert {lane for lane, _ in calls} == {"ddgs", "google"}
+
+
+def test_profile_search_uses_web_text_search(monkeypatch):
+    class FakeDDGS:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        def text(self, **kwargs):
+            return [{
+                "title": "Joe Root profile",
+                "href": "https://example.com/joe-root-profile",
+                "source": "Example",
+            }]
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "ddgs",
+        type("FakeModule", (), {"DDGS": FakeDDGS}),
+    )
+    pages = visual_fetcher._collect_profile_pages("Joe Root")
+    assert pages
+    assert pages[0]["url"].endswith("joe-root-profile")
+
+
+def test_static_parser_handles_responsive_image_markup():
+    parser = visual_fetcher._StaticImageParser()
+    parser.feed(
+        '<meta property="og:image" content="https://example.com/hero.jpg">'
+        '<picture><source data-srcset="https://example.com/a.jpg 1200w, https://example.com/b.jpg 800w">'
+        '<img data-lazy-src="https://example.com/c.jpg" alt="Joe Root batting"></picture>'
+    )
+    parser.close()
+    urls = [item[0] for item in parser.candidates]
+    assert "https://example.com/a.jpg" in urls
+    assert "https://example.com/b.jpg" in urls
+    assert "https://example.com/c.jpg" in urls
