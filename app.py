@@ -270,7 +270,7 @@ def _crop_visual_dialog(
         image,
         realtime_update=True,
         box_color="#8B5CF6",
-        aspect_ratio=9 / 16,
+        aspect_ratio=None,
         return_type="image",
         key=f"cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
         stroke_width=2,
