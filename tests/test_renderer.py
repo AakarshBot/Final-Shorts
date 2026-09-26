@@ -58,6 +58,22 @@ def test_renderer_uses_supplied_headline(monkeypatch):
     assert seen == ["Gill Injury Scare"]
 
 
+def test_renderer_shows_headline_and_subtitles_together(monkeypatch):
+    calls = []
+    monkeypatch.setattr(renderer, "_draw_headline", lambda *args: calls.append("headline"))
+    monkeypatch.setattr(renderer, "_draw_subtitles", lambda *args: calls.append("subtitles"))
+    base = renderer.make_sample_background()
+
+    renderer.render_frame(
+        base,
+        0.50,
+        headline_text="Gill Injury Scare",
+        headline_enabled=True,
+    )
+
+    assert calls == ["headline", "subtitles"]
+
+
 def test_headline_wraps_three_and_six_word_inputs_without_overflow():
     for text in ("BIG CRICKET NEWS", "BIG CRICKET NEWS FROM INDIA TODAY"):
         font, clean, lines = renderer._fit_headline_font(text)
