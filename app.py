@@ -157,6 +157,8 @@ def render_scriptwriter():
         st.session_state.approved_script = None
         st.session_state.audio_data = None
         st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
     topic = st.session_state.topics[selected_index]
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -239,7 +241,14 @@ def render_visuals_crawler():
         key="visual_story",
     )
     selected_index = labels.index(selected_label)
-    st.session_state.selected_topic = selected_index
+    if selected_index != st.session_state.selected_topic:
+        st.session_state.selected_topic = selected_index
+        st.session_state.script_data = None
+        st.session_state.approved_script = None
+        st.session_state.audio_data = None
+        st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
     topic = st.session_state.topics[selected_index]
 
     story = {
