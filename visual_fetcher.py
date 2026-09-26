@@ -7,6 +7,7 @@ import html
 import io
 import json
 import re
+from html.parser import HTMLParser
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
@@ -609,38 +610,127 @@ async def _browser_page(context, request):
             pass
 
 
+class _StaticImageParser(HTMLParser):
+    def __init__(self):
+        super().__init__(convert_charrefs=True)
+        self.meta = {}
+        self.candidates = []
+        self._script = False
+        self._script_type = ""
+
+    def handle_starttag(self, tag, attrs):
+        data = {str(k).casefold(): str(v) for k, v in attrs if k and v is not None}
+        tag = tag.casefold()
+
+        if tag == "meta":
+            key = _clean(data.get("property") or data.get("name") or data.get("itemprop"), 120).casefold()
+            value = _clean(data.get("content"), 3000)
+            if key and value:
+                self.meta.setdefault(key, value)
+            return
+
+        if tag == "script":
+            self._script = True
+            self._script_type = _clean(data.get("type"), 120).casefold()
+            return
+
+        if tag == "link":
+            rel = _clean(data.get("rel"), 200).casefold()
+            href = data.get("href")
+            if href and ("image_src" in rel or ("preload" in rel and data.get("as", "").casefold() == "image")):
+                self.candidates.append((href, "link:image", {}))
+            return
+
+        if tag not in {"img", "source"}:
+            return
+
+        if tag == "source" and "video" in data.get("type", "").casefold():
+            return
+
+        payload = {
+            "alt": data.get("alt"),
+            "title": data.get("title"),
+            "class": data.get("class"),
+            "itemprop": data.get("itemprop"),
+        }
+        for key, method in (
+            ("src", "static-img"),
+            ("data-src", "static-lazy"),
+            ("data-lazy-src", "static-lazy"),
+            ("data-original", "static-original"),
+            ("data-image", "static-image"),
+            ("data-image-url", "static-image"),
+            ("data-url", "static-image"),
+        ):
+            if data.get(key):
+                self.candidates.append((data[key], method, payload))
+        for key in ("srcset", "data-srcset", "data-lazy-srcset"):
+            for value in _extract_srcset(data.get(key)):
+                self.candidates.append((value, "static-srcset", payload))
+
+    def handle_endtag(self, tag):
+        if tag.casefold() == "script":
+            self._script = False
+            self._script_type = ""
+
+    def handle_data(self, data):
+        return
+
+
 def _static_page(request):
     try:
         response = requests.get(
             request["url"],
             timeout=SEARCH_TIMEOUT,
-            headers=HEADERS,
+            headers={**HEADERS, "Accept": "text/html,application/xhtml+xml"},
         )
         response.raise_for_status()
-        markup = response.text
+        markup = response.content[:4_000_000].decode(
+            response.encoding or "utf-8",
+            errors="replace",
+        )
         base_url = response.url or request["url"]
-    except requests.RequestException:
-        return {"assets": []}
+    except (requests.RequestException, UnicodeError):
+        return {"assets": [], "error": "static-navigation-failed"}
 
-    urls = []
-    for pattern in (
-        r'<meta[^>]+(?:property|name)=["\'](?:og:image|twitter:image)["\'][^>]+content=["\']([^"\']+)',
-        r'<img[^>]+(?:src|data-src|data-original)=["\']([^"\']+)',
+    parser = _StaticImageParser()
+    try:
+        parser.feed(markup)
+        parser.close()
+    except Exception as exc:
+        return {"assets": [], "error": f"static-parse: {type(exc).__name__}: {exc}"}
+
+    candidates = []
+    seen_urls = set()
+
+    for key, method in (
+        ("og:image", "metadata"),
+        ("og:image:url", "metadata"),
+        ("og:image:secure_url", "metadata"),
+        ("twitter:image", "metadata"),
+        ("twitter:image:src", "metadata"),
     ):
-        urls.extend(re.findall(pattern, markup, re.IGNORECASE))
+        if parser.meta.get(key):
+            candidates.append((parser.meta[key], method, {}))
+
+    candidates.extend(parser.candidates)
 
     assets = []
-    seen = set()
-    for raw_url in urls[: IMAGES_PER_PAGE * 4]:
+    seen_hashes = set()
+    for raw_url, method, payload in candidates[: IMAGES_PER_PAGE * 8]:
         url = _absolute(raw_url, base_url)
-        if not url or _bad_image_url(url) or url.casefold() in seen:
+        if not url or _bad_image_url(url) or url.casefold() in seen_urls:
             continue
-        seen.add(url.casefold())
+        seen_urls.add(url.casefold())
         try:
             image_response = requests.get(
                 url,
                 timeout=SEARCH_TIMEOUT,
-                headers={**HEADERS, "Referer": base_url},
+                headers={
+                    **HEADERS,
+                    "Referer": base_url,
+                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                },
             )
             image_response.raise_for_status()
             data = image_response.content
@@ -649,25 +739,51 @@ def _static_page(request):
         if not _image_bytes_ok(data):
             continue
 
+        digest = _visual_hash(data)
+        if digest in seen_hashes:
+            continue
+        seen_hashes.add(digest)
         width, height = _image_dimensions(data)
         assets.append({
             "bytes": data,
-            "hash": _visual_hash(data),
+            "hash": digest,
             "source_page_url": base_url,
             "source_image_url": url,
-            "publisher": urlparse(base_url).netloc.removeprefix("www."),
-            "article_title": request.get("title", ""),
+            "publisher": _clean(
+                parser.meta.get("og:site_name")
+                or request.get("publisher")
+                or urlparse(base_url).netloc.removeprefix("www."),
+                160,
+            ),
+            "article_title": _clean(
+                parser.meta.get("og:title")
+                or request.get("title")
+                or "",
+                600,
+            ),
             "published_at": request.get("published_at", ""),
             "query": request.get("query", ""),
-            "method": "static",
+            "method": method,
             "width": width,
             "height": height,
             "score": 10.0,
-            "action_score": 0,
+            "action_score": len(
+                _tokens(" ".join(
+                    str(payload.get(key) or "")
+                    for key in ("alt", "title", "class", "itemprop")
+                )) & ACTION_TERMS
+            ),
         })
         if len(assets) >= IMAGES_PER_PAGE:
             break
-    return {"assets": assets}
+
+    return {
+        "assets": assets,
+        "title": _clean(parser.meta.get("og:title") or request.get("title"), 600),
+        "url": base_url,
+        "static_candidates": len(candidates),
+        "error": "",
+    }
 
 
 def _crawl_pages(page_requests):
