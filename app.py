@@ -14,6 +14,7 @@ from visual_search import search_images
 from visual_generator import generate_images
 from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle
 from subtitles import generate_subtitles
+from uploader import upload_video
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
@@ -31,7 +32,7 @@ st.caption("Free Shorts factory · independent function testing")
 
 function = st.sidebar.selectbox(
     "Test function",
-    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio", "04 · Visuals", "05 · Subtitles", "06 · Renderer"],
+    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio", "04 · Visuals", "05 · Subtitles", "06 · Renderer", "07 · Upload QC"],
     key="test_function",
 )
 
@@ -61,6 +62,23 @@ if "subtitle_data" not in st.session_state:
     st.session_state.subtitle_data = None
 if "approved_subtitles" not in st.session_state:
     st.session_state.approved_subtitles = None
+
+if "rendered_video_path" not in st.session_state:
+    st.session_state.rendered_video_path = None
+if "upload_qc_approved" not in st.session_state:
+    st.session_state.upload_qc_approved = False
+if "upload_result" not in st.session_state:
+    st.session_state.upload_result = None
+if "upload_title_choice" not in st.session_state:
+    st.session_state.upload_title_choice = 0
+if "upload_title_options" not in st.session_state:
+    st.session_state.upload_title_options = []
+if "upload_description" not in st.session_state:
+    st.session_state.upload_description = ""
+if "upload_hashtags" not in st.session_state:
+    st.session_state.upload_hashtags = ""
+if "upload_comment" not in st.session_state:
+    st.session_state.upload_comment = ""
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
@@ -227,6 +245,13 @@ def render_scriptwriter():
             st.session_state.audio_data = None
             st.session_state.approved_audio = None
             st.session_state.renderer_previews = None
+            st.session_state.upload_qc_approved = False
+            st.session_state.upload_result = None
+            st.session_state.upload_title_options = list(approved.get("titles") or [])
+            st.session_state.upload_title_choice = 0
+            st.session_state.upload_description = str(approved.get("seo_description") or "")
+            st.session_state.upload_hashtags = " ".join(approved.get("hashtags") or [])
+            st.session_state.upload_comment = str(approved.get("comment") or "")
         except ValueError as exc:
             st.error(str(exc))
 
@@ -635,6 +660,157 @@ def render_renderer_test():
         st.caption("Large bold captions · yellow active word · logo top-right · source bottom-right")
 
 
+
+def render_upload_qc():
+    st.header("07 · Upload QC")
+    script = st.session_state.get("approved_script")
+    if not isinstance(script, dict):
+        st.info("Approve the Scriptwriter first.")
+        return
+
+    video_path = st.session_state.get("rendered_video_path")
+    if video_path:
+        video_path = Path(video_path)
+
+    if not video_path or not video_path.is_file():
+        uploaded = st.file_uploader(
+            "Rendered video",
+            type=["mp4", "mov", "m4v"],
+            key="upload_video_file",
+        )
+        if uploaded is not None:
+            upload_dir = Path("output/upload_qc")
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            suffix = Path(uploaded.name).suffix.lower() or ".mp4"
+            video_path = upload_dir / f"rendered_video{suffix}"
+            video_path.write_bytes(uploaded.getbuffer())
+            st.session_state.rendered_video_path = str(video_path)
+
+    if not video_path or not video_path.is_file():
+        st.info("The rendered video will appear here after the Renderer hands it off.")
+        return
+
+    st.video(str(video_path), width=520)
+
+    titles = list(st.session_state.get("upload_title_options") or script.get("titles") or [])
+    if not titles:
+        st.error("No Scriptwriter title candidates are available.")
+        return
+
+    if not st.session_state.upload_qc_approved:
+        st.subheader("Metadata")
+        st.caption("Edit everything you want. Approve once, then choose Public or Private upload.")
+
+        edited_titles = []
+        for index, title in enumerate(titles, 1):
+            edited_titles.append(
+                st.text_input(
+                    f"Title option {index}",
+                    value=title,
+                    key=f"upload-title-{index}",
+                    max_chars=100,
+                )
+            )
+        st.session_state.upload_title_options = edited_titles
+
+        choice = st.radio(
+            "Title to upload",
+            list(range(len(edited_titles))),
+            index=min(
+                int(st.session_state.upload_title_choice),
+                len(edited_titles) - 1,
+            ),
+            format_func=lambda index: edited_titles[index],
+            key="upload_title_choice",
+        )
+
+        st.text_area(
+            "Description",
+            key="upload_description",
+            height=150,
+        )
+        st.text_input(
+            "Hashtags",
+            key="upload_hashtags",
+        )
+        st.text_area(
+            "Comment",
+            key="upload_comment",
+            height=100,
+        )
+
+        if st.button("Approve Upload QC", type="primary", use_container_width=True):
+            st.session_state.upload_qc_approved = True
+            st.session_state.upload_result = None
+            st.session_state.upload_qc = {
+                "title": edited_titles[choice].strip(),
+                "description": st.session_state.upload_description,
+                "hashtags": st.session_state.upload_hashtags,
+                "comment": st.session_state.upload_comment,
+            }
+            st.rerun()
+
+        return
+
+    qc = st.session_state.get("upload_qc") or {}
+    st.subheader("Approved metadata")
+    st.write(f"**Title:** {qc.get('title') or ''}")
+    st.write(f"**Description:** {qc.get('description') or ''}")
+    st.write(f"**Hashtags:** {qc.get('hashtags') or ''}")
+    st.write(f"**Comment:** {qc.get('comment') or ''}")
+
+    result = st.session_state.get("upload_result")
+    if result:
+        st.success(
+            f"Uploaded as {result.get('privacy_status') or result.get('requested_privacy')} · "
+            f"{result.get('url')}"
+        )
+        if result.get("requested_privacy") == "public":
+            if result.get("privacy_status") != "public":
+                st.warning(
+                    "YouTube accepted the upload but returned it as private, so the public comment was not added."
+                )
+            elif result.get("comment_posted"):
+                st.success("Public upload comment added.")
+            elif result.get("comment_error"):
+                st.warning(
+                    "The video was uploaded publicly, but YouTube did not accept the comment: "
+                    + result["comment_error"]
+                )
+        st.link_button("Open YouTube video", result["url"], use_container_width=True)
+        return
+
+    st.subheader("Upload")
+    col1, col2 = st.columns(2, gap="medium")
+    with col1:
+        public = st.button(
+            "Upload Public",
+            type="primary",
+            use_container_width=True,
+        )
+    with col2:
+        private = st.button(
+            "Upload Private",
+            use_container_width=True,
+        )
+
+    if not (public or private):
+        return
+
+    privacy = "public" if public else "private"
+    try:
+        with st.spinner(f"Uploading video as {privacy}…"):
+            st.session_state.upload_result = upload_video(
+                video_path,
+                qc.get("title", ""),
+                qc.get("description", ""),
+                qc.get("hashtags", ""),
+                qc.get("comment", ""),
+                privacy,
+            )
+    except (RuntimeError, ValueError, OSError) as exc:
+        st.error(str(exc))
+
 def render_audio():
     st.header("03 · Audio")
 
@@ -711,3 +887,5 @@ elif function == "05 · Subtitles":
     render_subtitles()
 elif function == "06 · Renderer":
     render_renderer_test()
+elif function == "07 · Upload QC":
+    render_upload_qc()
