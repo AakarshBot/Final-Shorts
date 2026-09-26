@@ -49,6 +49,25 @@ def valid_result(scene1="Gill suffers a fresh injury scare before India’s ODI.
     }
 
 
+def test_writer_sends_title_and_description_as_story_evidence(monkeypatch):
+    captured = []
+
+    def fake_request(model, prompt, story):
+        captured.append(story)
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    write_script(
+        {
+            "title": "Gill injury scare",
+            "description": "Shubman Gill was struck during training before the ODI.",
+        }
+    )
+
+    assert "Gill injury scare" in captured[0]
+    assert "Shubman Gill was struck during training before the ODI." in captured[0]
+
+
 def test_writer_uses_one_primary_groq_call(monkeypatch):
     calls = []
 
