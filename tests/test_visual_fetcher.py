@@ -61,3 +61,24 @@ def test_dedupe_prefers_original_story_assets_on_equal_score():
     ]
     result = visual_fetcher._dedupe(assets)
     assert result[0]["hash"] == "original"
+
+def test_crawl_exposes_page_diagnostics(monkeypatch):
+    def fake_crawl_pages(requests):
+        return [{
+            "assets": [],
+            "url": requests[0]["url"],
+            "title": "Test page",
+            "candidate_count": 7,
+            "dom_image_count": 12,
+            "network_image_count": 9,
+            "direct_download_failures": 4,
+            "network_fallback_hits": 3,
+            "error": "",
+        }]
+
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl_pages)
+    result = visual_fetcher.crawl_visuals(_story())
+
+    assert result["failure_state"] == "no_images"
+    assert result["diagnostics"][0]["candidates"] == 7
+    assert result["diagnostics"][0]["network_fallback_hits"] == 3
