@@ -301,6 +301,25 @@ def test_writer_rejects_retention_bait(monkeypatch):
     else:
         raise AssertionError("Retention-bait draft should not pass.")
 
+
+def test_writer_rejects_other_retention_phrases(monkeypatch):
+    for phrase in ("Watch till the end for the full story.", "Don't skip this.", "Keep watching."):
+        def fake_request(model, prompt, story, phrase=phrase):
+            return valid_result(phrase)
+
+        monkeypatch.setattr("script_writer._request", fake_request)
+        try:
+            write_script(
+                {
+                    "title": "India cricket injury update",
+                    "description": "A player faces an injury scare.",
+                }
+            )
+        except RuntimeError as exc:
+            assert "failed" in str(exc).lower()
+        else:
+            raise AssertionError(f"Retention phrase passed: {phrase}")
+
 def test_writer_research_uses_full_article_before_generation(monkeypatch):
     class FakeResponse:
         url = "https://example.com/story"
