@@ -458,7 +458,7 @@ async def _browser_page(context, request):
 
         for markup in data.get("noscripts") or []:
             for match in re.finditer(
-                r'<(?:img|source)\\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\\s*=\\s*[\'"']([^\'"']+)[\'"']',
+                r'<(?:img|source)\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\s*=\s*[\'"']([^\'"']+)[\'"']',
                 markup,
                 re.IGNORECASE,
             ):
@@ -678,7 +678,12 @@ def _crawl_pages(page_requests):
                     return_exceptions=True,
                 )
                 output = [
-                    {"assets": []} if isinstance(result, Exception) else result
+                    {
+                        "assets": [],
+                        "error": f"{type(result).__name__}: {result}",
+                    }
+                    if isinstance(result, Exception)
+                    else result
                     for result in results
                 ]
                 await context.close()
