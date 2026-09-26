@@ -6,6 +6,7 @@ import hashlib
 import html
 import io
 import json
+import os
 import re
 from html.parser import HTMLParser
 from concurrent.futures import ThreadPoolExecutor
@@ -67,6 +68,23 @@ ACTION_TERMS = {
     "lifting",
 }
 HEADERS = {"User-Agent": "Final-Shorts/1.0 (web image retrieval)"}
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MANUAL_QUERY_MODEL = "openai/gpt-oss-20b"
+MANUAL_QUERY_TIMEOUT = 20
+MANUAL_QUERY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "historical": {"type": "boolean"},
+        "queries": {
+            "type": "array",
+            "items": {"type": "string"},
+            "minItems": 1,
+            "maxItems": 3,
+        },
+    },
+    "required": ["historical", "queries"],
+    "additionalProperties": False,
+}
 
 
 def _clean(value, limit=5000):
@@ -108,6 +126,77 @@ def _usable_url(value):
     url = _clean(value, 3000)
     parsed = urlparse(url)
     return url if parsed.scheme in {"http", "https"} and parsed.netloc else ""
+
+
+def _manual_query_plan(query):
+    key = _clean(os.getenv("GROQ_API_KEY"), 300)
+    if not key:
+        return {"historical": False, "queries": [query]}
+
+    prompt = """You are a sports web-image search planner.
+Decide whether the query is name_only or contextual.
+
+name_only means the user supplied only an entity/person/team name.
+contextual means they added a specific event, object, action, milestone or occasion.
+
+Rules:
+- name_only: return exactly the original query and historical=false.
+- contextual: return the original query plus up to two concise search variants using useful synonyms.
+- Preserve every named entity and the user's intent.
+- Do not invent dates, opponents, scores, events or other facts.
+- Set historical=true for contextual searches so older publisher pages can be found.
+- Queries should help find photographs on publisher/news pages.
+- Return JSON only.
+"""
+    try:
+        response = requests.post(
+            GROQ_URL,
+            headers={
+                "Authorization": f"Bearer {key}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": MANUAL_QUERY_MODEL,
+                "messages": [
+                    {"role": "system", "content": prompt},
+                    {"role": "user", "content": query},
+                ],
+                "response_format": {
+                    "type": "json_schema",
+                    "json_schema": {
+                        "name": "manual_visual_query_plan",
+                        "strict": True,
+                        "schema": MANUAL_QUERY_SCHEMA,
+                    },
+                },
+                "include_reasoning": False,
+                "reasoning_effort": "low",
+                "temperature": 0.2,
+                "max_completion_tokens": 220,
+            },
+            timeout=MANUAL_QUERY_TIMEOUT,
+        )
+        response.raise_for_status()
+        content = response.json()["choices"][0]["message"]["content"]
+        plan = content if isinstance(content, dict) else json.loads(content)
+
+        queries = []
+        seen = set()
+        for value in [query] + list(plan.get("queries") or []):
+            value = _clean(value, 260)
+            key = value.casefold()
+            if value and key not in seen:
+                queries.append(value)
+                seen.add(key)
+            if len(queries) >= 3:
+                break
+
+        return {
+            "historical": bool(plan.get("historical")) and len(queries) > 1,
+            "queries": queries or [query],
+        }
+    except Exception:
+        return {"historical": False, "queries": [query]}
 
 
 def build_queries(title, description="", entity=""):
