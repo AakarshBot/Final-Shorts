@@ -95,42 +95,136 @@ def _usable_url(value):
 
 
 def build_queries(title, description="", entity=""):
-    """Build two compact visual-search queries; the original URL is separate."""
+    """Build the working crawler's exact-headline and entity/context lanes."""
+    title = _clean(title, 260)
     entity = _clean(entity, 180)
     entity_tokens = _tokens(entity)
-    source = f"{title} {description}"
-    terms = []
+
+    distinctive = []
     seen = set()
-    for token in re.findall(r"[A-Za-z0-9][A-Za-z0-9'’.-]*", _clean(source, 1200)):
+    for token in re.findall(
+        r"[A-Za-z0-9][A-Za-z0-9'’.-]*",
+        _clean(f"{title} {description}", 1500),
+    ):
         key = token.casefold()
         if len(token) <= 2 or key in STOPWORDS or key in entity_tokens or key in seen:
             continue
         seen.add(key)
-        terms.append(token)
-        if len(terms) >= 5:
+        distinctive.append(token)
+        if len(distinctive) >= 5:
             break
 
-    if entity and terms:
-        queries = [
-            f"{entity} {' '.join(terms[:4])}",
-            f"{entity} {' '.join(terms[:2])}",
-        ]
-    elif terms:
-        queries = [" ".join(terms[:4]), " ".join(terms[:2])]
-    else:
-        queries = [entity or _clean(title, 220)] if (entity or title) else []
+    queries = [title] if title else []
+    if entity and distinctive:
+        queries.extend((
+            f"{entity} {' '.join(distinctive[:4])}",
+            f"{entity} {' '.join(distinctive[:2])}",
+        ))
+    elif distinctive:
+        queries.extend((
+            " ".join(distinctive[:4]),
+            " ".join(distinctive[:2]),
+        ))
+    elif entity:
+        queries.append(entity)
 
     output = []
-    seen = set()
+    seen_queries = set()
     for query in queries:
         query = _clean(query, 260)
-        if query and query.casefold() not in seen:
+        key = query.casefold()
+        if query and key not in seen_queries:
             output.append(query)
-            seen.add(query.casefold())
-    return output[:2]
+            seen_queries.add(key)
+        if len(output) >= QUERY_COUNT:
+            break
+    return output
 
 
-def _news_search(query):
+def _age_hours(published_at, now):
+    if published_at is None:
+        return None
+    return (now - published_at).total_seconds() / 3600.0
+
+
+def _title_match(query, title, entity=""):
+    q_tokens = _tokens(query)
+    title_tokens = _tokens(title)
+    if not q_tokens or not title_tokens:
+        return 0.0
+    overlap = len(q_tokens & title_tokens) / max(1, len(q_tokens))
+    entity_tokens = _tokens(entity)
+    entity_overlap = (
+        len(entity_tokens & title_tokens) / max(1, len(entity_tokens))
+        if entity_tokens else 1.0
+    )
+    if entity_tokens and entity_overlap < 0.75:
+        return 0.0
+    threshold = 0.82 if len(q_tokens) <= 4 else 0.58
+    if overlap < threshold:
+        return 0.0
+    return min(1.0, overlap * 0.75 + entity_overlap * 0.25)
+
+
+def _related_article_score(query, article_title, story_title, entity=""):
+    title_tokens = _tokens(article_title)
+    query_tokens = _tokens(query)
+    story_tokens = _tokens(story_title)
+    entity_tokens = _tokens(entity)
+    if not title_tokens:
+        return 0.0
+
+    if entity_tokens:
+        entity_hits = len(entity_tokens & title_tokens)
+        entity_overlap = entity_hits / max(1, len(entity_tokens))
+        if entity_overlap < 0.75 and not (
+            entity_hits >= 1 and len(entity_tokens) >= 2
+        ):
+            return 0.0
+    else:
+        entity_overlap = 0.0
+
+    topic_tokens = (story_tokens | query_tokens) - entity_tokens
+    topic_hits = len(topic_tokens & title_tokens)
+    if not entity_tokens and topic_hits < 2:
+        return 0.0
+    if entity_tokens and topic_hits < 1:
+        return 0.0
+
+    query_overlap = len(query_tokens & title_tokens) / max(1, len(query_tokens))
+    return min(
+        1.0,
+        entity_overlap * 0.45
+        + min(1.0, topic_hits / 3.0) * 0.35
+        + query_overlap * 0.20,
+    )
+
+
+def _ddgs_news(query, timelimit="d"):
+    try:
+        from ddgs import DDGS
+        search = DDGS(timeout=SEARCH_TIMEOUT)
+    except Exception:
+        return []
+
+    for backend in ("bing", "yahoo"):
+        try:
+            results = search.news(
+                query=query,
+                region="us-en",
+                safesearch="moderate",
+                timelimit=timelimit,
+                max_results=SEARCH_RESULTS,
+                backend=backend,
+            )
+            if results:
+                return [dict(item) for item in results if isinstance(item, dict)]
+        except Exception:
+            continue
+    return []
+
+
+def _google_news_rss(query):
     url = (
         "https://news.google.com/rss/search?q="
         + quote_plus(query)
@@ -143,73 +237,215 @@ def _news_search(query):
     except (requests.RequestException, ET.ParseError):
         return []
 
-    results = []
+    output = []
     for item in root.findall(".//item")[:SEARCH_RESULTS]:
         title = _clean(item.findtext("title"), 600)
         link = _usable_url(item.findtext("link"))
         published = _parse_date(item.findtext("pubDate"))
         source = _clean(item.findtext("source"), 160)
         if title and link:
-            results.append({
+            output.append({
                 "title": title,
                 "url": link,
                 "published_at": published.isoformat() if published else "",
                 "source": source,
                 "query": query,
             })
-    return results
+    return output
 
 
-def _collect_related_pages(queries, original_url):
+def _news_search(query):
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        ddgs_future = executor.submit(_ddgs_news, query)
+        google_future = executor.submit(_google_news_rss, query)
+        ddgs = ddgs_future.result()
+        google = google_future.result()
+
+    combined = []
+    seen = set()
+    for item in list(ddgs or []) + list(google or []):
+        url = _clean(item.get("url") or item.get("href"), 3000)
+        title = _clean(item.get("title"), 600)
+        identity = url.casefold() or title.casefold()
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        combined.append({**item, "url": url, "title": title, "query": query})
+
+    if len(combined) < min(SEARCH_RESULTS, 8):
+        for item in _ddgs_news(query, timelimit="w"):
+            url = _clean(item.get("url") or item.get("href"), 3000)
+            title = _clean(item.get("title"), 600)
+            identity = url.casefold() or title.casefold()
+            if not identity or identity in seen:
+                continue
+            seen.add(identity)
+            combined.append({**item, "url": url, "title": title, "query": query})
+            if len(combined) >= SEARCH_RESULTS:
+                break
+
+    return combined[:SEARCH_RESULTS]
+
+
+def _article_url_is_usable(url):
+    parsed = urlparse(str(url or ""))
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        return False
+    host = parsed.netloc.casefold().split(":")[0]
+    if host in BLOCKED_HOSTS:
+        return False
+    if host != "news.google.com" and any(
+        part in parsed.path.casefold() for part in BAD_PATH_PARTS
+    ):
+        return False
+    return True
+
+
+def _collect_related_pages(queries, original_url, story_title="", entity=""):
     if not queries:
         return []
 
-    with ThreadPoolExecutor(max_workers=len(queries)) as executor:
+    with ThreadPoolExecutor(max_workers=min(3, len(queries))) as executor:
         groups = list(executor.map(_news_search, queries))
 
     now = datetime.now(timezone.utc)
-    candidates = [item for group in groups for item in group]
-
-    def sort_key(item):
-        published = _parse_date(item.get("published_at"))
-        age = (now - published).total_seconds() if published else 0
-        return (
-            1 if published is None else 0,
-            age,
-            -len(_tokens(item.get("title", ""))),
-        )
-
-    candidates.sort(key=sort_key)
-
-    pages = []
+    ranked = []
     seen_urls = {_clean(original_url).casefold().rstrip("/")}
-    seen_hosts = {}
-    for item in candidates:
-        url = _clean(item.get("url"), 3000)
-        key = url.casefold().rstrip("/")
-        host = urlparse(url).netloc.casefold().removeprefix("www.")
-        if not url or key in seen_urls or not host:
-            continue
 
-        published = _parse_date(item.get("published_at"))
-        if published is not None:
-            age_hours = (now - published).total_seconds() / 3600.0
-            if age_hours < -1 or age_hours > 96:
+    for group in groups:
+        for item in group:
+            url = _clean(item.get("url") or item.get("href"), 3000)
+            title = _clean(item.get("title"), 600)
+            if not url or not title or not _article_url_is_usable(url):
                 continue
 
-        if seen_hosts.get(host, 0) >= 2:
-            continue
-        if any(part in urlparse(url).path.casefold() for part in (
-            "/search", "/tag/", "/category/", "/topic/", "/feed", "/rss"
-        )):
-            continue
+            key = url.casefold().rstrip("/")
+            if key in seen_urls:
+                continue
 
-        seen_urls.add(key)
-        seen_hosts[host] = seen_hosts.get(host, 0) + 1
+            published = _parse_date(
+                item.get("published_at")
+                or item.get("published")
+                or item.get("date")
+            )
+            age = _age_hours(published, now)
+            if age is not None and (age < -0.5 or age > MAX_AGE_HOURS):
+                continue
+
+            query = _clean(item.get("query"), 260)
+            match = max(
+                _title_match(query, title, entity),
+                _related_article_score(query, title, story_title, entity),
+            )
+            if not query or match <= 0:
+                continue
+
+            ranked.append({
+                **item,
+                "url": url,
+                "title": title,
+                "query": query,
+                "published_at": published.isoformat() if published else "",
+                "match": match,
+                "age": age,
+                "_host": urlparse(url).netloc.casefold().removeprefix("www."),
+            })
+            seen_urls.add(key)
+
+    ranked.sort(
+        key=lambda item: (
+            1 if item.get("age") is None else 0,
+            float(item.get("age") or 0),
+            -float(item.get("match") or 0),
+        )
+    )
+
+    pages = []
+    host_counts = {}
+    for item in ranked:
+        host = item.get("_host") or ""
+        if host and host_counts.get(host, 0) >= 2:
+            continue
         pages.append(item)
+        if host:
+            host_counts[host] = host_counts.get(host, 0) + 1
         if len(pages) >= MAX_RELATED_PAGES:
             break
+
+    if len(pages) < MAX_RELATED_PAGES:
+        selected = {item["url"].casefold() for item in pages}
+        for item in ranked:
+            if item["url"].casefold() in selected:
+                continue
+            pages.append(item)
+            selected.add(item["url"].casefold())
+            if len(pages) >= MAX_RELATED_PAGES:
+                break
+
     return pages
+
+
+def _collect_profile_pages(entity):
+    if not entity:
+        return []
+
+    try:
+        from ddgs import DDGS
+        search = DDGS(timeout=SEARCH_TIMEOUT)
+    except Exception:
+        return []
+
+    ranked = []
+    seen = set()
+    for query in (
+        f"{entity} player profile",
+        f"{entity} profile",
+        f"{entity} official",
+    ):
+        for backend in ("bing", "yahoo"):
+            try:
+                results = search.text(
+                    query=query,
+                    region="us-en",
+                    safesearch="moderate",
+                    max_results=8,
+                    backend=backend,
+                )
+            except Exception:
+                continue
+            if not results:
+                continue
+
+            for item in results:
+                if not isinstance(item, dict):
+                    continue
+                url = _clean(item.get("href") or item.get("url"), 3000)
+                title = _clean(item.get("title"), 600)
+                key = url.casefold()
+                if (
+                    not url
+                    or not title
+                    or key in seen
+                    or not _article_url_is_usable(url)
+                ):
+                    continue
+                if _title_match(entity, title, entity) <= 0:
+                    continue
+
+                seen.add(key)
+                ranked.append({
+                    "url": url,
+                    "title": title,
+                    "source": _clean(item.get("source"), 160),
+                    "published_at": "",
+                    "query": query,
+                    "profile": True,
+                })
+
+            if ranked:
+                break
+
+    return ranked[:PROFILE_PAGES]
 
 
 def _extract_srcset(value):
@@ -328,6 +564,7 @@ def _browser_script():
           srcset: img.getAttribute('srcset') || '',
           dataSrc: img.getAttribute('data-src') || '',
           dataSrcset: img.getAttribute('data-srcset') || '',
+          dataLazySrcset: img.getAttribute('data-lazy-srcset') || '',
           dataLazySrc: img.getAttribute('data-lazy-src') || '',
           dataOriginal: img.getAttribute('data-original') || '',
           alt: img.getAttribute('alt') || '',
@@ -437,6 +674,29 @@ async def _browser_page(context, request):
 
         base_url = data.get("finalUrl") or request["url"]
         page_title = _clean(data.get("title"), 600)
+        query = _clean(request.get("query"), 500)
+        entity = _clean(request.get("entity"), 180)
+        story_title = _clean(request.get("story_title"), 600)
+        if query:
+            page_match = max(
+                _title_match(query, page_title, entity),
+                _related_article_score(query, page_title, story_title, entity),
+            )
+            if request.get("profile") and entity:
+                page_match = max(
+                    page_match,
+                    _title_match(entity, page_title, entity),
+                )
+            if page_match <= 0:
+                return {
+                    "assets": [],
+                    "title": page_title,
+                    "url": base_url,
+                    "candidate_count": 0,
+                    "dom_image_count": len(data.get("images") or []),
+                    "network_image_count": len(network_responses),
+                    "error": "page-title-mismatch",
+                }
         candidates = []
 
         def add(url, method, payload=None):
@@ -495,7 +755,11 @@ async def _browser_page(context, request):
             ):
                 if image.get(key):
                     add(image[key], method, payload)
-            for url in _extract_srcset(image.get("srcset")) + _extract_srcset(image.get("dataSrcset")):
+            for url in (
+                _extract_srcset(image.get("srcset"))
+                + _extract_srcset(image.get("dataSrcset"))
+                + _extract_srcset(image.get("dataLazySrcset"))
+            ):
                 add(url, "srcset", payload)
 
         unique = []
@@ -525,7 +789,8 @@ async def _browser_page(context, request):
         direct_download_failures = 0
         direct_invalid_images = 0
         network_fallback_hits = 0
-        for candidate in unique[: IMAGES_PER_PAGE * 4]:
+        max_images = int(request.get("max_images") or IMAGES_PER_PAGE)
+        for candidate in unique[: max_images * 4]:
             try:
                 response = await page.request.get(
                     candidate["url"],
@@ -588,7 +853,7 @@ async def _browser_page(context, request):
                     )) & ACTION_TERMS
                 ),
             })
-            if len(assets) >= IMAGES_PER_PAGE:
+            if len(assets) >= max_images:
                 break
 
         return {
@@ -615,35 +880,49 @@ class _StaticImageParser(HTMLParser):
         super().__init__(convert_charrefs=True)
         self.meta = {}
         self.candidates = []
-        self._script = False
+        self.json_ld = []
+        self._in_script = False
         self._script_type = ""
+        self._script_parts = []
 
     def handle_starttag(self, tag, attrs):
-        data = {str(k).casefold(): str(v) for k, v in attrs if k and v is not None}
         tag = tag.casefold()
+        data = {
+            str(key).casefold(): str(value)
+            for key, value in attrs
+            if key and value is not None
+        }
 
         if tag == "meta":
-            key = _clean(data.get("property") or data.get("name") or data.get("itemprop"), 120).casefold()
+            key = _clean(
+                data.get("property")
+                or data.get("name")
+                or data.get("itemprop"),
+                120,
+            ).casefold()
             value = _clean(data.get("content"), 3000)
             if key and value:
                 self.meta.setdefault(key, value)
             return
 
         if tag == "script":
-            self._script = True
+            self._in_script = True
             self._script_type = _clean(data.get("type"), 120).casefold()
+            self._script_parts = []
             return
 
         if tag == "link":
             rel = _clean(data.get("rel"), 200).casefold()
             href = data.get("href")
-            if href and ("image_src" in rel or ("preload" in rel and data.get("as", "").casefold() == "image")):
+            if href and (
+                "image_src" in rel
+                or ("preload" in rel and data.get("as", "").casefold() == "image")
+            ):
                 self.candidates.append((href, "link:image", {}))
             return
 
         if tag not in {"img", "source"}:
             return
-
         if tag == "source" and "video" in data.get("type", "").casefold():
             return
 
@@ -664,17 +943,28 @@ class _StaticImageParser(HTMLParser):
         ):
             if data.get(key):
                 self.candidates.append((data[key], method, payload))
+
         for key in ("srcset", "data-srcset", "data-lazy-srcset"):
             for value in _extract_srcset(data.get(key)):
                 self.candidates.append((value, "static-srcset", payload))
 
     def handle_endtag(self, tag):
-        if tag.casefold() == "script":
-            self._script = False
-            self._script_type = ""
+        if tag.casefold() != "script" or not self._in_script:
+            return
+        if "ld+json" in self._script_type:
+            raw = "".join(self._script_parts).strip()
+            if raw:
+                try:
+                    self.json_ld.append(json.loads(html.unescape(raw)))
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    pass
+        self._in_script = False
+        self._script_type = ""
+        self._script_parts = []
 
     def handle_data(self, data):
-        return
+        if self._in_script:
+            self._script_parts.append(data)
 
 
 def _static_page(request):
@@ -685,8 +975,9 @@ def _static_page(request):
             headers={**HEADERS, "Accept": "text/html,application/xhtml+xml"},
         )
         response.raise_for_status()
-        markup = response.content[:4_000_000].decode(
-            response.encoding or "utf-8",
+        raw = response.content[:4_000_000]
+        markup = raw.decode(
+            response.encoding or response.apparent_encoding or "utf-8",
             errors="replace",
         )
         base_url = response.url or request["url"]
@@ -698,11 +989,12 @@ def _static_page(request):
         parser.feed(markup)
         parser.close()
     except Exception as exc:
-        return {"assets": [], "error": f"static-parse: {type(exc).__name__}: {exc}"}
+        return {
+            "assets": [],
+            "error": f"static-parse: {type(exc).__name__}: {exc}",
+        }
 
     candidates = []
-    seen_urls = set()
-
     for key, method in (
         ("og:image", "metadata"),
         ("og:image:url", "metadata"),
@@ -713,37 +1005,56 @@ def _static_page(request):
         if parser.meta.get(key):
             candidates.append((parser.meta[key], method, {}))
 
+    for value in parser.json_ld:
+        for url in _walk_images(value):
+            candidates.append((url, "json-ld:image", {}))
+
     candidates.extend(parser.candidates)
 
+    max_images = int(request.get("max_images") or IMAGES_PER_PAGE)
     assets = []
+    seen_urls = set()
     seen_hashes = set()
-    for raw_url, method, payload in candidates[: IMAGES_PER_PAGE * 8]:
+
+    for raw_url, method, payload in candidates[: max_images * 8]:
         url = _absolute(raw_url, base_url)
-        if not url or _bad_image_url(url) or url.casefold() in seen_urls:
+        if not url or _bad_image_url(url):
             continue
-        seen_urls.add(url.casefold())
+        key = url.casefold()
+        if key in seen_urls:
+            continue
+        seen_urls.add(key)
+
         try:
-            image_response = requests.get(
+            response = requests.get(
                 url,
                 timeout=SEARCH_TIMEOUT,
                 headers={
                     **HEADERS,
                     "Referer": base_url,
-                    "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+                    "Accept": (
+                        "image/avif,image/webp,image/apng,image/svg+xml,"
+                        "image/*,*/*;q=0.8"
+                    ),
                 },
             )
-            image_response.raise_for_status()
-            data = image_response.content
+            response.raise_for_status()
+            data = response.content
         except requests.RequestException:
             continue
+
         if not _image_bytes_ok(data):
             continue
-
         digest = _visual_hash(data)
         if digest in seen_hashes:
             continue
         seen_hashes.add(digest)
+
         width, height = _image_dimensions(data)
+        context = " ".join(
+            str(payload.get(key) or "")
+            for key in ("alt", "title", "class", "itemprop")
+        )
         assets.append({
             "bytes": data,
             "hash": digest,
@@ -767,14 +1078,10 @@ def _static_page(request):
             "width": width,
             "height": height,
             "score": 10.0,
-            "action_score": len(
-                _tokens(" ".join(
-                    str(payload.get(key) or "")
-                    for key in ("alt", "title", "class", "itemprop")
-                )) & ACTION_TERMS
-            ),
+            "action_score": len(_tokens(context) & ACTION_TERMS),
+            "profile_page": bool(request.get("profile")),
         })
-        if len(assets) >= IMAGES_PER_PAGE:
+        if len(assets) >= max_images:
             break
 
     return {
@@ -786,7 +1093,7 @@ def _static_page(request):
     }
 
 
-def _crawl_pages(page_requests):
+def _crawl_pages(page_requests, images_per_page=IMAGES_PER_PAGE):
     async def run_browser():
         try:
             from playwright.async_api import async_playwright
@@ -807,7 +1114,18 @@ def _crawl_pages(page_requests):
                     ),
                 )
                 results = await asyncio.gather(
-                    *(_browser_page(context, request) for request in page_requests),
+                    *(
+                        _browser_page(
+                            context,
+                            {
+                                **request,
+                                "max_images": int(
+                                    request.get("max_images") or images_per_page
+                                ),
+                            },
+                        )
+                        for request in page_requests
+                    ),
                     return_exceptions=True,
                 )
                 output = [
@@ -892,18 +1210,21 @@ def _dedupe(assets):
     return output
 
 
+
 def crawl_visuals(story, manual_query=""):
-    """Fetch a 10–15 image web pool for one selected sports story."""
+    """Fetch the 10–15 image web pool for one selected sports story."""
     title = _topic_value(story, "title")
     description = _topic_value(story, "description")
     entity = (
         _topic_value(story, "primary_entity")
         or _topic_value(story, "subject")
-        or ""
     )
     original_url = _usable_url(_topic_value(story, "url"))
+
     if not title or not original_url:
-        raise ValueError("Visual Fetcher requires the selected story title and original URL.")
+        raise ValueError(
+            "Visual Fetcher requires the selected story title and original URL."
+        )
 
     automatic_queries = build_queries(title, description, entity)
     manual_query = _clean(manual_query, 260)
@@ -916,9 +1237,17 @@ def crawl_visuals(story, manual_query=""):
         "published_at": _topic_value(story, "published_at"),
         "query": "",
         "entity": entity,
+        "story_title": title,
     }]
 
-    for page in _collect_related_pages(search_queries, original_url):
+    related_pages = _collect_related_pages(
+        search_queries,
+        original_url,
+        title,
+        entity,
+    ) if search_queries else []
+
+    for page in related_pages:
         page_requests.append({
             "url": page["url"],
             "title": page.get("title", ""),
@@ -926,14 +1255,14 @@ def crawl_visuals(story, manual_query=""):
             "published_at": page.get("published_at", ""),
             "query": page.get("query", ""),
             "entity": entity,
+            "story_title": title,
         })
 
     results = _crawl_pages(page_requests)
     assets = []
     diagnostics = []
 
-    for index, result in enumerate(results):
-        request = page_requests[index]
+    def add_diagnostic(request, result):
         diagnostics.append({
             "url": result.get("url") or request["url"],
             "title": result.get("title") or request.get("title", ""),
@@ -941,78 +1270,120 @@ def crawl_visuals(story, manual_query=""):
             "candidates": int(result.get("candidate_count") or 0),
             "dom_images": int(result.get("dom_image_count") or 0),
             "network_images": int(result.get("network_image_count") or 0),
-            "direct_download_failures": int(result.get("direct_download_failures") or 0),
-            "direct_invalid_images": int(result.get("direct_invalid_images") or 0),
-            "network_fallback_hits": int(result.get("network_fallback_hits") or 0),
-            "static_fallback_attempted": bool(result.get("static_fallback_attempted")),
+            "direct_download_failures": int(
+                result.get("direct_download_failures") or 0
+            ),
+            "direct_invalid_images": int(
+                result.get("direct_invalid_images") or 0
+            ),
+            "network_fallback_hits": int(
+                result.get("network_fallback_hits") or 0
+            ),
+            "static_fallback_attempted": bool(
+                result.get("static_fallback_attempted")
+            ),
             "static_candidates": int(result.get("static_candidates") or 0),
             "static_assets": int(result.get("static_assets") or 0),
             "static_error": str(result.get("static_error") or ""),
             "error": str(result.get("error") or ""),
             "query": request.get("query") or "original story URL",
+            "profile": bool(request.get("profile")),
         })
+
+    for index, result in enumerate(results):
+        request = page_requests[index]
+        add_diagnostic(request, result)
+
         for asset in result.get("assets") or []:
-            asset["article_title"] = asset.get("article_title") or request.get("title", "")
-            asset["source_page_url"] = asset.get("source_page_url") or request["url"]
-            asset["publisher"] = asset.get("publisher") or request.get("publisher", "")
-            asset["query"] = asset.get("query") or request.get("query", "")
+            asset["article_title"] = (
+                asset.get("article_title") or request.get("title", "")
+            )
+            asset["source_page_url"] = (
+                asset.get("source_page_url") or request["url"]
+            )
+            asset["publisher"] = (
+                asset.get("publisher") or request.get("publisher", "")
+            )
+            asset["query"] = (
+                asset.get("query") or request.get("query", "")
+            )
+
             if index == 0:
                 asset["query"] = "original story URL"
                 asset["original_story"] = True
-                asset["published_at"] = asset.get("published_at") or _topic_value(
-                    story, "published_at"
+                asset["published_at"] = (
+                    asset.get("published_at")
+                    or _topic_value(story, "published_at")
                 )
+
             assets.append(asset)
 
     selected = _dedupe(assets)
 
     if len(selected) < SUCCESS and entity and not manual_query:
-        fallback_pages = _collect_related_pages(
-            [f"{entity} profile", f"{entity} action"],
-            original_url,
-        )
-        fallback_requests = [
+        profile_pages = _collect_profile_pages(entity)
+        profile_requests = [
             {
                 "url": page["url"],
                 "title": page.get("title", ""),
                 "publisher": page.get("source", ""),
-                "published_at": page.get("published_at", ""),
+                "published_at": "",
                 "query": page.get("query", ""),
                 "entity": entity,
+                "story_title": title,
+                "profile": True,
+                "max_images": PROFILE_IMAGES,
             }
-            for page in fallback_pages
+            for page in profile_pages
         ]
-        if fallback_requests:
-            fallback_results = _crawl_pages(fallback_requests)
-            for request, result in zip(fallback_requests, fallback_results):
-                diagnostics.append({
-                    "url": result.get("url") or request["url"],
-                    "title": result.get("title") or request.get("title", ""),
-                    "assets": len(result.get("assets") or []),
-                    "candidates": int(result.get("candidate_count") or 0),
-                    "dom_images": int(result.get("dom_image_count") or 0),
-                    "network_images": int(result.get("network_image_count") or 0),
-                    "direct_download_failures": int(result.get("direct_download_failures") or 0),
-                    "network_fallback_hits": int(result.get("network_fallback_hits") or 0),
-                    "error": str(result.get("error") or ""),
-                    "query": request.get("query") or "fallback",
-                })
+
+        if profile_requests:
+            profile_results = _crawl_pages(
+                profile_requests,
+                images_per_page=PROFILE_IMAGES,
+            )
+            for request, result in zip(profile_requests, profile_results):
+                add_diagnostic(request, result)
                 for asset in result.get("assets") or []:
-                    asset["article_title"] = asset.get("article_title") or request["title"]
-                    asset["source_page_url"] = asset.get("source_page_url") or request["url"]
-                    asset["publisher"] = asset.get("publisher") or request["publisher"]
-                    asset["query"] = asset.get("query") or request["query"]
+                    asset["article_title"] = (
+                        asset.get("article_title") or request["title"]
+                    )
+                    asset["source_page_url"] = (
+                        asset.get("source_page_url") or request["url"]
+                    )
+                    asset["publisher"] = (
+                        asset.get("publisher") or request["publisher"]
+                    )
+                    asset["query"] = (
+                        asset.get("query") or request["query"]
+                    )
+                    asset["profile_page"] = True
                     assets.append(asset)
             selected = _dedupe(assets)
 
+    publishers = sorted({
+        _clean(item.get("publisher"), 160)
+        for item in selected
+        if _clean(item.get("publisher"), 160)
+    })
+    domains = sorted({
+        urlparse(str(item.get("source_page_url") or "")).netloc.removeprefix("www.").lower()
+        for item in selected
+        if urlparse(str(item.get("source_page_url") or "")).netloc
+    })
+
     failure_state = (
-        "ready" if len(selected) >= SUCCESS
-        else "underfilled" if selected
+        "ready"
+        if len(selected) >= SUCCESS
+        else "underfilled"
+        if selected
         else "no_images"
     )
+
     print(
-        f"   [Visual Fetcher] pages={len(page_requests)} final_pool={len(selected)}/{TARGET} "
-        f"state={failure_state}",
+        f"   [Visual Fetcher] related={len(related_pages)} "
+        f"profiles={sum(1 for p in page_requests if p.get('profile'))} "
+        f"final_pool={len(selected)}/{TARGET} state={failure_state}",
         flush=True,
     )
 
@@ -1025,10 +1396,14 @@ def crawl_visuals(story, manual_query=""):
         "queries_used": search_queries,
         "manual_query": manual_query,
         "pages_scraped": len(page_requests),
-        "related_pages": max(0, len(page_requests) - 1),
+        "related_pages": len(related_pages),
+        "profile_pages": sum(1 for page in page_requests if page.get("profile")),
+        "publishers": publishers,
+        "domains": domains,
         "failure_state": failure_state,
         "diagnostics": diagnostics,
     }
+
 
 def same_query(query, used_queries):
     value = _clean(query, 260).casefold()
