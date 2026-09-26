@@ -74,6 +74,14 @@ STOPWORDS = {
     "after", "before", "as", "is", "are", "was", "were", "has", "have", "had", "vs", "v", "into", "over",
 }
 
+AUDIENCE_PULL_TERMS = {
+    "reacts", "reacted", "responds", "responded", "slams", "blasts", "criticises", "criticizes",
+    "praises", "reveals", "admits", "confirms", "snubs", "snubbed", "dropped", "ruled", "withdraws",
+    "withdrawn", "suspended", "banned", "fined", "shocking", "shock", "surprise", "surprising",
+    "historic", "first", "only", "never", "breakthrough", "comeback", "retirement", "debut",
+    "controversy", "clash", "upset", "record", "milestone", "injury",
+}
+
 
 @dataclass(frozen=True)
 class Topic:
@@ -134,8 +142,15 @@ def _score(topic: Topic) -> float:
     age_hours = max(0.0, (datetime.now(timezone.utc) - topic.published_at).total_seconds() / 3600)
     freshness = max(0.0, 72.0 - age_hours) / 72.0 * 4
     event_bonus = min(3.0, len(_event_groups(topic.title)) * 0.7)
+    interest_bonus = min(
+        4.0,
+        len(_tokens(topic.title) & AUDIENCE_PULL_TERMS) * 1.2,
+    )
+    event_terms = set().union(*EVENT_GROUPS.values())
+    distinctive = _tokens(topic.title) - SPORT_WORDS - event_terms
+    specificity_bonus = min(1.5, max(0, len(distinctive) - 2) * 0.35)
     source_bonus = 1.0 if topic.source else 0.0
-    return freshness + event_bonus + source_bonus
+    return freshness + event_bonus + interest_bonus + specificity_bonus + source_bonus
 
 
 def _parse_rss(xml_text: str) -> list[Topic]:
