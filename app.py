@@ -302,38 +302,6 @@ def render_visuals_crawler():
     st.markdown(f"**{topic.title}**")
     st.caption(f"Original story: {result.get('original_story_url', topic.url)}")
 
-    st.subheader("Manual web query")
-    st.caption("Runs a fresh crawler search for your query while keeping the selected story as context.")
-    with st.form("visual_manual_query_form"):
-        manual_query = st.text_input(
-            "Keyword / phrase / query",
-            value=st.session_state.get("visual_manual_query") or "",
-            placeholder="e.g. Virat Kohli Rohit Sharma",
-        )
-        run_manual = st.form_submit_button(
-            "Run manual scrape",
-            type="primary",
-            use_container_width=True,
-        )
-
-    if run_manual:
-        manual_query = manual_query.strip()
-        if not manual_query:
-            st.warning("Enter a query first.")
-        elif same_query(manual_query, automatic_queries):
-            st.warning("That query was already used by the factory. Use a different query.")
-        else:
-            with st.spinner("Scraping the manual query…"):
-                try:
-                    st.session_state.visual_result = crawl_visuals(
-                        story,
-                        manual_query=manual_query,
-                    )
-                    st.session_state.visual_manual_query = manual_query
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"{type(exc).__name__}: {exc}")
-
     if result.get("error"):
         st.error(result["error"])
         return
