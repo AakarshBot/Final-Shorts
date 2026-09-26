@@ -24,8 +24,9 @@ def test_headline_is_single_line_and_dynamic():
 
     assert short_text.split() == ["GAME", "CHANGED"]
     assert long_text.split() == ["THIS", "IS", "A", "MUCH", "LONGER", "HEADLINE"]
-    assert short_width <= 860
-    assert long_width <= 860
+    assert short_width <= renderer.HEADLINE_MAX_WIDTH
+    assert long_width <= renderer.HEADLINE_MAX_WIDTH
+    assert renderer.HEADLINE_MAX_SIZE > 118
     assert long_font.size < short_font.size
 
 
@@ -64,6 +65,15 @@ def test_subtitles_start_after_headline(monkeypatch):
         headline_enabled=True,
     )
     assert seen == [renderer.HEADLINE_SECONDS + 0.30]
+
+
+def test_headline_marker_and_subtitle_style_are_brand_consistent():
+    assert renderer.HEADLINE_MARKER_WIDTH > 0
+    assert renderer.HEADLINE_MARKER_HEIGHT > 0
+    assert renderer.BRAND_BLUE != renderer.ACCENT
+    assert renderer.SUBTITLE_MAX_SIZE > 58
+    assert renderer.SUBTITLE_MAX_WIDTH >= 860
+    assert renderer.SUBTITLE_Y < 1450
 
 
 def test_subtitle_handoff_contract():
