@@ -14,23 +14,25 @@ def test_renderer_frame_is_vertical_and_independent():
     assert frame is not base
 
 
-def test_headline_is_single_line_and_dynamic():
-    short_font, short_text, short_width = renderer._fit_headline_font(
+def test_headline_is_large_and_dynamic():
+    short_font, short_text, short_lines = renderer._fit_headline_font(
         "GAME CHANGED",
     )
-    long_font, long_text, long_width = renderer._fit_headline_font(
+    long_font, long_text, long_lines = renderer._fit_headline_font(
         "THIS IS A MUCH LONGER HEADLINE",
     )
 
     assert short_text.split() == ["GAME", "CHANGED"]
     assert long_text.split() == ["THIS", "IS", "A", "MUCH", "LONGER", "HEADLINE"]
     assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size == renderer.HEADLINE_MAX_SIZE
-    assert short_width <= renderer.HEADLINE_MAX_WIDTH
-    assert long_width <= renderer.HEADLINE_MAX_WIDTH
     assert renderer.HEADLINE_MAX_SIZE >= 250
+    assert renderer.HEADLINE_MIN_SIZE >= 120
+    assert renderer.HEADLINE_LINE_GAP > 0
     assert renderer.get_headline_font_path().name == "Oswald-Bold.ttf"
     assert renderer.get_headline_font_path().exists()
-    assert long_font.size < short_font.size
+    assert 1 <= len(renderer._fit_headline_font(renderer.HEADLINE_TEXT)[2]) <= 2
+    assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size >= 150
+    assert len(long_lines) >= len(short_lines)
 
 
 def test_headline_and_subtitles_do_not_overlap():

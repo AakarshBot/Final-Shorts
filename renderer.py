@@ -20,10 +20,11 @@ FINAL_STYLE_NAME = "Editorial Highlight"
 
 HEADLINE_MAX_WIDTH = 980
 HEADLINE_MAX_SIZE = 260
-HEADLINE_MIN_SIZE = 42
+HEADLINE_MIN_SIZE = 120
 HEADLINE_MARKER_WIDTH = 56
 HEADLINE_MARKER_HEIGHT = 8
 HEADLINE_MARKER_GAP = 16
+HEADLINE_LINE_GAP = 8
 
 SUBTITLE_MAX_WIDTH = 900
 SUBTITLE_MAX_SIZE = 70
@@ -139,33 +140,59 @@ def _measure(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
     return box[2] - box[0], box[3] - box[1]
 
 
+def _headline_lines(
+    text: str,
+    draw: ImageDraw.ImageDraw,
+    font,
+) -> list[list[str]]:
+    words = text.split()
+    if not words:
+        return []
+
+    measurements = [_measure(draw, word, font)[0] for word in words]
+    spacing = HEADLINE_MARKER_GAP
+
+    def line_width(start: int, end: int) -> int:
+        return (
+            sum(measurements[start:end])
+            + spacing * max(0, end - start - 1)
+        )
+
+    first_line_max = HEADLINE_MAX_WIDTH - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
+
+    if line_width(0, len(words)) <= first_line_max:
+        return [words]
+
+    candidates = []
+    for split in range(1, len(words)):
+        top = line_width(0, split)
+        bottom = line_width(split, len(words))
+        if top <= first_line_max and bottom <= HEADLINE_MAX_WIDTH:
+            candidates.append((max(top, bottom), abs(top - bottom), split))
+
+    if not candidates:
+        raise ValueError("Headline is too long to fit in two lines.")
+
+    _, _, split = min(candidates)
+    return [words[:split], words[split:]]
+
+
 def _fit_headline_font(
     text: str,
     language: str = "english",
-    max_width: int = HEADLINE_MAX_WIDTH,
 ):
     clean = " ".join(str(text or "").upper().split()) or HEADLINE_TEXT
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
-    def fits(size: int) -> bool:
+    for size in range(HEADLINE_MAX_SIZE, HEADLINE_MIN_SIZE - 1, -1):
         font = headline_font(size, language)
-        return _measure(probe, clean, font)[0] + 12 <= max_width
+        try:
+            lines = _headline_lines(clean, probe, font)
+        except ValueError:
+            continue
+        return font, clean, lines
 
-    if not fits(HEADLINE_MIN_SIZE):
-        raise ValueError("Headline is too long to fit on one line.")
-
-    low, high = HEADLINE_MIN_SIZE, HEADLINE_MAX_SIZE
-    while low < high:
-        middle = (low + high + 1) // 2
-        if fits(middle):
-            low = middle
-        else:
-            high = middle - 1
-
-    font = headline_font(low, language)
-    return font, clean, _measure(probe, clean, font)[0]
-
-
+    raise ValueError("Headline is too long to fit in two lines.")
 def make_sample_background() -> Image.Image:
     image = Image.new("RGB", (WIDTH, HEIGHT))
     draw = ImageDraw.Draw(image)
@@ -219,21 +246,34 @@ def _paste_source(base: Image.Image) -> None:
 
 
 def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
-    font, clean, text_width = _fit_headline_font(text, language)
-    group_width = HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP + text_width
+    font, clean, lines = _fit_headline_font(text, language)
+    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+
+    line_widths = []
+    line_heights = []
+    for line in lines:
+        width, height = _measure(draw, " ".join(line), font)
+        line_widths.append(width)
+        line_heights.append(height)
+
+    text_block_width = max(line_widths)
+    text_block_height = (
+        sum(line_heights) + HEADLINE_LINE_GAP * max(0, len(lines) - 1)
+    )
+    group_width = HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP + text_block_width
+
     progress = min(1.0, max(0.0, t / 0.45))
     eased = 1 - (1 - progress) ** 3
     start_group_x = -group_width - 80
-    final_group_x = 72 - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
+    final_group_x = max(24, (WIDTH - group_width) // 2)
     group_x = int(
         start_group_x + (final_group_x - start_group_x) * eased
     )
+
     marker_x = group_x
     text_x = group_x + HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP
     y = 560
-
-    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
 
     line_y = y + max(8, font.size // 2)
     split = int(HEADLINE_MARKER_WIDTH * 0.58)
@@ -255,14 +295,21 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
         ),
         fill=ACCENT,
     )
-    draw.text(
-        (text_x, y),
-        clean,
-        font=font,
-        fill=WHITE,
-        stroke_width=6,
-        stroke_fill=DARK,
-    )
+
+    cursor_y = y
+    for row, line in enumerate(lines):
+        line_text = " ".join(line)
+        line_width = line_widths[row]
+        line_x = text_x + (text_block_width - line_width) // 2
+        draw.text(
+            (line_x, cursor_y),
+            line_text,
+            font=font,
+            fill=WHITE,
+            stroke_width=6,
+            stroke_fill=DARK,
+        )
+        cursor_y += line_heights[row] + HEADLINE_LINE_GAP
 
     if t < 0.68 and progress < 1.0:
         layer = layer.filter(
@@ -270,8 +317,6 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
         )
 
     base.paste(layer, (0, 0), layer)
-
-
 def _cue_at_time(subtitle_data: dict, t: float):
     for cue in subtitle_data.get("cues") or []:
         try:
