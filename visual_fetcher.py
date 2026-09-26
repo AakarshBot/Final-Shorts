@@ -438,7 +438,7 @@ async def _browser_page(context, request):
 
         for markup in data.get("noscripts") or []:
             for match in re.finditer(
-                r'<(?:img|source)\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\s*=\s*["']([^"']+)["']',
+                    r'<(?:img|source)\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\s*=\s*[\'"]([^\'"]+)[\'"]',
                 markup,
                 re.IGNORECASE,
             ):
