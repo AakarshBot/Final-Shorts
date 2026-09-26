@@ -34,6 +34,8 @@ STOPWORDS = {
     "be", "been", "being", "has", "have", "had", "will", "would", "could",
     "should", "says", "said", "report", "reports", "latest", "news", "story",
     "update", "today", "ahead", "versus", "vs", "v",
+    "survive", "survives", "suffer", "suffers", "faces", "face", "gets", "get",
+    "appears", "announce", "announces", "likely", "may",
 }
 BAD_IMAGE_TERMS = {
     "logo", "icon", "favicon", "sprite", "tracking", "pixel", "avatar",
