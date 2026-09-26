@@ -100,56 +100,33 @@ def _measure(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
     return box[2] - box[0], box[3] - box[1]
 
 
-def _wrap(text: str, font, max_width: int, max_lines: int = 2) -> list[str]:
-    words = text.split()
-    if not words:
-        return []
-
+def _fit_headline_font(
+    text: str,
+    max_width: int = 860,
+    min_size: int = 42,
+    max_size: int = 118,
+):
+    clean = " ".join(str(text or "").upper().split()) or HEADLINE_TEXT
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    if _measure(probe, text, font)[0] <= max_width:
-        return [text]
 
-    if max_lines < 2 or len(words) < 2:
-        return [text]
-
-    candidates: list[tuple[int, list[str]]] = []
-    for split in range(1, len(words)):
-        lines = [
-            " ".join(words[:split]),
-            " ".join(words[split:]),
-        ]
-        widths = [_measure(probe, line, font)[0] for line in lines]
-        if max(widths) <= max_width:
-            candidates.append((max(widths), lines))
-
-    if candidates:
-        return min(candidates, key=lambda item: item[0])[1]
-
-    return [text]
-
-
-def _headline_layout(text: str) -> tuple[ImageFont.FreeTypeFont, list[str]]:
-    clean = " ".join(text.upper().split())
-    if not clean:
-        clean = HEADLINE_TEXT
-
-    for size in range(118, 59, -4):
+    def fits(size: int) -> bool:
         font = headline_font(size)
-        lines = _wrap(clean, font, 860, 2)
-        probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-        if len(lines) <= 2 and all(
-            _measure(probe, line, font)[0] <= 860
-            for line in lines
-        ):
-            return font, lines
+        return _measure(probe, clean, font)[0] + 12 <= max_width
 
-    font = headline_font(58)
-    words = clean.split()
-    midpoint = max(1, len(words) // 2)
-    return font, [
-        " ".join(words[:midpoint]),
-        " ".join(words[midpoint:]),
-    ]
+    if not fits(min_size):
+        raise ValueError("Headline is too long to fit on one line.")
+
+    low, high = min_size, max_size
+    while low < high:
+        middle = (low + high + 1) // 2
+        if fits(middle):
+            low = middle
+        else:
+            high = middle - 1
+
+    font = headline_font(low)
+    width = _measure(probe, clean, font)[0]
+    return font, clean, width
 
 
 
@@ -202,10 +179,7 @@ def _paste_source(base: Image.Image, style: str) -> None:
     )
 
 
-def _headline_position(text_lines: list[str], font, t: float) -> tuple[int, int, float]:
-    draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    widths = [_measure(draw, line, font)[0] for line in text_lines]
-    text_width = max(widths) if widths else 0
+def _headline_position(text_width: int, t: float) -> tuple[int, int, float]:
     start_x = -text_width - 80
     final_x = 72
     progress = min(1.0, max(0.0, t / 0.45))
@@ -214,29 +188,28 @@ def _headline_position(text_lines: list[str], font, t: float) -> tuple[int, int,
     return x, 560, eased
 
 
+
 def _draw_headline(base: Image.Image, text: str, t: float) -> None:
-    font, lines = _headline_layout(text)
-    x, y, progress = _headline_position(lines, font, t)
+    font, clean, text_width = _fit_headline_font(text)
+    x, y, progress = _headline_position(text_width, t)
 
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
-    current_y = y
-    for line in lines:
-        draw.text(
-            (x, current_y),
-            line,
-            font=font,
-            fill=(249, 250, 252, 255),
-            stroke_width=6,
-            stroke_fill=(5, 7, 10, 235),
-        )
-        current_y += 112
+    draw.text(
+        (x, y),
+        clean,
+        font=font,
+        fill=(249, 250, 252, 255),
+        stroke_width=6,
+        stroke_fill=(5, 7, 10, 235),
+    )
 
     if t < 0.68 and progress < 1.0:
         layer = layer.filter(
             ImageFilter.GaussianBlur(radius=max(0.0, 2.5 * (1 - progress)))
         )
     base.paste(layer, (0, 0), layer)
+
 
 
 def _groups_at_time(t: float) -> tuple[list[str], int]:
