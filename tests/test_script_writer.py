@@ -390,6 +390,8 @@ def test_writer_research_uses_text_search_when_news_fallback_is_empty(monkeypatc
 
     def fake_get(url, **kwargs):
         urls.append(url)
+        if url == "https://example.com/story":
+            return FakeResponse(url, "<html><body><p>Thin page.</p></body></html>")
         return FakeResponse(
             url,
             "<html><body>" +
@@ -509,7 +511,11 @@ def test_writer_research_falls_back_to_another_article_when_primary_is_thin(monk
         lambda html, **kwargs: (
             ""
             if "thin page" in html
-            else "Shubman Gill was hit in training before the ODI and returned to continue his session."
+            else (
+                "Shubman Gill was hit in training before the ODI and returned to continue "
+                "his session. The coaching staff reviewed his condition before the next "
+                "session while India assessed his availability for the match. "
+            ) * 5
         ),
     )
     monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
