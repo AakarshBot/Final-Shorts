@@ -22,7 +22,7 @@ def approved_audio(language="english"):
         "scenes": [
             {
                 "scene": 1,
-                "duration": 1.8,
+                "duration": 1.4,
                 "timings": [
                     {"word": "India", "start": 0.0, "end": 0.3},
                     {"word": "won", "start": 0.3, "end": 0.6},
@@ -63,6 +63,7 @@ def test_subtitles_break_into_small_readable_cues():
     script = approved_script()
     script["script"][0]["voiceover"] = "One two three four five six seven eight."
     audio = approved_audio()
+    audio["scenes"][0]["duration"] = 1.8
     audio["scenes"][0]["timings"] = [
         {"word": word, "start": index * 0.2, "end": (index + 1) * 0.2}
         for index, word in enumerate("One two three four five six seven eight".split())
