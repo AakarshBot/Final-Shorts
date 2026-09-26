@@ -540,8 +540,8 @@ def render_renderer_test():
     )
 
     st.caption(
-        f"{FINAL_STYLE_NAME} · Bebas Neue headline · Montserrat ExtraBold captions · "
-        "gold active-word highlight"
+        f"{FINAL_STYLE_NAME} · larger Bebas Neue headline · kinetic keyword captions · "
+        "blue/yellow brand accents"
     )
 
     if st.button("Build preview", type="primary", use_container_width=True):
