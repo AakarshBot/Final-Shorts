@@ -42,7 +42,7 @@ The Visuals test desk has four independent options. Option 1 is the automatic sc
 Function 06 is an isolated final visual preview desk. It uses only generated filler content and a generic local background; it does not call the Topic Fetcher, Scriptwriter, Audio, Visuals, or any AI/API provider.
 
 The final preview uses one canonical style:
-- **Headline:** large Oswald Bold block display face, dynamically fitted to one or two lines, with the existing left-entry animation and moving blue/yellow brand marker.
+- **Headline:** large Oswald Bold block display face, dynamically fitted to one, two or three lines with screen-safe wrapping and stroke-aware bounds, with the existing left-entry animation and moving blue/yellow brand marker.
 - **Subtitles:** large bold sans-serif, word-level timing, white phrase text with dark outline, yellow active word, lower-middle safe placement, no background capsule.
 - **Branding:** the real `logo.png` in the top-right and a simple source label in the bottom-right.
 - **No decorative borders, lines, dots, glass panels, or extra motion.**
