@@ -1260,7 +1260,7 @@ def crawl_visuals(story, manual_query=""):
         search_queries,
         original_url,
         title,
-        entity,
+        "" if manual_query else entity,
     ) if search_queries else []
 
     for page in related_pages:
