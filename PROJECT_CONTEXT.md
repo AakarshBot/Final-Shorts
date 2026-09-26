@@ -100,9 +100,11 @@ app.py
 topic_fetcher.py
 script_writer.py
 audio.py
+subtitles.py
 tests/test_topic_fetcher.py
 tests/test_script_writer.py
 tests/test_audio.py
+tests/test_subtitles.py
 tests/test_visual_fetcher.py
 tests/test_visual_search.py
 tests/test_visual_generator.py
