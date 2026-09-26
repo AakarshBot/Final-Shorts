@@ -53,6 +53,89 @@ def test_renderer_uses_supplied_headline(monkeypatch):
     assert seen == ["Gill Injury Scare"]
 
 
+def test_headline_wraps_three_and_six_word_inputs_without_overflow():
+    for text in ("BIG CRICKET NEWS", "BIG CRICKET NEWS FROM INDIA TODAY"):
+        font, clean, lines = renderer._fit_headline_font(text)
+        assert 3 <= len(clean.split()) <= 6
+        assert 1 <= len(lines) <= renderer.HEADLINE_MAX_LINES
+        from PIL import Image, ImageDraw
+
+        probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        width = max(
+            probe.textbbox(
+                (0, 0),
+                " ".join(line),
+                font=font,
+                stroke_width=renderer.HEADLINE_STROKE_WIDTH,
+            )[2]
+            - probe.textbbox(
+                (0, 0),
+                " ".join(line),
+                font=font,
+                stroke_width=renderer.HEADLINE_STROKE_WIDTH,
+            )[0]
+            for line in lines
+        )
+        assert (
+            width
+            <= renderer.HEADLINE_MAX_WIDTH
+            - renderer.HEADLINE_MARKER_WIDTH
+            - renderer.HEADLINE_MARKER_GAP
+        )
+
+
+def test_headline_render_stays_inside_safe_screen_bounds(monkeypatch):
+    monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
+    monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
+    base = renderer.make_sample_background()
+
+    frame = renderer.render_frame(
+        base,
+        0.50,
+        headline_text="BIG CRICKET NEWS FROM INDIA TODAY",
+        headline_enabled=True,
+    )
+    bbox = ImageChops.difference(base, frame).getbbox()
+
+    assert bbox is not None
+    assert bbox[0] >= renderer.HEADLINE_SAFE_MARGIN
+    assert bbox[2] <= renderer.WIDTH - renderer.HEADLINE_SAFE_MARGIN
+
+
+def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
+    monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
+    monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
+    base = renderer.make_sample_background()
+    subtitle_data = {
+        "schema": "final-shorts.subtitles.v1",
+        "language": "english",
+        "cues": [
+            {
+                "start": 0.0,
+                "end": 2.0,
+                "words": [
+                    {"text": "Championship", "start": 0.0, "end": 0.5},
+                    {"text": "International", "start": 0.5, "end": 1.0},
+                    {"text": "Cricket", "start": 1.0, "end": 1.5},
+                    {"text": "Update", "start": 1.5, "end": 2.0},
+                ],
+            }
+        ],
+    }
+
+    frame = renderer.render_frame(
+        base,
+        1.0,
+        subtitle_data=subtitle_data,
+        headline_enabled=False,
+    )
+    bbox = ImageChops.difference(base, frame).getbbox()
+
+    assert bbox is not None
+    assert bbox[0] >= renderer.SUBTITLE_SAFE_MARGIN
+    assert bbox[2] <= renderer.WIDTH - renderer.SUBTITLE_SAFE_MARGIN
+
+
 def test_headline_and_subtitles_do_not_overlap():
     base = renderer.make_sample_background()
 
