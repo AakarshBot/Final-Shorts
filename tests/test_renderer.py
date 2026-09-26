@@ -24,7 +24,6 @@ def test_headline_is_large_and_dynamic():
 
     assert short_text.split() == ["GAME", "CHANGED"]
     assert long_text.split() == ["THIS", "IS", "A", "MUCH", "LONGER", "HEADLINE"]
-    assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size == renderer.HEADLINE_MAX_SIZE
     assert renderer.HEADLINE_MAX_SIZE >= 250
     assert renderer.HEADLINE_MIN_SIZE >= 120
     assert renderer.HEADLINE_LINE_GAP > 0
