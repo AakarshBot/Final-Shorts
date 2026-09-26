@@ -157,6 +157,8 @@ if "live_topics" not in st.session_state:
     st.session_state.live_topics = []
 if "live_selected_topic" not in st.session_state:
     st.session_state.live_selected_topic = None
+if "live_stage" not in st.session_state:
+    st.session_state.live_stage = "01 · Story"
 if "live_topics_profile" not in st.session_state:
     st.session_state.live_topics_profile = None
 if "live_script_data" not in st.session_state:
@@ -429,6 +431,7 @@ def _live_story_key(topic) -> str:
 def _live_reset_downstream():
     for key, value in {
         "live_selected_topic": None,
+        "live_stage": "01 · Story",
         "live_script_data": None,
         "live_approved_script": None,
         "live_script_error": "",
@@ -472,6 +475,7 @@ def _live_start_story(index: int):
     topic = st.session_state.live_topics[index]
     _live_reset_downstream()
     st.session_state.live_selected_topic = index
+    st.session_state.live_stage = "02 · Script"
     story = _live_story(topic)
 
     try:
@@ -897,6 +901,7 @@ def _render_live_visuals(slide_count: int):
                     st.session_state.live_rendered_video_path = str(output)
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
+                    st.session_state.live_stage = "04 · Upload"
                     st.rerun()
                 except (RuntimeError, ValueError, OSError) as exc:
                     st.session_state.live_render_error = str(exc)
@@ -972,6 +977,7 @@ def _render_live_script():
             try:
                 with st.spinner("Creating audio and subtitle handoffs…"):
                     _live_generate_audio_and_subtitles()
+                st.session_state.live_stage = "03 · Visuals + Render"
             except (RuntimeError, ValueError, OSError) as exc:
                 st.session_state.live_handoff_error = str(exc)
             st.rerun()
@@ -1164,6 +1170,7 @@ def render_live_dashboard():
                 st.session_state.live_cricket_profile = None
                 st.session_state.live_topics = []
                 st.session_state.live_topics_profile = None
+                st.session_state.live_stage = "01 · Story"
                 st.rerun()
         with controls[1]:
             if st.button("← Home",key="live-home",width="stretch"):
@@ -1253,106 +1260,91 @@ def render_live_dashboard():
                 st.rerun()
         return
 
-    language_choice = st.pills(
-        "Script language",
-        ["English", "Hindi", "Telugu"],
-        default=st.session_state.get("live_script_language", "english").title(),
-        key="live-script-language-choice",
-        label_visibility="collapsed",
-    )
-    if language_choice:
-        st.session_state.live_script_language = language_choice.casefold()
+    live_stage_order = ["01 · Story", "02 · Script", "03 · Visuals + Render", "04 · Upload"]
+    live_stage_labels = ["STORY", "SCRIPT", "VISUALS + RENDER", "UPLOAD"]
+    current_stage = live_stage_order.index(st.session_state.live_stage)
 
-    st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Top 20 stories</div></div><div class="section-count">headline + rating</div></div>', unsafe_allow_html=True)
-
-    topics = st.session_state.live_topics
-    for start in range(0, len(topics), 2):
-        row = st.columns(2, gap="medium")
-        for col, (index, topic) in zip(
-            row,
-            enumerate(topics[start:start + 2], start=start),
-        ):
-            with col:
-                rating = max(
-                    1,
-                    min(
-                        5,
-                        round(float(topic.score or 0.0) / 8.0 * 5.0),
-                    ),
-                )
-                stars = "★" * rating + "☆" * (5 - rating)
-                with st.container(key=f"live-topic-{index}"):
-                    st.markdown(
-                        f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span><span class="topic-rating">{stars}</span></div>'
-                        f'<div class="topic-title">{topic.title}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if st.button(
-                        "Select story →",
-                        width="stretch",
-                        key=f"live-select-story-{index}",
-                    ):
-                        _live_start_story(index)
-                        st.rerun()
-
-    if st.button(
-        "Find 20 more unique stories",
-        width="stretch",
-        key="live-find-more",
-    ):
-        with st.spinner("Searching for 20 additional unique stories…"):
-            existing = list(st.session_state.live_topics)
-            new_topics = fetch_topics(
-                st.session_state.live_topics_profile,
-                more=True,
-                exclude_topics=existing,
-                limit=20,
-            )
-            st.session_state.live_topics = existing + new_topics
-        st.rerun()
-
-    selected_index = st.session_state.live_selected_topic
-    if selected_index is None or not 0 <= selected_index < len(topics):
-        return
-
-    topic = topics[selected_index]
-    story_id = _live_story_key(topic)
-
-    st.markdown('<div class="live-glow"></div>',unsafe_allow_html=True)
-    st.space("medium")
-
-    st.markdown('<div class="section-head"><div><div class="eyebrow">02 · SCRIPTWRITER</div><div class="section-title">Script review</div></div><div class="section-count">manual QC</div></div>', unsafe_allow_html=True)
-    _render_live_script()
-
-    script_approved = isinstance(st.session_state.live_approved_script, dict)
-    audio_ready = isinstance(st.session_state.live_approved_audio, dict)
-    subtitles_ready = isinstance(st.session_state.live_subtitle_data, dict)
-
-    status_cols = st.columns(4, gap="small")
-    live_visual_result = st.session_state.get("live_visual_result") or {}
-    live_visuals_ready = bool(live_visual_result.get("assets")) and not live_visual_result.get("error")
-    status_values = [
-        ("Script", "Approved" if script_approved else "Waiting"),
-        ("Audio", "Ready" if audio_ready else "Waiting"),
-        ("Subtitles", "Ready" if subtitles_ready else "Waiting"),
-        ("Visuals", "Ready" if live_visuals_ready else "Scraping"),
-    ]
-    for col, (label, value) in zip(status_cols, status_values):
-        with col:
+    stage_cols = st.columns(4, gap="small")
+    for stage_index, (label, stage_key) in enumerate(zip(live_stage_labels, live_stage_order)):
+        with stage_cols[stage_index]:
+            state_label = "✓ COMPLETE" if stage_index < current_stage else "● ACTIVE" if stage_index == current_stage else "LOCKED"
             st.markdown(
-                f'<div class="live-card" style="min-height:90px;"><div class="eyebrow">{label}</div><div style="font-weight:850;">{value}</div></div>',
+                f'<div class="live-card" style="min-height:72px;padding:12px 14px;">'
+                f'<div class="eyebrow">0{stage_index + 1}</div>'
+                f'<div style="font-size:.78rem;font-weight:900;letter-spacing:.04em;">{label}</div>'
+                f'<div class="visual-detail">{state_label}</div></div>',
                 unsafe_allow_html=True,
             )
 
-    if script_approved and audio_ready and subtitles_ready:
-        st.space("medium")
-        st.markdown('<div class="section-head"><div><div class="eyebrow">04 · VISUALS</div><div class="section-title">Choose the imagery</div></div><div class="section-count">manual visual approval</div></div>', unsafe_allow_html=True)
-        _render_live_visuals(len(st.session_state.live_approved_script.get("script") or []))
+    if st.session_state.live_stage == "01 · Story":
+        st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one to start production</div></div>', unsafe_allow_html=True)
+        topics = st.session_state.live_topics
+        for start in range(0, len(topics), 2):
+            row = st.columns(2, gap="medium")
+            for col, (index, topic) in zip(
+                row,
+                enumerate(topics[start:start + 2], start=start),
+            ):
+                with col:
+                    rating = max(1, min(5, round(float(topic.score or 0.0) / 8.0 * 5.0)))
+                    stars = "★" * rating + "☆" * (5 - rating)
+                    with st.container(key=f"live-topic-{index}"):
+                        st.markdown(
+                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span><span class="topic-rating">{stars}</span></div>'
+                            f'<div class="topic-title">{topic.title}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        if st.button("Select story →", width="stretch", key=f"live-select-story-{index}"):
+                            _live_start_story(index)
+                            st.rerun()
 
-    if st.session_state.live_rendered_video_path and st.session_state.live_visuals_approved:
-        st.space("medium")
-        st.markdown('<div class="section-head"><div><div class="eyebrow">06–07 · RENDER + UPLOAD</div><div class="section-title">Preview and publish</div></div></div>', unsafe_allow_html=True)
+        if st.button("Find 20 more unique stories", width="stretch", key="live-find-more"):
+            with st.spinner("Searching for 20 additional unique stories…"):
+                existing = list(st.session_state.live_topics)
+                new_topics = fetch_topics(
+                    st.session_state.live_topics_profile,
+                    more=True,
+                    exclude_topics=existing,
+                    limit=20,
+                )
+                st.session_state.live_topics = existing + new_topics
+            st.rerun()
+        return
+
+    selected_index = st.session_state.live_selected_topic
+    if selected_index is None or not 0 <= selected_index < len(st.session_state.live_topics):
+        st.session_state.live_stage = "01 · Story"
+        st.rerun()
+
+    topic = st.session_state.live_topics[selected_index]
+    st.markdown(
+        f'<div class="section-head"><div><div class="eyebrow">SELECTED STORY</div><div class="section-title">{topic.title}</div></div>'
+        f'<div class="section-count">{st.session_state.live_stage.upper()}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    if st.button("← Back to stories", key="live-back-to-stories"):
+        _live_reset_downstream()
+        st.rerun()
+
+    if st.session_state.live_stage == "02 · Script":
+        _render_live_script()
+        return
+
+    if st.session_state.live_stage == "03 · Visuals + Render":
+        script = st.session_state.live_approved_script
+        audio_ready = isinstance(st.session_state.live_approved_audio, dict)
+        subtitle_ready = isinstance(st.session_state.live_subtitle_data, dict)
+        if audio_ready and subtitle_ready:
+            st.success("Audio and subtitles are approved automatically. Choose the visuals for each slide.")
+        else:
+            st.warning("Audio and subtitle handoffs are not ready yet.")
+        _render_live_visuals(len(script.get("script") or []) if isinstance(script, dict) else 0)
+        return
+
+    if st.session_state.live_stage == "04 · Upload":
         _render_live_upload()
+        return
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
