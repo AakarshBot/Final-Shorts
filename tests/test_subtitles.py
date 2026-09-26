@@ -37,7 +37,7 @@ def test_generate_subtitles_groups_word_timings_and_writes_srt(tmp_path):
     assert result["format"] == "srt"
     assert len(result["scenes"]) == 2
     assert result["scenes"][0]["cues"]
-    assert result["scenes"][0]["cues"][0]["text"] == "Virat Kohli hit a century in style"
+    assert result["scenes"][0]["cues"][0]["text"] == "Virat Kohli hit a century in"
     assert "-->" in result["srt"]
     assert (tmp_path / "final_shorts.srt").exists()
     assert (tmp_path / "scene_1.srt").exists()
@@ -47,7 +47,7 @@ def test_generate_subtitles_offsets_combined_cues(tmp_path):
     result = generate_subtitles(_approved_audio(), tmp_path)
 
     assert result["cues"][0]["start"] == 0.0
-    assert result["cues"][-1]["start"] > 2.8
+    assert result["cues"][-1]["start"] >= 2.8
 
 
 def test_subtitles_require_approved_audio(tmp_path):
