@@ -431,21 +431,21 @@ async def _browser_page(context, request):
                 add(url, "json-ld:image")
 
         for url in data.get("linkImages") or []:
-        add(url, "link:image")
+            add(url, "link:image")
 
-    for url in data.get("backgrounds") or []:
-        add(url, "background-image", {"in_article": True})
+        for url in data.get("backgrounds") or []:
+            add(url, "background-image", {"in_article": True})
 
-    for markup in data.get("noscripts") or []:
-        for match in re.finditer(
-            r'<(?:img|source)\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\s*=\s*["']([^"']+)["']',
-            markup,
-            re.IGNORECASE,
-        ):
-            for url in _extract_srcset(match.group(1)):
-                add(url, "noscript:image", {"in_article": True})
+        for markup in data.get("noscripts") or []:
+            for match in re.finditer(
+                r'<(?:img|source)\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\s*=\s*["']([^"']+)["']',
+                markup,
+                re.IGNORECASE,
+            ):
+                for url in _extract_srcset(match.group(1)):
+                    add(url, "noscript:image", {"in_article": True})
 
-    for image in data.get("images") or []:
+        for image in data.get("images") or []:
             payload = {
                 "alt": image.get("alt"),
                 "title": image.get("title"),
