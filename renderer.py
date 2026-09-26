@@ -393,9 +393,7 @@ def _ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
-def write_preview_video(frames: list[Image.Image], path: Path) -> Path:
-    if not frames:
-        raise ValueError("No preview frames were provided.")
+def write_preview_video(frames, path: Path) -> Path:
     if not _ffmpeg_available():
         raise RuntimeError("ffmpeg is required to create renderer previews.")
 
@@ -436,8 +434,14 @@ def write_preview_video(frames: list[Image.Image], path: Path) -> Path:
     assert process.stdin is not None
 
     try:
+        wrote_frame = False
         for frame in frames:
+            wrote_frame = True
             process.stdin.write(frame.tobytes())
+        if not wrote_frame:
+            process.stdin.close()
+            process.kill()
+            raise ValueError("No preview frames were provided.")
         process.stdin.close()
     except BrokenPipeError as exc:
         process.kill()
@@ -462,18 +466,18 @@ def build_preview_bundle(
     base = make_sample_background()
     videos: dict[str, Path] = {}
 
-    opening_frames = [
-        render_frame(
-            base,
-            "Clean Editorial",
-            index / FPS,
-            headline_text,
-            headline_enabled,
-        )
-        for index in range(max(1, int(HEADLINE_SECONDS * FPS)))
-    ]
+    opening_count = max(1, int(HEADLINE_SECONDS * FPS))
     videos["opening"] = write_preview_video(
-        opening_frames,
+        (
+            render_frame(
+                base,
+                "Clean Editorial",
+                index / FPS,
+                headline_text,
+                headline_enabled,
+            )
+            for index in range(opening_count)
+        ),
         output / "opening_headline.mp4",
     )
 
@@ -484,18 +488,17 @@ def build_preview_bundle(
         "Broadcast / Data": "broadcast_data.mp4",
     }
     for style in STYLE_NAMES:
-        frames = [
-            render_frame(
-                base,
-                style,
-                index / FPS,
-                headline_text,
-                headline_enabled,
-            )
-            for index in range(frame_count)
-        ]
         videos[style] = write_preview_video(
-            frames,
+            (
+                render_frame(
+                    base,
+                    style,
+                    index / FPS,
+                    headline_text,
+                    headline_enabled,
+                )
+                for index in range(frame_count)
+            ),
             output / filenames[style],
         )
 
