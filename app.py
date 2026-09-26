@@ -61,6 +61,8 @@ if "app_mode" not in st.session_state:
     st.session_state.app_mode = "home"
 if "test_stage" not in st.session_state:
     st.session_state.test_stage = "01 · Topic Fetcher"
+if "renderer_previews" not in st.session_state:
+    st.session_state.renderer_previews = None
 
 def _render_home():
     st.markdown('<div class="eyebrow">FINAL SHORTS · CONTROL CENTER</div>',unsafe_allow_html=True)
@@ -188,7 +190,13 @@ profiles = {
 
 def render_topic_fetcher():
     st.header("01 · Topic Fetcher")
-    desk = st.selectbox("Desk", list(profiles), key="topic_desk")
+    desk = st.pills(
+        "Desk",
+        list(profiles),
+        default="Cricket India / Asia",
+        key="topic_desk",
+        label_visibility="collapsed",
+    ) or "Cricket India / Asia"
     col1, col2 = st.columns(2)
     with col1:
         fetch = st.button("Fetch topics", type="primary", use_container_width=True)
