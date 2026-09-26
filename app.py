@@ -559,7 +559,7 @@ def render_renderer_test():
     st.subheader("Opening frame")
     opening = previews.get("opening")
     if opening and Path(opening).exists():
-        st.video(str(opening), width=360)
+        st.video(str(opening), width=320)
         st.caption(
             "Sample image · optional first-second headline · logo top-right · source bottom-right"
         )
@@ -578,7 +578,7 @@ def render_renderer_test():
             st.markdown(f"**{style}**")
             path = previews.get(style)
             if path and Path(path).exists():
-                st.video(str(path), width=260)
+                st.video(str(path), width=220)
                 st.caption(descriptions[style])
 
 
