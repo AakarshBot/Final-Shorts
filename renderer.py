@@ -198,7 +198,7 @@ def _headline_position(text_lines: list[str], font, t: float) -> tuple[int, int,
     progress = min(1.0, max(0.0, t / 0.45))
     eased = 1 - (1 - progress) ** 3
     x = int(start_x + (final_x - start_x) * eased)
-    return x, 470, eased
+    return x, 560, eased
 
 
 def _draw_headline(base: Image.Image, text: str, t: float) -> None:
@@ -238,8 +238,14 @@ def _groups_at_time(t: float) -> tuple[list[str], int]:
     return list(FILLER_WORDS[group_start:group_end]), active - group_start
 
 
-def _draw_subtitles(base: Image.Image, style: str, t: float) -> None:
-    words, active_index = _groups_at_time(t)
+def _draw_subtitles(
+    base: Image.Image,
+    style: str,
+    t: float,
+    headline_enabled: bool = False,
+) -> None:
+    subtitle_time = max(0.0, t - HEADLINE_SECONDS) if headline_enabled else t
+    words, active_index = _groups_at_time(subtitle_time)
     font = subtitle_font()
     draw = ImageDraw.Draw(base)
     text = " ".join(words)
@@ -344,7 +350,7 @@ def render_frame(
         (WIDTH, HEIGHT),
         Image.Resampling.LANCZOS,
     )
-    _draw_subtitles(frame, style, t)
+    _draw_subtitles(frame, style, t, headline_enabled)
     if headline_enabled and t < HEADLINE_SECONDS:
         _draw_headline(frame, headline_text, t)
     _paste_logo(frame)
