@@ -840,8 +840,26 @@ def _crawl_pages(page_requests):
         ))
 
     for (index, _), fallback in zip(missing, fallback_results):
+        merged = {
+            **browser_results[index],
+            "static_fallback_attempted": True,
+            "static_candidates": int(fallback.get("static_candidates") or 0),
+            "static_assets": len(fallback.get("assets") or []),
+            "static_error": str(fallback.get("error") or ""),
+        }
         if fallback.get("assets"):
-            browser_results[index] = fallback
+            browser_results[index] = {
+                **fallback,
+                "static_fallback_attempted": True,
+                "static_candidates": int(fallback.get("static_candidates") or 0),
+                "static_assets": len(fallback.get("assets") or []),
+                "static_error": str(fallback.get("error") or ""),
+                "browser_candidate_count": int(browser_results[index].get("candidate_count") or 0),
+                "browser_dom_image_count": int(browser_results[index].get("dom_image_count") or 0),
+                "browser_network_image_count": int(browser_results[index].get("network_image_count") or 0),
+            }
+        else:
+            browser_results[index] = merged
     return browser_results
 
 
@@ -924,7 +942,12 @@ def crawl_visuals(story, manual_query=""):
             "dom_images": int(result.get("dom_image_count") or 0),
             "network_images": int(result.get("network_image_count") or 0),
             "direct_download_failures": int(result.get("direct_download_failures") or 0),
+            "direct_invalid_images": int(result.get("direct_invalid_images") or 0),
             "network_fallback_hits": int(result.get("network_fallback_hits") or 0),
+            "static_fallback_attempted": bool(result.get("static_fallback_attempted")),
+            "static_candidates": int(result.get("static_candidates") or 0),
+            "static_assets": int(result.get("static_assets") or 0),
+            "static_error": str(result.get("static_error") or ""),
             "error": str(result.get("error") or ""),
             "query": request.get("query") or "original story URL",
         })
