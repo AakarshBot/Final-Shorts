@@ -150,25 +150,11 @@ def _load_logo():
 
 def _paste_logo(base: Image.Image) -> None:
     logo = _load_logo()
-    draw = ImageDraw.Draw(base)
-    if logo is not None:
-        x = WIDTH - logo.width - 42
-        y = 36
-        base.paste(logo, (x, y), logo)
+    if logo is None:
         return
-
-    draw.rounded_rectangle(
-        (WIDTH - 178, 34, WIDTH - 38, 96),
-        radius=20,
-        fill=(15, 19, 25, 225),
-    )
-    draw.text(
-        (WIDTH - 108, 65),
-        "LOGO",
-        font=_font((), 28),
-        fill=(245, 247, 250),
-        anchor="mm",
-    )
+    x = WIDTH - logo.width - 42
+    y = 36
+    base.paste(logo, (x, y), logo)
 
 
 def _paste_source(base: Image.Image, style: str) -> None:
