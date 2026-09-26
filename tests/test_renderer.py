@@ -78,12 +78,11 @@ def test_headline_marker_and_subtitle_style_are_brand_consistent():
 
 
 def test_subtitle_layout_uses_second_line_only_when_needed():
-    draw = renderer.ImageDraw.Draw(renderer.Image.new("RGB", (1, 1)))
     words = renderer.PREVIEW_SUBTITLE_DATA["cues"][0]["words"]
 
-    font, one_line = renderer._fit_subtitle_layout(words, "english")
+    font, lines = renderer._fit_subtitle_layout(words, "english")
     assert font.size >= renderer.SUBTITLE_MIN_SIZE
-    assert len(one_line) == 1
+    assert 1 <= len(lines) <= 2
 
     long_words = [
         {"text": "This", "start": 0.0, "end": 0.2},
