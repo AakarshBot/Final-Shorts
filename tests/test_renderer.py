@@ -71,3 +71,13 @@ def test_renderer_headline_moves_between_start_and_resting_position():
 def test_renderer_paths_point_to_expected_local_assets():
     assert renderer.get_logo_path().name == "logo.png"
     assert Path(renderer.get_headline_font_path()).parent.name == "fonts"
+
+
+def test_default_headline_is_short_and_fits():
+    assert len(renderer.HEADLINE_TEXT.split()) == 4
+
+    font, lines = renderer._headline_layout(renderer.HEADLINE_TEXT)
+    probe = renderer.ImageDraw.Draw(renderer.Image.new("RGB", (1, 1)))
+
+    assert len(lines) <= 2
+    assert all(renderer._measure(probe, line, font)[0] <= 860 for line in lines)
