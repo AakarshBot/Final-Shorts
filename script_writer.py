@@ -278,9 +278,19 @@ def write_script(story, language: str = "english") -> dict:
     )
 
     errors = []
+    recovery_reason = ""
     for model in MODELS:
         try:
-            result = _request(model, instruction, source)
+            model_instruction = instruction
+            if recovery_reason:
+                model_instruction += (
+                    "\nRECOVERY:\n"
+                    "The previous draft failed local validation. Regenerate the complete JSON "
+                    "while fixing this exact failure and preserving every other hard rule. "
+                    f"Validation failure: {recovery_reason}"
+                )
+
+            result = _request(model, model_instruction, source)
             valid, reason = validate_script(result, source)
             if valid:
                 result["provider_used"] = model
@@ -293,9 +303,11 @@ def write_script(story, language: str = "english") -> dict:
                 )
                 result["source_evidence"] = source
                 return result
+            recovery_reason = reason
             errors.append(f"{model}: {reason}")
         except Exception as exc:
-            errors.append(f"{model}: {type(exc).__name__}: {exc}")
+            recovery_reason = f"{type(exc).__name__}: {exc}"
+            errors.append(f"{model}: {recovery_reason}")
 
     raise RuntimeError("Script generation failed: " + " | ".join(errors))
 
