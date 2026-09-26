@@ -95,6 +95,8 @@ def render_topic_fetcher():
         st.session_state.approved_script = None
         st.session_state.audio_data = None
         st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
         st.session_state.visual_result = None
         st.session_state.visual_loaded_story = None
 
@@ -157,6 +159,8 @@ def render_scriptwriter():
         st.session_state.approved_script = None
         st.session_state.audio_data = None
         st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
     topic = st.session_state.topics[selected_index]
 
     st.markdown("<div class='card'>", unsafe_allow_html=True)
@@ -653,6 +657,8 @@ def render_audio():
                 st.error(str(exc))
                 st.session_state.audio_data = None
                 st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
 
     audio = st.session_state.audio_data
     if not audio:
@@ -677,6 +683,8 @@ def render_audio():
     if st.button("Approve audio", type="primary", use_container_width=True):
         try:
             st.session_state.approved_audio = approve_audio(audio)
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
         except ValueError as exc:
             st.error(str(exc))
 
