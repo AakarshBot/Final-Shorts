@@ -19,17 +19,18 @@ SCENE_1_MAX_WORDS = 14
 MAX_WORDS = 75
 
 LANGUAGE_INSTRUCTIONS = {
-    "english": "Write all narration and titles in punchy, natural spoken English.",
-    "hindi": "Write all narration and titles in natural spoken Hindi using Devanagari script.",
-    "telugu": "Write all narration and titles in natural spoken Telugu using Telugu script.",
+    "english": "Write all narration, the headline and titles in punchy, natural spoken English.",
+    "hindi": "Write all narration, the headline and titles in natural spoken Hindi using Devanagari script.",
+    "telugu": "Write all narration, the headline and titles in natural spoken Telugu using Telugu script.",
 }
 
 SCHEMA = {
     "type": "object",
     "properties": {
+        "headline": {"type": "string"},
         "titles": {"type": "array", "items": {"type": "string"}},
         "seo_description": {"type": "string"},
-        "pinned_comment": {"type": "string"},
+        "hashtags": {"type": "array", "items": {"type": "string"}},
         "script": {
             "type": "array",
             "items": {
@@ -58,9 +59,10 @@ SCHEMA = {
         },
     },
     "required": [
+        "headline",
         "titles",
-            "seo_description",
-        "pinned_comment",
+        "seo_description",
+        "hashtags",
         "script",
     ],
     "additionalProperties": False,
@@ -84,7 +86,10 @@ RULES:
 - Target about 22–27 seconds of natural narration and never exceed 30 seconds.
 - Do not pad the script.
 - Use natural spoken sentences and spell out numbers, acronyms and symbols where practical for TTS.
+- Generate exactly one headline of strictly 3 or 4 words for the opening renderer overlay. It must be a concise summary of the story.
 - Generate exactly 3 title candidates. They are stored for later title selection.
+- Generate a concise SEO description.
+- Generate 3–5 relevant hashtags, each beginning with #, with no spaces inside a hashtag.
 - Every scene must include a supported primary visual entity, visual intent, specific search prompt and sports category.
 - Return only JSON matching the supplied schema.
 """
@@ -153,10 +158,21 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
 
+    headline = _clean(result.get("headline"))
+    if not headline or _words(headline) not in (3, 4):
+        return False, "The headline must contain exactly 3 or 4 words."
+
     titles = result.get("titles")
     if not isinstance(titles, list) or len(titles) != 3 or any(not _clean(x) for x in titles):
         return False, "Exactly three non-empty titles are required."
 
+    hashtags = result.get("hashtags")
+    if (
+        not isinstance(hashtags, list)
+        or not hashtags
+        or any(not _clean(x).startswith("#") for x in hashtags)
+    ):
+        return False, "At least one valid hashtag is required."
 
     scenes = result.get("script")
     if not isinstance(scenes, list) or len(scenes) not in (4, 5):
@@ -278,8 +294,12 @@ def write_script(story, language: str = "english") -> dict:
     raise RuntimeError("Script generation failed: " + " | ".join(errors))
 
 
-def apply_script_edits(script: dict, voiceovers: list[str]) -> dict:
-    """Apply optional human narration edits and re-run local script checks."""
+def apply_script_edits(
+    script: dict,
+    voiceovers: list[str],
+    headline: str | None = None,
+) -> dict:
+    """Apply optional human edits and re-run local script checks."""
     result = json.loads(json.dumps(script, ensure_ascii=False))
     scenes = result.get("script") or []
     if len(voiceovers) != len(scenes):
@@ -287,6 +307,9 @@ def apply_script_edits(script: dict, voiceovers: list[str]) -> dict:
 
     for scene, voiceover in zip(scenes, voiceovers):
         scene["voiceover"] = _clean(voiceover)
+
+    if headline is not None:
+        result["headline"] = _clean(headline)
 
     valid, reason = validate_script(result, _clean(result.get("source_evidence")))
     if not valid:
