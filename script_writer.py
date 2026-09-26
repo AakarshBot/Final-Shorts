@@ -396,6 +396,8 @@ def apply_script_edits(
     script: dict,
     voiceovers: list[str],
     headline: str | None = None,
+    *,
+    validate: bool = True,
 ) -> dict:
     """Apply optional human edits and re-run local script checks."""
     result = json.loads(json.dumps(script, ensure_ascii=False))
@@ -410,9 +412,10 @@ def apply_script_edits(
     if headline is not None:
         result["headline"] = _clean(headline)
 
-    valid, reason = validate_script(result, _clean(result.get("source_evidence")))
-    if not valid:
-        raise ValueError(f"Edited script failed local validation: {reason}")
+    if validate:
+        valid, reason = validate_script(result, _clean(result.get("source_evidence")))
+        if not valid:
+            raise ValueError(f"Edited script failed local validation: {reason}")
 
     result["human_script_edited"] = any(
         _clean(scene["voiceover"]) != _clean(original["voiceover"])
