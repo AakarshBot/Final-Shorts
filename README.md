@@ -39,8 +39,8 @@ The Visuals test desk has four independent options. Option 1 is the automatic sc
 Function 06 is an isolated final visual preview desk. It uses only generated filler content and a generic local background; it does not call the Topic Fetcher, Scriptwriter, Audio, Visuals, or any AI/API provider.
 
 The final preview uses one canonical style:
-- **Headline:** Bebas Neue-style condensed display face, single line, dynamically fitted to the safe width, with the existing left-entry animation.
-- **Subtitles:** bold sans-serif, word-level timing, white text with a dark outline, one gold active-word highlight, lower-middle placement, no permanent caption box.
+- **Headline:** larger Bebas Neue-style condensed display face, single line, dynamically fitted to the safe width, with the existing left-entry animation and moving blue/yellow brand marker.
+- **Subtitles:** large bold sans-serif, word-level timing, white phrase text with dark outline, blue active-word capsule with yellow active text, lower-middle safe placement, no permanent caption box.
 - **Branding:** the real `logo.png` in the top-right and a simple source label in the bottom-right.
 - **No decorative borders, lines, dots, glass panels, or extra motion.**
 
