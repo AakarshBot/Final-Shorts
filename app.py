@@ -150,8 +150,66 @@ if "real_image_result" not in st.session_state:
 if "ai_image_result" not in st.session_state:
     st.session_state.ai_image_result = None
 
-if "live_desk" not in st.session_state:\n    st.session_state.live_desk = None\nif "live_cricket_profile" not in st.session_state:\n    st.session_state.live_cricket_profile = None\nif "live_topics" not in st.session_state:\n    st.session_state.live_topics = []\nif "live_selected_topic" not in st.session_state:\n    st.session_state.live_selected_topic = None\nif "live_topics_profile" not in st.session_state:\n    st.session_state.live_topics_profile = None\nif "live_script_data" not in st.session_state:\n    st.session_state.live_script_data = None\nif "live_approved_script" not in st.session_state:\n    st.session_state.live_approved_script = None\nif "live_script_error" not in st.session_state:\n    st.session_state.live_script_error = ""\nif "live_audio_data" not in st.session_state:\n    st.session_state.live_audio_data = None\nif "live_approved_audio" not in st.session_state:\n    st.session_state.live_approved_audio = None\nif "live_subtitle_data" not in st.session_state:\n    st.session_state.live_subtitle_data = None\nif "live_handoff_error" not in st.session_state:\n    st.session_state.live_handoff_error = ""\nif "live_visual_result" not in st.session_state:\n    st.session_state.live_visual_result = None\nif "live_manual_visual_result" not in st.session_state:\n    st.session_state.live_manual_visual_result = None\nif "live_real_image_result" not in st.session_state:\n    st.session_state.live_real_image_result = None\nif "live_ai_image_result" not in st.session_state:\n    st.session_state.live_ai_image_result = None\nif "live_visual_crops" not in st.session_state:\n    st.session_state.live_visual_crops = {}\nif "live_visual_deleted" not in st.session_state:\n    st.session_state.live_visual_deleted = set()\nif "live_visual_assignments" not in st.session_state:\n    st.session_state.live_visual_assignments = {}\nif "live_visuals_approved" not in st.session_state:\n    st.session_state.live_visuals_approved = False\nif "live_rendered_video_path" not in st.session_state:\n    st.session_state.live_rendered_video_path = None\nif "live_render_error" not in st.session_state:\n    st.session_state.live_render_error = ""\nif "live_upload_qc_approved" not in st.session_state:\n    st.session_state.live_upload_qc_approved = False\nif "live_upload_qc" not in st.session_state:\n    st.session_state.live_upload_qc = None\nif "live_upload_result" not in st.session_state:\n    st.session_state.live_upload_result = None\nif "live_upload_titles" not in st.session_state:\n    st.session_state.live_upload_titles = []\nif "live_upload_title_choice" not in st.session_state:\n    st.session_state.live_upload_title_choice = 0\nif "live_upload_description" not in st.session_state:\n    st.session_state.live_upload_description = ""\nif "live_upload_hashtags" not in st.session_state:\n    st.session_state.live_upload_hashtags = ""\nif "live_upload_comment" not in st.session_state:\n    st.session_state.live_upload_comment = ""
-
+if "live_desk" not in st.session_state:
+    st.session_state.live_desk = None
+if "live_cricket_profile" not in st.session_state:
+    st.session_state.live_cricket_profile = None
+if "live_topics" not in st.session_state:
+    st.session_state.live_topics = []
+if "live_selected_topic" not in st.session_state:
+    st.session_state.live_selected_topic = None
+if "live_topics_profile" not in st.session_state:
+    st.session_state.live_topics_profile = None
+if "live_script_data" not in st.session_state:
+    st.session_state.live_script_data = None
+if "live_approved_script" not in st.session_state:
+    st.session_state.live_approved_script = None
+if "live_script_error" not in st.session_state:
+    st.session_state.live_script_error = ""
+if "live_audio_data" not in st.session_state:
+    st.session_state.live_audio_data = None
+if "live_approved_audio" not in st.session_state:
+    st.session_state.live_approved_audio = None
+if "live_subtitle_data" not in st.session_state:
+    st.session_state.live_subtitle_data = None
+if "live_handoff_error" not in st.session_state:
+    st.session_state.live_handoff_error = ""
+if "live_visual_result" not in st.session_state:
+    st.session_state.live_visual_result = None
+if "live_manual_visual_result" not in st.session_state:
+    st.session_state.live_manual_visual_result = None
+if "live_real_image_result" not in st.session_state:
+    st.session_state.live_real_image_result = None
+if "live_ai_image_result" not in st.session_state:
+    st.session_state.live_ai_image_result = None
+if "live_visual_crops" not in st.session_state:
+    st.session_state.live_visual_crops = {}
+if "live_visual_deleted" not in st.session_state:
+    st.session_state.live_visual_deleted = set()
+if "live_visual_assignments" not in st.session_state:
+    st.session_state.live_visual_assignments = {}
+if "live_visuals_approved" not in st.session_state:
+    st.session_state.live_visuals_approved = False
+if "live_rendered_video_path" not in st.session_state:
+    st.session_state.live_rendered_video_path = None
+if "live_render_error" not in st.session_state:
+    st.session_state.live_render_error = ""
+if "live_upload_qc_approved" not in st.session_state:
+    st.session_state.live_upload_qc_approved = False
+if "live_upload_qc" not in st.session_state:
+    st.session_state.live_upload_qc = None
+if "live_upload_result" not in st.session_state:
+    st.session_state.live_upload_result = None
+if "live_upload_titles" not in st.session_state:
+    st.session_state.live_upload_titles = []
+if "live_upload_title_choice" not in st.session_state:
+    st.session_state.live_upload_title_choice = 0
+if "live_upload_description" not in st.session_state:
+    st.session_state.live_upload_description = ""
+if "live_upload_hashtags" not in st.session_state:
+    st.session_state.live_upload_hashtags = ""
+if "live_upload_comment" not in st.session_state:
+    st.session_state.live_upload_comment = ""
 def _asset_to_image(value):
     try:
         if isinstance(value, Image.Image):
