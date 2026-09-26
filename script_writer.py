@@ -222,7 +222,7 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
             query=query,
             region="in-en",
             safesearch="off",
-            timelimit="d",
+            timelimit="w",
             max_results=5,
         )
     except Exception:
@@ -230,6 +230,7 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
 
     keywords = _story_title_keywords(query)
     candidates = []
+    minimum_overlap = 2 if len(keywords) >= 2 else 1
     for result in results or []:
         url = _clean(result.get("url") or result.get("href"))
         title = _clean(result.get("title"))
@@ -242,7 +243,7 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
             continue
         candidate_keywords = _story_title_keywords(title)
         overlap = len(keywords & candidate_keywords)
-        if keywords and overlap == 0:
+        if keywords and overlap < minimum_overlap:
             continue
         candidates.append((overlap, url))
 
