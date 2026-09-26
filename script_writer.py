@@ -19,9 +19,9 @@ SCENE_1_MAX_WORDS = 14
 MAX_WORDS = 75
 
 LANGUAGE_INSTRUCTIONS = {
-    "english": "Write all narration, the headline and titles in punchy, natural spoken English.",
-    "hindi": "Write all narration, the headline and titles in natural spoken Hindi using Devanagari script.",
-    "telugu": "Write all narration, the headline and titles in natural spoken Telugu using Telugu script.",
+    "english": "Write all narration and publish metadata in punchy, natural spoken English.",
+    "hindi": "Write all narration and publish metadata in natural spoken Hindi using Devanagari script.",
+    "telugu": "Write all narration and publish metadata in natural spoken Telugu using Telugu script.",
 }
 
 SCHEMA = {
