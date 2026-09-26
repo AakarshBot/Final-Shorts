@@ -313,13 +313,16 @@ def test_writer_research_uses_full_article_before_generation(monkeypatch):
     captured = []
 
     monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
+    article = (
+        "Shubman Gill was struck during practice and returned after treatment. "
+        "India are assessing his availability for the ODI. "
+        "The team continued its session while medical staff monitored him closely. "
+        "The coaching staff later reviewed the incident and the next training plan. "
+        "His availability remains dependent on further assessment before the match. "
+    ) * 3
     monkeypatch.setattr(
         "script_writer.trafilatura.extract",
-        lambda *args, **kwargs: (
-            "Shubman Gill was struck during practice. "
-            "He returned after treatment and continued batting. "
-            "India are assessing his availability for the ODI."
-        ),
+        lambda *args, **kwargs: article,
     )
 
     def fake_request(model, prompt, story):
