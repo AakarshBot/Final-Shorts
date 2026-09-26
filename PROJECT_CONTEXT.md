@@ -1,13 +1,9 @@
 # Final Shorts — Project Context
 
 ## Current state
-Functions 01–04 are implemented, tested, and accepted for development use:
-1. Topic Fetching
-2. Scriptwriter
-3. Audio
-4. Visuals — Phase 1 + Phase 2 complete
-
-Function 04 Visuals Phase 1 and Phase 2 are complete. Subtitle code and tests have been intentionally removed and will be designed later.
+Functions 01–04 are implemented, tested, and accepted for development use.
+Function 06 Renderer is complete as the final canonical visual treatment and isolated preview desk.
+Function 05 Subtitles is the current development stage.
 
 ## Factory order
 01. Topic Fetching
@@ -120,17 +116,17 @@ README.md
 ```
 
 ## Last completed
-Function 04 — Visuals.
+Function 06 — Renderer.
 
 ## Current development
-Function 04 Visuals Phase 1 and Phase 2 are complete. Function 06 Renderer now has an isolated preview desk; its previews use filler content only and are not a production handoff:
+Function 05 — Subtitles. Function 06 Renderer is complete as an isolated preview desk; its previews use filler content only and are not a production handoff:
 - Visuals Option 1 is the automatic scraper/crawler.
 - Visuals Option 2 is the standalone manual scraper with lightweight AI query planning and historical retrieval for contextual queries.
 - Visuals Option 3 is manual real-image search across configured sources.
 - Visuals Option 4 is manual AI image generation across configured providers.
 - Visuals remains manual-review driven; no AI visual-verification gate is used in the completed Visuals phases.
 
-Subtitle implementation is intentionally absent. The next stage will be designed and added later from the approved Visuals handoff.
+Function 05 is the direct Scriptwriter + Audio timing handoff. It uses no transcription or AI call and produces the renderer subtitle payload from the approved narration and native Edge-TTS word timings.
 
 ## Visuals Phase 2 contract
 - Option 1: existing Phase 1 scraper/crawler.
@@ -143,7 +139,7 @@ Subtitle implementation is intentionally absent. The next stage will be designed
 
 
 ## Next gate
-Function 05 — Subtitles will be designed later. The renderer preview may visually simulate subtitle styling with filler timings, but it does not implement the production Subtitles function.
+Function 05 — Subtitles is the current build stage. Once its focused tests and CI are green, the approved subtitle payload becomes the handoff available to Function 06 Renderer.
 
 
 ## Renderer contract
@@ -152,7 +148,7 @@ Function 06 currently exists as an isolated final preview desk and does not cons
 
 Final visual system:
 - one canonical **Editorial Highlight** style
-- headline uses a larger Bebas Neue treatment for English, single line, dynamically fitted to available width, with a moving blue/yellow brand marker
+- headline uses a large, heavy block display face (Anton preferred, with local bold fallbacks), single line, dynamically fitted to available width, with a moving blue/yellow brand marker
 - subtitle styling uses a large bold sans-serif, dark outline, white phrase text and a blue active-word capsule with yellow active text
 - subtitles use word-level timing, stable phrase layout and restrained keyword emphasis in the lower-middle safe area
 - logo is the real local `logo.png`, top-right
@@ -160,4 +156,4 @@ Final visual system:
 - no permanent border, decorative graphics, glass panel, or universal Ken-Burns effect
 - when the opening headline is enabled, audio may already be running but subtitles remain hidden until the 1.15-second headline window ends
 
-Subtitle handoff from Function 05 to Function 06 must use `final-shorts.subtitles.v1` JSON-compatible data with absolute seconds and grouped cues containing per-word `start` and `end` timestamps. The Renderer must not transcribe, regroup semantically, or call an AI provider.
+Function 05 subtitle handoff to Function 06 must use `final-shorts.subtitles.v1` JSON-compatible data with absolute seconds and grouped cues containing per-word `start` and `end` timestamps. The Renderer must not transcribe, regroup semantically, or call an AI provider.

@@ -26,7 +26,8 @@ def test_headline_is_single_line_and_dynamic():
     assert long_text.split() == ["THIS", "IS", "A", "MUCH", "LONGER", "HEADLINE"]
     assert short_width <= renderer.HEADLINE_MAX_WIDTH
     assert long_width <= renderer.HEADLINE_MAX_WIDTH
-    assert renderer.HEADLINE_MAX_SIZE > 118
+    assert renderer.HEADLINE_MAX_SIZE >= 180
+    assert renderer.get_headline_font_path().name == "Anton-Regular.ttf"
     assert long_font.size < short_font.size
 
 

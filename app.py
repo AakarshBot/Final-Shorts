@@ -13,6 +13,7 @@ from visual_fetcher import crawl_visuals, manual_crawl_visuals
 from visual_search import search_images
 from visual_generator import generate_images
 from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle
+from subtitles import generate_subtitles
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
@@ -30,7 +31,7 @@ st.caption("Free Shorts factory · independent function testing")
 
 function = st.sidebar.selectbox(
     "Test function",
-    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio", "04 · Visuals", "06 · Renderer"],
+    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio", "04 · Visuals", "05 · Subtitles", "06 · Renderer"],
     key="test_function",
 )
 
@@ -56,6 +57,10 @@ if "real_image_result" not in st.session_state:
     st.session_state.real_image_result = None
 if "ai_image_result" not in st.session_state:
     st.session_state.ai_image_result = None
+if "subtitle_data" not in st.session_state:
+    st.session_state.subtitle_data = None
+if "approved_subtitles" not in st.session_state:
+    st.session_state.approved_subtitles = None
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
@@ -520,6 +525,47 @@ def render_visuals():
         _render_manual_ai_images()
 
 
+def render_subtitles():
+    st.header("05 · Subtitles")
+    st.caption("Build captions directly from the approved Scriptwriter text and native Audio word timings.")
+
+    script = st.session_state.approved_script
+    audio = st.session_state.approved_audio
+    if not script or not audio:
+        st.info("Approve the Scriptwriter and Audio handoffs first.")
+        return
+
+    if st.button("Generate subtitles", type="primary", use_container_width=True):
+        try:
+            st.session_state.subtitle_data = generate_subtitles(script, audio)
+            st.session_state.approved_subtitles = None
+        except ValueError as exc:
+            st.error(str(exc))
+
+    subtitles = st.session_state.subtitle_data
+    if not subtitles:
+        return
+
+    st.divider()
+    st.subheader("Subtitle review")
+    st.caption(
+        f'{len(subtitles["cues"])} cues · {subtitles["language"]} · '
+        "native Audio timings · no second transcription"
+    )
+
+    for index, cue in enumerate(subtitles["cues"], 1):
+        words = " ".join(word["text"] for word in cue["words"])
+        st.write(
+            f'{index:02d} · {cue["start"]:.2f}s–{cue["end"]:.2f}s · {words}'
+        )
+
+    if st.button("Approve subtitles", type="primary", use_container_width=True):
+        st.session_state.approved_subtitles = dict(subtitles)
+
+    if st.session_state.approved_subtitles:
+        st.success("Subtitles approved and stored as the handoff for Function 06 · Renderer.")
+
+
 def render_renderer_test():
     st.header("06 · Renderer")
     st.caption("Final visual preview · fixed filler content · no factory inputs")
@@ -645,5 +691,7 @@ elif function == "03 · Audio":
     render_audio()
 elif function == "04 · Visuals":
     render_visuals()
+elif function == "05 · Subtitles":
+    render_subtitles()
 elif function == "06 · Renderer":
     render_renderer_test()

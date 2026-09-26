@@ -10,7 +10,7 @@ Functions 01–04 are implemented and accepted:
 - **03 — Audio**
 - **04 — Visuals Phase 1 + Phase 2**
 
-Visuals Phase 1 and Phase 2 are complete. The Subtitles implementation is intentionally not present yet. The Function 06 Renderer now has a final visual preview desk.
+Visuals Phase 1 and Phase 2 are complete. The Subtitles implementation is intentionally not present yet. The Function 06 Renderer now has a final visual preview desk. Function 05 Subtitles is implemented as the direct Scriptwriter + Audio timing handoff.
 
 The Streamlit dashboard is currently a Test desk for independent function testing. Live production is intentionally not present until the full factory exists.
 
@@ -39,10 +39,14 @@ The Visuals test desk has four independent options. Option 1 is the automatic sc
 Function 06 is an isolated final visual preview desk. It uses only generated filler content and a generic local background; it does not call the Topic Fetcher, Scriptwriter, Audio, Visuals, or any AI/API provider.
 
 The final preview uses one canonical style:
-- **Headline:** larger Bebas Neue-style condensed display face, single line, dynamically fitted to the safe width, with the existing left-entry animation and moving blue/yellow brand marker.
+- **Headline:** large, heavy block display face with Anton preferred, single line, dynamically fitted to the safe width, with the existing left-entry animation and moving blue/yellow brand marker.
 - **Subtitles:** large bold sans-serif, word-level timing, white phrase text with dark outline, blue active-word capsule with yellow active text, lower-middle safe placement, no permanent caption box.
 - **Branding:** the real `logo.png` in the top-right and a simple source label in the bottom-right.
 - **No decorative borders, lines, dots, glass panels, or extra motion.**
+
+### Function 05 · Subtitles
+
+Function 05 takes the approved Scriptwriter narration and approved Audio word timings and converts them directly into `final-shorts.subtitles.v1`. There is no second transcription pass and no AI call. Cues are grouped into short readable phrases with absolute timestamps.
 
 ### Subtitle handoff contract
 

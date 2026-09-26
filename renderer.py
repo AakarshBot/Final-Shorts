@@ -18,8 +18,8 @@ HEADLINE_TEXT = "THE GAME JUST CHANGED"
 SOURCE_LABEL = "SPORTS DESK"
 FINAL_STYLE_NAME = "Editorial Highlight"
 
-HEADLINE_MAX_WIDTH = 860
-HEADLINE_MAX_SIZE = 150
+HEADLINE_MAX_WIDTH = 900
+HEADLINE_MAX_SIZE = 180
 HEADLINE_MIN_SIZE = 42
 HEADLINE_MARKER_WIDTH = 56
 HEADLINE_MARKER_HEIGHT = 8
@@ -110,8 +110,10 @@ def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
                 root / "NotoSansTelugu-Black.ttf",
             )
         return (
-            root / "BebasNeue-Regular.ttf",
-            root / "BebasNeue-Regular.otf",
+            root / "Anton-Regular.ttf",
+            root / "Anton-Bold.ttf",
+            root / "ArchivoBlack-Regular.ttf",
+            root / "Montserrat-Black.ttf",
         )
 
     if language == "hindi":
@@ -607,4 +609,4 @@ def get_logo_path() -> Path:
 
 
 def get_headline_font_path() -> Path:
-    return Path(__file__).resolve().parent / "fonts" / "BebasNeue-Regular.ttf"
+    return Path(__file__).resolve().parent / "fonts" / "Anton-Regular.ttf"
