@@ -20,3 +20,9 @@ python -m pip install -r requirements.txt
 python -m pytest -q
 streamlit run app.py
 ```
+
+For Function 04 Visuals, install the Chromium browser once after dependencies: 
+
+```bash
+python -m playwright install chromium
+```
