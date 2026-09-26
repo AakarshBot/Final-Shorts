@@ -26,7 +26,7 @@ Only completed functions should exist in the repository. Do not scaffold future 
 - Test exposes the completed function desks plus an isolated Function 06 Renderer preview desk.
 - Function handoffs are human-approved in the dashboard.
 - No Live-production screen is present yet; it will be added when the production pipeline actually exists.
-- Dashboard visual polish is parked. Change only functional test behavior while building the factory.
+- Dashboard visual polish is parked. Function 06's renderer test desk is intentionally a small final UI preview, not production functionality.
 
 ## Non-negotiables
 - Keep the code simple and direct.
@@ -144,3 +144,20 @@ Subtitle implementation is intentionally absent. The next stage will be designed
 
 ## Next gate
 Function 05 — Subtitles will be designed later. The renderer preview may visually simulate subtitle styling with filler timings, but it does not implement the production Subtitles function.
+
+
+## Renderer contract
+
+Function 06 currently exists as an isolated final preview desk and does not consume factory handoffs yet.
+
+Final visual system:
+- one canonical **Editorial Highlight** style
+- headline uses Bebas Neue for English, single line, dynamically fitted to available width
+- subtitle styling uses a bold sans-serif, white text, dark outline and one gold active-word highlight
+- subtitles sit in the lower-middle safe area
+- logo is the real local `logo.png`, top-right
+- source label is plain text, bottom-right
+- no permanent border, decorative graphics, glass panel, or universal Ken-Burns effect
+- when the opening headline is enabled, audio may already be running but subtitles remain hidden until the 1.15-second headline window ends
+
+Subtitle handoff from Function 05 to Function 06 must use `final-shorts.subtitles.v1` JSON-compatible data with absolute seconds and grouped cues containing per-word `start` and `end` timestamps. The Renderer must not transcribe, regroup semantically, or call an AI provider.
