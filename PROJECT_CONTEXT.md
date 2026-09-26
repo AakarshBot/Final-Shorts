@@ -94,9 +94,8 @@ Function 03 rules:
 - Treat the current `main` branch as the clean working baseline.
 - Do not re-open or redesign completed Functions unless a concrete regression is found.
 - Do not copy the old visual-fetch runtime architecture into this repo.
-- Function 04 remains a direct visual module with focused tests and a Streamlit test desk. Phase 1 and Phase 2 are complete; its four visual test options remain independent.
-- Start by auditing the user's existing visual-fetch requirements and available free sources, then implement only the smallest useful Visuals function.
-- Keep manual visual approval gates.
+- Start from the current project context and implement only the next requested function.
+- Keep human approval gates where the function contract requires them.
 - Keep the factory free-tier only.
 - Run tests and CI before moving to the next function.
 
@@ -122,31 +121,13 @@ Function 05 — Subtitles.
 
 ## Current development
 Function 05 — Subtitles is implemented:
-- Visuals Phase 1 and Phase 2 are complete.
-- Option 1 is the automatic scraper/crawler.
-- Option 2 is the standalone manual scraper.
-- Option 3 is manual real-image search.
-- Option 4 is manual AI generation.
-- Option 1 remains the Phase 1 scraper/crawler.
-- Option 2 is manual-query-only real-image retrieval across all configured real-image sources.
-- Option 3 is manual-prompt-only AI generation across configured AI providers.
-- No semantic, licensing or monetization filtering is active in Phase 2.
-- The two new manual paths run their configured providers independently and fail safely per provider.
-- Automatic discovery uses the exact selected headline plus entity/context queries.
-- The manual scraper accepts arbitrary people, events or phrases and searches current publisher pages without requiring a selected headline.
-- Google News RSS and DDGS/Bing/Yahoo discovery run as complementary free search lanes.
-- Related publisher pages are relevance-filtered, freshness-filtered and host-diversified before scraping.
-- If the first pass is still underfilled, real web profile/action pages are searched separately.
-- One shared Chromium session handles concurrent publisher-page scraping.
-- Browser-loaded image responses are reused when direct image requests are invalid.
-- Static HTML extraction is a real fallback for pages the browser path cannot use.
-- Responsive image attributes, JSON-LD images, article metadata and page publication dates are handled.
-- Images are filtered for decodeability, minimum dimensions, obvious non-photo assets and duplicates.
-- The target pool is 15 images with 10 treated as ready for the next human-review step.
-- Option 2 is a standalone manual crawler. A name-only query searches normally; a contextual query is expanded by one lightweight AI query-planning call and searches older publisher pages as well.
-- The Test dashboard shows the automatic queries used and exposes crawler diagnostics.
-- No AI visual-verification call is used in Phase 1; human review remains the final image-selection gate.
-- Visuals uses only free services. DDGS is a discovery dependency; Playwright/Chromium is the browser scraper.
+- Function 04 Visuals Phase 1 and Phase 2 are complete.
+- Visuals Option 1 is the automatic scraper/crawler.
+- Visuals Option 2 is the standalone manual scraper with lightweight AI query planning and historical retrieval for contextual queries.
+- Visuals Option 3 is manual real-image search across configured sources.
+- Visuals Option 4 is manual AI image generation across configured providers.
+- Visuals remains manual-review driven; no AI visual-verification gate is used in the completed Visuals phases.
+- Function 05 generates deterministic SRT subtitles directly from the approved Audio word timings.
 
 ## Visuals Phase 2 contract
 - Option 1: existing Phase 1 scraper/crawler.
