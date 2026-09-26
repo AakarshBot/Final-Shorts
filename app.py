@@ -37,6 +37,12 @@ if "audio_data" not in st.session_state:
     st.session_state.audio_data = None
 if "approved_audio" not in st.session_state:
     st.session_state.approved_audio = None
+if "visual_result" not in st.session_state:
+    st.session_state.visual_result = None
+if "visual_loaded_story" not in st.session_state:
+    st.session_state.visual_loaded_story = None
+if "visual_manual_query" not in st.session_state:
+    st.session_state.visual_manual_query = ""
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
@@ -381,5 +387,7 @@ if function == "01 · Topic Fetcher":
     render_topic_fetcher()
 elif function == "02 · Scriptwriter":
     render_scriptwriter()
-else:
+elif function == "03 · Audio":
     render_audio()
+else:
+    render_visuals()
