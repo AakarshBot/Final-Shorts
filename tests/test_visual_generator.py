@@ -22,7 +22,7 @@ def test_generate_images_runs_configured_providers(monkeypatch):
 
     result = visual_generator.generate_images("cricket stadium")
 
-    assert [item["source"] for item in result["assets"]] == ["Hugging Face", "Cloudflare Workers AI"]
+    assert [item["source"] for item in result["assets"]] == ["One", "Two"]
 
 
 def test_generate_images_requires_manual_prompt(monkeypatch):
