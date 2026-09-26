@@ -1,12 +1,13 @@
 # Final Shorts — Project Context
 
 ## Current state
-Functions 01–03 are implemented, tested, and accepted for development use:
+Functions 01–04 are implemented, tested, and accepted for development use:
 1. Topic Fetching
 2. Scriptwriter
 3. Audio
+4. Visuals — Phase 1 (scraping)
 
-Function 04 — Visuals Phase 1 is implemented and awaiting manual dashboard validation. Do not start Renderer, Metadata, or Upload yet.
+Function 04 Visuals Phase 1 (scraping) is complete and has passed live dashboard validation. Do not start Renderer, Metadata, or Upload until the next Visuals phase is explicitly defined.
 
 ## Factory order
 01. Topic Fetching
@@ -21,7 +22,7 @@ Only completed functions should exist in the repository. Do not scaffold future 
 
 ## Dashboard
 - The dashboard is currently a Test desk only while the factory is built.
-- Test exposes each completed function independently: Topic Fetcher, Scriptwriter and Audio.
+- Test exposes each completed function independently: Topic Fetcher, Scriptwriter, Audio and Visuals.
 - Function handoffs are human-approved in the dashboard.
 - No Live-production screen is present yet; it will be added when the production pipeline actually exists.
 - Dashboard visual polish is parked. Change only functional test behavior while building the factory.
@@ -114,19 +115,25 @@ README.md
 ```
 
 ## Last completed
-Function 03 — Audio. Manual test passed.
+Function 04 — Visuals Phase 1 (scraping). Live dashboard validation passed.
 
 ## Current development
-Function 04 — Visuals Phase 1 is implemented:
-- Original selected story URL is the first web source.
-- Two compact automatic visual-search queries are derived from the selected headline/evidence.
-- Related publisher pages are scraped in one shared Chromium session.
-- Images are filtered for decodeability, size, obvious non-photo assets, and duplicates.
-- A conditional entity/profile search is used only when the first pass returns fewer than 10 images.
-- The Test dashboard displays 10–15 scraped images when available.
-- A manual keyword/phrase/query reruns the same web crawler against the same original story URL and only that manual query.
-- The automatic visual queries used are displayed in the Test dashboard so manual queries can be chosen deliberately.
-- No AI visual gate is added in Phase 1; human review remains available in the dashboard.
+Function 04 — Visuals Phase 1 (scraping) is complete:
+- The selected story URL is scraped first and remains the primary anchor.
+- Automatic discovery uses the exact selected headline plus entity/context queries.
+- Google News RSS and DDGS/Bing/Yahoo discovery run as complementary free search lanes.
+- Related publisher pages are relevance-filtered, freshness-filtered and host-diversified before scraping.
+- If the first pass is still underfilled, real web profile/action pages are searched separately.
+- One shared Chromium session handles concurrent publisher-page scraping.
+- Browser-loaded image responses are reused when direct image requests are invalid.
+- Static HTML extraction is a real fallback for pages the browser path cannot use.
+- Responsive image attributes, JSON-LD images, article metadata and page publication dates are handled.
+- Images are filtered for decodeability, minimum dimensions, obvious non-photo assets and duplicates.
+- The target pool is 15 images with 10 treated as ready for the next human-review step.
+- A manual keyword/phrase/query reruns the crawler with the original story URL plus only that manual query.
+- The Test dashboard shows the automatic queries used and exposes crawler diagnostics.
+- No AI visual-verification call is used in Phase 1; human review remains the final image-selection gate.
+- Visuals uses only free services. DDGS is a discovery dependency; Playwright/Chromium is the browser scraper.
 
 ## Next gate
-Manually test Function 04 with current sports headlines, including at least one cricketer/action story. Record image count, source diversity, query quality, and whether manual queries return useful new images before extending the function.
+Do not redesign Functions 01–04 based on working-path cleanup alone. The next development task is the explicitly defined next Visuals phase or Function 05 — Renderer, after the project owner decides the handoff contract.
