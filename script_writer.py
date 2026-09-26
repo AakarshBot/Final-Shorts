@@ -255,6 +255,18 @@ def _extract_article(url: str) -> tuple[str, str]:
         text = _clean(candidate)
         if len(text) >= MIN_ARTICLE_CHARS:
             return text, resolved_url
+
+    try:
+        extracted = DDGS(timeout=5).extract(
+            resolved_url,
+            fmt="text_plain",
+        )
+        text = _clean(extracted.get("content") if isinstance(extracted, dict) else "")
+        if len(text) >= MIN_ARTICLE_CHARS:
+            return text, str(extracted.get("url") or resolved_url)
+    except Exception:
+        pass
+
     return "", resolved_url
 
 
