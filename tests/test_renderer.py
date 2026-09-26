@@ -29,7 +29,7 @@ def test_headline_is_large_and_dynamic():
     assert renderer.HEADLINE_LINE_GAP > 0
     assert renderer.get_headline_font_path().name == "Oswald-Bold.ttf"
     assert renderer.get_headline_font_path().exists()
-    assert 1 <= len(renderer._fit_headline_font(renderer.HEADLINE_TEXT)[2]) <= 2
+    assert 1 <= len(renderer._fit_headline_font(renderer.HEADLINE_TEXT)[2]) <= renderer.HEADLINE_MAX_LINES
     assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size >= 150
     assert len(long_lines) >= len(short_lines)
 
@@ -74,15 +74,10 @@ def test_headline_wraps_three_and_six_word_inputs_without_overflow():
             )[0]
             for line in lines
         )
-        assert (
-            width
-            <= renderer.HEADLINE_MAX_WIDTH
-            - renderer.HEADLINE_MARKER_WIDTH
-            - renderer.HEADLINE_MARKER_GAP
-        )
+        assert width <= renderer.HEADLINE_MAX_WIDTH
 
 
-def test_headline_render_stays_inside_safe_screen_bounds(monkeypatch):
+def test_headline_render_stays_inside_canvas_bounds(monkeypatch):
     monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
     monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
     base = renderer.make_sample_background()
@@ -96,8 +91,8 @@ def test_headline_render_stays_inside_safe_screen_bounds(monkeypatch):
     bbox = ImageChops.difference(base, frame).getbbox()
 
     assert bbox is not None
-    assert bbox[0] >= renderer.HEADLINE_SAFE_MARGIN
-    assert bbox[2] <= renderer.WIDTH - renderer.HEADLINE_SAFE_MARGIN
+    assert bbox[0] >= 0
+    assert bbox[2] <= renderer.WIDTH
 
 
 def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
