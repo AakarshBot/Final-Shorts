@@ -67,3 +67,17 @@ def test_approved_subtitles_are_renderer_handoff(tmp_path):
     approved = approve_subtitles(result)
 
     assert approved["approved_for_renderer"] is True
+
+
+def test_subtitle_approval_rejects_missing_files(tmp_path):
+    subtitles = {
+        "scenes": [{"scene": 1, "path": str(tmp_path / "missing.srt")}],
+        "srt_path": str(tmp_path / "missing-all.srt"),
+    }
+
+    try:
+        approve_subtitles(subtitles)
+    except ValueError as exc:
+        assert "missing" in str(exc).lower()
+    else:
+        raise AssertionError("Missing subtitle files must be rejected.")
