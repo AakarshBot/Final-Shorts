@@ -73,17 +73,18 @@ def test_renderer_paths_point_to_expected_local_assets():
     assert Path(renderer.get_headline_font_path()).parent.name == "fonts"
 
 
-def test_default_headline_is_short_and_fits():
+def test_default_headline_is_short_and_fits_and_keeps_all_words():
     assert len(renderer.HEADLINE_TEXT.split()) == 4
 
     font, lines = renderer._headline_layout(renderer.HEADLINE_TEXT)
     probe = renderer.ImageDraw.Draw(renderer.Image.new("RGB", (1, 1)))
 
     assert len(lines) <= 2
+    assert " ".join(lines).split() == renderer.HEADLINE_TEXT.split()
     assert all(renderer._measure(probe, line, font)[0] <= 860 for line in lines)
 
 
-def test_subtitles_wait_for_headline(monkeypatch):
+def test_subtitles_wait_until_headline_has_disappeared(monkeypatch):
     seen = []
 
     def fake_groups(t):
@@ -93,8 +94,26 @@ def test_subtitles_wait_for_headline(monkeypatch):
     monkeypatch.setattr(renderer, "_groups_at_time", fake_groups)
     base = renderer.make_sample_background()
 
-    renderer.render_frame(base, "Clean Editorial", 0.5, renderer.HEADLINE_TEXT, True)
-    renderer.render_frame(base, "Clean Editorial", 1.65, renderer.HEADLINE_TEXT, True)
+    renderer.render_frame(base, "Clean Editorial", 0.30, renderer.HEADLINE_TEXT, True)
+    assert seen == []
 
-    assert seen[0] == 0.0
-    assert round(seen[1], 2) == 0.5
+    renderer.render_frame(base, "Clean Editorial", renderer.HEADLINE_SECONDS - 0.01, renderer.HEADLINE_TEXT, True)
+    assert seen == []
+
+    renderer.render_frame(base, "Clean Editorial", renderer.HEADLINE_SECONDS + 0.30, renderer.HEADLINE_TEXT, True)
+    assert round(seen[-1], 2) == 0.30
+
+
+def test_subtitles_start_immediately_without_headline(monkeypatch):
+    seen = []
+
+    def fake_groups(t):
+        seen.append(t)
+        return ["preview"], 0
+
+    monkeypatch.setattr(renderer, "_groups_at_time", fake_groups)
+    base = renderer.make_sample_background()
+
+    renderer.render_frame(base, "Clean Editorial", 0.30, renderer.HEADLINE_TEXT, False)
+
+    assert seen == [0.30]
