@@ -1113,7 +1113,21 @@ def _render_live_upload():
         format_func=lambda index: edited_titles[index] or f"Title option {index + 1}",
         key=f"live-upload-choice-{story_id}",
     )
-    st.session_state.live_upload_title_choice = choice
+    final_title_key = f"live-upload-final-title-{story_id}"
+    if (
+        choice != st.session_state.live_upload_title_choice
+        or not str(st.session_state.get(final_title_key) or "").strip()
+    ):
+        st.session_state.live_upload_title_choice = choice
+        st.session_state[final_title_key] = edited_titles[choice]
+
+    st.text_input(
+        "Final title",
+        key=final_title_key,
+        max_chars=100,
+        help="Edit the selected title here. The exact value in this field becomes the YouTube title when you approve.",
+    )
+    st.caption("The Final title field is the value that will be published after Manual QC approval.")
 
     st.text_area(
         "Description",
@@ -1150,7 +1164,7 @@ def _render_live_upload():
                 f"live-upload-comment-{story_id}"
             ]
             st.session_state.live_upload_qc = {
-                "title": edited_titles[choice].strip(),
+                "title": st.session_state[final_title_key].strip(),
                 "description": st.session_state.live_upload_description,
                 "hashtags": st.session_state.live_upload_hashtags,
                 "comment": st.session_state.live_upload_comment,
