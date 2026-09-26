@@ -29,9 +29,9 @@ python -m playwright install chromium
 ```
 
 
-### Visuals Phase 2
+### Visuals
 
-The Visuals test desk has three independent options. Option 1 is the Phase 1 scraper/crawler. Option 2 accepts only a manual query and searches Commons, DuckDuckGo, Wikipedia, Openverse, and any configured Pixabay/Pexels/Unsplash APIs. Option 3 accepts only a manual prompt and currently supports Hugging Face Inference Providers and Cloudflare Workers AI.
+The Visuals test desk has four independent options. Option 1 is the automatic Phase 1 scraper/crawler and starts when a headline is selected. Option 2 is the standalone manual Phase 1 scraper. It uses an AI query planner: a name-only query searches normally, while a contextual query generates up to two useful variants and searches older publisher pages as well. Option 3 searches Commons, DuckDuckGo, Wikipedia, Openverse, and any configured Pixabay/Pexels/Unsplash APIs. Option 4 generates images with Hugging Face Inference Providers and Cloudflare Workers AI.
 
 Optional .env keys:
 
