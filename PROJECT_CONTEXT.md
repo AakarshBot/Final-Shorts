@@ -115,11 +115,15 @@ README.md
 ```
 
 ## Last completed
-Function 04 — Visuals Phase 1 (scraping). Live dashboard validation passed.
+Function 04 — Visuals Phase 2 (manual real-image search and manual AI generation).
 
 ## Current development
-Function 04 — Visuals Phase 1 (scraping) is complete:
-- The selected story URL is scraped first and remains the primary anchor.
+Function 04 — Visuals Phase 2 is implemented:
+- Option 1 remains the Phase 1 scraper/crawler.
+- Option 2 is manual-query-only real-image retrieval across all configured real-image sources.
+- Option 3 is manual-prompt-only AI generation across configured AI providers.
+- No semantic, licensing or monetization filtering is active in Phase 2.
+- The two new manual paths run their configured providers independently and fail safely per provider.
 - Automatic discovery uses the exact selected headline plus entity/context queries.
 - Google News RSS and DDGS/Bing/Yahoo discovery run as complementary free search lanes.
 - Related publisher pages are relevance-filtered, freshness-filtered and host-diversified before scraping.
