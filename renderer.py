@@ -126,22 +126,15 @@ def make_sample_background() -> Image.Image:
     image = Image.new("RGB", (WIDTH, HEIGHT))
     draw = ImageDraw.Draw(image)
 
-    top = (18, 23, 31)
-    bottom = (7, 10, 14)
+    top = (24, 28, 36)
+    bottom = (8, 10, 14)
     for y in range(HEIGHT):
         mix = y / max(1, HEIGHT - 1)
-        color = tuple(int(top[i] * (1 - mix) + bottom[i] * mix) for i in range(3))
+        color = tuple(
+            int(top[i] * (1 - mix) + bottom[i] * mix)
+            for i in range(3)
+        )
         draw.line((0, y, WIDTH, y), fill=color)
-
-    # Generic stadium geometry for preview-only filler content.
-    for x in (130, 290, 790, 950):
-        draw.rounded_rectangle((x - 6, 360, x + 6, 1100), radius=6, fill=(110, 118, 130))
-        for offset in (-42, -14, 14, 42):
-            draw.ellipse((x + offset - 10, 335, x + offset + 10, 355), fill=(235, 240, 246))
-
-    draw.ellipse((120, 880, 960, 1720), outline=(55, 64, 74), width=6)
-    draw.arc((60, 1000, 1020, 1870), start=198, end=342, fill=(80, 89, 101), width=9)
-    draw.line((130, 1460, 950, 1460), fill=(50, 58, 68), width=4)
     return image
 
 
@@ -181,38 +174,15 @@ def _paste_logo(base: Image.Image) -> None:
 def _paste_source(base: Image.Image, style: str) -> None:
     draw = ImageDraw.Draw(base)
     font = _font((), 24)
-    label_w, label_h = _measure(draw, SOURCE_LABEL, font)
-    x2 = WIDTH - 36
-    x1 = x2 - label_w - 36
-    y2 = HEIGHT - 42
-    y1 = y2 - label_h - 20
-
-    if style == "Broadcast / Data":
-        draw.rectangle((x1 - 12, y1, x1, y2), fill=(92, 205, 255))
-        draw.text(
-            (x1 + 4, y1 + 10),
-            SOURCE_LABEL,
-            font=font,
-            fill=(245, 247, 250),
-        )
-        return
-
-    overlay = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    odraw = ImageDraw.Draw(overlay)
-    odraw.rounded_rectangle(
-        (x1 - 18, y1, x2, y2),
-        radius=16,
-        fill=(10, 13, 18, 178),
-        outline=(71, 80, 91, 140),
-        width=1,
-    )
-    odraw.text(
-        (x1, y1 + 10),
+    label_w, _ = _measure(draw, SOURCE_LABEL, font)
+    x = WIDTH - label_w - 42
+    y = HEIGHT - 86
+    draw.text(
+        (x, y),
         SOURCE_LABEL,
         font=font,
-        fill=(245, 247, 250, 235),
+        fill=(210, 216, 224),
     )
-    base.paste(overlay, (0, 0), overlay)
 
 
 def _headline_position(text_lines: list[str], font, t: float) -> tuple[int, int, float]:
@@ -234,15 +204,6 @@ def _draw_headline(base: Image.Image, text: str, t: float) -> None:
 
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
-    accent_x = x - 22
-    total_height = 112 * len(lines) + 10
-
-    draw.rounded_rectangle(
-        (accent_x, y - 10, accent_x + 7, y + total_height),
-        radius=4,
-        fill=(92, 205, 255, int(215 * progress)),
-    )
-
     current_y = y
     for line in lines:
         draw.text(
@@ -345,15 +306,14 @@ def _draw_subtitles(base: Image.Image, style: str, t: float) -> None:
 
     x = 82
     y = 1405
-    draw.rectangle((x, y + 2, x + 8, y + 108), fill=(92, 205, 255))
     draw.text(
-        (x + 28, y - 4),
-        "FIELD REPORT",
+        (x, y),
+        "BROADCAST",
         font=_font((), 22),
         fill=(154, 166, 180),
     )
 
-    cursor = x + 28
+    cursor = x
     for index, word in enumerate(words):
         width, _ = _measure(draw, word, font)
         draw.text(
