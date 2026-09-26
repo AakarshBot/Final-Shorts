@@ -185,6 +185,8 @@ if "live_ai_image_result" not in st.session_state:
     st.session_state.live_ai_image_result = None
 if "live_script_language" not in st.session_state:
     st.session_state.live_script_language = "english"
+if "live_headline_enabled" not in st.session_state:
+    st.session_state.live_headline_enabled = True
 if "live_visual_crops" not in st.session_state:
     st.session_state.live_visual_crops = {}
 if "live_visual_deleted" not in st.session_state:
@@ -457,6 +459,7 @@ def _live_reset_downstream():
         "live_upload_description": "",
         "live_upload_hashtags": "",
         "live_upload_comment": "",
+        "live_headline_enabled": True,
     }.items():
         st.session_state[key] = value
 
@@ -990,14 +993,21 @@ def _render_live_script():
         unsafe_allow_html=True,
     )
     st.caption(
-        "Edit the narration and the 3–4 word opening headline. Your edits are handed directly to Audio after approval."
+        "Manual QC is the final editorial decision. The opening headline is optional; leaving it empty is accepted."
+    )
+
+    st.session_state.live_headline_enabled = st.toggle(
+        "Use opening headline",
+        value=st.session_state.get("live_headline_enabled", True),
+        key=f"live-headline-enabled-{story_id}",
     )
 
     edited_headline = st.text_input(
         "Opening headline",
-        value=str(script.get("headline") or ""),
-        max_chars=48,
+        value=str(script.get("headline") or "") if st.session_state.live_headline_enabled else "",
+        max_chars=100,
         key=f"live-script-headline-{story_id}",
+        disabled=not st.session_state.live_headline_enabled,
     )
 
     edited_voiceovers = []
@@ -1022,7 +1032,13 @@ def _render_live_script():
                 approved = apply_script_edits(
                     script,
                     edited_voiceovers,
-                    headline=edited_headline,
+                    headline=edited_headline if st.session_state.live_headline_enabled else "",
+                    validate=False,
+                )
+                approved["headline"] = (
+                    str(edited_headline or "").strip()
+                    if st.session_state.live_headline_enabled
+                    else ""
                 )
             except ValueError as exc:
                 st.session_state.live_script_error = str(exc)
