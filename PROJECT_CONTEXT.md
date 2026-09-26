@@ -2,7 +2,7 @@
 
 ## Project status
 
-The factory's seven functional stages are implemented on `main`:
+The factory's seven functional stages are implemented on `main` and **all Test Pages are Approved**:
 
 01. Topic Fetcher — **Approved**
 02. Scriptwriter — **Approved**
@@ -10,9 +10,9 @@ The factory's seven functional stages are implemented on `main`:
 04. Visuals — **Approved**
 05. Subtitles — **Approved**
 06. Renderer — **Approved**
-07. YouTube Upload — **Implemented / ready for dashboard integration**
+07. YouTube Upload — **Approved**
 
-The next development stage is **Dashboard UI enhancement**. Do not add another factory function before the dashboard work is complete.
+The dashboard UI is **to be improved**. The current development step is **Turning Test into Live**.
 
 ## Factory order
 
@@ -211,7 +211,7 @@ Status: **Implemented and ready for dashboard integration.**
 
 ## Dashboard state
 
-Current dashboard is still primarily the independent-function Test desk.
+Current dashboard contains the approved Test pages and the Live production surface is the next integration target.
 
 Implemented:
 - Function selector for stages 01–07.
@@ -220,11 +220,11 @@ Implemented:
 - Upload QC desk with Public/Private upload lane.
 
 Important:
-- The dashboard currently contains functional scaffolding from the build/test phase and is the next cleanup/enhancement target.
+- Dashboard UI remains to be improved as the Test experience is converted into the Live production flow.
 - Do not add new factory logic while doing dashboard UI work unless required to support an existing completed handoff.
 - Preserve the already-approved function contracts.
 
-## Current development target — Dashboard UI enhancement
+## Current development target — Turning Test into Live
 
 Dashboard UI v2 is implemented in `app.py` and does not alter the factory function implementations.
 
@@ -245,7 +245,7 @@ Current UI direction:
 - Media review now uses the MIT-licensed Streamlit Cropper component inside a native Streamlit dialog. The crop is free-size, the original asset is untouched, and the saved result is only a persistent dashboard preview.
 - No completed factory function contract was changed for the dashboard/UI work.
 
-The next dashboard iteration should refine production-facing layout further without reopening completed functions or adding new factory logic.
+The current step is to turn the approved Test pages into the Live production flow without reopening completed factory functions or adding unnecessary new logic.
 
 Do not reopen completed functions unless the UI work exposes a concrete integration regression.
 
