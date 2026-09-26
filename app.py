@@ -1300,16 +1300,16 @@ def render_live_dashboard():
         width="stretch",
         key="live-find-more",
     ):
-            with st.spinner("Searching for 20 additional unique stories…"):
-                existing = list(st.session_state.live_topics)
-                new_topics = fetch_topics(
-                    st.session_state.live_topics_profile,
-                    more=True,
-                    exclude_topics=existing,
-                    limit=20,
-                )
-                st.session_state.live_topics = existing + new_topics
-            st.rerun()
+        with st.spinner("Searching for 20 additional unique stories…"):
+            existing = list(st.session_state.live_topics)
+            new_topics = fetch_topics(
+                st.session_state.live_topics_profile,
+                more=True,
+                exclude_topics=existing,
+                limit=20,
+            )
+            st.session_state.live_topics = existing + new_topics
+        st.rerun()
 
     selected_index = st.session_state.live_selected_topic
     if selected_index is None or not 0 <= selected_index < len(topics):
