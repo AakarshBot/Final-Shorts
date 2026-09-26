@@ -43,6 +43,42 @@ def test_context_does_not_rescue_an_unrelated_article():
     ) == 0
 
 
+def test_manual_query_plan_keeps_original_and_expands_context(monkeypatch):
+    class Response:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [{
+                    "message": {
+                        "content": {
+                            "historical": True,
+                            "queries": [
+                                "Virat Kohli century",
+                                "Virat Kohli hundred",
+                                "Virat Kohli century cricket",
+                            ],
+                        }
+                    }
+                }]
+            }
+
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(visual_fetcher.requests, "post", lambda *args, **kwargs: Response())
+
+    plan = visual_fetcher._manual_query_plan("Virat Kohli century")
+
+    assert plan == {
+        "historical": True,
+        "queries": [
+            "Virat Kohli century",
+            "Virat Kohli hundred",
+            "Virat Kohli century cricket",
+        ],
+    }
+
+
 def test_manual_crawl_name_only_keeps_current_search(monkeypatch):
     calls = []
 
@@ -93,6 +129,40 @@ def test_manual_crawl_context_enables_historical_search(monkeypatch):
     )]
     assert result["historical"] is True
     assert len(result["search_queries"]) == 3
+
+
+def test_historical_search_keeps_old_relevant_pages(monkeypatch):
+    old_date = "2020-10-23T00:00:00+00:00"
+
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_news_search",
+        lambda query, historical=False: [{
+            "title": "Virat Kohli century in memorable innings",
+            "url": "https://example.com/old",
+            "published_at": old_date,
+            "body": "Virat Kohli scored a century in a memorable innings.",
+            "query": query,
+        }],
+    )
+
+    current_pages = visual_fetcher._collect_related_pages(
+        ["Virat Kohli century"],
+        "",
+        "",
+        "",
+        historical=False,
+    )
+    historical_pages = visual_fetcher._collect_related_pages(
+        ["Virat Kohli century"],
+        "",
+        "",
+        "",
+        historical=True,
+    )
+
+    assert current_pages == []
+    assert [page["url"] for page in historical_pages] == ["https://example.com/old"]
 
 
 def test_manual_crawl_returns_scraped_assets(monkeypatch):
