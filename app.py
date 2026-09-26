@@ -11,6 +11,7 @@ from topic_fetcher import fetch_topics
 from visual_fetcher import crawl_visuals, manual_crawl_visuals
 from visual_search import search_images
 from visual_generator import generate_images
+from subtitles import approve_subtitles, generate_subtitles
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
@@ -28,7 +29,7 @@ st.caption("Free Shorts factory · independent function testing")
 
 function = st.sidebar.selectbox(
     "Test function",
-    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio", "04 · Visuals"],
+    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Audio", "04 · Visuals", "05 · Subtitles"],
     key="test_function",
 )
 
@@ -54,6 +55,10 @@ if "real_image_result" not in st.session_state:
     st.session_state.real_image_result = None
 if "ai_image_result" not in st.session_state:
     st.session_state.ai_image_result = None
+if "subtitle_data" not in st.session_state:
+    st.session_state.subtitle_data = None
+if "approved_subtitles" not in st.session_state:
+    st.session_state.approved_subtitles = None
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
@@ -86,6 +91,10 @@ def render_topic_fetcher():
         st.session_state.approved_audio = None
         st.session_state.visual_result = None
         st.session_state.visual_loaded_story = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
 
     st.markdown(
         f"<span class='badge'>{len(st.session_state.topics)} topics</span>",
@@ -107,6 +116,8 @@ def render_topic_fetcher():
                 st.session_state.approved_script = None
                 st.session_state.audio_data = None
                 st.session_state.approved_audio = None
+                st.session_state.subtitle_data = None
+                st.session_state.approved_subtitles = None
                 st.session_state.visual_result = None
                 st.session_state.visual_loaded_story = None
         
@@ -173,6 +184,8 @@ def render_scriptwriter():
         st.session_state.approved_script = None
         st.session_state.audio_data = None
         st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
 
     script = st.session_state.script_data
     if not script:
@@ -199,6 +212,8 @@ def render_scriptwriter():
             st.session_state.approved_script = approved
             st.session_state.audio_data = None
             st.session_state.approved_audio = None
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
         except ValueError as exc:
             st.error(str(exc))
 
@@ -224,6 +239,7 @@ def render_visuals_crawler():
         key="visual_story",
     )
     selected_index = labels.index(selected_label)
+    st.session_state.selected_topic = selected_index
     topic = st.session_state.topics[selected_index]
 
     story = {
@@ -248,7 +264,6 @@ def render_visuals_crawler():
 
     if story_key != st.session_state.get("visual_loaded_story"):
         st.session_state.visual_result = None
-        st.session_state.visual_manual_query = ""
         with st.spinner("Scraping the selected story and related publisher pages…"):
             try:
                 st.session_state.visual_result = crawl_visuals(story)
@@ -535,6 +550,8 @@ def render_audio():
             try:
                 st.session_state.audio_data = generate_audio(selected)
                 st.session_state.approved_audio = None
+                st.session_state.subtitle_data = None
+                st.session_state.approved_subtitles = None
             except (RuntimeError, ValueError) as exc:
                 st.error(str(exc))
                 st.session_state.audio_data = None
@@ -563,11 +580,65 @@ def render_audio():
     if st.button("Approve audio", type="primary", use_container_width=True):
         try:
             st.session_state.approved_audio = approve_audio(audio)
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
         except ValueError as exc:
             st.error(str(exc))
 
     if st.session_state.approved_audio:
         st.success("Audio approved and stored as the handoff for Function 04 · Visuals.")
+
+def render_subtitles():
+    st.header("05 · Subtitles")
+
+    audio = st.session_state.approved_audio
+    if not audio:
+        st.info("Approve Audio first. Subtitles use the approved Edge-TTS word timings.")
+        return
+
+    if st.button("Generate subtitles", type="primary", use_container_width=True):
+        try:
+            st.session_state.subtitle_data = generate_subtitles(audio)
+            st.session_state.approved_subtitles = None
+        except ValueError as exc:
+            st.error(str(exc))
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
+
+    subtitles = st.session_state.subtitle_data
+    if not subtitles:
+        return
+
+    st.divider()
+    st.subheader("Subtitle review")
+    st.caption(
+        f'{len(subtitles["scenes"])} scenes · '
+        f'{len(subtitles["cues"])} total cues'
+    )
+
+    for scene in subtitles["scenes"]:
+        st.markdown(
+            f'**Slide {scene["scene"]}** · '
+            f'{scene["duration"]:.2f}s · {len(scene["cues"])} cues'
+        )
+        st.code(scene["srt"], language="text")
+
+    st.download_button(
+        "Download combined SRT",
+        data=subtitles["srt"],
+        file_name="final_shorts.srt",
+        mime="application/x-subrip",
+        use_container_width=True,
+    )
+
+    if st.button("Approve subtitles", type="primary", use_container_width=True):
+        try:
+            st.session_state.approved_subtitles = approve_subtitles(subtitles)
+        except ValueError as exc:
+            st.error(str(exc))
+
+    if st.session_state.approved_subtitles:
+        st.success("Subtitles approved and stored as the handoff for Function 06 · Renderer.")
 
 
 if function == "01 · Topic Fetcher":
@@ -576,5 +647,7 @@ elif function == "02 · Scriptwriter":
     render_scriptwriter()
 elif function == "03 · Audio":
     render_audio()
-else:
+elif function == "04 · Visuals":
     render_visuals()
+else:
+    render_subtitles()
