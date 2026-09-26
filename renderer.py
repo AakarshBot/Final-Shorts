@@ -790,6 +790,7 @@ def render_production_video(
     visuals: list[dict],
     output_path: str | Path,
     headline_text: str | None = None,
+    headline_enabled: bool = True,
     source_label: str | None = None,
 ) -> Path:
     """Render the approved production handoff with supplied slide visuals and audio."""
@@ -859,7 +860,7 @@ def render_production_video(
                 t,
                 subtitle_data,
                 headline_text or HEADLINE_TEXT,
-                True,
+                headline_enabled,
                 source_label,
             )
 
