@@ -8,7 +8,7 @@ load_dotenv()
 from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
 from topic_fetcher import fetch_topics
-from visual_fetcher import crawl_visuals, same_query
+from visual_fetcher import crawl_visuals, manual_crawl_visuals
 from visual_search import search_images
 from visual_generator import generate_images
 
@@ -50,6 +50,8 @@ if "visual_loaded_story" not in st.session_state:
     st.session_state.visual_loaded_story = None
 if "visual_manual_query" not in st.session_state:
     st.session_state.visual_manual_query = ""
+if "manual_visual_result" not in st.session_state:
+    st.session_state.manual_visual_result = None
 if "real_image_result" not in st.session_state:
     st.session_state.real_image_result = None
 if "ai_image_result" not in st.session_state:
@@ -248,42 +250,6 @@ def render_visuals_crawler():
 
     story_key = f"{selected_index}:{story['url']}:{story['title']}"
 
-    st.subheader("Manual web query")
-    st.caption("Enter any people, event or phrase and run a fresh crawler search.")
-    with st.form("visual_manual_query_form"):
-        manual_query = st.text_input(
-            "Keyword / phrase / query",
-            value=st.session_state.get("visual_manual_query") or "",
-            placeholder="e.g. Virat Kohli Rohit Sharma",
-        )
-        run_manual = st.form_submit_button(
-            "Run manual scrape",
-            type="primary",
-            use_container_width=True,
-        )
-
-    if run_manual:
-        manual_query = manual_query.strip()
-        automatic_for_check = list(
-            (st.session_state.get("visual_result") or {}).get("automatic_queries") or []
-        )
-        if not manual_query:
-            st.warning("Enter a query first.")
-        elif same_query(manual_query, automatic_for_check):
-            st.warning("That query was already used by the factory. Use a different query.")
-        else:
-            with st.spinner("Scraping the manual query…"):
-                try:
-                    st.session_state.visual_result = crawl_visuals(
-                        story,
-                        manual_query=manual_query,
-                    )
-                    st.session_state.visual_manual_query = manual_query
-                    st.session_state.visual_loaded_story = story_key
-                    st.rerun()
-                except Exception as exc:
-                    st.error(f"{type(exc).__name__}: {exc}")
-
     if story_key != st.session_state.get("visual_loaded_story"):
         st.session_state.visual_result = None
         st.session_state.visual_manual_query = ""
@@ -356,8 +322,76 @@ def render_visuals_crawler():
                     st.link_button("Open source", source_url, use_container_width=True)
 
 
+def _render_manual_crawler():
+    st.subheader("Option 2 · Manual Scraper")
+    st.caption("Manual query only. Searches current publisher pages and scrapes their images.")
+    with st.form("manual_crawler_form"):
+        query = st.text_input(
+            "Search query",
+            placeholder="e.g. Virat Kohli Rohit Sharma",
+            key="manual_crawler_query",
+        )
+        scrape = st.form_submit_button(
+            "Run manual scrape",
+            type="primary",
+            use_container_width=True,
+        )
+
+    if scrape:
+        query = query.strip()
+        if not query:
+            st.warning("Enter a query first.")
+        else:
+            with st.spinner("Searching and scraping publisher pages…"):
+                try:
+                    st.session_state.manual_visual_result = manual_crawl_visuals(query)
+                except Exception as exc:
+                    st.session_state.manual_visual_result = {
+                        "error": f"{type(exc).__name__}: {exc}"
+                    }
+
+    result = st.session_state.get("manual_visual_result") or {}
+    if result.get("error"):
+        st.error(result["error"])
+        return
+    if not result:
+        return
+
+    st.caption(
+        f'{len(result.get("assets") or [])} images · '
+        f'{int(result.get("pages_scraped") or 0)} pages · '
+        f'query: {result.get("manual_query") or ""}'
+    )
+    diagnostics = list(result.get("diagnostics") or [])
+    with st.expander("Crawler diagnostics", expanded=not bool(result.get("assets"))):
+        if diagnostics:
+            st.code(json.dumps(diagnostics, indent=2, ensure_ascii=False), language="text")
+        else:
+            st.caption("No page diagnostics were returned.")
+
+    assets = list(result.get("assets") or [])
+    if not assets:
+        st.warning("The manual crawler found no usable images.")
+        return
+
+    st.subheader("Scraped images")
+    for start in range(0, len(assets), 3):
+        cols = st.columns(3, gap="medium")
+        for col, asset in zip(cols, assets[start:start + 3]):
+            with col:
+                st.image(asset["bytes"], width="stretch")
+                publisher = asset.get("publisher") or "Web source"
+                size = f'{asset.get("width", 0)}×{asset.get("height", 0)}'
+                st.caption(
+                    f"{publisher} · {size}\n{asset.get('article_title') or ''}"
+                )
+                source_url = str(asset.get("source_page_url") or "").strip()
+                if source_url:
+                    st.link_button("Open source", source_url, use_container_width=True)
+
+
 def _render_manual_real_images():
-    st.subheader("Option 2 · Real Image Search")
+    st.subheader("Option 3 · Real Image Search")
     st.caption("Manual query only. Searches all configured real-image sources in parallel.")
     with st.form("real_image_search_form"):
         query = st.text_input(
@@ -459,9 +493,10 @@ def render_visuals():
     mode = st.radio(
         "Visual test",
         [
-            "Option 1 · Scraper / Crawler",
-            "Option 2 · Real Image Search",
-            "Option 3 · AI Generation",
+            "Option 1 · Automatic Scraper",
+            "Option 2 · Manual Scraper",
+            "Option 3 · Real Image Search",
+            "Option 4 · AI Generation",
         ],
         horizontal=True,
         key="visual_test_mode",
@@ -469,6 +504,8 @@ def render_visuals():
     if mode.startswith("Option 1"):
         render_visuals_crawler()
     elif mode.startswith("Option 2"):
+        _render_manual_crawler()
+    elif mode.startswith("Option 3"):
         _render_manual_real_images()
     else:
         _render_manual_ai_images()
