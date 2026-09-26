@@ -150,9 +150,9 @@ Function 06 currently exists as an isolated final preview desk and does not cons
 
 Final visual system:
 - one canonical **Editorial Highlight** style
-- headline uses a large, heavy block display face (Anton preferred, with local bold fallbacks), single line, dynamically fitted to available width, with a moving blue/yellow brand marker
-- subtitle styling uses a large bold sans-serif, dark outline, white phrase text and a blue active-word capsule with yellow active text
-- subtitles use word-level timing, stable phrase layout and restrained keyword emphasis in the lower-middle safe area
+- headline uses the bundled Anton block display face, single line, dynamically fitted to the safe width, with a moving blue/yellow brand marker
+- subtitle styling uses a large bold sans-serif, dark outline, white phrase text and a yellow active word; there is no caption background capsule
+- subtitles use word-level timing, stable phrase layout and restrained word emphasis in the lower-middle safe area
 - logo is the real local `logo.png`, top-right
 - source label is plain text, bottom-right
 - no permanent border, decorative graphics, glass panel, or universal Ken-Burns effect

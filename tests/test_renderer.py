@@ -26,8 +26,9 @@ def test_headline_is_single_line_and_dynamic():
     assert long_text.split() == ["THIS", "IS", "A", "MUCH", "LONGER", "HEADLINE"]
     assert short_width <= renderer.HEADLINE_MAX_WIDTH
     assert long_width <= renderer.HEADLINE_MAX_WIDTH
-    assert renderer.HEADLINE_MAX_SIZE >= 180
+    assert renderer.HEADLINE_MAX_SIZE >= 220
     assert renderer.get_headline_font_path().name == "Anton-Regular.ttf"
+    assert renderer.get_headline_font_path().exists()
     assert long_font.size < short_font.size
 
 
@@ -74,8 +75,9 @@ def test_headline_marker_and_subtitle_style_are_brand_consistent():
     assert renderer.BRAND_BLUE != renderer.ACCENT
     assert renderer.SUBTITLE_MAX_SIZE > 58
     assert renderer.SUBTITLE_MAX_WIDTH >= 860
+    assert renderer.SUBTITLE_WORD_SPACING <= 12
     assert renderer.SUBTITLE_Y < 1450
-    assert renderer.SUBTITLE_LINE_GAP > 0
+    assert renderer.SUBTITLE_LINE_GAP >= 12
 
 
 def test_subtitle_layout_uses_second_line_only_when_needed():

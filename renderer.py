@@ -18,8 +18,8 @@ HEADLINE_TEXT = "THE GAME JUST CHANGED"
 SOURCE_LABEL = "SPORTS DESK"
 FINAL_STYLE_NAME = "Editorial Highlight"
 
-HEADLINE_MAX_WIDTH = 900
-HEADLINE_MAX_SIZE = 180
+HEADLINE_MAX_WIDTH = 960
+HEADLINE_MAX_SIZE = 230
 HEADLINE_MIN_SIZE = 42
 HEADLINE_MARKER_WIDTH = 56
 HEADLINE_MARKER_HEIGHT = 8
@@ -28,10 +28,8 @@ HEADLINE_MARKER_GAP = 16
 SUBTITLE_MAX_WIDTH = 900
 SUBTITLE_MAX_SIZE = 70
 SUBTITLE_MIN_SIZE = 54
-SUBTITLE_WORD_SPACING = 14
-SUBTITLE_LINE_GAP = 6
-SUBTITLE_ACTIVE_PAD_X = 14
-SUBTITLE_ACTIVE_PAD_Y = 8
+SUBTITLE_WORD_SPACING = 10
+SUBTITLE_LINE_GAP = 14
 SUBTITLE_Y = 1390
 
 ACCENT = (255, 205, 66)
@@ -85,8 +83,8 @@ def _font(candidates: tuple[Path, ...], size: int):
     for path in (
         Path("C:/Windows/Fonts/arialbd.ttf"),
         Path("C:/Windows/Fonts/ARLRDBD.TTF"),
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
     ):
         if path.exists():
             return ImageFont.truetype(str(path), size)
@@ -109,12 +107,7 @@ def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
                 root / "NotoSansTelugu-CondensedBlack.ttf",
                 root / "NotoSansTelugu-Black.ttf",
             )
-        return (
-            root / "Anton-Regular.ttf",
-            root / "Anton-Bold.ttf",
-            root / "ArchivoBlack-Regular.ttf",
-            root / "Montserrat-Black.ttf",
-        )
+        return (root / "Anton-Regular.ttf",)
 
     if language == "hindi":
         return (
@@ -408,10 +401,15 @@ def _draw_subtitles(
         index: _measure(draw, str(word["text"]), font)
         for index, word in enumerate(words)
     }
-    line_heights = [
-        max(measurements[index][1] for index in range(sum(len(line) for line in lines[:row]), sum(len(line) for line in lines[:row + 1])))
-        for row, line in enumerate(lines)
-    ]
+
+    line_heights = []
+    line_start = 0
+    for line in lines:
+        line_end = line_start + len(line)
+        line_heights.append(
+            max(measurements[index][1] for index in range(line_start, line_end))
+        )
+        line_start = line_end
     total_height = sum(line_heights) + SUBTITLE_LINE_GAP * max(0, len(lines) - 1)
     y = SUBTITLE_Y - total_height // 2
 
@@ -430,20 +428,6 @@ def _draw_subtitles(
             active = start <= t < end
 
             if active:
-                pad_x = SUBTITLE_ACTIVE_PAD_X
-                pad_y = SUBTITLE_ACTIVE_PAD_Y
-                draw.rounded_rectangle(
-                    (
-                        cursor - pad_x,
-                        y - pad_y,
-                        cursor + width + pad_x,
-                        y + height + pad_y,
-                    ),
-                    radius=10,
-                    fill=BRAND_BLUE,
-                    outline=DARK,
-                    width=2,
-                )
                 text_fill = ACCENT
             else:
                 text_fill = WHITE
@@ -561,7 +545,6 @@ def build_preview_bundle(
     output_dir: str | Path | None = None,
     headline_enabled: bool = True,
     headline_text: str = HEADLINE_TEXT,
-    subtitle_data: dict = PREVIEW_SUBTITLE_DATA,
 ) -> dict[str, Path]:
     root = Path(__file__).resolve().parent
     output = Path(output_dir) if output_dir else root / "output" / "renderer_previews"

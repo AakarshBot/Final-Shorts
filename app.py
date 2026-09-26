@@ -590,8 +590,7 @@ def render_renderer_test():
     )
 
     st.caption(
-        f"{FINAL_STYLE_NAME} · larger Bebas Neue headline · kinetic keyword captions · "
-        "blue/yellow brand accents"
+        f"{FINAL_STYLE_NAME} · Anton block headline · clean word-highlight captions"
     )
 
     if st.button("Build preview", type="primary", use_container_width=True):
@@ -624,7 +623,7 @@ def render_renderer_test():
         st.markdown("**Final overlay**")
         if final and Path(final).exists():
             st.video(str(final), width=300)
-        st.caption("Large kinetic captions · blue active-word capsule · yellow keyword highlight · logo top-right · source bottom-right")
+        st.caption("Large bold captions · yellow active word · logo top-right · source bottom-right")
 
 
 def render_audio():

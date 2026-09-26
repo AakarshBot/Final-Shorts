@@ -10,7 +10,7 @@ Functions 01–04 are implemented and accepted:
 - **03 — Audio**
 - **04 — Visuals Phase 1 + Phase 2**
 
-Visuals Phase 1 and Phase 2 are complete. The Subtitles implementation is intentionally not present yet. The Function 06 Renderer now has a final visual preview desk. Function 05 Subtitles is implemented as the direct Scriptwriter + Audio timing handoff.
+Visuals Phase 1 and Phase 2 are complete. Function 05 Subtitles is implemented as the direct Scriptwriter + Audio timing handoff. Function 06 Renderer has the final isolated visual preview desk.
 
 The Streamlit dashboard is currently a Test desk for independent function testing. Live production is intentionally not present until the full factory exists.
 
@@ -39,8 +39,8 @@ The Visuals test desk has four independent options. Option 1 is the automatic sc
 Function 06 is an isolated final visual preview desk. It uses only generated filler content and a generic local background; it does not call the Topic Fetcher, Scriptwriter, Audio, Visuals, or any AI/API provider.
 
 The final preview uses one canonical style:
-- **Headline:** large, heavy block display face with Anton preferred, single line, dynamically fitted to the safe width, with the existing left-entry animation and moving blue/yellow brand marker.
-- **Subtitles:** large bold sans-serif, word-level timing, white phrase text with dark outline, blue active-word capsule with yellow active text, lower-middle safe placement, no permanent caption box.
+- **Headline:** large Anton block display face, single line, dynamically fitted to the safe width, with the existing left-entry animation and moving blue/yellow brand marker.
+- **Subtitles:** large bold sans-serif, word-level timing, white phrase text with dark outline, yellow active word, lower-middle safe placement, no background capsule.
 - **Branding:** the real `logo.png` in the top-right and a simple source label in the bottom-right.
 - **No decorative borders, lines, dots, glass panels, or extra motion.**
 
