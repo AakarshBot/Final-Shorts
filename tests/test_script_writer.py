@@ -120,7 +120,7 @@ def test_writer_fallback_receives_validation_failure(monkeypatch):
     def fake_request(model, prompt, story):
         prompts.append(prompt)
         if model == "openai/gpt-oss-120b":
-            return valid_result("Shubman Gill faces a fresh injury scare before India starts its ODI campaign.")
+            return valid_result("Shubman Gill faces a fresh injury scare before India starts its first ODI campaign this week.")
         return valid_result()
 
     monkeypatch.setattr("script_writer._request", fake_request)
