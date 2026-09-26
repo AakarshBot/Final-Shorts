@@ -22,77 +22,67 @@ from uploader import upload_video
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
 STAGES = [
-    {"key": "01 · Topic Fetcher", "number": "01", "icon": "🗞️", "label": "Topics", "desc": "Find the story"},
-    {"key": "02 · Scriptwriter", "number": "02", "icon": "✍️", "label": "Script", "desc": "Write the Short"},
-    {"key": "03 · Audio", "number": "03", "icon": "🎙️", "label": "Audio", "desc": "Create voice"},
-    {"key": "04 · Visuals", "number": "04", "icon": "🖼️", "label": "Visuals", "desc": "Source imagery"},
-    {"key": "05 · Subtitles", "number": "05", "icon": "💬", "label": "Subs", "desc": "Build captions"},
-    {"key": "06 · Renderer", "number": "06", "icon": "🎬", "label": "Render", "desc": "Build video"},
-    {"key": "07 · Upload QC", "number": "07", "icon": "🚀", "label": "Upload", "desc": "Publish"},
+    {"key": "01 · Topic Fetcher", "number": "01", "icon": "", "label": "Topics", "desc": "Find the story"},
+    {"key": "02 · Scriptwriter", "number": "02", "icon": "", "label": "Script", "desc": "Write the Short"},
+    {"key": "03 · Audio", "number": "03", "icon": "", "label": "Audio", "desc": "Create voice"},
+    {"key": "04 · Visuals", "number": "04", "icon": "", "label": "Visuals", "desc": "Source imagery"},
+    {"key": "05 · Subtitles", "number": "05", "icon": "", "label": "Subs", "desc": "Build captions"},
+    {"key": "06 · Renderer", "number": "06", "icon": "", "label": "Render", "desc": "Build video"},
+    {"key": "07 · Upload QC", "number": "07", "icon": "", "label": "Upload", "desc": "Publish"},
 ]
-
 st.markdown("""
 <style>
-:root{--bg:#07090d;--panel:#0d1118;--panel-2:#111722;--text:#f5f7fb;--muted:#8791a2;--line:rgba(255,255,255,.095);--line-strong:rgba(255,255,255,.15);--violet:#8b5cf6;--cyan:#22d3ee;--pink:#f43f8a;}
-[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 8% 0%,rgba(139,92,246,.11),transparent 28%),radial-gradient(circle at 92% 12%,rgba(34,211,238,.07),transparent 24%),linear-gradient(180deg,#090b10 0%,var(--bg) 58%,#06080b 100%);color:var(--text);}
-[data-testid="stHeader"]{background:transparent;}
-section[data-testid="stSidebar"]{display:none;}
-footer,#MainMenu{visibility:hidden;}
-.block-container{max-width:1500px;padding:1rem 2rem 3.25rem;}
-h1,h2,h3{letter-spacing:-.04em;}
-button{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;}
-button:hover{transform:translateY(-1px);}
-.card{background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:16px;padding:20px;margin:10px 0;box-shadow:0 18px 48px rgba(0,0,0,.22);}
-.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:7px;background:rgba(255,255,255,.045);border:1px solid var(--line);font-size:.68rem;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:#b8c0cc;}
-.eyebrow{color:#788394;font-size:.67rem;font-weight:900;letter-spacing:.17em;text-transform:uppercase;}
-.hero-title{font-size:clamp(2.6rem,5vw,5rem);line-height:.92;font-weight:950;letter-spacing:-.055em;margin:0;}
-.hero-subtitle{color:#a7afbc;font-size:.98rem;line-height:1.55;max-width:660px;margin-top:.72rem;}
-.st-key-landing-test,.st-key-landing-live{min-height:500px;border-radius:24px;padding:32px;overflow:hidden;position:relative;border:1px solid var(--line-strong);}
-.st-key-landing-test{background:radial-gradient(circle at 78% 12%,rgba(255,255,255,.11),transparent 24%),repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 4px),linear-gradient(145deg,#3e444d,#20252b);box-shadow:inset 0 0 110px rgba(0,0,0,.22),0 26px 64px rgba(0,0,0,.26);}
-.st-key-landing-live{background:radial-gradient(circle at 78% 15%,rgba(255,255,255,.18),transparent 20%),radial-gradient(circle at 16% 86%,rgba(34,211,238,.28),transparent 30%),linear-gradient(135deg,#21122f,#57205f 46%,#123a70);box-shadow:inset 0 0 130px rgba(244,63,138,.14),0 26px 70px rgba(75,42,140,.28);}
-.st-key-landing-test:before,.st-key-landing-live:before{content:"";position:absolute;left:32px;right:32px;top:0;height:2px;background:linear-gradient(90deg,transparent,#fff,transparent);opacity:.35;}
-.st-key-landing-live:before{background:linear-gradient(90deg,#f43f8a,#8b5cf6,#22d3ee);opacity:.95;box-shadow:0 0 24px rgba(139,92,246,.35);}
-.st-key-landing-test button,.st-key-landing-live button{min-height:54px;border-radius:11px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;}
-.st-key-landing-test button{background:rgba(8,10,14,.72);border-color:rgba(255,255,255,.20);}
-.st-key-landing-test button:hover{border-color:rgba(255,255,255,.36);box-shadow:0 12px 28px rgba(0,0,0,.28);}
-.st-key-landing-live button{background:linear-gradient(90deg,rgba(244,63,138,.92),rgba(139,92,246,.94));border-color:rgba(255,255,255,.24);box-shadow:0 10px 30px rgba(108,69,246,.20);}
-.st-key-landing-live button:hover{box-shadow:0 14px 36px rgba(108,69,246,.34);}
-.st-key-stage-shell{background:rgba(10,13,18,.82);border:1px solid var(--line);border-radius:16px;padding:10px 10px 5px;backdrop-filter:blur(18px);box-shadow:0 18px 46px rgba(0,0,0,.20);}
-.st-key-stage-content{background:linear-gradient(145deg,rgba(255,255,255,.038),rgba(255,255,255,.010));border:1px solid var(--line);border-radius:16px;padding:18px 20px 26px;margin-top:12px;box-shadow:0 18px 48px rgba(0,0,0,.18);}
-.st-key-stage-shell button{min-height:46px;border-radius:10px;font-size:.9rem;}
-.stage-rail-label{font-size:.63rem;color:var(--muted);text-align:center;letter-spacing:.12em;text-transform:uppercase;margin-top:5px;}
-.stage-rail-line{height:1px;background:linear-gradient(90deg,rgba(255,255,255,.13),rgba(255,255,255,.025));margin:0 8%;}
-.live-glow{height:3px;border-radius:999px;background:linear-gradient(90deg,#f43f8a,#8b5cf6,#22d3ee);box-shadow:0 0 24px rgba(139,92,246,.32);}
-.live-card{min-height:138px;border-radius:14px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.012));padding:18px;box-shadow:0 14px 34px rgba(0,0,0,.14);}
-.live-card:hover{border-color:rgba(139,92,246,.24);box-shadow:0 18px 42px rgba(0,0,0,.20);}
-.muted{color:var(--muted);}
-.section-head{display:flex;align-items:end;justify-content:space-between;margin:.35rem 0 1rem;}
-.section-title{font-size:1.42rem;font-weight:950;letter-spacing:-.035em;}
-.section-count{font-size:.68rem;color:#707b8b;letter-spacing:.13em;text-transform:uppercase;}
-.topic-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
-.topic-rank{font-size:.66rem;color:#798494;font-weight:900;letter-spacing:.14em;text-transform:uppercase;}
-.topic-rating{font-size:1.02rem;letter-spacing:.10em;color:#ffd35f;text-shadow:0 0 16px rgba(255,211,95,.13);}
-.topic-title{font-size:1.34rem;line-height:1.08;font-weight:950;letter-spacing:-.032em;margin:.12rem 0 .8rem;min-height:2.2em;}
-.topic-meta{font-size:.70rem;color:#7f8a9a;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.topic-selected{display:inline-flex;padding:4px 8px;border-radius:6px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);color:#71e8f7;font-size:.58rem;font-weight:950;letter-spacing:.13em;text-transform:uppercase;margin-bottom:9px;}
-div[class*="st-key-topic-card-"]{background:linear-gradient(145deg,rgba(255,255,255,.050),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px;min-height:178px;box-shadow:0 14px 40px rgba(0,0,0,.17);position:relative;overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
-div[class*="st-key-topic-card-"]:before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#f43f8a,#8b5cf6,#22d3ee);opacity:.28;}
-div[class*="st-key-topic-card-"]:hover{transform:translateY(-2px);border-color:rgba(139,92,246,.30);box-shadow:0 20px 48px rgba(0,0,0,.23);}
-div[class*="st-key-topic-card-"] button{border-radius:9px;font-weight:850;}
-div[class*="st-key-selected-story-"]{background:linear-gradient(145deg,rgba(34,211,238,.075),rgba(139,92,246,.025));border:1px solid rgba(34,211,238,.20);border-radius:14px;padding:18px 20px;box-shadow:0 18px 48px rgba(0,0,0,.18);}
-div[class*="st-key-visual-card-"]{background:linear-gradient(145deg,rgba(255,255,255,.048),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 14px 38px rgba(0,0,0,.18);overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
-div[class*="st-key-visual-card-"]:hover{transform:translateY(-2px);border-color:rgba(139,92,246,.32);box-shadow:0 20px 44px rgba(0,0,0,.23);}
-div[class*="st-key-visual-card-"] img{border-radius:9px;}
-div[class*="st-key-live-choice-"]{min-height:300px;border-radius:24px;padding:30px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.15);background:radial-gradient(circle at 80% 15%,rgba(255,255,255,.16),transparent 22%),linear-gradient(135deg,#21122f,#57205f 46%,#123a70);box-shadow:inset 0 0 120px rgba(244,63,138,.10),0 26px 64px rgba(0,0,0,.22);}
-div[class*="st-key-live-cricket-"]{min-height:220px;background:radial-gradient(circle at 80% 15%,rgba(255,255,255,.10),transparent 22%),linear-gradient(145deg,#1b2030,#2b1747 54%,#173b62);}
-div[class*="st-key-live-slide-"]{min-height:370px;border-radius:14px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.012));padding:12px;box-shadow:0 14px 34px rgba(0,0,0,.15);}
-
-.visual-source{font-size:.66rem;font-weight:850;color:#aab3c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.visual-detail{font-size:.62rem;color:#707b89;line-height:1.35;}
-.visual-crop-label{font-size:.58rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#8eeaf7;margin:.55rem 0 .3rem;}
-.crop-dialog-kicker{font-size:.68rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#8894a6;}
-.crop-dialog-title{font-size:1.45rem;font-weight:950;letter-spacing:-.035em;margin-top:.15rem;}
-@media (max-width: 900px){.block-container{padding-left:1rem;padding-right:1rem}.st-key-landing-test,.st-key-landing-live{min-height:420px;padding:24px}.hero-title{font-size:3rem}.topic-title{font-size:1.15rem}}
+:root{--bg:#f5f1e9;--surface:#fffdfa;--surface-2:#f1ece3;--ink:#211e1a;--muted:#756f65;--soft:#9a9388;--line:#e2dbd0;--line-strong:#d4ccbf;--accent:#b75a36;--accent-dark:#8f4226;--sage:#617565;--sage-soft:#e7eee8;--shadow:0 16px 44px rgba(52,43,34,.075);}
+html,body,.stApp{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);}
+[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 8% 0%,rgba(183,90,54,.075),transparent 27%),radial-gradient(circle at 94% 8%,rgba(97,117,101,.065),transparent 23%),linear-gradient(180deg,#f8f5ef 0%,var(--bg) 100%);}
+[data-testid="stHeader"]{background:transparent;} section[data-testid="stSidebar"]{display:none;} footer,#MainMenu{visibility:hidden;}
+.block-container{max-width:1440px;padding:1.35rem 2rem 4rem;} h1,h2,h3,h4{color:var(--ink);letter-spacing:-.045em;} p,li{line-height:1.55;}
+button{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease,background .16s ease;} button:hover{transform:translateY(-1px);}
+[data-testid="stButton"]>button,[data-testid="stFormSubmitButton"]>button,[data-testid="stDownloadButton"]>button{min-height:44px;border-radius:11px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-weight:760;box-shadow:0 4px 14px rgba(52,43,34,.045);}
+[data-testid="stButton"]>button:hover,[data-testid="stFormSubmitButton"]>button:hover{border-color:#c8beb0;box-shadow:0 9px 22px rgba(52,43,34,.075);}
+[data-testid="stButton"]>button[kind="primary"],[data-testid="stFormSubmitButton"]>button[kind="primary"]{background:var(--ink);color:#fffdfa;border-color:var(--ink);box-shadow:0 10px 24px rgba(33,30,26,.13);}
+[data-testid="stButton"]>button[kind="primary"]:hover,[data-testid="stFormSubmitButton"]>button[kind="primary"]:hover{background:#35302a;border-color:#35302a;}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stFileUploaderDropzone"]{background:rgba(255,253,250,.86)!important;border:1px solid var(--line-strong)!important;border-radius:11px!important;color:var(--ink)!important;}
+[data-testid="stTextInput"] input:focus,[data-testid="stTextArea"] textarea:focus{border-color:var(--accent)!important;box-shadow:0 0 0 1px var(--accent)!important;}
+[data-testid="stCaptionContainer"],.stCaption{color:var(--muted);} [data-testid="stAlert"]{border-radius:12px;}
+[data-testid="stExpander"]{background:rgba(255,253,250,.92);border:1px solid var(--line);border-radius:15px;box-shadow:0 8px 26px rgba(52,43,34,.045);overflow:hidden;}
+[data-testid="stExpander"] summary{padding:.85rem 1rem;color:var(--ink);} [data-testid="stExpander"] details{border:0!important;}
+[data-testid="stPills"] button{background:rgba(255,253,250,.74)!important;border:1px solid var(--line)!important;border-radius:999px!important;color:var(--muted)!important;}
+[data-testid="stPills"] button[aria-pressed="true"]{background:var(--ink)!important;border-color:var(--ink)!important;color:#fffdfa!important;}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:.64rem;font-weight:850;letter-spacing:.10em;text-transform:uppercase;color:var(--muted);}
+.eyebrow,.home-kicker{color:var(--soft);font-size:.64rem;font-weight:850;letter-spacing:.17em;text-transform:uppercase;} .home-kicker{color:var(--accent-dark);}
+.hero-title{font-size:clamp(2.65rem,5.1vw,5rem);line-height:.94;font-weight:900;letter-spacing:-.062em;margin:.15rem 0 0;max-width:940px;}
+.hero-subtitle{color:var(--muted);font-size:1rem;line-height:1.55;max-width:720px;margin-top:.72rem;}
+.home-note{display:flex;align-items:center;gap:.55rem;margin-top:1rem;color:var(--muted);font-size:.78rem;} .home-note-dot{width:7px;height:7px;border-radius:50%;background:var(--sage);}
+.st-key-landing-test,.st-key-landing-live{min-height:420px;border-radius:24px;padding:30px;overflow:hidden;position:relative;border:1px solid var(--line);box-shadow:var(--shadow);}
+.st-key-landing-test{background:linear-gradient(135deg,rgba(255,255,255,.98),rgba(244,239,231,.95));}
+.st-key-landing-live{background:radial-gradient(circle at 86% 8%,rgba(183,90,54,.11),transparent 22%),linear-gradient(135deg,#fffdfa 0%,#f7eee8 100%);}
+.st-key-landing-test:before,.st-key-landing-live:before{content:"";position:absolute;left:30px;right:30px;top:0;height:3px;border-radius:999px;background:var(--ink);opacity:.9;} .st-key-landing-live:before{background:var(--accent);}
+.st-key-landing-test button,.st-key-landing-live button{min-height:52px;border-radius:11px;}
+.st-key-stage-shell{position:sticky;top:.65rem;z-index:30;background:rgba(255,253,250,.92);border:1px solid var(--line);border-radius:15px;padding:8px;backdrop-filter:blur(14px);box-shadow:0 12px 30px rgba(52,43,34,.07);}
+.st-key-stage-content{background:rgba(255,253,250,.7);border:1px solid var(--line);border-radius:17px;padding:20px 22px 28px;margin-top:12px;box-shadow:var(--shadow);}
+.st-key-stage-shell [data-testid="stButton"]>button{min-height:40px;border-radius:9px;font-size:.8rem;font-weight:850;} .st-key-stage-shell [data-testid="stButton"]>button[kind="primary"]{background:var(--ink);}
+.stage-rail-label{font-size:.60rem;color:var(--soft);text-align:center;letter-spacing:.11em;text-transform:uppercase;margin-top:4px;} .stage-rail-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-strong),transparent);margin:0 8% 4px;}
+.live-glow{height:3px;border-radius:999px;background:var(--accent);box-shadow:0 3px 12px rgba(183,90,54,.2);}
+.live-card{min-height:124px;border-radius:15px;border:1px solid var(--line);background:var(--surface);padding:18px;box-shadow:0 10px 30px rgba(52,43,34,.055);}
+.live-card:hover{border-color:#cdc3b6;box-shadow:0 15px 34px rgba(52,43,34,.075);}
+.muted{color:var(--muted);} .section-head{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin:.3rem 0 .95rem;} .section-title{font-size:1.38rem;font-weight:900;letter-spacing:-.038em;} .section-count{font-size:.63rem;color:var(--soft);letter-spacing:.12em;text-transform:uppercase;}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:18px 20px;margin:10px 0;box-shadow:0 10px 28px rgba(52,43,34,.05);}
+.topic-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;} .topic-rank{font-size:.60rem;color:var(--soft);font-weight:850;letter-spacing:.13em;text-transform:uppercase;} .topic-rating{display:none;}
+.topic-selected{display:inline-flex;padding:4px 8px;border-radius:999px;background:var(--sage-soft);border:1px solid #d4e1d5;color:var(--sage);font-size:.57rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:9px;}
+.topic-title{font-size:1.18rem;line-height:1.18;font-weight:860;letter-spacing:-.027em;margin:.12rem 0 .7rem;} .topic-meta{font-size:.69rem;color:var(--muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+div[class*="st-key-topic-card-"]{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:16px 16px 14px;min-height:168px;box-shadow:0 10px 28px rgba(52,43,34,.05);position:relative;overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
+div[class*="st-key-topic-card-"]:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.2;} div[class*="st-key-topic-card-"]:hover{transform:translateY(-1px);border-color:#cfc5b8;box-shadow:0 16px 34px rgba(52,43,34,.075);} div[class*="st-key-topic-card-"] button{border-radius:9px;}
+div[class*="st-key-selected-story-"]{background:linear-gradient(135deg,#fffdfa,#f4eee7);border:1px solid #dfd0c5;border-radius:15px;padding:18px 20px;box-shadow:0 12px 32px rgba(52,43,34,.055);}
+div[class*="st-key-visual-card-"],div[class*="st-key-live-visual-card-"]{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:9px;box-shadow:0 9px 26px rgba(52,43,34,.05);overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
+div[class*="st-key-visual-card-"]:hover,div[class*="st-key-live-visual-card-"]:hover{transform:translateY(-1px);border-color:#cfc5b8;box-shadow:0 14px 30px rgba(52,43,34,.075);} div[class*="st-key-visual-card-"] img,div[class*="st-key-live-visual-card-"] img{border-radius:9px;}
+.visual-source{font-size:.64rem;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;} .visual-detail{font-size:.60rem;color:var(--muted);line-height:1.35;}
+.visual-crop-label{font-size:.55rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-dark);margin:.5rem 0 .25rem;} .crop-dialog-kicker{font-size:.65rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);} .crop-dialog-title{font-size:1.42rem;font-weight:900;letter-spacing:-.034em;margin-top:.15rem;}
+div[class*="st-key-live-choice-"]{min-height:280px;border-radius:20px;padding:28px;overflow:hidden;position:relative;border:1px solid var(--line);background:linear-gradient(135deg,#fffdfa,#f6eee8);box-shadow:var(--shadow);}
+div[class*="st-key-live-cricket-"]{min-height:200px;background:linear-gradient(145deg,#fffdfa,#f2eee6);}
+div[class*="st-key-live-slide-"]{min-height:370px;border-radius:13px;border:1px solid var(--line);background:var(--surface);padding:11px;box-shadow:0 10px 28px rgba(52,43,34,.05);} div[class*="st-key-live-slide-"] img{border-radius:9px;}
+[data-testid="stMetric"]{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:8px 12px;} .stProgress > div > div{background:var(--accent);}
+@media (max-width:900px){.block-container{padding-left:1rem;padding-right:1rem;}.st-key-landing-test,.st-key-landing-live{min-height:360px;padding:24px;}.hero-title{font-size:3rem;}.topic-title{font-size:1.05rem;}.st-key-stage-shell{position:static;}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -362,32 +352,45 @@ def _render_visual_asset_grid(assets: list[dict], result_key: str):
 
 
 def _render_home():
-    st.markdown('<div class="eyebrow">FINAL SHORTS · CONTROL CENTER</div>',unsafe_allow_html=True)
-    st.markdown('<div class="hero-title">Make the next Short.</div>',unsafe_allow_html=True)
-    st.markdown('<div class="hero-subtitle">Choose your workspace. Test is the build lab; Live is the production control room.</div>',unsafe_allow_html=True)
+    st.markdown('<div class="home-kicker">FINAL SHORTS · NEWSROOM</div>', unsafe_allow_html=True)
+    st.markdown('<div class="hero-title">From story to Short.</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="hero-subtitle">A focused workspace for finding the story, shaping the script and shipping the finished Short — without getting in the way.</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        '<div class="home-note"><span class="home-note-dot"></span><span>Test is the build lab. Live is the production room.</span></div>',
+        unsafe_allow_html=True,
+    )
     st.space("medium")
-    left,right=st.columns(2,gap="small")
+    left, right = st.columns(2, gap="medium")
     with left:
         with st.container(key="landing-test"):
-            st.markdown('<div class="eyebrow">01 · BUILD LAB</div>',unsafe_allow_html=True)
-            st.markdown('<div style="font-size:3.1rem;font-weight:900;letter-spacing:-.05em;">TEST</div>',unsafe_allow_html=True)
-            st.markdown('<div style="font-size:1.05rem;color:#d6d9df;max-width:430px;">Inspect every stage, test handoffs, and tune the factory without touching production.</div>',unsafe_allow_html=True)
-            st.space("large")
-            st.markdown('<span class="badge">7 stages</span> <span class="badge">manual review</span>',unsafe_allow_html=True)
-            st.space("large")
-            if st.button("Open Test Lab  →",key="open-test",width="stretch"):
-                st.session_state.app_mode="test"
+            st.markdown('<div class="eyebrow">01 · BUILD LAB</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">TEST</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:1rem;color:#756f65;max-width:480px;">Inspect each production stage, test handoffs and tune the factory without touching a live upload.</div>',
+                unsafe_allow_html=True,
+            )
+            st.space("medium")
+            st.markdown('<span class="badge">7 stages</span> <span class="badge">manual review</span>', unsafe_allow_html=True)
+            st.space("medium")
+            if st.button("Open Test Lab  →", key="open-test", width="stretch"):
+                st.session_state.app_mode = "test"
                 st.rerun()
     with right:
         with st.container(key="landing-live"):
-            st.markdown('<div class="eyebrow">02 · PRODUCTION</div>',unsafe_allow_html=True)
-            st.markdown('<div style="font-size:3.1rem;font-weight:900;letter-spacing:-.05em;">LIVE</div>',unsafe_allow_html=True)
-            st.markdown('<div style="font-size:1.05rem;color:#f1eaf8;max-width:430px;">One clean control room for the real Shorts pipeline, from story selection through upload.</div>',unsafe_allow_html=True)
-            st.space("large")
-            st.markdown('<span class="badge">production</span> <span class="badge">public / private</span>',unsafe_allow_html=True)
-            st.space("large")
-            if st.button("Open Live Control Room  →",key="open-live",width="stretch"):
-                st.session_state.app_mode="live"
+            st.markdown('<div class="eyebrow">02 · PRODUCTION</div>', unsafe_allow_html=True)
+            st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">LIVE</div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:1rem;color:#756f65;max-width:480px;">The production room for selecting a story, approving the handoffs and publishing the finished Short.</div>',
+                unsafe_allow_html=True,
+            )
+            st.space("medium")
+            st.markdown('<span class="badge">production</span> <span class="badge">public / private</span>', unsafe_allow_html=True)
+            st.space("medium")
+            if st.button("Open Live Control Room  →", key="open-live", width="stretch"):
+                st.session_state.app_mode = "live"
                 st.rerun()
 
 def _stage_status(stage_key:str)->tuple[str,str]:
@@ -403,24 +406,27 @@ def _stage_status(stage_key:str)->tuple[str,str]:
     return ("ready",checks.get(stage_key,"Waiting"))
 
 def _render_test_nav():
-    home_col,title_col,status_col=st.columns([.18,1,.38],gap="medium")
+    home_col, title_col, status_col = st.columns([.14, 1, .28], gap="medium")
     with home_col:
-        if st.button("← Home",key="test-home",width="stretch"):
-            st.session_state.app_mode="home"
+        if st.button("←", key="test-home", width="stretch", help="Back to home"):
+            st.session_state.app_mode = "home"
             st.rerun()
     with title_col:
-        st.markdown('<div class="eyebrow">BUILD LAB</div>',unsafe_allow_html=True)
-        st.markdown('<h1 style="margin:0;">TEST</h1>',unsafe_allow_html=True)
+        st.markdown('<div class="eyebrow">BUILD LAB</div>', unsafe_allow_html=True)
+        st.markdown('<h1 style="margin:0;">Test workspace</h1>', unsafe_allow_html=True)
     with status_col:
-        completed=sum(_stage_status(stage["key"])[1]!="Waiting" for stage in STAGES)
-        st.markdown(f'<div style="text-align:right;"><span class="badge">{completed} / 7 active</span></div>',unsafe_allow_html=True)
+        completed = sum(_stage_status(stage["key"])[1] != "Waiting" for stage in STAGES)
+        st.markdown(
+            f'<div style="text-align:right;padding-top:9px;"><span class="badge">{completed} / 7 stages active</span></div>',
+            unsafe_allow_html=True,
+        )
     st.space("small")
     with st.container(key="stage-shell"):
-        nav_cols=st.columns(7,gap="small")
-        for col,stage_info in zip(nav_cols,STAGES):
+        nav_cols = st.columns(7, gap="small")
+        for col, stage_info in zip(nav_cols, STAGES):
             with col:
-                active=st.session_state.test_stage==stage_info["key"]
-                clicked=st.button(
+                active = st.session_state.test_stage == stage_info["key"]
+                clicked = st.button(
                     f'{stage_info["icon"]} {stage_info["number"]}',
                     key=f'stage-nav-{stage_info["number"]}',
                     type="primary" if active else "secondary",
@@ -428,13 +434,13 @@ def _render_test_nav():
                     help=f'{stage_info["label"]} · {stage_info["desc"]}',
                 )
                 st.markdown(
-                    f'<div class="stage-rail-label" style="color:{"#f6f7fb" if active else "#7d8694"};">{stage_info["label"]}</div>',
+                    f'<div class="stage-rail-label" style="color:{"#211e1a" if active else "#9a9388"};">{stage_info["label"]}</div>',
                     unsafe_allow_html=True,
                 )
                 if clicked:
-                    st.session_state.test_stage=stage_info["key"]
+                    st.session_state.test_stage = stage_info["key"]
                     st.rerun()
-    st.markdown('<div class="stage-rail-line"></div>',unsafe_allow_html=True)
+    st.markdown('<div class="stage-rail-line"></div>', unsafe_allow_html=True)
 
 def _live_story_key(topic) -> str:
     return hashlib.sha1(
@@ -1432,12 +1438,11 @@ def render_live_dashboard():
                 enumerate(topics[start:start + 2], start=start),
             ):
                 with col:
-                    rating = max(1, min(5, round(float(topic.score or 0.0) / 8.0 * 5.0)))
-                    stars = "★" * rating + "☆" * (5 - rating)
                     with st.container(key=f"live-topic-{index}"):
                         st.markdown(
-                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span><span class="topic-rating">{stars}</span></div>'
-                            f'<div class="topic-title">{topic.title}</div>',
+                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
+                            f'<div class="topic-title">{topic.title}</div>'
+                            f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',
                             unsafe_allow_html=True,
                         )
                         if st.button("Select story →", width="stretch", key=f"live-select-story-{index}"):
@@ -1616,14 +1621,6 @@ def render_topic_fetcher():
             enumerate(topics[start:start + 2], start=start),
         ):
             with col:
-                rating = max(
-                    1,
-                    min(
-                        5,
-                        round(float(topic.score or 0.0) / 8.0 * 5.0),
-                    ),
-                )
-                stars = "★" * rating + "☆" * (5 - rating)
                 source = topic.source or "Sports desk"
                 published = topic.published_at.strftime("%d %b · %H:%M UTC")
                 with st.container(key=f"topic-card-{index}"):
@@ -1633,7 +1630,6 @@ def render_topic_fetcher():
                         f'''
                         <div class="topic-top">
                             <span class="topic-rank">STORY {index + 1:02d}</span>
-                            <span class="topic-rating" title="{rating}/5">{stars}</span>
                         </div>
                         <div class="topic-title">{topic.title}</div>
                         <div class="topic-meta">{source} · {published}</div>
