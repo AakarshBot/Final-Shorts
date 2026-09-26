@@ -643,9 +643,9 @@ def _dedupe(assets):
     for asset in sorted(
         assets,
         key=lambda item: (
+            0 if item.get("original_story") else 1,
             -float(item.get("score") or 0),
             -int(item.get("action_score") or 0),
-            0 if item.get("original_story") else 1,
         ),
     ):
         digest = _clean(asset.get("hash"), 120)
@@ -719,6 +719,34 @@ def crawl_visuals(story, manual_query=""):
             assets.append(asset)
 
     selected = _dedupe(assets)
+
+    if len(selected) < SUCCESS and entity and not manual_query:
+        fallback_pages = _collect_related_pages(
+            [f"{entity} profile", f"{entity} cricket action"],
+            original_url,
+        )
+        fallback_requests = [
+            {
+                "url": page["url"],
+                "title": page.get("title", ""),
+                "publisher": page.get("source", ""),
+                "published_at": page.get("published_at", ""),
+                "query": page.get("query", ""),
+                "entity": entity,
+            }
+            for page in fallback_pages
+        ]
+        if fallback_requests:
+            fallback_results = _crawl_pages(fallback_requests)
+            for request, result in zip(fallback_requests, fallback_results):
+                for asset in result.get("assets") or []:
+                    asset["article_title"] = asset.get("article_title") or request["title"]
+                    asset["source_page_url"] = asset.get("source_page_url") or request["url"]
+                    asset["publisher"] = asset.get("publisher") or request["publisher"]
+                    asset["query"] = asset.get("query") or request["query"]
+                    assets.append(asset)
+            selected = _dedupe(assets)
+
     return {
         "assets": selected,
         "target": TARGET,
