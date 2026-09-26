@@ -109,8 +109,7 @@ def render_topic_fetcher():
                 st.session_state.approved_audio = None
                 st.session_state.visual_result = None
                 st.session_state.visual_loaded_story = None
-                st.session_state.visual_manual_query = ""
-
+        
     if st.session_state.selected_topic is not None:
         index = st.session_state.selected_topic
         if index < len(st.session_state.topics):
