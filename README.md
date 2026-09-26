@@ -4,13 +4,16 @@ A simple, free-tier YouTube Shorts factory built one independently testable func
 
 ## Current
 
-Functions 01–04 are implemented and accepted:
+Functions 01–07 are implemented and accepted:
 - **01 — Topic Fetching**
 - **02 — Scriptwriter**
 - **03 — Audio**
 - **04 — Visuals Phase 1 + Phase 2**
+- **05 — Subtitles**
+- **06 — Renderer**
+- **07 — YouTube Upload QC**
 
-Visuals Phase 1 and Phase 2 are complete. Function 05 Subtitles is the direct Scriptwriter + Audio timing handoff. Function 06 Renderer has the final isolated visual preview desk. Function 07 is the manual YouTube Upload QC lane.
+The Scriptwriter now supplies the opening heading, three title candidates, description, hashtags and public-upload comment in the same generation call. Function 06 hands the approved heading into the renderer. Function 07 provides the final human metadata/video QC and Public or Private upload lane.
 
 The Streamlit dashboard keeps the upload decision human-controlled: review the rendered video and metadata once, approve the QC, then choose Public or Private.
 
