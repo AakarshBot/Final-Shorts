@@ -195,7 +195,14 @@ def render_scriptwriter():
 
     st.divider()
     st.subheader("Script review")
-    st.caption("Edit any scene you want. The three generated titles are stored for the later title-selection step and are not shown here.")
+    st.caption("Edit the headline or any narration scene. Titles, description and hashtags are stored for later upload QC.")
+
+    edited_headline = st.text_input(
+        "Opening heading (3–4 words)",
+        value=script.get("headline", ""),
+        max_chars=48,
+        key="script-headline",
+    )
 
     edited_voiceovers = []
     for index, scene in enumerate(script.get("script", []), 1):
@@ -210,7 +217,11 @@ def render_scriptwriter():
 
     if st.button("Approve script", type="primary", use_container_width=True):
         try:
-            approved = apply_script_edits(script, edited_voiceovers)
+            approved = apply_script_edits(
+                script,
+                edited_voiceovers,
+                headline=edited_headline,
+            )
             st.session_state.approved_script = approved
             st.session_state.audio_data = None
             st.session_state.approved_audio = None
@@ -572,22 +583,18 @@ def render_subtitles():
 
 def render_renderer_test():
     st.header("06 · Renderer")
-    st.caption("Final visual preview · fixed filler content · no factory inputs")
+    approved_script = st.session_state.get("approved_script")
+    headline_text = (
+        str(approved_script.get("headline") or "").strip()
+        if isinstance(approved_script, dict)
+        else ""
+    ) or HEADLINE_TEXT
+    headline_enabled = True
 
-    headline_mode = st.radio(
-        "Opening headline",
-        ["On", "Off"],
-        horizontal=True,
-        key="renderer_headline_mode",
+    st.caption(
+        "Uses the approved Scriptwriter heading when available; otherwise uses the renderer test fallback."
     )
-    headline_enabled = headline_mode == "On"
-
-    headline_text = st.text_input(
-        "Headline",
-        value=HEADLINE_TEXT,
-        max_chars=48,
-        key="renderer_headline_text",
-    )
+    st.code(headline_text, language="text")
 
     st.caption(
         f"{FINAL_STYLE_NAME} · Oswald Bold block headline · clean word-highlight captions"
