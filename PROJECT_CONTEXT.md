@@ -225,7 +225,7 @@ Important:
 
 ## Current development target — Dashboard UI enhancement
 
-Dashboard UI v1 is implemented in `app.py` and does not alter the factory function implementations.
+Dashboard UI v2 is implemented in `app.py` and does not alter the factory function implementations.
 
 Current UI direction:
 - Landing screen is split into a grey textured **TEST** build-lab panel and a vibrant textured **LIVE** production panel.
@@ -236,7 +236,9 @@ Current UI direction:
 - Topic desk, Scriptwriter language, Visual mode, Audio language, and Upload title selection use pill/button-style controls.
 - Story selection is inherited from the selected Topic Fetcher story rather than repeated in downstream stages.
 - Live has a production control-room visual surface using existing session-state status only; it does not duplicate or alter the completed factory functions.
-- The dashboard uses responsive columns, bordered containers, cards, textured backgrounds, safe spacing, and a restrained dark control-room visual system.
+- The dashboard uses responsive columns, bordered containers, textured backgrounds, safe spacing, and a restrained dark control-room visual system.
+- Topic selection is a two-column card grid showing the headline, current five-star visual rating derived from the existing Topic Fetcher score, source/time metadata, short description, and direct Select story action.
+- Selected topics receive a visible selected-state treatment.
 
 The next dashboard iteration should refine the visual design and production-facing layout further without reopening completed functions or adding new factory logic.
 
