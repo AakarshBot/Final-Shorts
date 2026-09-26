@@ -135,7 +135,7 @@ Function 04 — Visuals Phase 2 is implemented:
 - Responsive image attributes, JSON-LD images, article metadata and page publication dates are handled.
 - Images are filtered for decodeability, minimum dimensions, obvious non-photo assets and duplicates.
 - The target pool is 15 images with 10 treated as ready for the next human-review step.
-- A manual keyword/phrase/query reruns the crawler with the original story URL plus only that manual query.
+- Option 2 is a standalone manual crawler. A name-only query searches normally; a contextual query is expanded by one lightweight AI query-planning call and searches older publisher pages as well.
 - The Test dashboard shows the automatic queries used and exposes crawler diagnostics.
 - No AI visual-verification call is used in Phase 1; human review remains the final image-selection gate.
 - Visuals uses only free services. DDGS is a discovery dependency; Playwright/Chromium is the browser scraper.
