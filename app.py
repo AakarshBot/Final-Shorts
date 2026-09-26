@@ -926,6 +926,7 @@ def _render_live_visuals(slide_count: int):
                             assigned,
                             output_path=output,
                             headline_text=st.session_state.live_approved_script.get("headline", ""),
+                            headline_enabled=st.session_state.live_headline_enabled,
                             source_label=story.source or "SPORTS DESK",
                         )
                     st.session_state.live_rendered_video_path = str(output)
