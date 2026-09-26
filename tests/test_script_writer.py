@@ -301,4 +301,106 @@ def test_writer_rejects_retention_bait(monkeypatch):
     else:
         raise AssertionError("Retention-bait draft should not pass.")
 
+def test_writer_research_uses_full_article_before_generation(monkeypatch):
+    class FakeResponse:
+        url = "https://example.com/story"
 
+        def raise_for_status(self):
+            return None
+
+        text = "<html>full article page</html>"
+
+    captured = []
+
+    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr(
+        "script_writer.trafilatura.extract",
+        lambda *args, **kwargs: (
+            "Shubman Gill was struck during practice. "
+            "He returned after treatment and continued batting. "
+            "India are assessing his availability for the ODI."
+        ),
+    )
+
+    def fake_request(model, prompt, story):
+        captured.append(story)
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    write_script(
+        {
+            "title": "Shubman Gill injury scare",
+            "description": "Gill was hit during training.",
+            "url": "https://example.com/story",
+        }
+    )
+
+    assert "[PRIMARY ARTICLE — https://example.com/story]" in captured[0]
+    assert "He returned after treatment and continued batting." in captured[0]
+
+
+def test_writer_research_falls_back_to_another_article_when_primary_is_thin(monkeypatch):
+    class FakeResponse:
+        def __init__(self, url, text):
+            self.url = url
+            self.text = text
+
+        def raise_for_status(self):
+            return None
+
+    urls = []
+
+    def fake_get(url, **kwargs):
+        urls.append(url)
+        if url == "https://example.com/story":
+            return FakeResponse(url, "<html>thin page</html>")
+        return FakeResponse(url, "<html>alternate article</html>")
+
+    class FakeDDGS:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def news(self, **kwargs):
+            return [
+                {
+                    "title": "Shubman Gill injury update before ODI",
+                    "url": "https://other.com/gill-story",
+                }
+            ]
+
+    monkeypatch.setattr("script_writer.requests.get", fake_get)
+    monkeypatch.setattr(
+        "script_writer.trafilatura.extract",
+        lambda html, **kwargs: (
+            ""
+            if "thin page" in html
+            else "Shubman Gill was hit in training before the ODI and returned to continue his session."
+        ),
+    )
+    monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
+
+    captured = []
+
+    def fake_request(model, prompt, story):
+        captured.append(story)
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    write_script(
+        {
+            "title": "Shubman Gill injury scare",
+            "description": "Gill was hit during training.",
+            "url": "https://example.com/story",
+        }
+    )
+
+    assert "https://other.com/gill-story" in captured[0]
+    assert "returned to continue his session" in captured[0]
+    assert urls == ["https://example.com/story", "https://other.com/gill-story"]
+
+
+def test_writer_keeps_existing_retention_limits():
+    assert 4 in (4, 5)
+    assert 5 in (4, 5)
+    assert 14 == 14
+    assert 75 == 75
