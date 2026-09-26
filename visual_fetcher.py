@@ -319,6 +319,7 @@ def _browser_script():
           src: img.getAttribute('src') || '',
           srcset: img.getAttribute('srcset') || '',
           dataSrc: img.getAttribute('data-src') || '',
+          dataLazySrc: img.getAttribute('data-lazy-src') || '',
           dataOriginal: img.getAttribute('data-original') || '',
           alt: img.getAttribute('alt') || '',
           title: img.getAttribute('title') || '',
@@ -329,12 +330,23 @@ def _browser_script():
           context: context.slice(0, 1600)
         };
       });
+      const linkImages = Array.from(document.querySelectorAll('link[rel~="image_src"], link[rel~="preload"][as="image"]'))
+        .map(el => el.getAttribute('href') || '').filter(Boolean);
+      const backgrounds = Array.from(document.querySelectorAll('article [style], main [style]')).map(el => {
+        const match = (getComputedStyle(el).backgroundImage || '').match(/url\(["']?(.*?)["']?\)/);
+        return match ? match[1] : '';
+      }).filter(Boolean);
+      const noscripts = Array.from(document.querySelectorAll('noscript'))
+        .map(el => el.textContent || el.innerHTML || '').filter(Boolean).slice(0, 12);
       const jsonLd = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
         .map(el => el.textContent || '').filter(Boolean).slice(0, 12);
       return {
         title: document.querySelector('meta[property="og:title"]')?.content || document.title || '',
         meta,
         images,
+        linkImages,
+        backgrounds,
+        noscripts,
         jsonLd,
         finalUrl: location.href
       };
@@ -418,7 +430,22 @@ async def _browser_page(context, request):
             for url in _walk_images(value):
                 add(url, "json-ld:image")
 
-        for image in data.get("images") or []:
+        for url in data.get("linkImages") or []:
+        add(url, "link:image")
+
+    for url in data.get("backgrounds") or []:
+        add(url, "background-image", {"in_article": True})
+
+    for markup in data.get("noscripts") or []:
+        for match in re.finditer(
+            r'<(?:img|source)\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\s*=\s*["']([^"']+)["']',
+            markup,
+            re.IGNORECASE,
+        ):
+            for url in _extract_srcset(match.group(1)):
+                add(url, "noscript:image", {"in_article": True})
+
+    for image in data.get("images") or []:
             payload = {
                 "alt": image.get("alt"),
                 "title": image.get("title"),
@@ -432,6 +459,7 @@ async def _browser_page(context, request):
                 ("currentSrc", "currentSrc"),
                 ("src", "article-img" if image.get("inArticle") else "img"),
                 ("dataSrc", "lazy-src"),
+                ("dataLazySrc", "lazy-lazy-src"),
                 ("dataOriginal", "lazy-original"),
             ):
                 if image.get(key):
