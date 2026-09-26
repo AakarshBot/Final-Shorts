@@ -237,10 +237,14 @@ Current UI direction:
 - Story selection is inherited from the selected Topic Fetcher story rather than repeated in downstream stages.
 - Live has a production control-room visual surface using existing session-state status only; it does not duplicate or alter the completed factory functions.
 - The dashboard uses responsive columns, bordered containers, textured backgrounds, safe spacing, and a restrained dark control-room visual system.
-- Topic selection is a two-column card grid showing the headline, current five-star visual rating derived from the existing Topic Fetcher score, source/time metadata, short description, and direct Select story action.
+- Topic selection is a two-column card grid showing the headline, current five-star visual rating derived from the existing Topic Fetcher score, compact source/time metadata, and direct Select story action.
 - Selected topics receive a visible selected-state treatment.
+- Dashboard UI v3 adds a dedicated dark theme config, sharper keyed-card hover states, lighter visual hierarchy, and a compact media-board layout.
+- Visual review cards downsample only the dashboard preview; original image bytes remain available for cropping.
+- Media review now uses the MIT-licensed Streamlit Cropper component inside a native Streamlit dialog. The crop is free-size, the original asset is untouched, and the saved result is only a persistent dashboard preview.
+- No completed factory function contract was changed for the dashboard/UI work.
 
-The next dashboard iteration should refine the visual design and production-facing layout further without reopening completed functions or adding new factory logic.
+The next dashboard iteration should refine production-facing layout further without reopening completed functions or adding new factory logic.
 
 Do not reopen completed functions unless the UI work exposes a concrete integration regression.
 
