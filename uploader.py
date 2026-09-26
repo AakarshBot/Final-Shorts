@@ -6,6 +6,7 @@ from pathlib import Path
 import re
 from typing import Any
 
+from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import Resource, build
@@ -66,8 +67,22 @@ def _load_credentials(
         try:
             credentials.refresh(Request())
             path.write_text(credentials.to_json(), encoding="utf-8")
+        except RefreshError as exc:
+            detail = _clean(str(exc))
+            raise RuntimeError(
+                "YouTube authentication could not be refreshed. "
+                "The saved refresh token is expired, revoked, or no longer valid. "
+                "Re-authorize token.json with YouTube upload permission and, for public comments, "
+                "YouTube comment permission, then retry the upload."
+                + (f" Provider detail: {detail}" if detail else "")
+            ) from exc
         except Exception as exc:
-            raise RuntimeError("YouTube authentication could not be refreshed.") from exc
+            detail = _clean(str(exc))
+            raise RuntimeError(
+                "YouTube authentication could not be refreshed. "
+                "Check token.json and re-authorize it if necessary."
+                + (f" Provider detail: {detail}" if detail else "")
+            ) from exc
 
     if not credentials.valid:
         raise RuntimeError("YouTube token.json is not valid. Create a fresh authorized token.")
