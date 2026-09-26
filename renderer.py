@@ -564,7 +564,10 @@ def render_frame(
         _draw_subtitles(frame, subtitle_data, t)
 
     _paste_logo(frame)
-    _paste_source(frame, source_label)
+    if source_label is None:
+        _paste_source(frame)
+    else:
+        _paste_source(frame, source_label)
     return frame.convert("RGB")
 
 
