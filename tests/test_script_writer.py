@@ -342,6 +342,52 @@ def test_writer_research_uses_full_article_before_generation(monkeypatch):
     assert "returned after treatment" in captured[0]
 
 
+def test_writer_research_uses_ddgs_extract_when_page_extractors_fail(monkeypatch):
+    class FakeResponse:
+        url = "https://example.com/story"
+        text = "<html><body>not enough article text</body></html>"
+
+        def raise_for_status(self):
+            return None
+
+    article = (
+        "Shubman Gill was hit in training before the ODI. "
+        "India are assessing his availability after the incident. "
+        "The coaching staff reviewed his condition before the next session. "
+    ) * 8
+
+    class FakeDDGS:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def extract(self, url, fmt):
+            assert url == "https://example.com/story"
+            assert fmt == "text_plain"
+            return {"url": url, "content": article}
+
+    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: "")
+    monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
+
+    captured = []
+
+    def fake_request(model, prompt, story):
+        captured.append(story)
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    write_script(
+        {
+            "title": "Shubman Gill injury scare",
+            "description": "Gill was hit during training.",
+            "url": "https://example.com/story",
+        }
+    )
+
+    assert "[PRIMARY ARTICLE — https://example.com/story]" in captured[0]
+    assert "India are assessing his availability" in captured[0]
+
+
 def test_writer_research_reads_jsonld_article_body_when_trafilatura_is_thin(monkeypatch):
     class FakeResponse:
         url = "https://example.com/story"
