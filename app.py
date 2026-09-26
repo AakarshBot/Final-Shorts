@@ -270,7 +270,7 @@ def _crop_visual_dialog(
         image,
         realtime_update=True,
         box_color="#8B5CF6",
-        aspect_ratio=9 / 16,
+        aspect_ratio=None,
         return_type="image",
         key=f"cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
         stroke_width=2,
@@ -284,8 +284,8 @@ def _crop_visual_dialog(
         st.markdown('<div class="crop-dialog-kicker">ORIGINAL SIZE</div>', unsafe_allow_html=True)
         st.caption(f"{image.width} × {image.height}px")
         st.markdown('<div class="crop-dialog-kicker" style="margin-top:1rem;">OUTPUT</div>', unsafe_allow_html=True)
-        st.caption("Saved as a review preview only. It does not replace the source asset.")
-        if st.button("Save crop", type="primary", width="stretch"):
+        st.caption("Applying the crop changes the selected slide framing only; the original visual stays untouched.")
+        if st.button("Apply crop", type="primary", width="stretch"):
             buffer = BytesIO()
             cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
             crop_bytes = buffer.getvalue()
@@ -649,7 +649,7 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
                         )
                     if preview_bytes:
                         st.markdown(
-                            '<div class="visual-crop-label">9:16 CROP SAVED</div>',
+                            '<div class="visual-crop-label">CROP APPLIED</div>',
                             unsafe_allow_html=True,
                         )
 
