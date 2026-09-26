@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from PIL import ImageChops
+from PIL import Image, ImageChops, ImageDraw
 
 import renderer
 
@@ -58,8 +58,6 @@ def test_headline_wraps_three_and_six_word_inputs_without_overflow():
         font, clean, lines = renderer._fit_headline_font(text)
         assert 3 <= len(clean.split()) <= 6
         assert 1 <= len(lines) <= renderer.HEADLINE_MAX_LINES
-        from PIL import Image, ImageDraw
-
         probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
         width = max(
             probe.textbbox(
