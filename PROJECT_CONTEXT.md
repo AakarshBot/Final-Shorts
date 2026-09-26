@@ -1,14 +1,13 @@
 # Final Shorts — Project Context
 
 ## Current state
-Functions 01–05 are implemented, tested, and accepted for development use:
+Functions 01–04 are implemented, tested, and accepted for development use:
 1. Topic Fetching
 2. Scriptwriter
 3. Audio
 4. Visuals — Phase 1 + Phase 2 complete
-5. Subtitles
 
-Function 04 Visuals Phase 1 and Phase 2 are complete. Function 05 Subtitles converts approved Edge-TTS word timings into SRT before Renderer.
+Function 04 Visuals Phase 1 and Phase 2 are complete. Subtitle code and tests have been intentionally removed and will be designed later.
 
 ## Factory order
 01. Topic Fetching
@@ -24,7 +23,7 @@ Only completed functions should exist in the repository. Do not scaffold future 
 
 ## Dashboard
 - The dashboard is currently a Test desk only while the factory is built.
-- Test exposes each completed function independently: Topic Fetcher, Scriptwriter, Audio, Visuals and Subtitles.
+- Test exposes each completed function independently: Topic Fetcher, Scriptwriter, Audio and Visuals.
 - Function handoffs are human-approved in the dashboard.
 - No Live-production screen is present yet; it will be added when the production pipeline actually exists.
 - Dashboard visual polish is parked. Change only functional test behavior while building the factory.
@@ -120,17 +119,17 @@ README.md
 ```
 
 ## Last completed
-Function 05 — Subtitles.
+Function 04 — Visuals.
 
 ## Current development
-Function 05 — Subtitles is implemented:
-- Function 04 Visuals Phase 1 and Phase 2 are complete.
+Function 04 Visuals Phase 1 and Phase 2 are complete:
 - Visuals Option 1 is the automatic scraper/crawler.
 - Visuals Option 2 is the standalone manual scraper with lightweight AI query planning and historical retrieval for contextual queries.
 - Visuals Option 3 is manual real-image search across configured sources.
 - Visuals Option 4 is manual AI image generation across configured providers.
 - Visuals remains manual-review driven; no AI visual-verification gate is used in the completed Visuals phases.
-- Function 05 generates deterministic SRT subtitles directly from the approved Audio word timings.
+
+Subtitle implementation is intentionally absent. The next stage will be designed and added later from the approved Visuals handoff.
 
 ## Visuals Phase 2 contract
 - Option 1: existing Phase 1 scraper/crawler.
@@ -141,13 +140,6 @@ Function 05 — Subtitles is implemented:
 - Current AI providers: Hugging Face Inference Providers with FLUX.1-schnell and Cloudflare Workers AI with FLUX.1-schnell.
 - Option 2 and Option 3 never trigger automatically.
 
-## Subtitles contract
-- Input is only the approved Audio handoff.
-- Use the native Edge-TTS word timings already produced by Function 03.
-- Build deterministic SRT cues with readable word grouping; no AI call is used.
-- Write one scene SRT plus one combined SRT for Renderer.
-- Human approval stores the verified subtitle payload as the Renderer handoff.
-- Reject missing, invalid or out-of-order timings.
 
 ## Next gate
-Function 06 — Renderer.
+Function 05 — Subtitles will be designed later.
