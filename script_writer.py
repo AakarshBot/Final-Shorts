@@ -89,10 +89,11 @@ RULES:
 - Do not pad the script.
 - Use natural spoken sentences and spell out numbers, acronyms and symbols where practical for TTS.
 - Generate exactly one headline of strictly 3 or 4 words for the opening renderer overlay. It must be a concise summary of the story.
-- Generate exactly 3 title candidates. They are stored for later title selection.
-- Generate a concise SEO description.
+- Generate exactly 3 YouTube Shorts title candidates. They must be tailored to this exact story, not generic sports labels or filler. Each title should be concise, natural, specific and built around a real person, team, event, result or consequence from the story. Avoid generic phrases such as "latest update", "big update", "breaking news", "sports update", or "what you need to know". Do not use hashtags in titles. Make the 3 candidates meaningfully different: one direct event angle, one consequence/context angle, and one curiosity angle grounded in a supported fact.
+- Every title must contain at least one key name, team, competition or distinctive term from the selected story title.
+- Generate one concise, story-specific SEO description for YouTube Shorts. Write one natural sentence of roughly 15–30 words that names the key subject/event and explains what happened or why it matters. Do not use generic channel boilerplate.
 - Generate 3–5 relevant hashtags, each beginning with #, with no spaces inside a hashtag.
-- Generate one concise viewer comment for the eventual public upload. Keep it natural and discussion-oriented, using only supported story facts.
+- Generate one concise, story-specific viewer comment for the eventual public upload. Ask a natural discussion question tied to a concrete person, team, event or fact from this story. Never use a generic "What do you think?" comment with no story reference.
 - Every scene must include a supported primary visual entity, visual intent, specific search prompt and sports category.
 - Return only JSON matching the supplied schema.
 """
@@ -116,6 +117,29 @@ GENERIC_OPENERS = (
     "let's talk about",
     "here is the latest",
 )
+
+GENERIC_METADATA_PHRASES = (
+    "latest update",
+    "latest news",
+    "big update",
+    "major update",
+    "breaking update",
+    "breaking news",
+    "big news",
+    "sports update",
+    "what you need to know",
+    "here's the latest",
+    "here is the latest",
+)
+
+METADATA_STOPWORDS = {
+    "the", "and", "for", "with", "from", "this", "that", "before", "after",
+    "about", "into", "over", "under", "when", "where", "will", "has", "have",
+    "had", "its", "his", "her", "their", "they", "them", "your", "our",
+    "new", "latest", "update", "news", "team", "match", "game", "sport",
+    "sports", "vs", "versus",
+}
+
 
 
 def _clean(value) -> str:
@@ -173,6 +197,29 @@ def _copied(source, narration) -> bool:
     return False
 
 
+def _story_title_keywords(source: str) -> set[str]:
+    title_part = str(source or "").strip().split("\n\n", 1)[0]
+    words = re.findall(r"\b[\w]+(?:['’][\w]+)?\b", title_part.casefold(), flags=re.UNICODE)
+    return {
+        word
+        for word in words
+        if len(word) >= 3 and word not in METADATA_STOPWORDS
+    }
+
+
+def _metadata_mentions_story(text: str, source: str) -> bool:
+    keywords = _story_title_keywords(source)
+    if not keywords:
+        return True
+    normalised = _normalise(text)
+    return any(keyword in normalised.split() for keyword in keywords)
+
+
+def _metadata_is_generic_title(title: str) -> bool:
+    normalised = _normalise(title)
+    return any(phrase in normalised for phrase in GENERIC_METADATA_PHRASES)
+
+
 def validate_script(result: dict, source: str) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
@@ -184,6 +231,17 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     titles = result.get("titles")
     if not isinstance(titles, list) or len(titles) != 3 or any(not _clean(x) for x in titles):
         return False, "Exactly three non-empty titles are required."
+    normalised_titles = [_normalise(title) for title in titles]
+    if len(set(normalised_titles)) != 3:
+        return False, "The three Shorts titles must be different."
+    for title in titles:
+        clean_title = _clean(title)
+        if not 20 <= len(clean_title) <= 80:
+            return False, "Each Shorts title must be between 20 and 80 characters."
+        if _metadata_is_generic_title(clean_title):
+            return False, "The Shorts title uses a generic metadata phrase."
+        if not _metadata_mentions_story(clean_title, source):
+            return False, "Each Shorts title must reference the selected story."
 
     hashtags = result.get("hashtags")
     if (
@@ -193,8 +251,17 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     ):
         return False, "At least one valid hashtag is required."
 
-    if not _clean(result.get("comment")):
+    comment = _clean(result.get("comment"))
+    if not comment:
         return False, "A non-empty comment is required."
+    if not _metadata_mentions_story(comment, source):
+        return False, "The upload comment must reference the selected story."
+
+    description = _clean(result.get("seo_description"))
+    if _words(description) < 10:
+        return False, "The SEO description is too short."
+    if not _metadata_mentions_story(description, source):
+        return False, "The SEO description must reference the selected story."
 
     scenes = result.get("script")
     if not isinstance(scenes, list) or len(scenes) not in (4, 5):
@@ -234,9 +301,6 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
         return False, "The narration is likely longer than 30 seconds."
     if _copied(source, narration):
         return False, "The narration is too close to source wording."
-
-    if _words(result.get("seo_description")) < 10:
-        return False, "The SEO description is too short."
 
     return True, ""
 
