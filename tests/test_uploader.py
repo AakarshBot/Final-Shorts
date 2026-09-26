@@ -124,3 +124,67 @@ def test_upload_sets_private_metadata_and_skips_comments(tmp_path):
 
     assert result["video_id"] == "abc123"
     assert result["comment_posted"] is False
+
+
+def test_public_upload_requires_upload_and_comment_scopes(monkeypatch, tmp_path):
+    token = tmp_path / "token.json"
+    token.write_text("{}", encoding="utf-8")
+
+    class FakeCredentials:
+        scopes = [uploader.YOUTUBE_COMMENT_SCOPE]
+        expired = False
+        refresh_token = None
+        valid = True
+
+    monkeypatch.setattr(
+        uploader.Credentials,
+        "from_authorized_user_file",
+        classmethod(lambda cls, path: FakeCredentials()),
+    )
+
+    try:
+        uploader._load_credentials(token, require_comments=True)
+    except RuntimeError as exc:
+        assert uploader.YOUTUBE_UPLOAD_SCOPE in str(exc)
+    else:
+        raise AssertionError("Public upload validation must require the upload scope.")
+
+
+def test_public_upload_without_comment_does_not_require_comment_scope(monkeypatch, tmp_path):
+    video = tmp_path / "video.mp4"
+    video.write_bytes(b"video")
+    captured = {}
+
+    class Request:
+        def next_chunk(self, num_retries=0):
+            return None, {
+                "id": "abc123",
+                "snippet": {"channelId": "channel"},
+                "status": {"privacyStatus": "public"},
+            }
+
+    class Videos:
+        def insert(self, **kwargs):
+            return Request()
+
+    class FakeYoutube:
+        def videos(self):
+            return Videos()
+
+    def fake_client(token_path, require_comments=False):
+        captured["require_comments"] = require_comments
+        return FakeYoutube()
+
+    monkeypatch.setattr(uploader, "youtube_client", fake_client)
+
+    result = uploader.upload_video(
+        video,
+        "Test title",
+        "Test description",
+        "#Cricket",
+        "",
+        "public",
+    )
+
+    assert result["video_id"] == "abc123"
+    assert captured["require_comments"] is False

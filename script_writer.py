@@ -134,11 +134,27 @@ def _source_text(story) -> str:
     if hasattr(story, "__dataclass_fields__"):
         story = {name: getattr(story, name) for name in story.__dataclass_fields__}
     story = dict(story or {})
-    for key in ("research_evidence_text", "text", "summary", "description", "title", "topic"):
+
+    parts = []
+    seen = set()
+    for key in (
+        "title",
+        "research_evidence_text",
+        "text",
+        "summary",
+        "description",
+        "topic",
+    ):
         value = _clean(story.get(key))
-        if value:
-            return value[:MAX_SOURCE_CHARS]
-    return ""
+        if not value:
+            continue
+        identity = _normalise(value)
+        if not identity or identity in seen:
+            continue
+        seen.add(identity)
+        parts.append(value)
+
+    return "\n\n".join(parts)[:MAX_SOURCE_CHARS]
 
 
 def _copied(source, narration) -> bool:
@@ -326,6 +342,7 @@ def apply_script_edits(
     for scene, voiceover in zip(scenes, voiceovers):
         scene["voiceover"] = _clean(voiceover)
 
+    original_headline = _clean(script.get("headline"))
     if headline is not None:
         result["headline"] = _clean(headline)
 
@@ -336,6 +353,9 @@ def apply_script_edits(
     result["human_script_edited"] = any(
         _clean(scene["voiceover"]) != _clean(original["voiceover"])
         for scene, original in zip(scenes, script.get("script", []))
+    ) or (
+        headline is not None
+        and _clean(result.get("headline")) != original_headline
     )
     result["approved_for_audio"] = True
     return result

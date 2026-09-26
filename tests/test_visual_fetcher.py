@@ -25,6 +25,31 @@ def test_build_queries_is_small_and_entity_focused():
 
 
 
+def test_crawl_prefers_scriptwriter_visual_prompt(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_collect_related_pages",
+        lambda queries, *args, **kwargs: calls.append((queries, kwargs.get("historical", False))) or [],
+    )
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", lambda requests: [{
+        "assets": [],
+        "url": requests[0]["url"],
+        "title": "Test page",
+    }])
+    monkeypatch.setattr(visual_fetcher, "_collect_profile_pages", lambda entity: [])
+
+    story = _story()
+    story["primary_entity"] = "Shubman Gill"
+    story["specific_search_prompt"] = "Shubman Gill batting India"
+
+    result = visual_fetcher.crawl_visuals(story)
+
+    assert result["automatic_queries"][0] == "Shubman Gill batting India"
+    assert calls[0][0][0] == "Shubman Gill batting India"
+
+
 def test_context_can_rescue_a_valid_article_title():
     context = (
         "Virat Kohli and Rohit Sharma were both discussed after India's latest "

@@ -74,13 +74,22 @@ def _load_credentials(
 
     scopes = set(credentials.scopes or ())
     if YOUTUBE_SCOPE not in scopes:
-        required = YOUTUBE_COMMENT_SCOPE if require_comments else YOUTUBE_UPLOAD_SCOPE
-        if required not in scopes:
-            action = "upload videos and add public comments" if require_comments else "upload videos"
+        required = {YOUTUBE_UPLOAD_SCOPE}
+        if require_comments:
+            required.add(YOUTUBE_COMMENT_SCOPE)
+        missing = sorted(scope for scope in required if scope not in scopes)
+        if missing:
+            action = (
+                "upload videos and add public comments"
+                if require_comments
+                else "upload videos"
+            )
             raise RuntimeError(
                 f"token.json does not grant permission to {action}. "
-                f"Use a token authorized with {YOUTUBE_UPLOAD_SCOPE} and "
-                f"{YOUTUBE_COMMENT_SCOPE} (or the full {YOUTUBE_SCOPE} scope)."
+                f"Missing scope(s): {', '.join(missing)}. "
+                f"Use a token authorized with {YOUTUBE_UPLOAD_SCOPE} and, "
+                f"when posting a comment, {YOUTUBE_COMMENT_SCOPE}; "
+                f"the full {YOUTUBE_SCOPE} scope also covers both."
             )
 
     return credentials
@@ -124,10 +133,11 @@ def upload_video(
         raise ValueError("The YouTube description is too long.")
 
     final_comment = _clean(comment)
-    if privacy == "public":
-        youtube = youtube or youtube_client(token_path, require_comments=True)
-    else:
-        youtube = youtube or youtube_client(token_path)
+    if youtube is None:
+        youtube = youtube_client(
+            token_path,
+            require_comments=privacy == "public" and bool(final_comment),
+        )
 
     body = {
         "snippet": {

@@ -1407,7 +1407,17 @@ def crawl_visuals(story):
             "Visual Fetcher requires the selected story title and original URL."
         )
 
+    specific_prompt = _topic_value(story, "specific_search_prompt")
     automatic_queries = build_queries(title, description, entity)
+    if specific_prompt:
+        automatic_queries = [
+            specific_prompt,
+            *[
+                query
+                for query in automatic_queries
+                if query.casefold() != specific_prompt.casefold()
+            ],
+        ][:QUERY_COUNT]
     search_queries = list(automatic_queries)
 
     page_requests = [{
