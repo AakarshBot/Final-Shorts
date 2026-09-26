@@ -91,6 +91,51 @@ def test_context_does_not_rescue_an_unrelated_article():
     ) == 0
 
 
+def test_manual_crawl_uses_only_the_manual_query(monkeypatch):
+    calls = []
+
+    def fake_related(queries, original_url, story_title="", entity=""):
+        calls.append((queries, original_url, story_title, entity))
+        return [{
+            "url": "https://example.com/article",
+            "title": "Virat Kohli and Rohit Sharma latest",
+            "source": "Example",
+            "published_at": datetime.now(timezone.utc).isoformat(),
+            "query": queries[0],
+        }]
+
+    def fake_crawl_pages(requests):
+        calls.append(requests)
+        return [{
+            "assets": [{
+                "bytes": b"image",
+                "hash": "abc",
+                "source_image_url": "https://example.com/image.jpg",
+                "source_page_url": "https://example.com/article",
+                "publisher": "Example",
+                "article_title": "Virat Kohli and Rohit Sharma latest",
+            }],
+            "url": requests[0]["url"],
+            "title": requests[0]["title"],
+            "candidate_count": 1,
+        }]
+
+    monkeypatch.setattr(visual_fetcher, "_collect_related_pages", fake_related)
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl_pages)
+
+    result = visual_fetcher.manual_crawl_visuals("Virat Kohli Rohit Sharma")
+
+    assert calls[0] == (
+        ["Virat Kohli Rohit Sharma"],
+        "",
+        "",
+        "",
+    )
+    assert calls[1][0]["query"] == "Virat Kohli Rohit Sharma"
+    assert result["manual_query"] == "Virat Kohli Rohit Sharma"
+    assert len(result["assets"]) == 1
+
+
 def test_same_query_is_case_insensitive():
     assert visual_fetcher.same_query("Shubman Gill Cricket", ["shubman gill cricket"])
     assert not visual_fetcher.same_query("Gill nets", ["Gill batting"])
