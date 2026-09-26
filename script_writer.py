@@ -234,14 +234,19 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     normalised_titles = [_normalise(title) for title in titles]
     if len(set(normalised_titles)) != 3:
         return False, "The three Shorts titles must be different."
+
+    story_relevant_titles = 0
     for title in titles:
         clean_title = _clean(title)
         if not 12 <= len(clean_title) <= 80:
             return False, "Each Shorts title must be between 12 and 80 characters."
         if _metadata_is_generic_title(clean_title):
             return False, "The Shorts title uses a generic metadata phrase."
-        if not _metadata_mentions_story(clean_title, source):
-            return False, "Each Shorts title must reference the selected story."
+        if _metadata_mentions_story(clean_title, source):
+            story_relevant_titles += 1
+
+    if story_relevant_titles < 2:
+        return False, "At least two Shorts titles must reference the selected story."
 
     hashtags = result.get("hashtags")
     if (
