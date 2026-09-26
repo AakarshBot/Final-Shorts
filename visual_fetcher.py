@@ -1458,6 +1458,81 @@ def crawl_visuals(story, manual_query=""):
     }
 
 
+def manual_crawl_visuals(query):
+    """Scrape current publisher pages returned for one manual news query."""
+    query = _clean(query, 260)
+    if not query:
+        raise ValueError("Manual scraper requires a search query.")
+
+    related_pages = _collect_related_pages([query], "", "", "")
+    page_requests = [
+        {
+            "url": page["url"],
+            "title": page.get("title", ""),
+            "publisher": page.get("source", ""),
+            "published_at": page.get("published_at", ""),
+            "query": query,
+            "entity": "",
+            "story_title": "",
+        }
+        for page in related_pages
+    ]
+
+    results = _crawl_pages(page_requests)
+    assets = []
+    diagnostics = []
+
+    for request, result in zip(page_requests, results):
+        diagnostics.append({
+            "url": result.get("url") or request["url"],
+            "title": result.get("title") or request.get("title", ""),
+            "assets": len(result.get("assets") or []),
+            "candidates": int(result.get("candidate_count") or 0),
+            "dom_images": int(result.get("dom_image_count") or 0),
+            "network_images": int(result.get("network_image_count") or 0),
+            "direct_download_failures": int(result.get("direct_download_failures") or 0),
+            "direct_invalid_images": int(result.get("direct_invalid_images") or 0),
+            "network_fallback_hits": int(result.get("network_fallback_hits") or 0),
+            "static_fallback_attempted": bool(result.get("static_fallback_attempted")),
+            "static_candidates": int(result.get("static_candidates") or 0),
+            "static_assets": int(result.get("static_assets") or 0),
+            "static_error": str(result.get("static_error") or ""),
+            "error": str(result.get("error") or ""),
+            "query": query,
+        })
+        for asset in result.get("assets") or []:
+            asset["query"] = query
+            asset["article_title"] = asset.get("article_title") or request.get("title", "")
+            asset["source_page_url"] = asset.get("source_page_url") or request["url"]
+            asset["publisher"] = asset.get("publisher") or request.get("publisher", "")
+            assets.append(asset)
+
+    selected = _dedupe(assets)
+    failure_state = (
+        "ready" if len(selected) >= SUCCESS
+        else "underfilled" if selected
+        else "no_images"
+    )
+
+    print(
+        f"   [Visual Fetcher] manual_query={query!r} "
+        f"pages={len(related_pages)} final_pool={len(selected)}/{TARGET} state={failure_state}",
+        flush=True,
+    )
+
+    return {
+        "assets": selected,
+        "target": TARGET,
+        "success_threshold": SUCCESS,
+        "manual_query": query,
+        "queries_used": [query],
+        "pages_scraped": len(page_requests),
+        "related_pages": len(related_pages),
+        "failure_state": failure_state,
+        "diagnostics": diagnostics,
+    }
+
+
 def same_query(query, used_queries):
     value = _clean(query, 260).casefold()
     return bool(value) and any(
@@ -1466,4 +1541,4 @@ def same_query(query, used_queries):
     )
 
 
-__all__ = ["TARGET", "SUCCESS", "build_queries", "crawl_visuals", "same_query"]
+__all__ = ["TARGET", "SUCCESS", "build_queries", "crawl_visuals", "manual_crawl_visuals", "same_query"]
