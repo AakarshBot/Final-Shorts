@@ -157,6 +157,8 @@ if "live_topics" not in st.session_state:
     st.session_state.live_topics = []
 if "live_selected_topic" not in st.session_state:
     st.session_state.live_selected_topic = None
+if "live_stage" not in st.session_state:
+    st.session_state.live_stage = "01 · Story"
 if "live_topics_profile" not in st.session_state:
     st.session_state.live_topics_profile = None
 if "live_script_data" not in st.session_state:
@@ -429,6 +431,7 @@ def _live_story_key(topic) -> str:
 def _live_reset_downstream():
     for key, value in {
         "live_selected_topic": None,
+        "live_stage": "01 · Story",
         "live_script_data": None,
         "live_approved_script": None,
         "live_script_error": "",
@@ -469,49 +472,50 @@ def _live_story(topic) -> dict:
 
 
 def _live_start_story(index: int):
-    topic = st.session_state.live_topics[index]
     _live_reset_downstream()
     st.session_state.live_selected_topic = index
-    story = _live_story(topic)
+    st.session_state.live_stage = "02 · Script"
 
-    try:
-        script = write_script(
-            story,
-            language=st.session_state.get("live_script_language", "english"),
-        )
-        st.session_state.live_script_data = script
-    except Exception as exc:
-        st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
 
-    visual_story = dict(story)
-    script = st.session_state.live_script_data
-    if isinstance(script, dict):
-        scenes = script.get("script") or []
-        first_scene = scenes[0] if scenes and isinstance(scenes[0], dict) else {}
-        visual_story["primary_entity"] = str(
-            first_scene.get("primary_entity") or ""
-        ).strip()
-        visual_story["specific_search_prompt"] = str(
-            first_scene.get("specific_search_prompt") or ""
-        ).strip()
-        visual_story["visual_intent"] = str(
-            first_scene.get("visual_intent") or ""
-        ).strip()
+def _live_generate_script():
+    selected_index = st.session_state.get("live_selected_topic")
+    topics = st.session_state.get("live_topics") or []
+    if selected_index is None or not 0 <= selected_index < len(topics):
+        raise ValueError("No valid Live story is selected.")
 
-    try:
-        st.session_state.live_visual_result = crawl_visuals(visual_story)
-    except Exception as exc:
-        st.session_state.live_visual_result = {
-            "error": f"{type(exc).__name__}: {exc}"
-        }
+    story = _live_story(topics[selected_index])
+    script = write_script(
+        story,
+        language=st.session_state.get("live_script_language", "english"),
+    )
+    st.session_state.live_script_data = script
+    st.session_state.live_script_error = ""
+    st.session_state.live_upload_titles = list(script.get("titles") or [])
+    st.session_state.live_upload_description = str(script.get("seo_description") or "")
+    st.session_state.live_upload_hashtags = " ".join(
+        str(item) for item in (script.get("hashtags") or [])
+    )
+    st.session_state.live_upload_comment = str(script.get("comment") or "")
+    return script
 
-    if isinstance(script, dict):
-        st.session_state.live_upload_titles = list(script.get("titles") or [])
-        st.session_state.live_upload_description = str(script.get("seo_description") or "")
-        st.session_state.live_upload_hashtags = " ".join(
-            str(item) for item in (script.get("hashtags") or [])
-        )
-        st.session_state.live_upload_comment = str(script.get("comment") or "")
+
+def _live_scrape_automatic_visuals():
+    selected_index = st.session_state.get("live_selected_topic")
+    topics = st.session_state.get("live_topics") or []
+    script = st.session_state.get("live_script_data")
+    if selected_index is None or not 0 <= selected_index < len(topics):
+        raise ValueError("No valid Live story is selected.")
+    if not isinstance(script, dict):
+        raise ValueError("Generate the Live Scriptwriter result before scraping visuals.")
+
+    story = _live_story(topics[selected_index])
+    scenes = script.get("script") or []
+    first_scene = scenes[0] if scenes and isinstance(scenes[0], dict) else {}
+    story["primary_entity"] = str(first_scene.get("primary_entity") or "").strip()
+    story["specific_search_prompt"] = str(first_scene.get("specific_search_prompt") or "").strip()
+    story["visual_intent"] = str(first_scene.get("visual_intent") or "").strip()
+    st.session_state.live_visual_result = crawl_visuals(story)
+    return st.session_state.live_visual_result
 
 
 def _live_generate_audio_and_subtitles():
@@ -740,7 +744,29 @@ def _render_live_visuals(slide_count: int):
         result = st.session_state.get("live_visual_result") or {}
         if result.get("error"):
             st.error(result["error"])
+            if st.button(
+                "Retry automatic scrape",
+                type="primary",
+                width="stretch",
+                key="live-retry-auto-visuals",
+            ):
+                st.session_state.live_visual_result = None
+                st.rerun()
         else:
+            asset_count = len(result.get("assets") or [])
+            threshold = int(result.get("success_threshold") or 10)
+            if asset_count < threshold:
+                st.warning(
+                    f"Automatic scraper returned {asset_count} images. "
+                    "You can retry it or use another visual source."
+                )
+                if st.button(
+                    "Retry automatic scrape",
+                    width="stretch",
+                    key="live-retry-auto-visuals-underfilled",
+                ):
+                    st.session_state.live_visual_result = None
+                    st.rerun()
             st.caption(
                 f'{len(result.get("assets") or [])} images · '
                 f'{int(result.get("pages_scraped") or 0)} pages'
@@ -869,7 +895,7 @@ def _render_live_visuals(slide_count: int):
     if ready:
         if not st.session_state.live_visuals_approved:
             if st.button(
-                "Approve visuals and render",
+                "Retry render" if st.session_state.live_render_error else "Approve visuals and render",
                 type="primary",
                 width="stretch",
                 key="live-approve-visuals",
@@ -897,6 +923,7 @@ def _render_live_visuals(slide_count: int):
                     st.session_state.live_rendered_video_path = str(output)
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
+                    st.session_state.live_stage = "05 · Upload"
                     st.rerun()
                 except (RuntimeError, ValueError, OSError) as exc:
                     st.session_state.live_render_error = str(exc)
@@ -911,15 +938,42 @@ def _render_live_visuals(slide_count: int):
 
 def _render_live_script():
     script = st.session_state.get("live_script_data")
+    if not isinstance(script, dict) and not st.session_state.get("live_script_error"):
+        with st.spinner("Writing the Short…"):
+            try:
+                script = _live_generate_script()
+                st.rerun()
+            except Exception as exc:
+                st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+                st.rerun()
+
     if st.session_state.get("live_script_error"):
-        st.error(
-            "Scriptwriter failed: "
-            + st.session_state.live_script_error
-        )
-        return
+        if isinstance(script, dict):
+            st.error(
+                "Script approval failed: "
+                + st.session_state.live_script_error
+            )
+            st.caption("Correct the highlighted edit and approve the script again.")
+        else:
+            st.error(
+                "Scriptwriter failed: "
+                + st.session_state.live_script_error
+            )
+            if st.button(
+                "Retry Scriptwriter",
+                type="primary",
+                width="stretch",
+                key="live-retry-script",
+            ):
+                selected_index = st.session_state.get("live_selected_topic")
+                _live_reset_downstream()
+                st.session_state.live_selected_topic = selected_index
+                st.session_state.live_stage = "02 · Script"
+                st.rerun()
+            return
 
     if not isinstance(script, dict):
-        st.info("Generating the script and automatic visual pool…")
+        st.info("Preparing the Scriptwriter stage…")
         return
 
     story = st.session_state.live_topics[st.session_state.live_selected_topic]
@@ -969,11 +1023,9 @@ def _render_live_script():
                 st.session_state.live_script_error = str(exc)
                 st.rerun()
             st.session_state.live_approved_script = approved
-            try:
-                with st.spinner("Creating audio and subtitle handoffs…"):
-                    _live_generate_audio_and_subtitles()
-            except (RuntimeError, ValueError, OSError) as exc:
-                st.session_state.live_handoff_error = str(exc)
+            st.session_state.live_script_error = ""
+            st.session_state.live_handoff_error = ""
+            st.session_state.live_stage = "03 · Audio + Subs"
             st.rerun()
 
     if st.session_state.live_approved_script:
@@ -1164,6 +1216,7 @@ def render_live_dashboard():
                 st.session_state.live_cricket_profile = None
                 st.session_state.live_topics = []
                 st.session_state.live_topics_profile = None
+                st.session_state.live_stage = "01 · Story"
                 st.rerun()
         with controls[1]:
             if st.button("← Home",key="live-home",width="stretch"):
@@ -1253,106 +1306,129 @@ def render_live_dashboard():
                 st.rerun()
         return
 
-    language_choice = st.pills(
-        "Script language",
-        ["English", "Hindi", "Telugu"],
-        default=st.session_state.get("live_script_language", "english").title(),
-        key="live-script-language-choice",
-        label_visibility="collapsed",
-    )
-    if language_choice:
-        st.session_state.live_script_language = language_choice.casefold()
+    live_stage_order = ["01 · Story", "02 · Script", "03 · Audio + Subs", "04 · Visuals + Render", "05 · Upload"]
+    live_stage_labels = ["STORY", "SCRIPT", "AUDIO + SUBS", "VISUALS + RENDER", "UPLOAD"]
+    current_stage = live_stage_order.index(st.session_state.live_stage)
 
-    st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Top 20 stories</div></div><div class="section-count">headline + rating</div></div>', unsafe_allow_html=True)
-
-    topics = st.session_state.live_topics
-    for start in range(0, len(topics), 2):
-        row = st.columns(2, gap="medium")
-        for col, (index, topic) in zip(
-            row,
-            enumerate(topics[start:start + 2], start=start),
-        ):
-            with col:
-                rating = max(
-                    1,
-                    min(
-                        5,
-                        round(float(topic.score or 0.0) / 8.0 * 5.0),
-                    ),
-                )
-                stars = "★" * rating + "☆" * (5 - rating)
-                with st.container(key=f"live-topic-{index}"):
-                    st.markdown(
-                        f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span><span class="topic-rating">{stars}</span></div>'
-                        f'<div class="topic-title">{topic.title}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if st.button(
-                        "Select story →",
-                        width="stretch",
-                        key=f"live-select-story-{index}",
-                    ):
-                        _live_start_story(index)
-                        st.rerun()
-
-    if st.button(
-        "Find 20 more unique stories",
-        width="stretch",
-        key="live-find-more",
-    ):
-        with st.spinner("Searching for 20 additional unique stories…"):
-            existing = list(st.session_state.live_topics)
-            new_topics = fetch_topics(
-                st.session_state.live_topics_profile,
-                more=True,
-                exclude_topics=existing,
-                limit=20,
-            )
-            st.session_state.live_topics = existing + new_topics
-        st.rerun()
-
-    selected_index = st.session_state.live_selected_topic
-    if selected_index is None or not 0 <= selected_index < len(topics):
-        return
-
-    topic = topics[selected_index]
-    story_id = _live_story_key(topic)
-
-    st.markdown('<div class="live-glow"></div>',unsafe_allow_html=True)
-    st.space("medium")
-
-    st.markdown('<div class="section-head"><div><div class="eyebrow">02 · SCRIPTWRITER</div><div class="section-title">Script review</div></div><div class="section-count">manual QC</div></div>', unsafe_allow_html=True)
-    _render_live_script()
-
-    script_approved = isinstance(st.session_state.live_approved_script, dict)
-    audio_ready = isinstance(st.session_state.live_approved_audio, dict)
-    subtitles_ready = isinstance(st.session_state.live_subtitle_data, dict)
-
-    status_cols = st.columns(4, gap="small")
-    live_visual_result = st.session_state.get("live_visual_result") or {}
-    live_visuals_ready = bool(live_visual_result.get("assets")) and not live_visual_result.get("error")
-    status_values = [
-        ("Script", "Approved" if script_approved else "Waiting"),
-        ("Audio", "Ready" if audio_ready else "Waiting"),
-        ("Subtitles", "Ready" if subtitles_ready else "Waiting"),
-        ("Visuals", "Ready" if live_visuals_ready else "Scraping"),
-    ]
-    for col, (label, value) in zip(status_cols, status_values):
-        with col:
+    stage_cols = st.columns(len(live_stage_order), gap="small")
+    for stage_index, (label, stage_key) in enumerate(zip(live_stage_labels, live_stage_order)):
+        with stage_cols[stage_index]:
+            state_label = "✓ COMPLETE" if stage_index < current_stage else "● ACTIVE" if stage_index == current_stage else "LOCKED"
             st.markdown(
-                f'<div class="live-card" style="min-height:90px;"><div class="eyebrow">{label}</div><div style="font-weight:850;">{value}</div></div>',
+                f'<div class="live-card" style="min-height:72px;padding:12px 14px;">'
+                f'<div class="eyebrow">0{stage_index + 1}</div>'
+                f'<div style="font-size:.78rem;font-weight:900;letter-spacing:.04em;">{label}</div>'
+                f'<div class="visual-detail">{state_label}</div></div>',
                 unsafe_allow_html=True,
             )
 
-    if script_approved and audio_ready and subtitles_ready:
-        st.space("medium")
-        st.markdown('<div class="section-head"><div><div class="eyebrow">04 · VISUALS</div><div class="section-title">Choose the imagery</div></div><div class="section-count">manual visual approval</div></div>', unsafe_allow_html=True)
-        _render_live_visuals(len(st.session_state.live_approved_script.get("script") or []))
+    if st.session_state.live_stage == "01 · Story":
+        st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one to start production</div></div>', unsafe_allow_html=True)
+        topics = st.session_state.live_topics
+        for start in range(0, len(topics), 2):
+            row = st.columns(2, gap="medium")
+            for col, (index, topic) in zip(
+                row,
+                enumerate(topics[start:start + 2], start=start),
+            ):
+                with col:
+                    rating = max(1, min(5, round(float(topic.score or 0.0) / 8.0 * 5.0)))
+                    stars = "★" * rating + "☆" * (5 - rating)
+                    with st.container(key=f"live-topic-{index}"):
+                        st.markdown(
+                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span><span class="topic-rating">{stars}</span></div>'
+                            f'<div class="topic-title">{topic.title}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        if st.button("Select story →", width="stretch", key=f"live-select-story-{index}"):
+                            _live_start_story(index)
+                            st.rerun()
 
-    if st.session_state.live_rendered_video_path and st.session_state.live_visuals_approved:
-        st.space("medium")
-        st.markdown('<div class="section-head"><div><div class="eyebrow">06–07 · RENDER + UPLOAD</div><div class="section-title">Preview and publish</div></div></div>', unsafe_allow_html=True)
+        if st.button("Find 20 more unique stories", width="stretch", key="live-find-more"):
+            with st.spinner("Searching for 20 additional unique stories…"):
+                existing = list(st.session_state.live_topics)
+                new_topics = fetch_topics(
+                    st.session_state.live_topics_profile,
+                    more=True,
+                    exclude_topics=existing,
+                    limit=20,
+                )
+                st.session_state.live_topics = existing + new_topics
+            st.rerun()
+        return
+
+    selected_index = st.session_state.live_selected_topic
+    if selected_index is None or not 0 <= selected_index < len(st.session_state.live_topics):
+        st.session_state.live_stage = "01 · Story"
+        st.rerun()
+
+    topic = st.session_state.live_topics[selected_index]
+    st.markdown(
+        f'<div class="section-head"><div><div class="eyebrow">SELECTED STORY</div><div class="section-title">{topic.title}</div></div>'
+        f'<div class="section-count">{st.session_state.live_stage.upper()}</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    if st.button("← Back to stories", key="live-back-to-stories"):
+        _live_reset_downstream()
+        st.rerun()
+
+    if st.session_state.live_stage == "02 · Script":
+        _render_live_script()
+        return
+
+    if st.session_state.live_stage == "03 · Audio + Subs":
+        script = st.session_state.live_approved_script
+        if not isinstance(script, dict):
+            st.warning("Approve the Scriptwriter before generating Audio.")
+            return
+        if not isinstance(st.session_state.live_approved_audio, dict) or not isinstance(st.session_state.live_subtitle_data, dict):
+            if st.session_state.live_handoff_error:
+                st.error(st.session_state.live_handoff_error)
+            else:
+                with st.spinner("Generating Audio and Subtitles…"):
+                    try:
+                        _live_generate_audio_and_subtitles()
+                        st.session_state.live_stage = "04 · Visuals + Render"
+                        st.rerun()
+                    except (RuntimeError, ValueError, OSError) as exc:
+                        st.session_state.live_handoff_error = str(exc)
+                        st.rerun()
+            if st.session_state.live_handoff_error:
+                if st.button("Retry Audio / Subtitles", type="primary", key="live-retry-handoffs-stage"):
+                    st.session_state.live_handoff_error = ""
+                    st.session_state.live_approved_audio = None
+                    st.session_state.live_subtitle_data = None
+                    st.rerun()
+            return
+        st.success("Audio and subtitles are approved. Moving to Visuals.")
+        st.session_state.live_stage = "04 · Visuals + Render"
+        st.rerun()
+
+    if st.session_state.live_stage == "04 · Visuals + Render":
+        script = st.session_state.live_approved_script
+        audio_ready = isinstance(st.session_state.live_approved_audio, dict)
+        subtitle_ready = isinstance(st.session_state.live_subtitle_data, dict)
+        if not audio_ready or not subtitle_ready:
+            st.warning("Audio and subtitle handoffs are not ready yet.")
+            return
+
+        visual_result = st.session_state.get("live_visual_result")
+        if visual_result is None:
+            with st.spinner("Scraping automatic visuals from the approved Scriptwriter context…"):
+                try:
+                    _live_scrape_automatic_visuals()
+                    st.rerun()
+                except Exception as exc:
+                    st.session_state.live_visual_result = {
+                        "error": f"{type(exc).__name__}: {exc}"
+                    }
+        _render_live_visuals(len(script.get("script") or []) if isinstance(script, dict) else 0)
+        return
+
+    if st.session_state.live_stage == "05 · Upload":
         _render_live_upload()
+        return
 
 profiles = {
     "Cricket India / Asia": "cricket_india_asia",
