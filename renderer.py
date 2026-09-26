@@ -29,6 +29,7 @@ SUBTITLE_MAX_WIDTH = 900
 SUBTITLE_MAX_SIZE = 70
 SUBTITLE_MIN_SIZE = 54
 SUBTITLE_WORD_SPACING = 14
+SUBTITLE_LINE_GAP = 6
 SUBTITLE_ACTIVE_PAD_X = 14
 SUBTITLE_ACTIVE_PAD_Y = 8
 SUBTITLE_Y = 1390
@@ -332,23 +333,59 @@ def validate_subtitle_handoff(subtitle_data: dict) -> bool:
     return bool(subtitle_data.get("cues"))
 
 
-def _fit_subtitle_font(
+def _subtitle_lines(
+    words: list[dict],
+    draw: ImageDraw.ImageDraw,
+    font,
+) -> list[list[dict]]:
+    if not words:
+        return []
+
+    measurements = [
+        _measure(draw, str(word.get("text") or ""), font)[0]
+        for word in words
+    ]
+
+    def line_width(start: int, end: int) -> int:
+        return (
+            sum(measurements[start:end])
+            + SUBTITLE_WORD_SPACING * max(0, end - start - 1)
+        )
+
+    if line_width(0, len(words)) + SUBTITLE_ACTIVE_PAD_X * 2 <= SUBTITLE_MAX_WIDTH:
+        return [words]
+
+    candidates = []
+    for split in range(1, len(words)):
+        top = line_width(0, split)
+        bottom = line_width(split, len(words))
+        if (
+            top + SUBTITLE_ACTIVE_PAD_X * 2 <= SUBTITLE_MAX_WIDTH
+            and bottom + SUBTITLE_ACTIVE_PAD_X * 2 <= SUBTITLE_MAX_WIDTH
+        ):
+            candidates.append((max(top, bottom), abs(top - bottom), split))
+
+    if not candidates:
+        raise ValueError("Subtitle cue is too wide to fit in two lines.")
+
+    _, _, split = min(candidates)
+    return [words[:split], words[split:]]
+
+
+def _fit_subtitle_layout(
     words: list[dict],
     language: str,
 ):
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    text = " ".join(str(word.get("text") or "").upper() for word in words).strip()
-    if not text:
-        return subtitle_font(SUBTITLE_MAX_SIZE, language)
-
     for size in range(SUBTITLE_MAX_SIZE, SUBTITLE_MIN_SIZE - 1, -1):
         font = subtitle_font(size, language)
-        width, _ = _measure(probe, text, font)
-        width += SUBTITLE_WORD_SPACING * max(0, len(words) - 1)
-        if width + SUBTITLE_ACTIVE_PAD_X * 2 <= SUBTITLE_MAX_WIDTH:
-            return font
+        try:
+            lines = _subtitle_lines(words, probe, font)
+        except ValueError:
+            continue
+        return font, lines
 
-    return subtitle_font(SUBTITLE_MIN_SIZE, language)
+    raise ValueError("Subtitle cue is too wide to fit in two lines.")
 
 
 def _draw_subtitles(
@@ -362,52 +399,65 @@ def _draw_subtitles(
 
     words = cue["words"]
     language = subtitle_data.get("language") or "english"
-    font = _fit_subtitle_font(words, language)
     draw = ImageDraw.Draw(base)
+    font, lines = _fit_subtitle_layout(words, language)
 
-    pieces = []
-    total_width = 0
-    for word in words:
-        text = str(word["text"]).upper()
-        width, height = _measure(draw, text, font)
-        pieces.append((text, width, height))
-        total_width += width
-    total_width += SUBTITLE_WORD_SPACING * max(0, len(pieces) - 1)
+    measurements = {
+        index: _measure(draw, str(word["text"]), font)
+        for index, word in enumerate(words)
+    }
+    line_heights = [
+        max(measurements[index][1] for index in range(sum(len(line) for line in lines[:row]), sum(len(line) for line in lines[:row + 1])))
+        for row, line in enumerate(lines)
+    ]
+    total_height = sum(line_heights) + SUBTITLE_LINE_GAP * max(0, len(lines) - 1)
+    y = SUBTITLE_Y - total_height // 2
 
-    cursor = (WIDTH - total_width) // 2
-    y = SUBTITLE_Y
+    word_index = 0
+    for row, line in enumerate(lines):
+        line_width = sum(measurements[word_index + offset][0] for offset in range(len(line)))
+        line_width += SUBTITLE_WORD_SPACING * max(0, len(line) - 1)
+        cursor = (WIDTH - line_width) // 2
 
-    for index, (text, width, height) in enumerate(pieces):
-        start = float(words[index]["start"])
-        end = float(words[index]["end"])
-        active = start <= t < end
+        for offset, word in enumerate(line):
+            index = word_index + offset
+            text = str(word["text"])
+            width, height = measurements[index]
+            start = float(word["start"])
+            end = float(word["end"])
+            active = start <= t < end
 
-        if active:
-            pad_x = SUBTITLE_ACTIVE_PAD_X
-            pad_y = SUBTITLE_ACTIVE_PAD_Y
-            draw.rounded_rectangle(
-                (
-                    cursor - pad_x,
-                    y - pad_y,
-                    cursor + width + pad_x,
-                    y + height + pad_y,
-                ),
-                radius=10,
-                fill=BRAND_BLUE,
+            if active:
+                pad_x = SUBTITLE_ACTIVE_PAD_X
+                pad_y = SUBTITLE_ACTIVE_PAD_Y
+                draw.rounded_rectangle(
+                    (
+                        cursor - pad_x,
+                        y - pad_y,
+                        cursor + width + pad_x,
+                        y + height + pad_y,
+                    ),
+                    radius=10,
+                    fill=BRAND_BLUE,
+                    outline=DARK,
+                    width=2,
+                )
+                text_fill = ACCENT
+            else:
+                text_fill = WHITE
+
+            draw.text(
+                (cursor, y),
+                text,
+                font=font,
+                fill=text_fill,
+                stroke_width=5,
+                stroke_fill=DARK,
             )
-            text_fill = ACCENT
-        else:
-            text_fill = WHITE
+            cursor += width + SUBTITLE_WORD_SPACING
 
-        draw.text(
-            (cursor, y),
-            text,
-            font=font,
-            fill=text_fill,
-            stroke_width=5,
-            stroke_fill=DARK,
-        )
-        cursor += width + SUBTITLE_WORD_SPACING
+        y += line_heights[row] + SUBTITLE_LINE_GAP
+        word_index += len(line)
 
 
 def render_frame(
