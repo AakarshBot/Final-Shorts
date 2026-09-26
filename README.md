@@ -4,12 +4,13 @@ A simple, free-tier YouTube Shorts factory built one independently testable func
 
 ## Current
 
-Functions 01–03 are implemented and accepted:
+Functions 01–04 are implemented and accepted:
 - **01 — Topic Fetching**
 - **02 — Scriptwriter**
 - **03 — Audio**
+- **04 — Visuals Phase 1 (scraping)**
 
-The next function is **04 — Visuals**.
+Visuals Phase 1 has been live-tested successfully. The next function is **05 — Renderer** only after its handoff is defined.
 
 The Streamlit dashboard is currently a Test desk for independent function testing. Live production is intentionally not present until the full factory exists.
 
