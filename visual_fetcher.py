@@ -382,16 +382,37 @@ def _google_news_rss(query):
     return output
 
 
-def _news_search(query):
-    with ThreadPoolExecutor(max_workers=2) as executor:
-        ddgs_future = executor.submit(_ddgs_news, query)
+def _news_search(query, historical=False):
+    def text_search():
+        try:
+            from ddgs import DDGS
+            search = DDGS(timeout=SEARCH_TIMEOUT)
+            results = search.text(
+                query=query,
+                region="us-en",
+                safesearch="moderate",
+                max_results=SEARCH_RESULTS,
+                backend="auto",
+            )
+            return [dict(item) for item in results if isinstance(item, dict)]
+        except Exception:
+            return []
+
+    with ThreadPoolExecutor(max_workers=3 if historical else 2) as executor:
+        news_future = executor.submit(
+            _ddgs_news,
+            query,
+            None if historical else "d",
+        )
         google_future = executor.submit(_google_news_rss, query)
-        ddgs = ddgs_future.result()
+        text_future = executor.submit(text_search) if historical else None
+        ddgs = news_future.result()
         google = google_future.result()
+        text = text_future.result() if text_future else []
 
     combined = []
     seen = set()
-    for item in list(ddgs or []) + list(google or []):
+    for item in list(ddgs or []) + list(google or []) + list(text or []):
         url = _clean(item.get("url") or item.get("href"), 3000)
         title = _clean(item.get("title"), 600)
         identity = url.casefold() or title.casefold()
@@ -400,7 +421,7 @@ def _news_search(query):
         seen.add(identity)
         combined.append({**item, "url": url, "title": title, "query": query})
 
-    if len(combined) < min(SEARCH_RESULTS, 8):
+    if not historical and len(combined) < min(SEARCH_RESULTS, 8):
         for item in _ddgs_news(query, timelimit="w"):
             url = _clean(item.get("url") or item.get("href"), 3000)
             title = _clean(item.get("title"), 600)
@@ -429,12 +450,12 @@ def _article_url_is_usable(url):
     return True
 
 
-def _collect_related_pages(queries, original_url, story_title="", entity=""):
+def _collect_related_pages(queries, original_url, story_title="", entity="", historical=False):
     if not queries:
         return []
 
     with ThreadPoolExecutor(max_workers=min(3, len(queries))) as executor:
-        groups = list(executor.map(_news_search, queries))
+        groups = list(executor.map(lambda query: _news_search(query, historical), queries))
 
     now = datetime.now(timezone.utc)
     ranked = []
@@ -457,13 +478,24 @@ def _collect_related_pages(queries, original_url, story_title="", entity=""):
                 or item.get("date")
             )
             age = _age_hours(published, now)
-            if age is not None and (age < -0.5 or age > MAX_AGE_HOURS):
+            if not historical and age is not None and (age < -0.5 or age > MAX_AGE_HOURS):
                 continue
 
             query = _clean(item.get("query"), 260)
             match = max(
                 _title_match(query, title, entity),
                 _related_article_score(query, title, story_title, entity),
+                _context_match(
+                    query,
+                    _clean(
+                        " ".join(
+                            str(item.get(key) or "")
+                            for key in ("body", "description", "snippet")
+                        ),
+                        3500,
+                    ),
+                    entity,
+                ),
             )
             if not query or match <= 0:
                 continue
@@ -480,13 +512,21 @@ def _collect_related_pages(queries, original_url, story_title="", entity=""):
             })
             seen_urls.add(key)
 
-    ranked.sort(
-        key=lambda item: (
-            1 if item.get("age") is None else 0,
-            float(item.get("age") or 0),
-            -float(item.get("match") or 0),
+    if historical:
+        ranked.sort(
+            key=lambda item: (
+                -float(item.get("match") or 0),
+                float(item.get("age") or 999999),
+            )
         )
-    )
+    else:
+        ranked.sort(
+            key=lambda item: (
+                1 if item.get("age") is None else 0,
+                float(item.get("age") or 0),
+                -float(item.get("match") or 0),
+            )
+        )
 
     pages = []
     host_counts = {}
