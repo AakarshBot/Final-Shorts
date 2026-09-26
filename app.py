@@ -12,7 +12,7 @@ from topic_fetcher import fetch_topics
 from visual_fetcher import crawl_visuals, manual_crawl_visuals
 from visual_search import search_images
 from visual_generator import generate_images
-from renderer import STYLE_NAMES, HEADLINE_TEXT, build_preview_bundle
+from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
@@ -522,7 +522,7 @@ def render_visuals():
 
 def render_renderer_test():
     st.header("06 · Renderer")
-    st.caption("Visual-only preview desk · fixed filler content · no factory inputs")
+    st.caption("Final visual preview · fixed filler content · no factory inputs")
 
     headline_mode = st.radio(
         "Opening headline",
@@ -533,53 +533,48 @@ def render_renderer_test():
     headline_enabled = headline_mode == "On"
 
     headline_text = st.text_input(
-        "Headline preview",
+        "Headline",
         value=HEADLINE_TEXT,
-        max_chars=56,
+        max_chars=48,
         key="renderer_headline_text",
     )
 
-    st.caption("Preferred headline face: Bebas Neue · automatic fallback if not installed")
+    st.caption(
+        f"{FINAL_STYLE_NAME} · Bebas Neue headline · Montserrat ExtraBold captions · "
+        "gold active-word highlight"
+    )
 
-    if st.button("Build previews", type="primary", use_container_width=True):
-        with st.spinner("Rendering preview clips…"):
+    if st.button("Build preview", type="primary", use_container_width=True):
+        with st.spinner("Rendering preview…"):
             try:
                 st.session_state.renderer_previews = build_preview_bundle(
                     headline_enabled=headline_enabled,
                     headline_text=headline_text.strip() or HEADLINE_TEXT,
                 )
-            except RuntimeError as exc:
+            except (RuntimeError, ValueError) as exc:
                 st.error(str(exc))
 
     previews = st.session_state.get("renderer_previews") or {}
     if not previews:
-        st.info("Build the previews to compare the opening and three final overlay styles.")
+        st.info("Build the preview to see the opening treatment and final overlay.")
         return
 
-    st.subheader("Opening frame")
     opening = previews.get("opening")
-    if opening and Path(opening).exists():
-        st.video(str(opening), width=320)
-        st.caption(
-            "Sample image · optional first-second headline · logo top-right · source bottom-right"
-        )
+    final = previews.get("final")
 
-    st.divider()
-    st.subheader("Final overlay styles")
-    columns = st.columns(3, gap="medium")
-    descriptions = {
-        "Clean Editorial": "Bold captions with clean active-word emphasis.",
-        "Micro Glass": "Small translucent treatment for busy imagery.",
-        "Broadcast / Data": "Sports-desk hierarchy with a restrained field-report label.",
-    }
+    left, right = st.columns(2, gap="large")
 
-    for column, style in zip(columns, STYLE_NAMES):
-        with column:
-            st.markdown(f"**{style}**")
-            path = previews.get(style)
-            if path and Path(path).exists():
-                st.video(str(path), width=220)
-                st.caption(descriptions[style])
+    with left:
+        st.markdown("**Opening**")
+        if opening and Path(opening).exists():
+            st.video(str(opening), width=320)
+        st.caption("Optional headline enters from the left, then clears before subtitles appear.")
+
+    with right:
+        st.markdown("**Final overlay**")
+        if final and Path(final).exists():
+            st.video(str(final), width=300)
+        st.caption("Clean bold captions · one active-word highlight · logo top-right · source bottom-right")
 
 
 def render_audio():
