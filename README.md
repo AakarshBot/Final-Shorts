@@ -4,7 +4,7 @@ A simple, free-tier YouTube Shorts factory built one independently testable func
 
 ## Current
 
-Functions 01–05 are implemented and accepted:
+Functions 01–04 are implemented and accepted; Function 05 is implemented and under final test:
 - **01 — Topic Fetching**
 - **02 — Scriptwriter**
 - **03 — Audio**
