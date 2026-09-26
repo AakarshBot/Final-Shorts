@@ -114,6 +114,25 @@ def test_writer_uses_20b_when_primary_output_fails_validation(monkeypatch):
     assert result["provider_used"] == "openai/gpt-oss-20b"
 
 
+def test_writer_fallback_receives_validation_failure(monkeypatch):
+    prompts = []
+
+    def fake_request(model, prompt, story):
+        prompts.append(prompt)
+        if model == "openai/gpt-oss-120b":
+            return valid_result("Shubman Gill faces a fresh injury scare before India starts its ODI campaign.")
+        return valid_result()
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+    result = write_script(
+        {"title": "Gill injury scare", "description": "Shubman Gill was hit in training before the ODI."}
+    )
+
+    assert result["provider_used"] == "openai/gpt-oss-20b"
+    assert "Scene 1 exceeds 14 words." in prompts[1]
+    assert "fixing this exact failure" in prompts[1]
+
+
 def test_writer_rejects_missing_comment(monkeypatch):
     def fake_request(model, prompt, story):
         result = valid_result()
