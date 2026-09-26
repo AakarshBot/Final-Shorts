@@ -1,13 +1,12 @@
 # Final Shorts — Project Context
 
 ## Current state
-Functions 01–04 are implemented, tested, and accepted for development use.
-Function 05 is implemented and currently under final test:
+Functions 01–05 are implemented, tested, and accepted for development use:
 1. Topic Fetching
 2. Scriptwriter
 3. Audio
 4. Visuals — Phase 1 + Phase 2 complete
-5. Subtitles (under final test)
+5. Subtitles
 
 Function 04 Visuals Phase 1 and Phase 2 are complete. Function 05 Subtitles converts approved Edge-TTS word timings into SRT before Renderer.
 
@@ -121,7 +120,7 @@ README.md
 ```
 
 ## Last completed
-Function 04 — Visuals Phase 2.
+Function 05 — Subtitles.
 
 ## Current development
 Function 05 — Subtitles is implemented:
@@ -151,4 +150,4 @@ Function 05 — Subtitles is implemented:
 - Reject missing, invalid or out-of-order timings.
 
 ## Next gate
-Function 06 — Renderer starts only after Subtitles is tested and accepted.
+Function 06 — Renderer.
