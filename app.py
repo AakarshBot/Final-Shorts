@@ -152,7 +152,7 @@ def _crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
         box_color="#8B5CF6",
         aspect_ratio=None,
         return_type="image",
-        key=f"cropper-{hashlib.sha1(asset_key.encode("utf-8")).hexdigest()[:12]}",
+        key=f"cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
         stroke_width=2,
     )
 
