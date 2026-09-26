@@ -1385,7 +1385,6 @@ def _dedupe(assets):
             seen_hashes.add(digest)
         if image_url:
             seen_urls.add(image_url)
-        asset["qc_status"] = "usable"
         output.append(asset)
         if len(output) >= TARGET:
             break
