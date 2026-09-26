@@ -19,7 +19,7 @@ HEIGHT = 1920
 FPS = 15
 HEADLINE_SECONDS = 1.15
 FULL_PREVIEW_SECONDS = 2.8
-HEADLINE_TEXT = "THIS CHANGED EVERYTHING"
+HEADLINE_TEXT = "THE GAME JUST CHANGED"
 SOURCE_LABEL = "SPORTS DESK"
 FILLER_WORDS = (
     "India",
@@ -105,6 +105,7 @@ def _wrap(text: str, font, max_width: int, max_lines: int = 2) -> list[str]:
     lines: list[str] = []
     current = ""
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+
     for word in words:
         candidate = f"{current} {word}".strip()
         width, _ = _measure(probe, candidate, font)
@@ -113,13 +114,30 @@ def _wrap(text: str, font, max_width: int, max_lines: int = 2) -> list[str]:
             current = word
         else:
             current = candidate
+
     if current:
         lines.append(current)
-    if len(lines) <= max_lines:
-        return lines
+    return lines[:max_lines] if len(lines) > max_lines else lines
 
-    midpoint = max(1, len(words) // 2)
-    return [" ".join(words[:midpoint]), " ".join(words[midpoint:])]
+
+def _headline_layout(text: str) -> tuple[ImageFont.FreeTypeFont, list[str]]:
+    clean = " ".join(text.upper().split())
+    if not clean:
+        clean = HEADLINE_TEXT
+
+    size = 118
+    while size >= 78:
+        font = headline_font(size)
+        lines = _wrap(clean, font, 860, 2)
+
+        if len(lines) <= 2:
+            probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+            if all(_measure(probe, line, font)[0] <= 860 for line in lines):
+                return font, lines
+        size -= 4
+
+    font = headline_font(78)
+    return font, _wrap(clean, font, 860, 2)
 
 
 def make_sample_background() -> Image.Image:
@@ -184,8 +202,7 @@ def _headline_position(text_lines: list[str], font, t: float) -> tuple[int, int,
 
 
 def _draw_headline(base: Image.Image, text: str, t: float) -> None:
-    font = headline_font()
-    lines = _wrap(text.upper().strip() or HEADLINE_TEXT, font, 820, 2)
+    font, lines = _headline_layout(text)
     x, y, progress = _headline_position(lines, font, t)
 
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
