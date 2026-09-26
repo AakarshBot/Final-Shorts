@@ -40,6 +40,39 @@ def test_original_story_url_is_first_and_manual_run_uses_only_manual_query(monke
     assert result["manual_query"] == "Gill cricket action"
 
 
+def test_manual_query_is_not_locked_to_story_entity(monkeypatch):
+    calls = []
+
+    def fake_related(queries, original_url, story_title="", entity=""):
+        calls.append((queries, original_url, story_title, entity))
+        return []
+
+    def fake_crawl_pages(requests):
+        return [{"assets": []} for _ in requests]
+
+    monkeypatch.setattr(visual_fetcher, "_collect_related_pages", fake_related)
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl_pages)
+
+    story = {
+        **_story(),
+        "primary_entity": "Shubman Gill",
+    }
+    result = visual_fetcher.crawl_visuals(
+        story,
+        manual_query="Virat Kohli Rohit Sharma",
+    )
+
+    assert result["manual_query"] == "Virat Kohli Rohit Sharma"
+    assert calls == [
+        (
+            ["Virat Kohli Rohit Sharma"],
+            story["url"],
+            story["title"],
+            "",
+        )
+    ]
+
+
 def test_same_query_is_case_insensitive():
     assert visual_fetcher.same_query("Shubman Gill Cricket", ["shubman gill cricket"])
     assert not visual_fetcher.same_query("Gill nets", ["Gill batting"])
