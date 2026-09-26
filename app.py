@@ -64,7 +64,8 @@ footer,#MainMenu{visibility:hidden;}
 .topic-meta{font-size:.76rem;color:#8992a0;line-height:1.4;}
 .topic-accent{width:64px;height:3px;border-radius:999px;margin:.8rem 0 .9rem;background:linear-gradient(90deg,#ff2f8b,#6c45ff,#00d4ff);box-shadow:0 0 18px rgba(108,69,255,.22);}
 .topic-description{min-height:52px;font-size:.88rem;line-height:1.55;color:#c9ced7;margin-bottom:1rem;}
-.st-key-topic-card-0,.st-key-topic-card-1,.st-key-topic-card-2,.st-key-topic-card-3,.st-key-topic-card-4,.st-key-topic-card-5,.st-key-topic-card-6,.st-key-topic-card-7,.st-key-topic-card-8,.st-key-topic-card-9,.st-key-topic-card-10,.st-key-topic-card-11,.st-key-topic-card-12,.st-key-topic-card-13,.st-key-topic-card-14,.st-key-topic-card-15,.st-key-topic-card-16,.st-key-topic-card-17,.st-key-topic-card-18,.st-key-topic-card-19{
+.topic-selected{display:inline-flex;padding:4px 8px;border-radius:999px;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.28);color:#7be7ff;font-size:.62rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}
+div[class*="st-key-topic-card-"]{
     background:linear-gradient(145deg,rgba(255,255,255,.052),rgba(255,255,255,.014));
     border:1px solid rgba(255,255,255,.09);
     border-radius:22px;
@@ -72,7 +73,8 @@ footer,#MainMenu{visibility:hidden;}
     min-height:245px;
     box-shadow:0 16px 46px rgba(0,0,0,.18);
 }
-.st-key-topic-card-0 button,.st-key-topic-card-1 button,.st-key-topic-card-2 button,.st-key-topic-card-3 button,.st-key-topic-card-4 button,.st-key-topic-card-5 button,.st-key-topic-card-6 button,.st-key-topic-card-7 button,.st-key-topic-card-8 button,.st-key-topic-card-9 button,.st-key-topic-card-10 button,.st-key-topic-card-11 button,.st-key-topic-card-12 button,.st-key-topic-card-13 button,.st-key-topic-card-14 button,.st-key-topic-card-15 button,.st-key-topic-card-16 button,.st-key-topic-card-17 button,.st-key-topic-card-18 button,.st-key-topic-card-19 button{
+
+div[class*="st-key-topic-card-"] button{
     border-radius:12px;
     font-weight:800;
 }
@@ -221,9 +223,9 @@ def render_topic_fetcher():
     ) or "Cricket India / Asia"
     col1, col2 = st.columns(2)
     with col1:
-        fetch = st.button("Fetch topics", type="primary", use_container_width=True)
+        fetch = st.button("Fetch topics", type="primary", width="stretch")
     with col2:
-        more = st.button("Find 20 more", use_container_width=True)
+        more = st.button("Find 20 more", width="stretch")
 
     if fetch or more:
         with st.spinner("Fetching current sports stories…"):
@@ -278,6 +280,8 @@ def render_topic_fetcher():
                 source = topic.source or "Sports desk"
                 published = topic.published_at.strftime("%d %b · %H:%M UTC")
                 with st.container(key=f"topic-card-{index}"):
+                    if index == st.session_state.selected_topic:
+                        st.markdown('<div class="topic-selected">SELECTED</div>', unsafe_allow_html=True)
                     st.markdown(
                         f'''
                         <div class="topic-top">
@@ -349,7 +353,7 @@ def render_scriptwriter():
         label_visibility="collapsed",
     ) or "English"
 
-    if st.button("Generate script", type="primary", use_container_width=True):
+    if st.button("Generate script", type="primary", width="stretch"):
         with st.spinner("Writing the Short…"):
             st.session_state.script_data = write_script(
                 {
@@ -395,7 +399,7 @@ def render_scriptwriter():
             )
         )
 
-    if st.button("Approve script", type="primary", use_container_width=True):
+    if st.button("Approve script", type="primary", width="stretch"):
         try:
             approved = apply_script_edits(
                 script,
@@ -524,7 +528,7 @@ def render_visuals_crawler():
                 )
                 source_url = str(asset.get("source_page_url") or "").strip()
                 if source_url:
-                    st.link_button("Open source", source_url, use_container_width=True)
+                    st.link_button("Open source", source_url, width="stretch")
 
 
 def _render_manual_crawler():
@@ -539,7 +543,7 @@ def _render_manual_crawler():
         scrape = st.form_submit_button(
             "Run manual scrape",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     if scrape:
@@ -594,7 +598,7 @@ def _render_manual_crawler():
                 )
                 source_url = str(asset.get("source_page_url") or "").strip()
                 if source_url:
-                    st.link_button("Open source", source_url, use_container_width=True)
+                    st.link_button("Open source", source_url, width="stretch")
 
 
 def _render_manual_real_images():
@@ -609,7 +613,7 @@ def _render_manual_real_images():
         search = st.form_submit_button(
             "Search real images",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     if search:
@@ -647,7 +651,7 @@ def _render_manual_real_images():
                 st.caption(asset.get("source") or "Web")
                 source_url = str(asset.get("source_page_url") or "").strip()
                 if source_url:
-                    st.link_button("Open source", source_url, use_container_width=True)
+                    st.link_button("Open source", source_url, width="stretch")
 
 
 def _render_manual_ai_images():
@@ -662,7 +666,7 @@ def _render_manual_ai_images():
         generate = st.form_submit_button(
             "Generate images",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
 
     if generate:
@@ -729,7 +733,7 @@ def render_subtitles():
         st.info("Approve the Scriptwriter and Audio handoffs first.")
         return
 
-    if st.button("Generate subtitles", type="primary", use_container_width=True):
+    if st.button("Generate subtitles", type="primary", width="stretch"):
         try:
             st.session_state.subtitle_data = generate_subtitles(script, audio)
             st.session_state.approved_subtitles = None
@@ -753,7 +757,7 @@ def render_subtitles():
             f'{index:02d} · {cue["start"]:.2f}s–{cue["end"]:.2f}s · {words}'
         )
 
-    if st.button("Approve subtitles", type="primary", use_container_width=True):
+    if st.button("Approve subtitles", type="primary", width="stretch"):
         st.session_state.approved_subtitles = dict(subtitles)
 
     if st.session_state.approved_subtitles:
@@ -779,7 +783,7 @@ def render_renderer_test():
         f"{FINAL_STYLE_NAME} · Oswald Bold block headline · clean word-highlight captions"
     )
 
-    if st.button("Build preview", type="primary", use_container_width=True):
+    if st.button("Build preview", type="primary", width="stretch"):
         with st.spinner("Rendering preview…"):
             try:
                 st.session_state.renderer_previews = build_preview_bundle(
@@ -893,7 +897,7 @@ def render_upload_qc():
             height=100,
         )
 
-        if st.button("Approve Upload QC", type="primary", use_container_width=True):
+        if st.button("Approve Upload QC", type="primary", width="stretch"):
             st.session_state.upload_qc_approved = True
             st.session_state.upload_result = None
             st.session_state.upload_qc = {
@@ -931,7 +935,7 @@ def render_upload_qc():
                     "The video was uploaded publicly, but YouTube did not accept the comment: "
                     + result["comment_error"]
                 )
-        st.link_button("Open YouTube video", result["url"], use_container_width=True)
+        st.link_button("Open YouTube video", result["url"], width="stretch")
         return
 
     st.subheader("Upload")
@@ -940,12 +944,12 @@ def render_upload_qc():
         public = st.button(
             "Upload Public",
             type="primary",
-            use_container_width=True,
+            width="stretch",
         )
     with col2:
         private = st.button(
             "Upload Private",
-            use_container_width=True,
+            width="stretch",
         )
 
     if not (public or private):
@@ -985,7 +989,7 @@ def render_audio():
     ) or default_language.title()
     st.caption("HYPE COMMENTATOR · female Indian voice · native Edge-TTS word timings")
 
-    if st.button("Generate audio", type="primary", use_container_width=True):
+    if st.button("Generate audio", type="primary", width="stretch"):
         selected = dict(script)
         selected["language_used"] = language.casefold()
         with st.spinner("Generating voiceover…"):
@@ -1019,7 +1023,7 @@ def render_audio():
         st.audio(scene["path"], format="audio/mp3")
         st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
 
-    if st.button("Approve audio", type="primary", use_container_width=True):
+    if st.button("Approve audio", type="primary", width="stretch"):
         try:
             st.session_state.approved_audio = approve_audio(audio)
             st.session_state.subtitle_data = None
