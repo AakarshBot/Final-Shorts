@@ -1,7 +1,10 @@
+import hashlib
 import json
+from io import BytesIO
 from pathlib import Path
 
 from dotenv import load_dotenv
+from PIL import Image
 import streamlit as st
 
 load_dotenv()
@@ -30,54 +33,62 @@ STAGES = [
 
 st.markdown("""
 <style>
-:root{--bg:#0a0c10;--text:#f6f7fb;--muted:#8d96a6;--line:rgba(255,255,255,.09);}
-[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 10% 0%,rgba(93,104,120,.13),transparent 28%),radial-gradient(circle at 90% 10%,rgba(69,81,102,.10),transparent 30%),var(--bg);color:var(--text);}
+:root{--bg:#07090d;--panel:#0d1118;--panel-2:#111722;--text:#f5f7fb;--muted:#8791a2;--line:rgba(255,255,255,.095);--line-strong:rgba(255,255,255,.15);--violet:#8b5cf6;--cyan:#22d3ee;--pink:#f43f8a;}
+[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 8% 0%,rgba(139,92,246,.11),transparent 28%),radial-gradient(circle at 92% 12%,rgba(34,211,238,.07),transparent 24%),linear-gradient(180deg,#090b10 0%,var(--bg) 58%,#06080b 100%);color:var(--text);}
 [data-testid="stHeader"]{background:transparent;}
 section[data-testid="stSidebar"]{display:none;}
 footer,#MainMenu{visibility:hidden;}
-.block-container{max-width:1480px;padding:1.25rem 2rem 3rem;}
-.card{background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.018));border:1px solid var(--line);border-radius:22px;padding:20px;margin:10px 0;box-shadow:0 18px 50px rgba(0,0,0,.22);}
-.badge{display:inline-block;padding:5px 10px;border-radius:999px;background:rgba(255,255,255,.06);border:1px solid var(--line);font-size:.76rem;letter-spacing:.06em;text-transform:uppercase;}
-.eyebrow{color:var(--muted);font-size:.72rem;font-weight:800;letter-spacing:.16em;text-transform:uppercase;}
-.hero-title{font-size:clamp(2.4rem,5vw,5rem);line-height:.94;font-weight:900;letter-spacing:-.05em;margin:0;}
-.hero-subtitle{color:#aab1be;font-size:1rem;max-width:600px;margin-top:.8rem;}
-.st-key-landing-test,.st-key-landing-live{min-height:520px;border-radius:30px;padding:34px;overflow:hidden;position:relative;border:1px solid rgba(255,255,255,.12);}
-.st-key-landing-test{background:radial-gradient(circle at 75% 15%,rgba(255,255,255,.11),transparent 24%),repeating-linear-gradient(0deg,rgba(255,255,255,.026) 0 1px,transparent 1px 4px),repeating-linear-gradient(90deg,rgba(0,0,0,.055) 0 1px,transparent 1px 5px),linear-gradient(145deg,#4c525b,#242930);box-shadow:inset 0 0 120px rgba(0,0,0,.22),0 30px 70px rgba(0,0,0,.26);}
-.st-key-landing-live{background:radial-gradient(circle at 78% 18%,rgba(255,255,255,.25),transparent 20%),radial-gradient(circle at 18% 82%,rgba(0,212,255,.28),transparent 28%),repeating-linear-gradient(120deg,rgba(255,255,255,.035) 0 2px,transparent 2px 7px),linear-gradient(135deg,#241241,#65206e 48%,#123a73);box-shadow:inset 0 0 140px rgba(255,47,139,.16),0 30px 80px rgba(85,38,165,.28);}
-.st-key-landing-test button,.st-key-landing-live button{min-height:58px;border-radius:16px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
-.st-key-landing-test button{background:rgba(12,14,18,.68);border-color:rgba(255,255,255,.2);}
-.st-key-landing-live button{background:linear-gradient(90deg,rgba(255,47,139,.88),rgba(108,69,255,.92));border-color:rgba(255,255,255,.22);}
-.st-key-stage-shell{background:rgba(14,18,24,.74);border:1px solid var(--line);border-radius:24px;padding:12px 10px 6px;backdrop-filter:blur(18px);}
-.st-key-stage-content{background:linear-gradient(145deg,rgba(255,255,255,.038),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:24px;padding:20px 22px 26px;margin-top:14px;}
-.stage-rail-label{font-size:.65rem;color:var(--muted);text-align:center;letter-spacing:.12em;text-transform:uppercase;margin-top:6px;}
-.stage-rail-line{height:2px;background:linear-gradient(90deg,rgba(255,255,255,.12),rgba(255,255,255,.03));margin:0 8%;}
-.live-glow{height:4px;border-radius:999px;background:linear-gradient(90deg,#ff2f8b,#6c45ff,#00d4ff);box-shadow:0 0 26px rgba(255,47,139,.35);}
-.live-card{min-height:154px;border-radius:22px;border:1px solid rgba(255,255,255,.10);background:linear-gradient(145deg,rgba(255,255,255,.05),rgba(255,255,255,.015));padding:20px;}
+.block-container{max-width:1500px;padding:1rem 2rem 3.25rem;}
+h1,h2,h3{letter-spacing:-.04em;}
+button{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;}
+button:hover{transform:translateY(-1px);}
+.card{background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.015));border:1px solid var(--line);border-radius:16px;padding:20px;margin:10px 0;box-shadow:0 18px 48px rgba(0,0,0,.22);}
+.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:7px;background:rgba(255,255,255,.045);border:1px solid var(--line);font-size:.68rem;font-weight:800;letter-spacing:.11em;text-transform:uppercase;color:#b8c0cc;}
+.eyebrow{color:#788394;font-size:.67rem;font-weight:900;letter-spacing:.17em;text-transform:uppercase;}
+.hero-title{font-size:clamp(2.6rem,5vw,5rem);line-height:.92;font-weight:950;letter-spacing:-.055em;margin:0;}
+.hero-subtitle{color:#a7afbc;font-size:.98rem;line-height:1.55;max-width:660px;margin-top:.72rem;}
+.st-key-landing-test,.st-key-landing-live{min-height:500px;border-radius:24px;padding:32px;overflow:hidden;position:relative;border:1px solid var(--line-strong);}
+.st-key-landing-test{background:radial-gradient(circle at 78% 12%,rgba(255,255,255,.11),transparent 24%),repeating-linear-gradient(0deg,rgba(255,255,255,.025) 0 1px,transparent 1px 4px),linear-gradient(145deg,#3e444d,#20252b);box-shadow:inset 0 0 110px rgba(0,0,0,.22),0 26px 64px rgba(0,0,0,.26);}
+.st-key-landing-live{background:radial-gradient(circle at 78% 15%,rgba(255,255,255,.18),transparent 20%),radial-gradient(circle at 16% 86%,rgba(34,211,238,.28),transparent 30%),linear-gradient(135deg,#21122f,#57205f 46%,#123a70);box-shadow:inset 0 0 130px rgba(244,63,138,.14),0 26px 70px rgba(75,42,140,.28);}
+.st-key-landing-test:before,.st-key-landing-live:before{content:"";position:absolute;left:32px;right:32px;top:0;height:2px;background:linear-gradient(90deg,transparent,#fff,transparent);opacity:.35;}
+.st-key-landing-live:before{background:linear-gradient(90deg,#f43f8a,#8b5cf6,#22d3ee);opacity:.95;box-shadow:0 0 24px rgba(139,92,246,.35);}
+.st-key-landing-test button,.st-key-landing-live button{min-height:54px;border-radius:11px;font-weight:850;letter-spacing:.06em;text-transform:uppercase;}
+.st-key-landing-test button{background:rgba(8,10,14,.72);border-color:rgba(255,255,255,.20);}
+.st-key-landing-test button:hover{border-color:rgba(255,255,255,.36);box-shadow:0 12px 28px rgba(0,0,0,.28);}
+.st-key-landing-live button{background:linear-gradient(90deg,rgba(244,63,138,.92),rgba(139,92,246,.94));border-color:rgba(255,255,255,.24);box-shadow:0 10px 30px rgba(108,69,246,.20);}
+.st-key-landing-live button:hover{box-shadow:0 14px 36px rgba(108,69,246,.34);}
+.st-key-stage-shell{background:rgba(10,13,18,.82);border:1px solid var(--line);border-radius:16px;padding:10px 10px 5px;backdrop-filter:blur(18px);box-shadow:0 18px 46px rgba(0,0,0,.20);}
+.st-key-stage-content{background:linear-gradient(145deg,rgba(255,255,255,.038),rgba(255,255,255,.010));border:1px solid var(--line);border-radius:16px;padding:18px 20px 26px;margin-top:12px;box-shadow:0 18px 48px rgba(0,0,0,.18);}
+.st-key-stage-shell button{min-height:46px;border-radius:10px;font-size:.9rem;}
+.stage-rail-label{font-size:.63rem;color:var(--muted);text-align:center;letter-spacing:.12em;text-transform:uppercase;margin-top:5px;}
+.stage-rail-line{height:1px;background:linear-gradient(90deg,rgba(255,255,255,.13),rgba(255,255,255,.025));margin:0 8%;}
+.live-glow{height:3px;border-radius:999px;background:linear-gradient(90deg,#f43f8a,#8b5cf6,#22d3ee);box-shadow:0 0 24px rgba(139,92,246,.32);}
+.live-card{min-height:138px;border-radius:14px;border:1px solid rgba(255,255,255,.09);background:linear-gradient(145deg,rgba(255,255,255,.045),rgba(255,255,255,.012));padding:18px;box-shadow:0 14px 34px rgba(0,0,0,.14);}
+.live-card:hover{border-color:rgba(139,92,246,.24);box-shadow:0 18px 42px rgba(0,0,0,.20);}
 .muted{color:var(--muted);}
-.section-head{display:flex;align-items:end;justify-content:space-between;margin:.5rem 0 1rem;}
-.section-title{font-size:1.45rem;font-weight:900;letter-spacing:-.03em;}
-.section-count{font-size:.75rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;}
-.topic-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
-.topic-rank{font-size:.72rem;color:#8f98a7;font-weight:800;letter-spacing:.12em;}
-.topic-rating{font-size:1rem;letter-spacing:.08em;color:#ffd45a;text-shadow:0 0 18px rgba(255,210,80,.14);}
-.topic-title{font-size:1.2rem;line-height:1.12;font-weight:900;letter-spacing:-.025em;margin:.15rem 0 .55rem;}
-.topic-meta{font-size:.76rem;color:#8992a0;line-height:1.4;}
-.topic-accent{width:64px;height:3px;border-radius:999px;margin:.8rem 0 .9rem;background:linear-gradient(90deg,#ff2f8b,#6c45ff,#00d4ff);box-shadow:0 0 18px rgba(108,69,255,.22);}
-.topic-description{min-height:52px;font-size:.88rem;line-height:1.55;color:#c9ced7;margin-bottom:1rem;}
-.topic-selected{display:inline-flex;padding:4px 8px;border-radius:999px;background:rgba(0,212,255,.12);border:1px solid rgba(0,212,255,.28);color:#7be7ff;font-size:.62rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:10px;}
-div[class*="st-key-topic-card-"]{
-    background:linear-gradient(145deg,rgba(255,255,255,.052),rgba(255,255,255,.014));
-    border:1px solid rgba(255,255,255,.09);
-    border-radius:22px;
-    padding:18px 18px 16px;
-    min-height:245px;
-    box-shadow:0 16px 46px rgba(0,0,0,.18);
-}
-
-div[class*="st-key-topic-card-"] button{
-    border-radius:12px;
-    font-weight:800;
-}
+.section-head{display:flex;align-items:end;justify-content:space-between;margin:.35rem 0 1rem;}
+.section-title{font-size:1.42rem;font-weight:950;letter-spacing:-.035em;}
+.section-count{font-size:.68rem;color:#707b8b;letter-spacing:.13em;text-transform:uppercase;}
+.topic-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;}
+.topic-rank{font-size:.66rem;color:#798494;font-weight:900;letter-spacing:.14em;text-transform:uppercase;}
+.topic-rating{font-size:1.02rem;letter-spacing:.10em;color:#ffd35f;text-shadow:0 0 16px rgba(255,211,95,.13);}
+.topic-title{font-size:1.34rem;line-height:1.08;font-weight:950;letter-spacing:-.032em;margin:.12rem 0 .8rem;min-height:2.2em;}
+.topic-meta{font-size:.70rem;color:#7f8a9a;line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.topic-selected{display:inline-flex;padding:4px 8px;border-radius:6px;background:rgba(34,211,238,.08);border:1px solid rgba(34,211,238,.25);color:#71e8f7;font-size:.58rem;font-weight:950;letter-spacing:.13em;text-transform:uppercase;margin-bottom:9px;}
+div[class*="st-key-topic-card-"]{background:linear-gradient(145deg,rgba(255,255,255,.050),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:16px;padding:16px 16px 14px;min-height:178px;box-shadow:0 14px 40px rgba(0,0,0,.17);position:relative;overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
+div[class*="st-key-topic-card-"]:before{content:"";position:absolute;left:0;top:0;bottom:0;width:2px;background:linear-gradient(180deg,#f43f8a,#8b5cf6,#22d3ee);opacity:.28;}
+div[class*="st-key-topic-card-"]:hover{transform:translateY(-2px);border-color:rgba(139,92,246,.30);box-shadow:0 20px 48px rgba(0,0,0,.23);}
+div[class*="st-key-topic-card-"] button{border-radius:9px;font-weight:850;}
+div[class*="st-key-selected-story-"]{background:linear-gradient(145deg,rgba(34,211,238,.075),rgba(139,92,246,.025));border:1px solid rgba(34,211,238,.20);border-radius:14px;padding:18px 20px;box-shadow:0 18px 48px rgba(0,0,0,.18);}
+div[class*="st-key-visual-card-"]{background:linear-gradient(145deg,rgba(255,255,255,.048),rgba(255,255,255,.012));border:1px solid var(--line);border-radius:14px;padding:10px;box-shadow:0 14px 38px rgba(0,0,0,.18);overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
+div[class*="st-key-visual-card-"]:hover{transform:translateY(-2px);border-color:rgba(139,92,246,.32);box-shadow:0 20px 44px rgba(0,0,0,.23);}
+div[class*="st-key-visual-card-"] img{border-radius:9px;}
+.visual-source{font-size:.66rem;font-weight:850;color:#aab3c0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.visual-detail{font-size:.62rem;color:#707b89;line-height:1.35;}
+.visual-crop-label{font-size:.58rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:#8eeaf7;margin:.55rem 0 .3rem;}
+.crop-dialog-kicker{font-size:.68rem;font-weight:900;letter-spacing:.14em;text-transform:uppercase;color:#8894a6;}
+.crop-dialog-title{font-size:1.45rem;font-weight:950;letter-spacing:-.035em;margin-top:.15rem;}
+@media (max-width: 900px){.block-container{padding-left:1rem;padding-right:1rem}.st-key-landing-test,.st-key-landing-live{min-height:420px;padding:24px}.hero-title{font-size:3rem}.topic-title{font-size:1.15rem}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -87,6 +98,131 @@ if "test_stage" not in st.session_state:
     st.session_state.test_stage = "01 · Topic Fetcher"
 if "renderer_previews" not in st.session_state:
     st.session_state.renderer_previews = None
+if "visual_crops" not in st.session_state:
+    st.session_state.visual_crops = {}
+
+def _asset_to_image(value):
+    try:
+        if isinstance(value, Image.Image):
+            return value.convert("RGB")
+        if isinstance(value, (bytes, bytearray)):
+            with Image.open(BytesIO(bytes(value))) as image:
+                return image.convert("RGB")
+    except (OSError, ValueError):
+        return None
+    return None
+
+
+def _preview_image(asset):
+    image = _asset_to_image(asset.get("bytes"))
+    if image is None:
+        return None
+    image.thumbnail((960, 960), Image.Resampling.LANCZOS)
+    return image
+
+
+def _visual_asset_key(result_key: str, index: int, asset: dict) -> str:
+    identity = (
+        str(asset.get("source_page_url") or asset.get("url") or "")
+        + "|"
+        + str(asset.get("article_title") or asset.get("model") or "")
+        + "|"
+        + str(index)
+    )
+    digest = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:12]
+    return f"{result_key}-{digest}"
+
+
+@st.dialog("Crop visual", width="large")
+def _crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
+    image = _asset_to_image(image_bytes)
+    if image is None:
+        st.error("This visual could not be opened for cropping.")
+        return
+
+    st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
+    st.caption("Free-size crop · drag the rectangle over the exact framing you want. The original visual stays untouched.")
+
+    from streamlit_cropper import st_cropper
+
+    cropped = st_cropper(
+        image,
+        realtime_update=True,
+        box_color="#8B5CF6",
+        aspect_ratio=None,
+        return_type="image",
+        key=f"cropper-{hashlib.sha1(asset_key.encode("utf-8")).hexdigest()[:12]}",
+        stroke_width=2,
+    )
+
+    left, right = st.columns([1.2, .8], gap="large")
+    with left:
+        st.markdown('<div class="crop-dialog-kicker">PREVIEW</div>', unsafe_allow_html=True)
+        st.image(cropped, width="stretch")
+    with right:
+        st.markdown('<div class="crop-dialog-kicker">ORIGINAL SIZE</div>', unsafe_allow_html=True)
+        st.caption(f"{image.width} × {image.height}px")
+        st.markdown('<div class="crop-dialog-kicker" style="margin-top:1rem;">OUTPUT</div>', unsafe_allow_html=True)
+        st.caption("Saved as a review preview only. It does not replace the source asset.")
+        if st.button("Save crop", type="primary", width="stretch"):
+            buffer = BytesIO()
+            cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
+            st.session_state.visual_crops[asset_key] = buffer.getvalue()
+            st.rerun()
+
+
+def _render_visual_asset_grid(assets: list[dict], result_key: str):
+    for start in range(0, len(assets), 3):
+        cols = st.columns(3, gap="medium")
+        for index, (col, asset) in enumerate(zip(cols, assets[start:start + 3]), start=start):
+            with col:
+                asset_key = _visual_asset_key(result_key, index, asset)
+                with st.container(key=f"visual-card-{result_key}-{index}"):
+                    preview = _preview_image(asset)
+                    if preview is not None:
+                        st.image(preview, width="stretch")
+                    source = str(
+                        asset.get("publisher")
+                        or asset.get("source")
+                        or asset.get("model")
+                        or "Web source"
+                    )
+                    detail = str(
+                        asset.get("article_title")
+                        or asset.get("dimensions")
+                        or (
+                            f'{int(asset.get("width") or 0)}×{int(asset.get("height") or 0)}px'
+                            if asset.get("width") and asset.get("height")
+                            else ""
+                        )
+                    )
+                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
+                    if detail:
+                        st.markdown(f'<div class="visual-detail">{detail}</div>', unsafe_allow_html=True)
+
+                    cropped = st.session_state.visual_crops.get(asset_key)
+                    if cropped:
+                        st.markdown('<div class="visual-crop-label">CROP PREVIEW</div>', unsafe_allow_html=True)
+                        crop_preview = _asset_to_image(cropped)
+                        if crop_preview is not None:
+                            st.image(crop_preview, width="stretch")
+
+                    action_cols = st.columns(2, gap="small")
+                    with action_cols[0]:
+                        if st.button("Crop", key=f"crop-button-{asset_key}", width="stretch"):
+                            raw = asset.get("bytes")
+                            if isinstance(raw, (bytes, bytearray)):
+                                _crop_visual_dialog(asset_key, bytes(raw), source)
+                            else:
+                                st.warning("This visual does not have a crop-ready image payload.")
+                    with action_cols[1]:
+                        source_url = str(asset.get("source_page_url") or "").strip()
+                        if source_url:
+                            st.link_button("Source ↗", source_url, width="stretch")
+                        else:
+                            st.markdown('<div class="visual-detail" style="padding-top:.45rem;">No source link</div>', unsafe_allow_html=True)
+
 
 def _render_home():
     st.markdown('<div class="eyebrow">FINAL SHORTS · CONTROL CENTER</div>',unsafe_allow_html=True)
@@ -285,25 +421,14 @@ def render_topic_fetcher():
                     st.markdown(
                         f'''
                         <div class="topic-top">
-                            <span class="topic-rank">#{index + 1:02d}</span>
-                            <span class="topic-rating">{stars}</span>
+                            <span class="topic-rank">STORY {index + 1:02d}</span>
+                            <span class="topic-rating" title="{rating}/5">{stars}</span>
                         </div>
                         <div class="topic-title">{topic.title}</div>
                         <div class="topic-meta">{source} · {published}</div>
-                        <div class="topic-accent"></div>
                         ''',
                         unsafe_allow_html=True,
                     )
-                    if topic.description:
-                        st.markdown(
-                            f'<div class="topic-description">{topic.description[:220]}</div>',
-                            unsafe_allow_html=True,
-                        )
-                    else:
-                        st.markdown(
-                            '<div class="topic-description muted">Fresh sports story · ready for Scriptwriter.</div>',
-                            unsafe_allow_html=True,
-                        )
                     if st.button(
                         "Select story  →",
                         key=f"topic-select-{index}",
@@ -316,15 +441,18 @@ def render_topic_fetcher():
                         st.session_state.approved_audio = None
                         st.session_state.visual_result = None
                         st.session_state.visual_loaded_story = None
+                        st.session_state.visual_crops = {}
 
     if st.session_state.selected_topic is not None:
         index = st.session_state.selected_topic
         if index < len(st.session_state.topics):
             topic = st.session_state.topics[index]
-            st.divider()
-            st.subheader("Selected story")
-            st.write(topic.title)
-            st.caption(f"{topic.source} · {topic.url}")
+            with st.container(key="selected-story-card"):
+                st.markdown('<div class="eyebrow">SELECTED STORY</div>', unsafe_allow_html=True)
+                st.markdown(f'<div style="font-size:1.18rem;font-weight:900;letter-spacing:-.02em;">{topic.title}</div>', unsafe_allow_html=True)
+                st.caption(topic.description or f"{topic.source} · {topic.published_at.strftime('%d %b · %H:%M UTC')}")
+                if topic.url:
+                    st.link_button("Open original story ↗", topic.url, width="stretch")
 
 
 def render_scriptwriter():
@@ -462,6 +590,7 @@ def render_visuals_crawler():
 
     if story_key != st.session_state.get("visual_loaded_story"):
         st.session_state.visual_result = None
+        st.session_state.visual_crops = {}
         with st.spinner("Scraping the selected story and related publisher pages…"):
             try:
                 st.session_state.visual_result = crawl_visuals(story)
@@ -513,26 +642,12 @@ def render_visuals_crawler():
         st.warning("The crawler found no usable images.")
         return
 
-    st.subheader("Scraped images")
-    for start in range(0, len(assets), 3):
-        cols = st.columns(3, gap="medium")
-        for col, asset in zip(cols, assets[start:start + 3]):
-            with col:
-                st.image(asset["bytes"], width="stretch")
-                publisher = asset.get("publisher") or "Web source"
-                size = f'{asset.get("width", 0)}×{asset.get("height", 0)}'
-                action = int(asset.get("action_score") or 0)
-                st.caption(
-                    f"{publisher} · {size} · action {action}\n"
-                    f"{asset.get('article_title') or ''}"
-                )
-                source_url = str(asset.get("source_page_url") or "").strip()
-                if source_url:
-                    st.link_button("Open source", source_url, width="stretch")
+    st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
+    _render_visual_asset_grid(assets, "auto-crawler")
 
 
 def _render_manual_crawler():
-    st.subheader("Option 2 · Manual Scraper")
+    st.subheader("Manual Scraper")
     st.caption("Manual query only. Searches current publisher pages and scrapes their images.")
     with st.form("manual_crawler_form"):
         query = st.text_input(
@@ -554,6 +669,7 @@ def _render_manual_crawler():
             with st.spinner("Searching and scraping publisher pages…"):
                 try:
                     st.session_state.manual_visual_result = manual_crawl_visuals(query)
+                    st.session_state.visual_crops = {}
                 except Exception as exc:
                     st.session_state.manual_visual_result = {
                         "error": f"{type(exc).__name__}: {exc}"
@@ -585,24 +701,12 @@ def _render_manual_crawler():
         st.warning("The manual crawler found no usable images.")
         return
 
-    st.subheader("Scraped images")
-    for start in range(0, len(assets), 3):
-        cols = st.columns(3, gap="medium")
-        for col, asset in zip(cols, assets[start:start + 3]):
-            with col:
-                st.image(asset["bytes"], width="stretch")
-                publisher = asset.get("publisher") or "Web source"
-                size = f'{asset.get("width", 0)}×{asset.get("height", 0)}'
-                st.caption(
-                    f"{publisher} · {size}\n{asset.get('article_title') or ''}"
-                )
-                source_url = str(asset.get("source_page_url") or "").strip()
-                if source_url:
-                    st.link_button("Open source", source_url, width="stretch")
+    st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
+    _render_visual_asset_grid(assets, "manual-crawler")
 
 
 def _render_manual_real_images():
-    st.subheader("Option 3 · Real Image Search")
+    st.subheader("Real Image Search")
     st.caption("Manual query only. Searches all configured real-image sources in parallel.")
     with st.form("real_image_search_form"):
         query = st.text_input(
@@ -623,6 +727,7 @@ def _render_manual_real_images():
         else:
             with st.spinner("Searching real-image sources…"):
                 st.session_state.real_image_result = search_images(query)
+                st.session_state.visual_crops = {}
 
     result = st.session_state.get("real_image_result") or {}
     if not result:
@@ -643,19 +748,12 @@ def _render_manual_real_images():
         st.warning("No usable images were returned.")
         return
 
-    for start in range(0, len(assets), 3):
-        cols = st.columns(3, gap="medium")
-        for col, asset in zip(cols, assets[start:start + 3]):
-            with col:
-                st.image(asset["bytes"], width="stretch")
-                st.caption(asset.get("source") or "Web")
-                source_url = str(asset.get("source_page_url") or "").strip()
-                if source_url:
-                    st.link_button("Open source", source_url, width="stretch")
+    st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Real images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
+    _render_visual_asset_grid(assets, "real-search")
 
 
 def _render_manual_ai_images():
-    st.subheader("Option 4 · AI Generation")
+    st.subheader("AI Generation")
     st.caption("Manual query only. Each configured AI provider runs independently.")
     with st.form("ai_image_form"):
         query = st.text_input(
@@ -676,6 +774,7 @@ def _render_manual_ai_images():
         else:
             with st.spinner("Generating images…"):
                 st.session_state.ai_image_result = generate_images(query)
+                st.session_state.visual_crops = {}
 
     result = st.session_state.get("ai_image_result") or {}
     if not result:
@@ -694,9 +793,8 @@ def _render_manual_ai_images():
         st.warning("No configured AI provider returned an image.")
         return
 
-    for asset in assets:
-        st.image(asset["bytes"], width="stretch")
-        st.caption(f'{asset.get("source") or "AI"} · {asset.get("model") or ""}'.strip(" ·"))
+    st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Generated images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
+    _render_visual_asset_grid(assets, "ai-generation")
 
 
 def render_visuals():
