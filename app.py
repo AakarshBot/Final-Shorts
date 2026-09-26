@@ -100,6 +100,50 @@ if "renderer_previews" not in st.session_state:
     st.session_state.renderer_previews = None
 if "visual_crops" not in st.session_state:
     st.session_state.visual_crops = {}
+if "topics" not in st.session_state:
+    st.session_state.topics = []
+if "selected_topic" not in st.session_state:
+    st.session_state.selected_topic = None
+if "script_data" not in st.session_state:
+    st.session_state.script_data = None
+if "approved_script" not in st.session_state:
+    st.session_state.approved_script = None
+if "audio_data" not in st.session_state:
+    st.session_state.audio_data = None
+if "approved_audio" not in st.session_state:
+    st.session_state.approved_audio = None
+if "subtitle_data" not in st.session_state:
+    st.session_state.subtitle_data = None
+if "approved_subtitles" not in st.session_state:
+    st.session_state.approved_subtitles = None
+if "visual_result" not in st.session_state:
+    st.session_state.visual_result = None
+if "visual_loaded_story" not in st.session_state:
+    st.session_state.visual_loaded_story = None
+if "rendered_video_path" not in st.session_state:
+    st.session_state.rendered_video_path = None
+if "upload_qc_approved" not in st.session_state:
+    st.session_state.upload_qc_approved = False
+if "upload_result" not in st.session_state:
+    st.session_state.upload_result = None
+if "upload_qc" not in st.session_state:
+    st.session_state.upload_qc = None
+if "upload_title_options" not in st.session_state:
+    st.session_state.upload_title_options = []
+if "upload_title_choice" not in st.session_state:
+    st.session_state.upload_title_choice = 0
+if "upload_description" not in st.session_state:
+    st.session_state.upload_description = ""
+if "upload_hashtags" not in st.session_state:
+    st.session_state.upload_hashtags = ""
+if "upload_comment" not in st.session_state:
+    st.session_state.upload_comment = ""
+if "manual_visual_result" not in st.session_state:
+    st.session_state.manual_visual_result = None
+if "real_image_result" not in st.session_state:
+    st.session_state.real_image_result = None
+if "ai_image_result" not in st.session_state:
+    st.session_state.ai_image_result = None
 
 def _asset_to_image(value):
     try:
