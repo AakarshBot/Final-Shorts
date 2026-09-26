@@ -7,14 +7,19 @@ from pathlib import Path
 from difflib import SequenceMatcher
 
 import requests
+import trafilatura
+from ddgs import DDGS
 from dotenv import load_dotenv
+from urllib.parse import urlparse
 
 load_dotenv(Path(__file__).resolve().with_name(".env"))
 
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
 TIMEOUT = 30
+RESEARCH_TIMEOUT = 8
 MAX_SOURCE_CHARS = 12000
+MIN_ARTICLE_CHARS = 600
 SCENE_1_MAX_WORDS = 14
 MAX_WORDS = 75
 
@@ -72,7 +77,7 @@ SCHEMA = {
 
 SYSTEM_PROMPT = """You are the original editorial writer for a human-reviewed sports Shorts channel.
 
-Use only the supplied story evidence. Tell the complete important story in fresh wording.
+Use only the supplied story evidence. Tell the complete important story in fresh wording. Prefer the primary article evidence when available; use corroborating evidence only when it supports the same event. Never turn a missing detail into a guess.
 Never invent facts, quotes, motives, numbers, predictions, outcomes or causal claims.
 Never copy a complete source sentence.
 
@@ -152,6 +157,133 @@ def _words(value) -> int:
 
 def _normalise(value) -> str:
     return re.sub(r"[^\w ]+", " ", str(value or "").casefold(), flags=re.UNICODE).strip()
+
+
+def _story_value(story, key: str) -> str:
+    if hasattr(story, "__dataclass_fields__"):
+        return _clean(getattr(story, key, ""))
+    return _clean(dict(story or {}).get(key))
+
+
+def _source_domain(url: str) -> str:
+    try:
+        return urlparse(str(url or "")).netloc.casefold().removeprefix("www.")
+    except ValueError:
+        return ""
+
+
+def _limit_source_text(text: str) -> str:
+    clean = _clean(text)
+    if len(clean) <= MAX_SOURCE_CHARS:
+        return clean
+    head = int(MAX_SOURCE_CHARS * 0.72)
+    tail = MAX_SOURCE_CHARS - head
+    return clean[:head].rstrip() + "\n\n[ARTICLE CONTINUES]\n\n" + clean[-tail:].lstrip()
+
+
+def _extract_article(url: str) -> tuple[str, str]:
+    target = _clean(url)
+    if not target:
+        return "", ""
+
+    response = requests.get(
+        target,
+        headers={
+            "User-Agent": "Final-Shorts/1.0",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+        timeout=RESEARCH_TIMEOUT,
+        allow_redirects=True,
+    )
+    response.raise_for_status()
+
+    extracted = trafilatura.extract(
+        response.text,
+        url=str(response.url or target),
+        favor_recall=True,
+        include_comments=False,
+        include_tables=False,
+        output_format="txt",
+    )
+    text = _clean(extracted)
+    if len(text) < MIN_ARTICLE_CHARS:
+        return "", str(response.url or target)
+    return text, str(response.url or target)
+
+
+def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
+    query = _clean(story_title)
+    original_domain = _source_domain(original_url)
+    if not query:
+        return "", ""
+
+    try:
+        results = DDGS(timeout=5).news(
+            query=query,
+            region="in-en",
+            safesearch="off",
+            timelimit="d",
+            max_results=5,
+        )
+    except Exception:
+        return "", ""
+
+    keywords = _story_title_keywords(query)
+    candidates = []
+    for result in results or []:
+        url = _clean(result.get("url") or result.get("href"))
+        title = _clean(result.get("title"))
+        if not url or url == original_url:
+            continue
+        domain = _source_domain(url)
+        if not domain or domain == original_domain:
+            continue
+        if any(blocked in domain for blocked in ("twitter.", "x.com", "facebook.", "instagram.", "youtube.", "google.")):
+            continue
+        candidate_keywords = _story_title_keywords(title)
+        overlap = len(keywords & candidate_keywords)
+        if keywords and overlap == 0:
+            continue
+        candidates.append((overlap, url))
+
+    for _, url in sorted(candidates, key=lambda item: item[0], reverse=True):
+        try:
+            extracted, resolved_url = _extract_article(url)
+            if extracted:
+                return extracted, resolved_url
+        except (requests.RequestException, OSError, ValueError):
+            continue
+
+    return "", ""
+
+
+def _research_story(story) -> str:
+    title = _story_value(story, "title")
+    description = _story_value(story, "description")
+    original_url = _story_value(story, "url")
+
+    sections = []
+    extracted, resolved_url = "", ""
+    if original_url:
+        try:
+            extracted, resolved_url = _extract_article(original_url)
+        except (requests.RequestException, OSError, ValueError):
+            extracted = ""
+
+    if extracted:
+        source_label = resolved_url or original_url
+        sections.append(f"[PRIMARY ARTICLE — {source_label}]\n{extracted}")
+    else:
+        fallback, fallback_url = _fallback_article(title, original_url)
+        if fallback:
+            sections.append(f"[CORROBORATING ARTICLE — {fallback_url}]\n{fallback}")
+
+    if description:
+        sections.append(f"[TOPIC FETCHER SUMMARY]\n{description}")
+    if title:
+        sections.insert(0, f"[SELECTED STORY]\n{title}")
+
+    return _limit_source_text("\n\n".join(sections))
 
 
 def _source_text(story) -> str:
@@ -349,7 +481,9 @@ def _request(model: str, prompt: str, story: str) -> dict:
 
 def write_script(story, language: str = "english") -> dict:
     """Generate one sports Shorts script and return its later-stage metadata too."""
-    source = _source_text(story)
+    source = _research_story(story)
+    if not source:
+        source = _source_text(story)
     if not source:
         raise ValueError("The selected story contains no usable evidence.")
 
