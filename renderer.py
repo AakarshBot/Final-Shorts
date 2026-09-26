@@ -102,22 +102,30 @@ def _measure(draw: ImageDraw.ImageDraw, text: str, font) -> tuple[int, int]:
 
 def _wrap(text: str, font, max_width: int, max_lines: int = 2) -> list[str]:
     words = text.split()
-    lines: list[str] = []
-    current = ""
+    if not words:
+        return []
+
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    if _measure(probe, text, font)[0] <= max_width:
+        return [text]
 
-    for word in words:
-        candidate = f"{current} {word}".strip()
-        width, _ = _measure(probe, candidate, font)
-        if current and width > max_width:
-            lines.append(current)
-            current = word
-        else:
-            current = candidate
+    if max_lines < 2 or len(words) < 2:
+        return [text]
 
-    if current:
-        lines.append(current)
-    return lines[:max_lines] if len(lines) > max_lines else lines
+    candidates: list[tuple[int, list[str]]] = []
+    for split in range(1, len(words)):
+        lines = [
+            " ".join(words[:split]),
+            " ".join(words[split:]),
+        ]
+        widths = [_measure(probe, line, font)[0] for line in lines]
+        if max(widths) <= max_width:
+            candidates.append((max(widths), lines))
+
+    if candidates:
+        return min(candidates, key=lambda item: item[0])[1]
+
+    return [text]
 
 
 def _headline_layout(text: str) -> tuple[ImageFont.FreeTypeFont, list[str]]:
@@ -125,19 +133,24 @@ def _headline_layout(text: str) -> tuple[ImageFont.FreeTypeFont, list[str]]:
     if not clean:
         clean = HEADLINE_TEXT
 
-    size = 118
-    while size >= 78:
+    for size in range(118, 59, -4):
         font = headline_font(size)
         lines = _wrap(clean, font, 860, 2)
+        probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+        if len(lines) <= 2 and all(
+            _measure(probe, line, font)[0] <= 860
+            for line in lines
+        ):
+            return font, lines
 
-        if len(lines) <= 2:
-            probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-            if all(_measure(probe, line, font)[0] <= 860 for line in lines):
-                return font, lines
-        size -= 4
+    font = headline_font(58)
+    words = clean.split()
+    midpoint = max(1, len(words) // 2)
+    return font, [
+        " ".join(words[:midpoint]),
+        " ".join(words[midpoint:]),
+    ]
 
-    font = headline_font(78)
-    return font, _wrap(clean, font, 860, 2)
 
 
 def make_sample_background() -> Image.Image:
@@ -244,7 +257,10 @@ def _draw_subtitles(
     t: float,
     headline_enabled: bool = False,
 ) -> None:
-    subtitle_time = max(0.0, t - HEADLINE_SECONDS) if headline_enabled else t
+    if headline_enabled and t < HEADLINE_SECONDS:
+        return
+
+    subtitle_time = t - HEADLINE_SECONDS if headline_enabled else t
     words, active_index = _groups_at_time(subtitle_time)
     font = subtitle_font()
     draw = ImageDraw.Draw(base)
