@@ -10,7 +10,7 @@ Functions 01–04 are implemented and accepted:
 - **03 — Audio**
 - **04 — Visuals Phase 1 + Phase 2**
 
-Visuals Phase 1 and Phase 2 are complete. The next function will be designed later; no subtitle implementation is currently present.
+Visuals Phase 1 and Phase 2 are complete. The Subtitles implementation is intentionally not present yet. The Function 06 Renderer now has a final visual preview desk.
 
 The Streamlit dashboard is currently a Test desk for independent function testing. Live production is intentionally not present until the full factory exists.
 
@@ -36,14 +36,35 @@ The Visuals test desk has four independent options. Option 1 is the automatic sc
 
 ### Renderer Test
 
-Function 06 adds an isolated visual preview desk. It uses only generated filler content and a generic local sample image; it does not call the Topic Fetcher, Scriptwriter, Audio, Visuals, or any AI/API provider.
+Function 06 is an isolated final visual preview desk. It uses only generated filler content and a generic local background; it does not call the Topic Fetcher, Scriptwriter, Audio, Visuals, or any AI/API provider.
 
-The test previews:
-- the optional first-second headline entrance
-- Clean Editorial
-- Micro Glass
-- Broadcast / Data
+The final preview uses one canonical style:
+- **Headline:** Bebas Neue-style condensed display face, single line, dynamically fitted to the safe width, with the existing left-entry animation.
+- **Subtitles:** bold sans-serif, word-level timing, white text with a dark outline, one gold active-word highlight, lower-middle placement, no permanent caption box.
+- **Branding:** the real `logo.png` in the top-right and a simple source label in the bottom-right.
+- **No decorative borders, lines, dots, glass panels, or extra motion.**
 
-Add your logo.png beside app.py. The renderer uses that file directly; it does not draw a placeholder logo.
+### Subtitle handoff contract
 
-For the intended display look, add fonts/BebasNeue-Regular.ttf. The subtitle renderer can use fonts/Montserrat-ExtraBold.ttf when present and otherwise falls back automatically.
+Function 05 should hand Function 06 a Python/JSON-compatible object shaped like:
+
+```json
+{
+  "schema": "final-shorts.subtitles.v1",
+  "language": "english",
+  "cues": [
+    {
+      "start": 0.30,
+      "end": 1.28,
+      "words": [
+        {"text": "India", "start": 0.30, "end": 0.52},
+        {"text": "started", "start": 0.52, "end": 0.75}
+      ]
+    }
+  ]
+}
+```
+
+Times are absolute seconds from the start of the final video. Each cue contains the words that should be displayed together. The Renderer derives the active word from the word timestamps and does not need a second transcription pass.
+
+Use this JSON contract internally. SRT/VTT/ASS can be derived later only when an external subtitle file is required; they should not be the production handoff between Functions 05 and 06.
