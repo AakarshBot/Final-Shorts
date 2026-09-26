@@ -65,6 +65,7 @@ Primary writer:
 - Groq `openai/gpt-oss-120b`.
 - Recovery is Groq `openai/gpt-oss-20b` only when the primary call fails or its output fails local validation.
 - One Scriptwriter generation call produces the complete script package.
+- If the primary generation fails local validation, the existing 20B fallback receives the exact validation failure as recovery guidance; the factory still makes at most two model calls.
 
 Narration:
 - Sports only.
