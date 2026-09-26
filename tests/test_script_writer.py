@@ -98,6 +98,7 @@ def test_writer_rejects_story_unrelated_title(monkeypatch):
     def fake_request(model, prompt, story):
         result = valid_result()
         result["titles"][0] = "Premier League Transfer Sparks Surprise"
+        result["titles"][1] = "Champions League Shock Rocks Europe"
         return result
 
     monkeypatch.setattr("script_writer._request", fake_request)
@@ -239,6 +240,24 @@ def test_writer_rejects_headline_with_wrong_word_count(monkeypatch):
         assert "failed" in str(exc).lower()
     else:
         raise AssertionError("Invalid headline should not pass.")
+
+
+def test_approved_edits_can_bypass_validation_for_live_manual_qc():
+    original = valid_result()
+    approved = apply_script_edits(
+        original,
+        [
+            "This is deliberately a longer manual edit that exceeds the writer's normal limit.",
+            original["script"][1]["voiceover"],
+            original["script"][2]["voiceover"],
+            original["script"][3]["voiceover"],
+        ],
+        headline="",
+        validate=False,
+    )
+
+    assert approved["headline"] == ""
+    assert approved["approved_for_audio"] is True
 
 
 def test_approved_edits_preserve_titles_and_metadata_and_mark_audio_handoff():
