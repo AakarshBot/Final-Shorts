@@ -319,6 +319,7 @@ def _browser_script():
           src: img.getAttribute('src') || '',
           srcset: img.getAttribute('srcset') || '',
           dataSrc: img.getAttribute('data-src') || '',
+          dataSrcset: img.getAttribute('data-srcset') || '',
           dataLazySrc: img.getAttribute('data-lazy-src') || '',
           dataOriginal: img.getAttribute('data-original') || '',
           alt: img.getAttribute('alt') || '',
@@ -375,6 +376,17 @@ def _walk_images(value):
 
 async def _browser_page(context, request):
     page = await context.new_page()
+    network_responses = {}
+
+    def remember_response(response):
+        try:
+            if response.request.resource_type == "image" and response.ok:
+                if len(network_responses) < 60:
+                    network_responses.setdefault(response.url, response)
+        except Exception:
+            pass
+
+    page.on("response", remember_response)
     try:
         try:
             await page.goto(
@@ -382,8 +394,12 @@ async def _browser_page(context, request):
                 wait_until="domcontentloaded",
                 timeout=PAGE_TIMEOUT_MS,
             )
-        except Exception:
-            return {"assets": []}
+        except Exception as exc:
+            return {
+                "assets": [],
+                "error": f"navigation: {type(exc).__name__}: {exc}",
+                "url": request["url"],
+            }
 
         try:
             await page.wait_for_load_state("networkidle", timeout=1800)
@@ -401,8 +417,12 @@ async def _browser_page(context, request):
 
         try:
             data = await page.evaluate(_browser_script())
-        except Exception:
-            return {"assets": []}
+        except Exception as exc:
+            return {
+                "assets": [],
+                "error": f"page-evaluation: {type(exc).__name__}: {exc}",
+                "url": page.url or request["url"],
+            }
 
         base_url = data.get("finalUrl") or request["url"]
         page_title = _clean(data.get("title"), 600)
@@ -438,7 +458,7 @@ async def _browser_page(context, request):
 
         for markup in data.get("noscripts") or []:
             for match in re.finditer(
-                    r'<(?:img|source)\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\s*=\s*[\'"]([^\'"]+)[\'"]',
+                r'<(?:img|source)\\b[^>]*(?:src|data-src|data-lazy-src|data-original|data-image|data-srcset)\\s*=\\s*[\'"']([^\'"']+)[\'"']',
                 markup,
                 re.IGNORECASE,
             ):
@@ -464,7 +484,7 @@ async def _browser_page(context, request):
             ):
                 if image.get(key):
                     add(image[key], method, payload)
-            for url in _extract_srcset(image.get("srcset")):
+            for url in _extract_srcset(image.get("srcset")) + _extract_srcset(image.get("dataSrcset")):
                 add(url, "srcset", payload)
 
         unique = []
@@ -491,6 +511,8 @@ async def _browser_page(context, request):
 
         assets = []
         seen_hashes = set()
+        direct_download_failures = 0
+        network_fallback_hits = 0
         for candidate in unique[: IMAGES_PER_PAGE * 4]:
             try:
                 response = await page.request.get(
@@ -501,11 +523,20 @@ async def _browser_page(context, request):
                         "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
                     },
                 )
-                if not response.ok:
-                    continue
-                data_bytes = await response.body()
+                data_bytes = await response.body() if response.ok else b""
             except Exception:
-                continue
+                direct_download_failures += 1
+                data_bytes = b""
+
+            if not data_bytes:
+                network_response = network_responses.get(candidate["url"])
+                if network_response is not None:
+                    try:
+                        data_bytes = await network_response.body()
+                        if data_bytes:
+                            network_fallback_hits += 1
+                    except Exception:
+                        data_bytes = b""
 
             if not _image_bytes_ok(data_bytes):
                 continue
@@ -543,7 +574,17 @@ async def _browser_page(context, request):
             if len(assets) >= IMAGES_PER_PAGE:
                 break
 
-        return {"assets": assets, "title": page_title, "url": base_url}
+        return {
+            "assets": assets,
+            "title": page_title,
+            "url": base_url,
+            "candidate_count": len(unique),
+            "dom_image_count": len(data.get("images") or []),
+            "network_image_count": len(network_responses),
+            "direct_download_failures": direct_download_failures,
+            "network_fallback_hits": network_fallback_hits,
+            "error": "",
+        }
     finally:
         try:
             await page.close()
