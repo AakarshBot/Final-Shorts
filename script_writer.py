@@ -191,7 +191,7 @@ def _article_body_from_html(html_text: str) -> str:
     raw = str(html_text or "")
 
     for match in re.finditer(
-        r"<script[^>]*type=[\"']application/ld\\+json[\"'][^>]*>(.*?)</script>",
+        r"<script[^>]*type=[\"']application/ld\+json[\"'][^>]*>(.*?)</script>",
         raw,
         flags=re.IGNORECASE | re.DOTALL,
     ):
@@ -216,7 +216,7 @@ def _article_body_from_html(html_text: str) -> str:
                 stack.extend(item)
 
     paragraphs = []
-    for paragraph in re.findall(r"<p\\b[^>]*>(.*?)</p>", raw, flags=re.IGNORECASE | re.DOTALL):
+    for paragraph in re.findall(r"<p\b[^>]*>(.*?)</p>", raw, flags=re.IGNORECASE | re.DOTALL):
         text = _clean(unescape(re.sub(r"<[^>]+>", " ", paragraph)))
         if text:
             paragraphs.append(text)
