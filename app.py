@@ -555,7 +555,7 @@ def render_audio():
             except (RuntimeError, ValueError) as exc:
                 st.error(str(exc))
                 st.session_state.audio_data = None
-                st.session_state.approved_audio = None
+                st.session_state.approved_audio = None\n                st.session_state.subtitle_data = None\n                st.session_state.approved_subtitles = None
 
     audio = st.session_state.audio_data
     if not audio:
