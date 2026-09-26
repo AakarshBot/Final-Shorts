@@ -143,11 +143,12 @@ def test_approved_edits_preserve_titles_and_metadata_and_mark_audio_handoff():
             original["script"][2]["voiceover"],
             original["script"][3]["voiceover"],
         ],
+        headline="Gill Update Unfolds",
     )
 
     assert edited["titles"] == original["titles"]
     assert edited["hashtags"] == original["hashtags"]
-    assert edited["headline"] == original["headline"]
+    assert edited["headline"] == "Gill Update Unfolds"
     assert edited["script"][0]["voiceover"].startswith("Gill faces")
     assert edited["human_script_edited"] is True
     assert edited["approved_for_audio"] is True
