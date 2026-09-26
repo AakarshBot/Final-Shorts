@@ -12,7 +12,7 @@ The factory's seven functional stages are implemented on `main` and **all Test P
 06. Renderer — **Approved**
 07. YouTube Upload — **Approved**
 
-The dashboard UI is **to be improved**. The current development step is **Turning Test into Live**.
+The dashboard now contains the connected **Live production flow**. The current development step is **end-to-end Live runtime verification and concrete integration fixes only**.
 
 ## Factory order
 
@@ -245,9 +245,9 @@ Current UI direction:
 - Media review now uses the MIT-licensed Streamlit Cropper component inside a native Streamlit dialog. The crop is free-size, the original asset is untouched, and the saved result is only a persistent dashboard preview.
 - No completed factory function contract was changed for the dashboard/UI work.
 
-The current step is to turn the approved Test pages into the Live production flow without reopening completed factory functions or adding unnecessary new logic.
+The Live production flow is now connected end-to-end around the approved function contracts. Further work should be limited to runtime verification, usability polish, and concrete integration regressions.
 
-Do not reopen completed functions unless the UI work exposes a concrete integration regression.
+Do not reopen completed functions unless Live exposes a concrete integration regression.
 
 ## Repository shape
 
@@ -311,4 +311,4 @@ Do not:
 - add extra upload gates,
 - or modify approved function behavior without a concrete regression.
 
-The immediate next task is **Dashboard UI enhancement**.
+The immediate next task is **Live end-to-end runtime verification**.
