@@ -121,7 +121,7 @@ README.md
 Function 04 — Visuals.
 
 ## Current development
-Function 04 Visuals Phase 1 and Phase 2 are complete:
+Function 04 Visuals Phase 1 and Phase 2 are complete. Function 06 Renderer now has an isolated preview desk; its previews use filler content only and are not a production handoff:
 - Visuals Option 1 is the automatic scraper/crawler.
 - Visuals Option 2 is the standalone manual scraper with lightweight AI query planning and historical retrieval for contextual queries.
 - Visuals Option 3 is manual real-image search across configured sources.
@@ -141,4 +141,4 @@ Subtitle implementation is intentionally absent. The next stage will be designed
 
 
 ## Next gate
-Function 05 — Subtitles will be designed later.
+Function 05 — Subtitles will be designed later. The renderer preview may visually simulate subtitle styling with filler timings, but it does not implement the production Subtitles function.
