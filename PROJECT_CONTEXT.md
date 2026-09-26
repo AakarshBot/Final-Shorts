@@ -110,6 +110,8 @@ tests/test_visual_search.py
 tests/test_visual_generator.py
 tests/test_renderer.py
 renderer.py
+fonts/Anton-Regular.ttf
+fonts/OFL.txt
 requirements.txt
 PROJECT_CONTEXT.md
 README.md
@@ -155,7 +157,7 @@ Final visual system:
 - subtitles use word-level timing, stable phrase layout and restrained word emphasis in the lower-middle safe area
 - logo is the real local `logo.png`, top-right
 - source label is plain text, bottom-right
-- no permanent border, decorative graphics, glass panel, or universal Ken-Burns effect
+- no caption capsule, permanent border, glass panel, or universal Ken-Burns effect
 - when the opening headline is enabled, audio may already be running but subtitles remain hidden until the 1.15-second headline window ends
 
 Function 05 subtitle handoff to Function 06 must use `final-shorts.subtitles.v1` JSON-compatible data with absolute seconds and grouped cues containing per-word `start` and `end` timestamps. The Renderer must not transcribe, regroup semantically, or call an AI provider.
