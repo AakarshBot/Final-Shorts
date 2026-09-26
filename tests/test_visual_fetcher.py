@@ -73,6 +73,24 @@ def test_manual_query_is_not_locked_to_story_entity(monkeypatch):
     ]
 
 
+def test_context_can_rescue_a_valid_article_title():
+    context = (
+        "Virat Kohli and Rohit Sharma were both discussed after India's latest "
+        "match, with the two former captains at the centre of the report."
+    )
+    assert visual_fetcher._context_match(
+        "Virat Kohli Rohit Sharma",
+        context,
+    ) > 0
+
+
+def test_context_does_not_rescue_an_unrelated_article():
+    assert visual_fetcher._context_match(
+        "Virat Kohli Rohit Sharma",
+        "The latest football transfer news covers European clubs and managers.",
+    ) == 0
+
+
 def test_same_query_is_case_insensitive():
     assert visual_fetcher.same_query("Shubman Gill Cricket", ["shubman gill cricket"])
     assert not visual_fetcher.same_query("Gill nets", ["Gill batting"])
