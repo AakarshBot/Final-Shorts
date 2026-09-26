@@ -1594,6 +1594,128 @@ def crawl_visuals(story):
     }
 
 
+def ranked_visual_search(story):
+    """Run each approved scene search prompt in parallel and return ranked visual lanes."""
+    title = _topic_value(story, "title")
+    original_url = _usable_url(_topic_value(story, "url"))
+    script = story.get("script") if isinstance(story, dict) else getattr(story, "script", None)
+    if not title or not original_url:
+        raise ValueError("Ranked visual search requires the selected story title and original URL.")
+    if not isinstance(script, list):
+        raise ValueError("Ranked visual search requires the approved Scriptwriter scenes.")
+
+    lanes = []
+    seen_queries = set()
+    for number, scene in enumerate(script, 1):
+        if not isinstance(scene, dict):
+            continue
+        entity = _clean(scene.get("primary_entity"), 180)
+        intent = _clean(scene.get("visual_intent"), 260)
+        prompt = _clean(scene.get("specific_search_prompt"), 260)
+        query = prompt or _clean(f"{entity} {intent}", 260)
+        key = query.casefold()
+        if not query or key in seen_queries:
+            continue
+        seen_queries.add(key)
+        lanes.append({
+            "scene": number,
+            "query": query,
+            "visual_intent": intent,
+            "primary_entity": entity,
+        })
+
+    if not lanes:
+        raise ValueError("The approved Scriptwriter result has no usable visual search prompts.")
+
+    queries = [lane["query"] for lane in lanes]
+    related_pages = _collect_related_pages(
+        queries,
+        original_url,
+        title,
+        "",
+        historical=False,
+    )
+    page_requests = [
+        {
+            "url": page["url"],
+            "title": page.get("title", ""),
+            "publisher": page.get("source", ""),
+            "published_at": page.get("published_at", ""),
+            "query": page.get("query", ""),
+            "entity": "",
+            "story_title": title,
+            "ranked_scene": next(
+                (
+                    lane["scene"]
+                    for lane in lanes
+                    if lane["query"].casefold() == str(page.get("query") or "").casefold()
+                ),
+                None,
+            ),
+        }
+        for page in related_pages
+    ]
+
+    results = _crawl_pages(page_requests)
+    assets = []
+    diagnostics = []
+    for request, result in zip(page_requests, results):
+        diagnostics.append({
+            "url": result.get("url") or request["url"],
+            "title": result.get("title") or request.get("title", ""),
+            "assets": len(result.get("assets") or []),
+            "candidates": int(result.get("candidate_count") or 0),
+            "query": request.get("query") or "",
+            "scene": request.get("ranked_scene"),
+            "error": str(result.get("error") or ""),
+        })
+        for asset in result.get("assets") or []:
+            asset["query"] = asset.get("query") or request.get("query", "")
+            asset["article_title"] = asset.get("article_title") or request.get("title", "")
+            asset["source_page_url"] = asset.get("source_page_url") or request["url"]
+            asset["publisher"] = asset.get("publisher") or request.get("publisher", "")
+            asset["ranked_scene"] = request.get("ranked_scene")
+            assets.append(asset)
+
+    lanes_out = []
+    for lane in lanes:
+        lane_assets = [
+            asset for asset in assets
+            if str(asset.get("query") or "").casefold() == lane["query"].casefold()
+        ]
+        lane_assets = sorted(
+            lane_assets,
+            key=lambda item: (
+                -float(item.get("score") or 0),
+                -int(item.get("action_score") or 0),
+            ),
+        )[:10]
+        for rank, asset in enumerate(lane_assets, 1):
+            asset["query_rank"] = rank
+        lanes_out.append({
+            **lane,
+            "assets": lane_assets,
+        })
+
+    selected = _dedupe(assets)
+    print(
+        f"   [Visual Fetcher] ranked_queries={len(lanes)} "
+        f"pages={len(related_pages)} final_pool={len(selected)}/{TARGET}",
+        flush=True,
+    )
+    return {
+        "assets": selected,
+        "target": TARGET,
+        "success_threshold": SUCCESS,
+        "search_queries": queries,
+        "lanes": lanes_out,
+        "pages_scraped": len(page_requests),
+        "related_pages": len(related_pages),
+        "failure_state": "ready" if selected else "no_images",
+        "diagnostics": diagnostics,
+    }
+
+
 def manual_crawl_visuals(query):
     """Scrape publisher pages for a manual query with optional historical targeting."""
     query = _clean(query, 260)
@@ -1679,4 +1801,4 @@ def manual_crawl_visuals(query):
     }
 
 
-__all__ = ["TARGET", "SUCCESS", "build_queries", "crawl_visuals", "manual_crawl_visuals"]
+__all__ = ["TARGET", "SUCCESS", "build_queries", "crawl_visuals", "manual_crawl_visuals", "ranked_visual_search"]
