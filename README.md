@@ -10,9 +10,9 @@ Functions 01–04 are implemented and accepted:
 - **03 — Audio**
 - **04 — Visuals Phase 1 + Phase 2**
 
-Visuals Phase 1 and Phase 2 are complete. Function 05 Subtitles is implemented as the direct Scriptwriter + Audio timing handoff. Function 06 Renderer has the final isolated visual preview desk.
+Visuals Phase 1 and Phase 2 are complete. Function 05 Subtitles is the direct Scriptwriter + Audio timing handoff. Function 06 Renderer has the final isolated visual preview desk. Function 07 is the manual YouTube Upload QC lane.
 
-The Streamlit dashboard is currently a Test desk for independent function testing. Live production is intentionally not present until the full factory exists.
+The Streamlit dashboard keeps the upload decision human-controlled: review the rendered video and metadata once, approve the QC, then choose Public or Private.
 
 Run locally:
 
@@ -72,3 +72,9 @@ Function 05 should hand Function 06 a Python/JSON-compatible object shaped like:
 Times are absolute seconds from the start of the final video. Each cue contains the words that should be displayed together. The Renderer derives the active word from the word timestamps and does not need a second transcription pass.
 
 Use this JSON contract internally. SRT/VTT/ASS can be derived later only when an external subtitle file is required; they should not be the production handoff between Functions 05 and 06.
+
+### YouTube Upload QC
+
+Function 07 uses a local `token.json` for YouTube OAuth. The QC desk shows the rendered video plus the three Scriptwriter title candidates, editable description, hashtags and comment. One QC approval unlocks the Public and Private upload buttons. A Public upload automatically posts the approved comment; a Private upload does not.
+
+Place your authorized `token.json` beside `app.py`. The token must include YouTube upload permission and YouTube comment permission (or the full YouTube scope). The token file is ignored by Git.
