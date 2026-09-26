@@ -435,6 +435,7 @@ def build_preview_bundle(
     output_dir: str | Path | None = None,
     headline_enabled: bool = True,
     headline_text: str = HEADLINE_TEXT,
+    subtitle_data: dict = PREVIEW_SUBTITLE_DATA,
 ) -> dict[str, Path]:
     root = Path(__file__).resolve().parent
     output = Path(output_dir) if output_dir else root / "output" / "renderer_previews"
@@ -449,7 +450,7 @@ def build_preview_bundle(
                 render_frame(
                     base,
                     index / FPS,
-                    PREVIEW_SUBTITLE_DATA,
+                    subtitle_data,
                     headline_text,
                     headline_enabled,
                 )
