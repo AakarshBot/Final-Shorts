@@ -24,54 +24,6 @@ def test_build_queries_is_small_and_entity_focused():
     assert all("Shubman Gill" in query for query in queries[1:])
 
 
-def test_original_story_url_is_first_and_manual_run_uses_only_manual_query(monkeypatch):
-    calls = []
-
-    def fake_crawl_pages(requests):
-        calls.append(requests)
-        return [{"assets": []} for _ in requests]
-
-    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl_pages)
-    result = visual_fetcher.crawl_visuals(_story(), manual_query="Gill cricket action")
-
-    assert calls[0][0]["url"] == _story()["url"]
-    assert calls[0][0]["query"] == ""
-    assert result["queries_used"] == ["Gill cricket action"]
-    assert result["manual_query"] == "Gill cricket action"
-
-
-def test_manual_query_is_not_locked_to_story_entity(monkeypatch):
-    calls = []
-
-    def fake_related(queries, original_url, story_title="", entity=""):
-        calls.append((queries, original_url, story_title, entity))
-        return []
-
-    def fake_crawl_pages(requests):
-        return [{"assets": []} for _ in requests]
-
-    monkeypatch.setattr(visual_fetcher, "_collect_related_pages", fake_related)
-    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl_pages)
-
-    story = {
-        **_story(),
-        "primary_entity": "Shubman Gill",
-    }
-    result = visual_fetcher.crawl_visuals(
-        story,
-        manual_query="Virat Kohli Rohit Sharma",
-    )
-
-    assert result["manual_query"] == "Virat Kohli Rohit Sharma"
-    assert calls == [
-        (
-            ["Virat Kohli Rohit Sharma"],
-            story["url"],
-            story["title"],
-            "",
-        )
-    ]
-
 
 def test_context_can_rescue_a_valid_article_title():
     context = (
@@ -91,54 +43,99 @@ def test_context_does_not_rescue_an_unrelated_article():
     ) == 0
 
 
-def test_manual_crawl_uses_only_the_manual_query(monkeypatch):
+def test_manual_crawl_name_only_keeps_current_search(monkeypatch):
     calls = []
 
-    def fake_related(queries, original_url, story_title="", entity=""):
-        calls.append((queries, original_url, story_title, entity))
-        return [{
-            "url": "https://example.com/article",
-            "title": "Virat Kohli and Rohit Sharma latest",
-            "source": "Example",
-            "published_at": datetime.now(timezone.utc).isoformat(),
-            "query": queries[0],
-        }]
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_manual_query_plan",
+        lambda query: {"historical": False, "queries": [query]},
+    )
 
-    def fake_crawl_pages(requests):
-        calls.append(requests)
-        return [{
+    def fake_related(queries, original_url, story_title="", entity="", historical=False):
+        calls.append((queries, historical))
+        return []
+
+    monkeypatch.setattr(visual_fetcher, "_collect_related_pages", fake_related)
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", lambda requests: [])
+
+    result = visual_fetcher.manual_crawl_visuals("Virat Kohli")
+
+    assert calls == [(["Virat Kohli"], False)]
+    assert result["historical"] is False
+    assert result["search_queries"] == ["Virat Kohli"]
+
+
+def test_manual_crawl_context_enables_historical_search(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_manual_query_plan",
+        lambda query: {
+            "historical": True,
+            "queries": [query, "Virat Kohli hundred", "Virat Kohli century cricket"],
+        },
+    )
+
+    def fake_related(queries, original_url, story_title="", entity="", historical=False):
+        calls.append((queries, historical))
+        return []
+
+    monkeypatch.setattr(visual_fetcher, "_collect_related_pages", fake_related)
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", lambda requests: [])
+
+    result = visual_fetcher.manual_crawl_visuals("Virat Kohli century")
+
+    assert calls == [(
+        ["Virat Kohli century", "Virat Kohli hundred", "Virat Kohli century cricket"],
+        True,
+    )]
+    assert result["historical"] is True
+    assert len(result["search_queries"]) == 3
+
+
+def test_manual_crawl_returns_scraped_assets(monkeypatch):
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_manual_query_plan",
+        lambda query: {"historical": True, "queries": [query, "MS Dhoni motorcycle"]},
+    )
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_collect_related_pages",
+        lambda *args, **kwargs: [{
+            "url": "https://example.com/article",
+            "title": "MS Dhoni motorcycle",
+            "source": "Example",
+            "published_at": "",
+            "query": "MS Dhoni motorcycle",
+        }],
+    )
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_crawl_pages",
+        lambda requests: [{
             "assets": [{
                 "bytes": b"image",
                 "hash": "abc",
                 "source_image_url": "https://example.com/image.jpg",
                 "source_page_url": "https://example.com/article",
                 "publisher": "Example",
-                "article_title": "Virat Kohli and Rohit Sharma latest",
+                "article_title": "MS Dhoni motorcycle",
             }],
-            "url": requests[0]["url"],
-            "title": requests[0]["title"],
+            "url": "https://example.com/article",
+            "title": "MS Dhoni motorcycle",
             "candidate_count": 1,
-        }]
-
-    monkeypatch.setattr(visual_fetcher, "_collect_related_pages", fake_related)
-    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl_pages)
-
-    result = visual_fetcher.manual_crawl_visuals("Virat Kohli Rohit Sharma")
-
-    assert calls[0] == (
-        ["Virat Kohli Rohit Sharma"],
-        "",
-        "",
-        "",
+        }],
     )
-    assert calls[1][0]["query"] == "Virat Kohli Rohit Sharma"
-    assert result["manual_query"] == "Virat Kohli Rohit Sharma"
-    assert len(result["assets"]) == 1
 
+    result = visual_fetcher.manual_crawl_visuals("MS Dhoni bike")
 
-def test_same_query_is_case_insensitive():
-    assert visual_fetcher.same_query("Shubman Gill Cricket", ["shubman gill cricket"])
-    assert not visual_fetcher.same_query("Gill nets", ["Gill batting"])
+    assert result["historical"] is True
+    assert result["assets"][0]["query"] == "MS Dhoni motorcycle"
+    assert result["assets"][0]["publisher"] == "Example"
+
 
 
 def test_dedupe_keeps_best_unique_assets():
