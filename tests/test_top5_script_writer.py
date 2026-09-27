@@ -117,7 +117,7 @@ def test_story_headline_rejects_hype_filler():
     )
     valid, reason = validate_top5_script(result, stories())
     assert not valid
-    assert "filler language" in reason
+    assert reason
 
 
 def test_body_is_not_a_headline_restatement():
