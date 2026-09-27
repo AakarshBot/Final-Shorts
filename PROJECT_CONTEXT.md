@@ -62,6 +62,8 @@ Contract:
 - “Find 20 more” uses a different query set, excludes already returned topics/events, and appends new topics.
 - Google News is the primary source.
 - GDELT is fallback only when the primary source does not produce enough topics.
+- Cricket profile relevance is title-led: known cricket players can pass without the word “cricket”, while description-only publisher boilerplate is not treated as proof of relevance.
+- Near-identical wording is not used as a blanket duplicate rule; event clustering remains responsible for removing multiple headlines about the same event while preserving genuinely different stories.
 
 Status: **Approved.**
 
