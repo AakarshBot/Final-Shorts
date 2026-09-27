@@ -44,6 +44,15 @@ def test_generic_listing_pages_are_removed():
     assert len(prepared) == 1
 
 
+def test_cricket_player_headline_survives_without_cricket_word():
+    row = make_topic(
+        "Need to be ten times better after injury layoff, says Prasidh Krishna",
+        description="Prasidh Krishna discussed his return to international cricket after an injury layoff.",
+    )
+    prepared = topic_fetcher._prepare([row], set(), profile="cricket_india_asia")
+    assert [r.title for r in prepared] == [row.title]
+
+
 def test_non_cricket_story_is_not_rescued_by_publisher_boilerplate():
     rows = [
         make_topic(
@@ -103,6 +112,11 @@ def test_interest_signals_raise_topic_score():
     generic = make_topic("India cricket wins match")
     pull = make_topic("Shubman Gill reacts after historic record")
     assert topic_fetcher._score(pull) > topic_fetcher._score(generic)
+
+
+def test_niche_profile_rejects_cricket_only_story():
+    row = make_topic("India men's cricket team arrives in Nagoya for Asian Games cricket")
+    assert topic_fetcher._prepare([row], set(), profile="niche_sports") == []
 
 
 def test_freshness_and_profile_relevance_are_enforced():
