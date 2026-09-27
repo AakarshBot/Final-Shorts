@@ -5,6 +5,7 @@ from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
 import html
 import re
+import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
 
 import requests
@@ -103,12 +104,6 @@ ASIA_TERMS = {
     "bangladeshi", "afghanistan", "afghan", "nepal", "japan", "oman", "malaysia",
     "hong", "kong", "asia", "asian", "asiad",
 }
-GLOBAL_CRICKET_TERMS = {
-    "australia", "australian", "england", "english", "south", "africa", "new", "zealand",
-    "west", "indies", "ireland", "scotland", "zimbabwe", "sri", "lanka", "bangladesh",
-    "pakistan", "afghanistan", "women",
-}
-
 UTILITY_PATTERNS = (
     r"how to watch",
     r"where to watch",
@@ -244,13 +239,8 @@ def _clean_title(title: str, source: str = "") -> str:
 
 def _profile_relevant(title: str, description: str, profile: str | None) -> bool:
     title_tokens = _tokens(title)
-    text_tokens = title_tokens | _tokens(description[:350])
     if profile in {"cricket_india_asia", "cricket_global"}:
-        if not title_tokens & CRICKET_TERMS:
-            return False
-        if profile == "cricket_india_asia":
-            return bool(title_tokens & ASIA_TERMS) or "international" in title_tokens
-        return bool(title_tokens & GLOBAL_CRICKET_TERMS) or "international" in title_tokens
+        return bool(title_tokens & CRICKET_TERMS)
     return bool(title_tokens & SPORT_WORDS)
 
 
@@ -264,10 +254,6 @@ def _utility(title: str) -> bool:
 def _event_groups(title: str) -> set[str]:
     words = _tokens(title)
     return {group for group, terms in EVENT_GROUPS.items() if words & terms}
-
-
-def _event_terms(title: str) -> set[str]:
-    return _tokens(title) - set.union(SPORT_WORDS, set().union(*EVENT_GROUPS.values()), set(UTILITY_PATTERNS))
 
 
 def _same_event(a: Topic, b: Topic) -> bool:
@@ -301,7 +287,7 @@ def _score(topic: Topic) -> float:
 
 
 def _parse_rss(xml_text: str) -> list[Topic]:
-    root = __import__("xml.etree.ElementTree", fromlist=["ElementTree"]).fromstring(xml_text)
+    root = ET.fromstring(xml_text)
     rows: list[Topic] = []
     for item in root.findall(".//item"):
         source_el = item.find("source")
