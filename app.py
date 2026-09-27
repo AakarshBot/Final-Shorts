@@ -37,6 +37,9 @@ html,body,.stApp{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFon
 [data-testid="stAppViewContainer"]{background:var(--bg);}
 [data-testid="stHeader"]{background:transparent;}
 section[data-testid="stSidebar"]{display:block!important;background:#eee8df;border-right:1px solid var(--line);min-width:248px;max-width:248px;}
+[data-testid="stSidebar"] [data-testid="stButton"]>button{min-height:39px;text-align:left;border-color:transparent;background:transparent;box-shadow:none;padding:.2rem .7rem;font-size:.76rem;color:var(--muted);}
+[data-testid="stSidebar"] [data-testid="stButton"]>button:hover{background:rgba(255,253,249,.7);border-color:var(--line);}
+[data-testid="stSidebar"] [data-testid="stButton"]>button[kind="primary"]{background:var(--paper);color:var(--ink);border-color:var(--line);box-shadow:0 4px 14px rgba(47,39,31,.05);}
 section[data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:1.15rem .9rem 1.25rem;}
 footer,#MainMenu{visibility:hidden;}
 .block-container{max-width:1480px;padding:1.35rem 2.2rem 4rem;}
@@ -63,26 +66,16 @@ button:hover{transform:translateY(-1px);}
 .stProgress > div > div{background:var(--accent);}
 .eyebrow{font-size:.60rem;font-weight:860;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);}
 .mini-label{font-size:.62rem;font-weight:820;letter-spacing:.12em;text-transform:uppercase;color:var(--soft);}
-.shell-title{font-size:2.65rem;line-height:.95;font-weight:900;letter-spacing:-.06em;margin:.1rem 0 .2rem;}
-.shell-subtitle{max-width:780px;color:var(--muted);font-size:.92rem;line-height:1.5;}
 .badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:var(--paper-2);border:1px solid var(--line);color:var(--muted);font-size:.58rem;font-weight:840;letter-spacing:.1em;text-transform:uppercase;}
 .sidebar-brand{padding:.2rem .2rem 1.1rem;}
 .sidebar-brand-name{font-size:1.15rem;font-weight:920;letter-spacing:-.04em;}
 .sidebar-brand-sub{font-size:.62rem;letter-spacing:.13em;text-transform:uppercase;color:var(--soft);margin-top:.15rem;}
 .sidebar-heading{font-size:.58rem;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);margin:1rem .2rem .45rem;}
-.sidebar-stage{display:flex;align-items:center;gap:.55rem;padding:.48rem .55rem;border-radius:9px;margin:.12rem 0;color:var(--muted);font-size:.74rem;}
-.sidebar-stage.active{background:var(--paper);color:var(--ink);box-shadow:0 4px 14px rgba(47,39,31,.05);}
-.sidebar-dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--line-strong);background:transparent;flex:0 0 auto;}
-.sidebar-stage.active .sidebar-dot{background:var(--accent);border-color:var(--accent);}
-.sidebar-stage.done .sidebar-dot{background:var(--ok);border-color:var(--ok);}
-.workspace-rule{height:1px;background:var(--line);margin:.2rem 0 1.15rem;}
 .canvas{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:22px 24px 28px;box-shadow:var(--shadow);}
 .canvas-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem;}
 .canvas-title{font-size:1.55rem;font-weight:900;letter-spacing:-.04em;line-height:1.1;}
 .canvas-copy{font-size:.78rem;color:var(--muted);max-width:720px;line-height:1.5;}
 .topic-toolbar{background:var(--paper);border:1px solid var(--line);border-radius:13px;padding:.55rem .7rem;margin-bottom:.8rem;}
-.topic-row{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:6px 0;box-shadow:0 4px 14px rgba(47,39,31,.035);}
-.topic-row:hover{border-color:#c9beb0;box-shadow:0 8px 20px rgba(47,39,31,.05);}
 .topic-index{font-size:.62rem;font-weight:900;color:var(--soft);letter-spacing:.11em;}
 .topic-title{font-size:.98rem;line-height:1.25;font-weight:820;letter-spacing:-.02em;color:var(--ink);}
 .topic-meta{font-size:.64rem;color:var(--muted);line-height:1.35;margin-top:.28rem;}
@@ -102,10 +95,6 @@ button:hover{transform:translateY(-1px);}
 .home-hero{padding:1rem 0 1.5rem;}
 .home-title{font-size:clamp(3rem,6vw,5.7rem);font-weight:920;line-height:.88;letter-spacing:-.075em;max-width:900px;}
 .home-copy{max-width:720px;color:var(--muted);font-size:1rem;line-height:1.55;margin-top:.8rem;}
-.workspace-card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:22px;min-height:250px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
-.workspace-card.live{background:#f7eee8;border-color:#e0cfc2;}
-.workspace-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink);opacity:.14;}
-.workspace-card.live:before{background:var(--accent);opacity:.75;}
 .workspace-name{font-size:2.2rem;font-weight:900;letter-spacing:-.055em;margin:.15rem 0 .45rem;}
 .workspace-desc{font-size:.82rem;color:var(--muted);line-height:1.5;max-width:470px;}
 @media(max-width:1050px){section[data-testid="stSidebar"]{min-width:210px;max-width:210px}.block-container{padding-left:1.1rem;padding-right:1.1rem;}}
@@ -437,54 +426,51 @@ def _render_app_sidebar():
             unsafe_allow_html=True,
         )
         if st.button("⌂  Home", key="sidebar-home", width="stretch"):
-            st.session_state.app_mode = "home"
+            st.session_state.app_mode="home"
             st.rerun()
 
-        current_workspace = "Test Lab" if st.session_state.app_mode == "test" else "Live Production"
-        workspace = st.radio(
+        current_workspace="Test Lab" if st.session_state.app_mode=="test" else "Live Production"
+        workspace=st.pills(
             "Workspace",
-            ["Test Lab", "Live Production"],
-            index=0 if current_workspace == "Test Lab" else 1,
+            ["Test Lab","Live Production"],
+            default=current_workspace,
             key="sidebar-workspace",
             label_visibility="collapsed",
-        )
-        target_mode = "test" if workspace == "Test Lab" else "live"
+        ) or current_workspace
+        target_mode="test" if workspace=="Test Lab" else "live"
         if target_mode != st.session_state.app_mode:
-            st.session_state.app_mode = target_mode
+            st.session_state.app_mode=target_mode
             st.rerun()
 
-        if st.session_state.app_mode == "test":
-            st.markdown('<div class="sidebar-heading">Pipeline</div>', unsafe_allow_html=True)
-            stage_map = {item["key"]: item for item in STAGES}
-            current = st.session_state.test_stage
+        st.markdown(
+            '<div class="sidebar-heading">'+("Pipeline" if st.session_state.app_mode=="test" else "Production")+'</div>',
+            unsafe_allow_html=True,
+        )
+
+        if st.session_state.app_mode=="test":
             for stage in STAGES:
-                done = _stage_status(stage["key"])[1] != "Waiting"
-                active = current == stage["key"]
-                cls = "sidebar-stage active" if active else "sidebar-stage done" if done else "sidebar-stage"
-                dot = "done" if done else ""
-                st.markdown(
-                    f'<div class="{cls}"><span class="sidebar-dot {dot}"></span>'
-                    f'<span>{stage["number"]} &nbsp; {stage["label"]}</span></div>',
-                    unsafe_allow_html=True,
-                )
+                done=_stage_status(stage["key"])[1] != "Waiting"
+                active=st.session_state.test_stage==stage["key"]
+                prefix="→" if active else "✓" if done else "·"
                 if st.button(
-                    stage["label"],
+                    f'{prefix}  {stage["number"]}  {stage["label"]}',
                     key=f"sidebar-stage-{stage['number']}",
+                    type="primary" if active else "secondary",
                     width="stretch",
                     help=stage["desc"],
                 ):
-                    st.session_state.test_stage = stage["key"]
+                    st.session_state.test_stage=stage["key"]
                     st.rerun()
         else:
-            st.markdown('<div class="sidebar-heading">Production</div>', unsafe_allow_html=True)
-            live_stage_order = ["01 · Story", "02 · Script", "03 · Audio + Subs", "04 · Visuals + Render", "05 · Upload"]
-            live_labels = ["Story", "Script", "Audio + Subs", "Visuals + Render", "Upload"]
-            current = st.session_state.live_stage
-            current_idx = live_stage_order.index(current) if current in live_stage_order else 0
-            for idx, label in enumerate(live_labels):
-                cls = "sidebar-stage active" if idx == current_idx else "sidebar-stage done" if idx < current_idx else "sidebar-stage"
+            live_stage_order=["01 · Story","02 · Script","03 · Audio + Subs","04 · Visuals + Render","05 · Upload"]
+            live_labels=["Story","Script","Audio + Subs","Visuals + Render","Upload"]
+            current=st.session_state.live_stage
+            current_idx=live_stage_order.index(current) if current in live_stage_order else 0
+            for idx,label in enumerate(live_labels):
+                prefix="→" if idx==current_idx else "✓" if idx<current_idx else "·"
+                tone="var(--ink)" if idx==current_idx else "var(--muted)"
                 st.markdown(
-                    f'<div class="{cls}"><span class="sidebar-dot"></span><span>0{idx+1} &nbsp; {label}</span></div>',
+                    f'<div style="padding:.52rem .7rem;color:{tone};font-size:.74rem;">{prefix}&nbsp;&nbsp;0{idx+1}&nbsp;&nbsp;{label}</div>',
                     unsafe_allow_html=True,
                 )
 
