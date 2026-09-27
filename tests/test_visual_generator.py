@@ -1,11 +1,7 @@
-from PIL import Image
-
 import visual_generator
 
 
 def test_generate_images_runs_configured_providers(monkeypatch):
-    image = Image.new("RGB", (10, 10), "green")
-
     def fake_one(_query):
         return {"bytes": b"one", "hash": "one", "source": "One", "model": "m1"}
 
