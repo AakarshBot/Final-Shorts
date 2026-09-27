@@ -664,39 +664,33 @@ def _render_app_sidebar():
             st.session_state.app_mode = target_mode
             st.rerun()
 
-        if st.session_state.app_mode == "test":
-            if st.session_state.test_production_line == "deep_dive":
-                st.markdown(
-                    '<div class="nav-sub" style="margin-top:12px;">Deep-Dive · Test stages</div>',
-                    unsafe_allow_html=True,
-                )
-                labels = [stage["key"] for stage in STAGES]
-                current = st.session_state.test_stage
-                selected = st.pills(
-                    "Pipeline",
-                    labels,
-                    default=current,
-                    format_func=lambda value: f'{value.split(" · ")[0]}  {value.split(" · ")[-1]}',
-                    key="test-stage-switcher",
-                    label_visibility="collapsed",
-                ) or current
-                if selected != st.session_state.test_stage:
-                    st.session_state.test_stage = selected
-                    st.rerun()
-                if st.button("← Production lines", key="test-back-to-lines", width="stretch"):
-                    st.session_state.test_production_line = None
-                    st.session_state.test_stage = "01 · Topic Fetcher"
-                    st.rerun()
-            elif st.session_state.test_production_line in {"top_5", "otd"}:
-                line_name = "Top-5" if st.session_state.test_production_line == "top_5" else "OTD"
-                st.markdown(
-                    f'<div class="nav-sub" style="margin-top:12px;">{line_name} · Test framework</div>',
-                    unsafe_allow_html=True,
-                )
-                if st.button("← Production lines", key="test-back-from-placeholder", width="stretch"):
-                    st.session_state.test_production_line = None
-                    st.session_state.test_stage = "01 · Topic Fetcher"
-                    st.rerun()
+        if st.session_state.app_mode == "test" and st.session_state.test_production_line:
+            line_name = {
+                "deep_dive": "Deep-Dive",
+                "top_5": "Top-5",
+                "otd": "OTD",
+            }[st.session_state.test_production_line]
+            st.markdown(
+                f'<div class="nav-sub" style="margin-top:12px;">{line_name} · Test stages</div>',
+                unsafe_allow_html=True,
+            )
+            labels = [stage["key"] for stage in STAGES]
+            current = st.session_state.test_stage
+            selected = st.pills(
+                "Pipeline",
+                labels,
+                default=current,
+                format_func=lambda value: f'{value.split(" · ")[0]}  {value.split(" · ")[-1]}',
+                key="test-stage-switcher",
+                label_visibility="collapsed",
+            ) or current
+            if selected != st.session_state.test_stage:
+                st.session_state.test_stage = selected
+                st.rerun()
+            if st.button("← Production lines", key="test-back-to-lines", width="stretch"):
+                st.session_state.test_production_line = None
+                st.session_state.test_stage = "01 · Topic Fetcher"
+                st.rerun()
 
 
 def _live_story_key(topic) -> str:
@@ -2796,42 +2790,91 @@ elif st.session_state.app_mode == "test":
                         if eyebrow == "01 · DEEP-DIVE":
                             st.session_state.test_stage = "01 · Topic Fetcher"
                         st.rerun()
-    elif st.session_state.test_production_line == "top_5":
-        st.markdown(
-            '<div class="section-head"><div><div class="eyebrow">TOP-5 · TEST WIP</div>'
-            '<div class="section-title">Top 5 cricket stories of the day</div></div></div>',
-            unsafe_allow_html=True,
-        )
-        st.info("Top-5 test framework is ready for design. No production logic has been added yet.")
-        if st.button("← Back to production lines", key="test-top-5-back"):
-            st.session_state.test_production_line = None
-            st.rerun()
-    elif st.session_state.test_production_line == "otd":
-        st.markdown(
-            '<div class="section-head"><div><div class="eyebrow">OTD · TEST WIP</div>'
-            '<div class="section-title">On This Day</div></div></div>',
-            unsafe_allow_html=True,
-        )
-        st.info("On This Day test framework is ready for design. No production logic has been added yet.")
-        if st.button("← Back to production lines", key="test-otd-back"):
-            st.session_state.test_production_line = None
-            st.rerun()
-    else:
+    elif st.session_state.test_production_line:
+        line_name = {
+            "deep_dive": "Deep-Dive",
+            "top_5": "Top-5",
+            "otd": "OTD",
+        }[st.session_state.test_production_line]
         stage = st.session_state.test_stage
+
         if stage == "01 · Topic Fetcher":
-            render_topic_fetcher()
+            if st.session_state.test_production_line == "deep_dive":
+                render_topic_fetcher()
+            elif st.session_state.test_production_line == "top_5":
+                st.markdown(
+                    '<div class="section-head"><div><div class="eyebrow">TOP-5 · 01 · STORY</div>'
+                    '<div class="section-title">Top-5 story selection</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.info("This is the shared Topic Fetcher stage. Top-5 story-selection behaviour will be designed here.")
+            else:
+                st.markdown(
+                    '<div class="section-head"><div><div class="eyebrow">OTD · 01 · STORY</div>'
+                    '<div class="section-title">On This Day story selection</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.info("This is the shared Topic Fetcher stage. On This Day story-selection behaviour will be designed here.")
         elif stage == "02 · Scriptwriter":
-            render_scriptwriter()
+            if line_name == "Deep-Dive":
+                render_scriptwriter()
+            else:
+                st.markdown(
+                    f'<div class="section-head"><div><div class="eyebrow">{line_name.upper()} · 02 · SCRIPT</div>'
+                    f'<div class="section-title">{line_name} Scriptwriter</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.info(f"{line_name} uses the same Scriptwriter stage, with line-specific script behaviour to be designed here.")
         elif stage == "03 · Audio":
-            render_audio()
+            if line_name == "Deep-Dive":
+                render_audio()
+            else:
+                st.markdown(
+                    f'<div class="section-head"><div><div class="eyebrow">{line_name.upper()} · 03 · AUDIO</div>'
+                    f'<div class="section-title">{line_name} Audio</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.info(f"{line_name} uses the same Audio stage. Its requirements will be defined once the script format is designed.")
         elif stage == "04 · Visuals":
-            render_visuals()
+            if line_name == "Deep-Dive":
+                render_visuals()
+            else:
+                st.markdown(
+                    f'<div class="section-head"><div><div class="eyebrow">{line_name.upper()} · 04 · VISUALS</div>'
+                    f'<div class="section-title">{line_name} Visuals</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.info(f"{line_name} uses the same Visuals stage, with line-specific visual requirements to be designed here.")
         elif stage == "05 · Subtitles":
-            render_subtitles()
+            if line_name == "Deep-Dive":
+                render_subtitles()
+            else:
+                st.markdown(
+                    f'<div class="section-head"><div><div class="eyebrow">{line_name.upper()} · 05 · SUBTITLES</div>'
+                    f'<div class="section-title">{line_name} Subtitles</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.info(f"{line_name} uses the same Subtitles stage; subtitle behaviour remains part of the shared factory stage.")
         elif stage == "06 · Renderer":
-            render_renderer_test()
+            if line_name == "Deep-Dive":
+                render_renderer_test()
+            else:
+                st.markdown(
+                    f'<div class="section-head"><div><div class="eyebrow">{line_name.upper()} · 06 · RENDERER</div>'
+                    f'<div class="section-title">{line_name} Renderer</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.info(f"{line_name} uses the same Renderer stage, with its presentation rules to be designed here.")
         elif stage == "07 · Upload QC":
-            render_upload_qc()
+            if line_name == "Deep-Dive":
+                render_upload_qc()
+            else:
+                st.markdown(
+                    f'<div class="section-head"><div><div class="eyebrow">{line_name.upper()} · 07 · UPLOAD</div>'
+                    f'<div class="section-title">{line_name} Upload</div></div></div>',
+                    unsafe_allow_html=True,
+                )
+                st.info(f"{line_name} uses the same YouTube Upload stage. Publishing behaviour will follow the shared upload contract unless the line design requires a documented change.")
 elif st.session_state.app_mode == "live":
     _render_app_sidebar()
     render_live_dashboard()
