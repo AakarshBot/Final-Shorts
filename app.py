@@ -330,6 +330,14 @@ if "test_production_line" not in st.session_state:
     st.session_state.test_production_line = None
 if "test_stage" not in st.session_state:
     st.session_state.test_stage = "01 · Topic Fetcher"
+if "test_top5_content_type" not in st.session_state:
+    st.session_state.test_top5_content_type = "Cricket"
+if "test_top5_topics" not in st.session_state:
+    st.session_state.test_top5_topics = []
+if "test_top5_selected" not in st.session_state:
+    st.session_state.test_top5_selected = []
+if "test_top5_handoff" not in st.session_state:
+    st.session_state.test_top5_handoff = None
 if "renderer_previews" not in st.session_state:
     st.session_state.renderer_previews = None
 if "visual_crops" not in st.session_state:
@@ -2813,6 +2821,163 @@ elif st.session_state.app_mode == "test":
                 render_renderer_test()
             elif stage == "07 · Upload QC":
                 render_upload_qc()
+        elif line_name == "Top-5" and stage == "01 · Topic Fetcher":
+            st.markdown(
+                '<div class="section-head"><div><div class="eyebrow">TOP-5 · 01 · TOPIC PRODUCTION</div>'
+                '<div class="section-title">Select five cricket stories</div>'
+                '<div class="canvas-copy">Use the existing Topic Fetcher, build the pool, then choose and order exactly five distinct stories.</div></div>'
+                '<div class="section-count">0–5 selected</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            content_type = st.pills(
+                "Content type",
+                ["Cricket", "General News"],
+                default=st.session_state.test_top5_content_type,
+                key="test-top5-content-type",
+                label_visibility="collapsed",
+            ) or st.session_state.test_top5_content_type
+
+            if content_type != st.session_state.test_top5_content_type:
+                st.session_state.test_top5_content_type = content_type
+                st.session_state.test_top5_topics = []
+                st.session_state.test_top5_selected = []
+                st.session_state.test_top5_handoff = None
+                st.rerun()
+
+            if content_type == "General News":
+                st.info("General News is reserved for a later Top-5 expansion. Cricket is the current active Topic Fetcher.")
+            else:
+                topics = st.session_state.test_top5_topics
+                toolbar_left, toolbar_mid, toolbar_right = st.columns([1, 1, .8], gap="small")
+                with toolbar_left:
+                    fetch = st.button("Fetch current cricket stories", type="primary", width="stretch", key="test-top5-fetch")
+                with toolbar_mid:
+                    more = st.button("20 more articles", width="stretch", key="test-top5-more", disabled=not bool(topics))
+                with toolbar_right:
+                    st.markdown(
+                        f'<div style="text-align:right;padding:.65rem .15rem;"><span class="badge">{len(topics)} stories</span></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                if fetch or more:
+                    existing = list(topics) if more else []
+                    exclude = existing
+                    with st.spinner("Fetching current cricket stories…"):
+                        new_topics = fetch_topics(
+                            "cricket_india_asia",
+                            more=more,
+                            exclude_topics=exclude,
+                            limit=20,
+                        )
+                    st.session_state.test_top5_topics = existing + new_topics
+                    if not more:
+                        st.session_state.test_top5_selected = []
+                        st.session_state.test_top5_handoff = None
+                    st.rerun()
+
+                topics = st.session_state.test_top5_topics
+                selected = st.session_state.test_top5_selected
+
+                if selected:
+                    st.markdown(
+                        f'<div class="section-head"><div><div class="eyebrow">TOP 5 SELECTION</div>'
+                        f'<div class="section-title">{len(selected)} / 5 selected</div></div>'
+                        f'<div class="section-count">order matters</div></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    for slot, topic_index in enumerate(selected):
+                        topic = topics[topic_index]
+                        row = st.columns([.12, 1.55, .26, .26, .34], gap="small")
+                        with row[0]:
+                            st.markdown(f'<div class="topic-rank">#{slot + 1}</div>', unsafe_allow_html=True)
+                        with row[1]:
+                            st.markdown(
+                                f'<div class="topic-title">{topic.title}</div>'
+                                f'<div class="topic-meta">{topic.source or "Sports desk"}</div>',
+                                unsafe_allow_html=True,
+                            )
+                        with row[2]:
+                            if st.button("↑", key=f"test-top5-up-{topic_index}", disabled=slot == 0, width="stretch"):
+                                selected[slot - 1], selected[slot] = selected[slot], selected[slot - 1]
+                                st.session_state.test_top5_selected = selected
+                                st.session_state.test_top5_handoff = None
+                                st.rerun()
+                        with row[3]:
+                            if st.button("↓", key=f"test-top5-down-{topic_index}", disabled=slot == len(selected) - 1, width="stretch"):
+                                selected[slot + 1], selected[slot] = selected[slot], selected[slot + 1]
+                                st.session_state.test_top5_selected = selected
+                                st.session_state.test_top5_handoff = None
+                                st.rerun()
+                        with row[4]:
+                            if st.button("Remove", key=f"test-top5-remove-{topic_index}", width="stretch"):
+                                selected.remove(topic_index)
+                                st.session_state.test_top5_selected = selected
+                                st.session_state.test_top5_handoff = None
+                                st.rerun()
+
+                    st.divider()
+
+                if not topics:
+                    st.markdown(
+                        '<div class="empty-state"><div class="empty-state-title">No cricket stories loaded</div>'
+                        '<div class="empty-state-copy">Fetch the current cricket story pool to start.</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                else:
+                    st.markdown(
+                        '<div class="section-head"><div><div class="eyebrow">STORY POOL</div>'
+                        '<div class="section-title">Available cricket stories</div></div>'
+                        '<div class="section-count">select up to five</div></div>',
+                        unsafe_allow_html=True,
+                    )
+                    for start in range(0, len(topics), 2):
+                        row = st.columns(2, gap="medium")
+                        for col, (index, topic) in zip(row, enumerate(topics[start:start + 2], start=start)):
+                            with col:
+                                with st.container(key=f"test-top5-topic-{index}"):
+                                    selected_here = index in selected
+                                    label = "✓ Selected" if selected_here else "Select story"
+                                    disabled = not selected_here and len(selected) >= 5
+                                    st.markdown(
+                                        f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
+                                        f'<div class="topic-title">{topic.title}</div>'
+                                        f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',
+                                        unsafe_allow_html=True,
+                                    )
+                                    if st.button(label, key=f"test-top5-select-{index}", width="stretch", disabled=disabled):
+                                        if selected_here:
+                                            selected.remove(index)
+                                        else:
+                                            selected.append(index)
+                                        st.session_state.test_top5_selected = selected
+                                        st.session_state.test_top5_handoff = None
+                                        st.rerun()
+
+                selected = st.session_state.test_top5_selected
+                if len(selected) == 5:
+                    if st.button("Approve Top-5 selection", type="primary", width="stretch", key="test-top5-approve"):
+                        st.session_state.test_top5_handoff = [
+                            {
+                                "title": topics[index].title,
+                                "url": topics[index].url,
+                                "article": topics[index].description,
+                                "source": topics[index].source,
+                                "published_at": topics[index].published_at.isoformat(),
+                            }
+                            for index in selected
+                        ]
+                        st.rerun()
+
+                if st.session_state.test_top5_handoff:
+                    st.success("Top-5 selection approved. The five story URLs, titles and available article content are ready for the next stage.")
+                    st.caption("Article scraping is the next enrichment step and has not been added yet.")
+                    for number, article in enumerate(st.session_state.test_top5_handoff, 1):
+                        st.markdown(
+                            f'**#{number} · {article["title"]}**<br><span class="topic-meta">{article["url"]}</span>',
+                            unsafe_allow_html=True,
+                        )
         else:
             stage_labels = {
                 "01 · Topic Fetcher": "Topic Fetcher",
