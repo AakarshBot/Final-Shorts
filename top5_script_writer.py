@@ -73,9 +73,7 @@ SCHEMA = {
     "properties": {
         "slides": {
             "type": "array",
-            "minItems": 6,
-            "maxItems": 6,
-            "items": {
+                        "items": {
                 "type": "object",
                 "properties": {
                     "slide_number": {"type": "integer", "minimum": 1, "maximum": 6},
@@ -102,9 +100,7 @@ SCHEMA = {
         },
         "hashtags": {
             "type": "array",
-            "minItems": MIN_HASHTAGS,
-            "maxItems": MAX_HASHTAGS,
-            "items": {"type": "string"},
+                        "items": {"type": "string"},
         },
     },
     "required": ["slides", "hashtags"],
