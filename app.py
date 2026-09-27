@@ -23,36 +23,36 @@ st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
 STAGES = [
     {"key": "01 · Topic Fetcher", "number": "01", "label": "Topics", "desc": "Find the story"},
-    {"key": "02 · Scriptwriter", "number": "02", "icon": "", "label": "Script", "desc": "Write the Short"},
-    {"key": "03 · Audio", "number": "03", "icon": "", "label": "Audio", "desc": "Create voice"},
-    {"key": "04 · Visuals", "number": "04", "icon": "", "label": "Visuals", "desc": "Source imagery"},
-    {"key": "05 · Subtitles", "number": "05", "icon": "", "label": "Subs", "desc": "Build captions"},
-    {"key": "06 · Renderer", "number": "06", "icon": "", "label": "Render", "desc": "Build video"},
-    {"key": "07 · Upload QC", "number": "07", "icon": "", "label": "Upload", "desc": "Publish"},
+    {"key": "02 · Scriptwriter", "number": "02", "label": "Script", "desc": "Write the Short"},
+    {"key": "03 · Audio", "number": "03", "label": "Audio", "desc": "Create voice"},
+    {"key": "04 · Visuals", "number": "04", "label": "Visuals", "desc": "Source imagery"},
+    {"key": "05 · Subtitles", "number": "05", "label": "Subs", "desc": "Build captions"},
+    {"key": "06 · Renderer", "number": "06", "label": "Render", "desc": "Build video"},
+    {"key": "07 · Upload QC", "number": "07", "label": "Upload", "desc": "Publish"},
 ]
 st.markdown("""
 <style>
 :root{
-  --bg:#f5f7fb;
+  --bg:#f7f7f2;
   --surface:#ffffff;
-  --surface-soft:#f8f9fc;
-  --surface-accent:#f1f3ff;
-  --ink:#111827;
-  --muted:#667085;
-  --subtle:#98a2b3;
-  --line:#e4e7ec;
-  --line-strong:#d0d5dd;
-  --primary:#4f46e5;
-  --primary-hover:#4338ca;
-  --primary-soft:#eef2ff;
-  --success:#087443;
-  --success-soft:#ecfdf3;
-  --warning:#b54708;
-  --warning-soft:#fffaeb;
-  --danger:#b42318;
-  --danger-soft:#fef3f2;
-  --shadow:0 10px 30px rgba(16,24,40,.06);
-  --shadow-hover:0 16px 40px rgba(16,24,40,.10);
+  --surface-soft:#f0f1ec;
+  --surface-accent:#edf3ef;
+  --ink:#1c1d1a;
+  --muted:#5f655e;
+  --subtle:#5f655e;
+  --line:#dfe2da;
+  --line-strong:#bcc2b9;
+  --primary:#2b5d50;
+  --primary-hover:#21483e;
+  --primary-soft:#eaf1ed;
+  --success:#2f6b50;
+  --success-soft:#edf5ef;
+  --warning:#8a5b16;
+  --warning-soft:#faf4e7;
+  --danger:#a23b31;
+  --danger-soft:#f9ecea;
+  --shadow:0 1px 2px rgba(28,29,26,.05),0 8px 24px rgba(28,29,26,.04);
+  --shadow-hover:0 10px 26px rgba(28,29,26,.08);
 }
 html,body,.stApp{
   font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
@@ -63,10 +63,11 @@ html,body,.stApp{
 [data-testid="stHeader"]{background:transparent;}
 section[data-testid="stSidebar"]{display:none!important;}
 footer,#MainMenu{visibility:hidden;}
-.block-container{max-width:1380px;padding:28px 34px 64px;}
+.block-container{max-width:1440px;padding:24px 32px 56px;}
 h1,h2,h3,h4{color:var(--ink);letter-spacing:-.04em;}
 h1{font-weight:850;} h2,h3{font-weight:800;}
 p{color:var(--muted);}
+[data-testid="stCaptionContainer"] p,[data-testid="stMarkdownContainer"] small{color:var(--muted)!important;}
 button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s ease,background .14s ease;}
 [data-testid="stButton"]>button,[data-testid="stFormSubmitButton"]>button{
   min-height:42px;
@@ -79,8 +80,8 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 }
 [data-testid="stButton"]>button:hover,[data-testid="stFormSubmitButton"]>button:hover{
   transform:translateY(-1px);
-  border-color:#b8c0cc;
-  box-shadow:0 8px 22px rgba(16,24,40,.08);
+  border-color:var(--line-strong);
+  box-shadow:0 6px 16px rgba(28,29,26,.07);
 }
 [data-testid="stButton"]>button[kind="primary"],[data-testid="stFormSubmitButton"]>button[kind="primary"]{
   background:var(--primary);
@@ -120,8 +121,9 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   border:1px solid var(--line)!important;
   border-radius:999px!important;
   box-shadow:none!important;
-  font-weight:730!important;
+  font-weight:700!important;
   white-space:nowrap;
+  min-height:36px;
 }
 [data-testid="stPills"] button:hover{color:var(--ink)!important;border-color:var(--line-strong)!important;transform:none;}
 [data-testid="stPills"] button[aria-pressed="true"]{
@@ -158,53 +160,67 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   display:inline-flex;
   align-items:center;
   gap:6px;
-  padding:5px 9px;
+  padding:4px 8px;
   border-radius:999px;
   background:var(--surface-soft);
   border:1px solid var(--line);
   color:var(--muted);
   font-size:.62rem;
-  font-weight:760;
-  letter-spacing:.04em;
+  font-weight:720;
+  letter-spacing:.02em;
 }
 .st-key-workspace-nav{
-  background:rgba(255,255,255,.78);
+  background:var(--surface);
   border:1px solid var(--line);
-  border-radius:16px;
-  padding:10px 12px;
-  box-shadow:0 4px 18px rgba(16,24,40,.04);
+  border-radius:14px;
+  padding:8px 10px;
+  box-shadow:0 3px 14px rgba(28,29,26,.035);
 }
-.nav-brand{font-size:1.02rem;font-weight:860;letter-spacing:-.03em;line-height:1.05;}
-.nav-sub{font-size:.62rem;color:var(--subtle);margin-top:3px;letter-spacing:.06em;text-transform:uppercase;}
-.home-hero{padding:36px 2px 30px;}
-.home-kicker{font-size:.65rem;font-weight:820;letter-spacing:.16em;text-transform:uppercase;color:var(--primary);}
+.nav-brand{font-size:.98rem;font-weight:850;letter-spacing:-.025em;line-height:1.05;}
+.nav-sub{font-size:.62rem;color:var(--muted);margin-top:2px;letter-spacing:.035em;}
+.home-hero{
+  padding:34px 2px 26px;
+  max-width:900px;
+}
+.home-kicker{
+  font-size:.64rem;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--primary);
+}
 .home-title{
-  font-size:clamp(3rem,6.5vw,6.4rem);
-  font-weight:880;
-  line-height:.9;
-  letter-spacing:-.075em;
-  max-width:950px;
-  margin-top:10px;
+  font-size:clamp(2.8rem,6vw,5.4rem);
+  font-weight:860;
+  line-height:.95;
+  letter-spacing:-.065em;
+  max-width:900px;
+  margin-top:8px;
 }
-.home-copy{max-width:610px;color:var(--muted);font-size:1rem;line-height:1.5;margin-top:16px;}
+.home-copy{
+  max-width:520px;
+  color:var(--muted);
+  font-size:.94rem;
+  line-height:1.4;
+  margin-top:12px;
+}
 .st-key-landing-test,.st-key-landing-live{
-  min-height:310px;
+  min-height:250px;
   border:1px solid var(--line);
-  border-radius:20px;
-  padding:24px;
+  border-radius:18px;
+  padding:20px;
   box-shadow:var(--shadow);
   display:flex;
   flex-direction:column;
   justify-content:space-between;
+  background:var(--surface);
 }
-.st-key-landing-test{background:var(--surface);}
-.st-key-landing-live{
-  background:linear-gradient(145deg,#f7f8ff 0%,#eef2ff 100%);
-  border-color:#d9ddff;
-}
-.workspace-index{font-size:.72rem;font-weight:820;color:var(--subtle);letter-spacing:.08em;}
-.workspace-name{font-size:3.6rem;font-weight:880;letter-spacing:-.07em;line-height:.9;margin:.7rem 0 .6rem;}
-.workspace-desc{font-size:.86rem;color:var(--muted);line-height:1.45;max-width:430px;}
+.st-key-landing-test:hover,.st-key-landing-live:hover{border-color:var(--line-strong);}
+.workspace-index{font-size:.62rem;font-weight:800;color:var(--primary);letter-spacing:.09em;}
+.workspace-name{font-size:3.1rem;font-weight:860;letter-spacing:-.06em;line-height:.9;margin:.55rem 0 .5rem;}
+.workspace-desc{font-size:.83rem;color:var(--muted);line-height:1.35;max-width:420px;}
+.home-card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.home-card-kind{font-size:.62rem;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);}
 .canvas-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:18px;}
 .canvas-title{font-size:1.7rem;font-weight:860;letter-spacing:-.045em;line-height:1.08;}
 .canvas-copy{font-size:.78rem;color:var(--muted);max-width:700px;line-height:1.45;margin-top:5px;}
@@ -217,18 +233,66 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 }
 .section-title{font-size:1.12rem;font-weight:820;letter-spacing:-.025em;color:var(--ink);}
 .section-count{font-size:.62rem;font-weight:760;color:var(--subtle);letter-spacing:.06em;text-transform:uppercase;}
-.st-key-topic-toolbar{background:var(--surface);border:1px solid var(--line);border-radius:14px;padding:8px 10px;margin-bottom:14px;}
-.topic-index{font-size:.66rem;font-weight:820;color:var(--subtle);letter-spacing:.1em;padding-top:2px;}
-.topic-title{font-size:.95rem;line-height:1.28;font-weight:760;letter-spacing:-.015em;color:var(--ink);}
-.topic-meta{font-size:.65rem;color:var(--muted);line-height:1.35;margin-top:4px;}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-card-"]{
+.st-key-topic-toolbar{
   background:var(--surface);
   border:1px solid var(--line);
   border-radius:14px;
-  padding:11px 12px;
-  margin-bottom:8px;
+  padding:7px 9px;
+  margin-bottom:14px;
 }
-.selected-story-title{font-size:1.05rem;font-weight:800;letter-spacing:-.02em;}
+.topic-index{font-size:.62rem;font-weight:800;color:var(--muted);letter-spacing:.08em;padding-top:2px;}
+.topic-title{
+  font-size:.96rem;
+  line-height:1.24;
+  font-weight:760;
+  letter-spacing:-.018em;
+  color:var(--ink);
+  display:-webkit-box;
+  -webkit-box-orient:vertical;
+  -webkit-line-clamp:3;
+  overflow:hidden;
+  min-height:3.57em;
+  margin:7px 0 6px;
+}
+.topic-meta{
+  font-size:.66rem;
+  color:var(--muted);
+  line-height:1.25;
+  margin-top:0;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-card-"]{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:13px 14px 12px;
+  margin-bottom:10px;
+  min-height:178px;
+  box-shadow:0 1px 2px rgba(28,29,26,.03);
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-card-"]:hover{
+  border-color:var(--line-strong);
+  box-shadow:var(--shadow);
+}
+.topic-card-state{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  min-height:14px;
+}
+.topic-card-state .selected{
+  color:var(--primary);
+  font-weight:800;
+}
+.selected-story-title{
+  font-size:1.08rem;
+  font-weight:820;
+  letter-spacing:-.025em;
+  line-height:1.18;
+  max-width:760px;
+}
 .st-key-script-editor,.st-key-subtitle-editor,.st-key-renderer-inspector,.st-key-audio-inspector{
   background:var(--surface);
   border:1px solid var(--line);
@@ -259,23 +323,32 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   justify-content:center;
   box-shadow:var(--shadow);
 }
-.live-product-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;}.live-product-title{font-size:clamp(2.7rem,5vw,4.8rem);font-weight:880;letter-spacing:-.07em;line-height:.9;margin-top:8px;}.live-status{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:.62rem;font-weight:760;white-space:nowrap;}.live-status span{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 4px var(--success-soft);}
-.hero-subtitle{font-size:.88rem;color:var(--muted);max-width:620px;line-height:1.45;margin-top:6px;}
+.live-product-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;}
+.live-product-title{
+  font-size:clamp(2.5rem,5vw,4.4rem);
+  font-weight:860;
+  letter-spacing:-.065em;
+  line-height:.94;
+  margin-top:6px;
+}
+.live-status{display:inline-flex;align-items:center;gap:7px;padding:6px 9px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:.62rem;font-weight:750;white-space:nowrap;}
+.live-status span{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 4px var(--success-soft);}
+.hero-subtitle{font-size:.82rem;color:var(--muted);max-width:600px;line-height:1.4;margin-top:5px;}
 .st-key-live-choice-cricket,.st-key-live-choice-niche,.st-key-live-cricket-india,.st-key-live-cricket-global,
 .st-key-live-line-deep-dive,.st-key-live-line-top-5,.st-key-live-line-otd{
   background:var(--surface);
   border:1px solid var(--line);
-  border-radius:18px;
-  padding:22px;
-  min-height:220px;
+  border-radius:16px;
+  padding:18px;
+  min-height:190px;
   box-shadow:var(--shadow);
 }
 .st-key-live-choice-niche,.st-key-live-line-top-5,.st-key-live-line-otd{
-  background:linear-gradient(145deg,#f8f9ff,#f2f4ff);
-  border-color:#dfe3ff;
+  background:var(--surface);
+  border-color:var(--line);
 }
-.choice-title{font-size:2.55rem;font-weight:880;letter-spacing:-.07em;line-height:.9;margin:.6rem 0;}
-.choice-copy{font-size:.84rem;color:var(--muted);line-height:1.4;max-width:420px;}
+.choice-title{font-size:2.25rem;font-weight:850;letter-spacing:-.06em;line-height:.94;margin:.45rem 0;}
+.choice-copy{font-size:.8rem;color:var(--muted);line-height:1.35;max-width:360px;}
 .live-card{
   min-height:72px;
   padding:12px 14px;
@@ -307,20 +380,27 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 .crop-dialog-title{font-size:1.2rem;font-weight:820;margin:4px 0 10px;letter-spacing:-.025em;}
 @media(max-width:900px){
   .block-container{padding:18px 16px 44px;}
-  .home-hero{padding:20px 0 22px;}
-  .home-title{font-size:clamp(2.9rem,12vw,4.7rem);}
-  .workspace-name{font-size:3rem;}
+  .home-hero{padding:24px 0 20px;}
+  .home-title{font-size:clamp(2.6rem,10vw,4.6rem);}
+  .workspace-name{font-size:2.7rem;}
   .canvas-head{margin-bottom:14px;}
   .section-head{margin-top:18px;}
+  .st-key-landing-test,.st-key-landing-live{min-height:230px;}
 }
 @media(max-width:640px){
   .block-container{padding-left:12px;padding-right:12px;}
-  .st-key-workspace-nav{padding:9px;}
-  .home-copy{font-size:.9rem;}
-  .canvas-title{font-size:1.4rem;}
-  .choice-title{font-size:2.2rem;}
-  .inspector-line{font-size:.68rem;}
-  .cue-row{grid-template-columns:58px 1fr;gap:8px;}
+  .st-key-workspace-nav{padding:8px;}
+  .home-copy{font-size:.86rem;}
+  .home-title{font-size:clamp(2.45rem,13vw,3.7rem);}
+  .canvas-title{font-size:1.35rem;}
+  .choice-title{font-size:2rem;}
+  .inspector-line{font-size:.7rem;}
+  .cue-row{grid-template-columns:52px 1fr;gap:9px;}
+  [data-testid="stHorizontalBlock"]{gap:10px;}
+  .st-key-topic-toolbar{padding:6px 8px;}
+  [data-testid="stVerticalBlock"] [class*="st-key-topic-card-"]{min-height:164px;padding:12px;}
+  .topic-title{font-size:.94rem;-webkit-line-clamp:3;}
+  .selected-story-title{font-size:1rem;}
 }
 </style>\n""", unsafe_allow_html=True)
 
@@ -612,9 +692,9 @@ def _render_visual_asset_grid(assets: list[dict], result_key: str):
 def _render_home():
     st.markdown(
         '<div class="home-hero">'
-        '<div class="home-kicker">FINAL SHORTS · EDITORIAL STUDIO</div>'
-        '<div class="home-title">Turn the story into the Short.</div>'
-        '<div class="home-copy">Two workspaces. One production flow.</div>'
+        '<div class="home-kicker">FINAL SHORTS</div>'
+        '<div class="home-title">Editorial studio.</div>'
+        '<div class="home-copy">Choose a workspace and start where you need to.</div>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -622,22 +702,32 @@ def _render_home():
     left, right = st.columns(2, gap="medium")
     with left:
         with st.container(key="landing-test"):
-            st.markdown('<div><div class="workspace-index">01 · BUILD</div><div class="workspace-name">TEST</div>'
-                        '<div class="workspace-desc">Run a single stage, inspect the output, and keep production untouched.</div></div>',
-                        unsafe_allow_html=True)
-            st.markdown('<div><span class="badge">7 stages</span> <span class="badge">manual review</span></div>',
-                        unsafe_allow_html=True)
-            if st.button("Open Test Lab", key="open-test", type="primary", width="stretch"):
+            st.markdown(
+                '<div class="home-card-top">'
+                '<span class="workspace-index">01</span>'
+                '<span class="home-card-kind">BUILD</span>'
+                '</div>'
+                '<div class="workspace-name">Test</div>'
+                '<div class="workspace-desc">Build and inspect without touching production.</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown('<div><span class="badge">7 stages</span> <span class="badge">manual</span></div>', unsafe_allow_html=True)
+            if st.button("Open Test", key="open-test", type="primary", width="stretch"):
                 st.session_state.app_mode = "test"
                 st.rerun()
     with right:
         with st.container(key="landing-live"):
-            st.markdown('<div><div class="workspace-index">02 · SHIP</div><div class="workspace-name">LIVE</div>'
-                        '<div class="workspace-desc">Take one story from selection to finished video and upload.</div></div>',
-                        unsafe_allow_html=True)
-            st.markdown('<div><span class="badge">production</span> <span class="badge">public / private</span></div>',
-                        unsafe_allow_html=True)
-            if st.button("Open Live Production", key="open-live", type="primary", width="stretch"):
+            st.markdown(
+                '<div class="home-card-top">'
+                '<span class="workspace-index">02</span>'
+                '<span class="home-card-kind">SHIP</span>'
+                '</div>'
+                '<div class="workspace-name">Live</div>'
+                '<div class="workspace-desc">Run the approved production flow.</div>',
+                unsafe_allow_html=True,
+            )
+            st.markdown('<div><span class="badge">production</span> <span class="badge">public / private</span></div>', unsafe_allow_html=True)
+            if st.button("Open Live", key="open-live", type="primary", width="stretch"):
                 st.session_state.app_mode = "live"
                 st.rerun()
 
@@ -1911,8 +2001,7 @@ profiles = {
 def render_topic_fetcher():
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">01 · STORY DESK</div>'
-        '<div class="canvas-title">Find the next story</div>'
-        '<div class="canvas-copy">Choose a desk, pull the current story pool, then select one story to hand to the Scriptwriter.</div></div></div>',
+        '<div class="canvas-title">Story desk</div></div></div>',
         unsafe_allow_html=True,
     )
 
@@ -1971,23 +2060,27 @@ def render_topic_fetcher():
         )
         return
 
-    for start in range(0, len(topics), 2):
-        row = st.columns(2, gap="medium")
+    for start in range(0, len(topics), 3):
+        row = st.columns(3, gap="small")
         for col, (index, topic) in zip(
             row,
-            enumerate(topics[start:start + 2], start=start),
+            enumerate(topics[start:start + 3], start=start),
         ):
             with col:
                 source = topic.source or "Sports desk"
-                published = topic.published_at.strftime("%d %b · %H:%M UTC")
+                published = topic.published_at.strftime("%d %b")
+                selected = index == st.session_state.selected_topic
                 with st.container(key=f"topic-card-{index}"):
                     st.markdown(
-                        f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
+                        f'<div class="topic-card-state">'
+                        f'<span class="topic-rank">STORY {index + 1:02d}</span>'
+                        f'<span class="topic-card-state {"selected" if selected else ""}">{"Selected" if selected else ""}</span>'
+                        f'</div>'
                         f'<div class="topic-title">{topic.title}</div>'
                         f'<div class="topic-meta">{source} · {published}</div>',
                         unsafe_allow_html=True,
                     )
-                    label = "Selected" if index == st.session_state.selected_topic else "Select story"
+                    label = "Selected" if selected else "Select"
                     if st.button(label, key=f"topic-select-{index}", width="stretch"):
                         st.session_state.selected_topic = index
                         st.session_state.script_data = None
@@ -2020,16 +2113,17 @@ def render_topic_fetcher():
         if index < len(topics):
             topic=topics[index]
             with st.container(key="selected-story-card"):
-                left,right=st.columns([1.5,.4],gap="medium")
+                left,right=st.columns([1.7,.45],gap="medium")
                 with left:
-                    st.markdown('<div class="eyebrow">SELECTED STORY</div>',unsafe_allow_html=True)
+                    st.markdown('<div class="eyebrow">SELECTED</div>',unsafe_allow_html=True)
                     st.markdown(f'<div class="selected-story-title">{topic.title}</div>',unsafe_allow_html=True)
-                    st.markdown(f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',unsafe_allow_html=True)
+                    st.markdown(f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b}</div>',unsafe_allow_html=True)
                     if topic.description:
-                        st.caption(topic.description)
+                        with st.expander("Story details", expanded=False):
+                            st.write(topic.description)
                 with right:
                     if topic.url:
-                        st.link_button("Open source ↗",topic.url,width="stretch")
+                        st.link_button("Source ↗",topic.url,width="stretch")
 def render_scriptwriter():
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first.")
@@ -2757,31 +2851,31 @@ elif st.session_state.app_mode == "test":
     if st.session_state.test_production_line is None:
         st.markdown(
             '<div class="live-product-head">'
-            '<div><div class="eyebrow">TEST PRODUCTION</div>'
-            '<div class="live-product-title">Build the line.</div>'
-            '<div class="hero-subtitle">Choose a production framework before entering its stages.</div></div>'
+            '<div><div class="eyebrow">TEST LAB</div>'
+            '<div class="live-product-title">Choose a line.</div>'
+            '<div class="hero-subtitle">Pick a production path.</div></div>'
             '</div>',
             unsafe_allow_html=True,
         )
-        st.space("medium")
+        st.space("small")
         choices = [
             (
                 "test-line-deep-dive",
                 "01 · DEEP-DIVE",
                 "DEEP-DIVE",
-                "Single-story production line using the shared seven-stage factory.",
+                "One story, end to end.",
             ),
             (
                 "test-line-top-5",
                 "02 · TOP-5",
                 "TOP-5",
-                "Five cricket stories in one daily package. Framework WIP.",
+                "Five cricket stories, one package.",
             ),
             (
                 "test-line-otd",
                 "03 · OTD",
                 "ON THIS DAY",
-                "Historical sports package built around the date. Framework WIP.",
+                "A date-driven historical package.",
             ),
         ]
         cols = st.columns(3, gap="small")
@@ -2793,9 +2887,9 @@ elif st.session_state.app_mode == "test":
                     st.markdown(f'<div class="choice-copy">{copy}</div>', unsafe_allow_html=True)
                     st.space("medium")
                     button_label = {
-                        "01 · DEEP-DIVE": "Open Deep-Dive →",
-                        "02 · TOP-5": "Open Top-5 →",
-                        "03 · OTD": "Open OTD →",
+                        "01 · DEEP-DIVE": "Open Deep-Dive",
+                        "02 · TOP-5": "Open Top-5",
+                        "03 · OTD": "Open OTD",
                     }[eyebrow]
                     if st.button(button_label, type="primary", width="stretch", key=f"{key}-button"):
                         st.session_state.test_production_line = {
