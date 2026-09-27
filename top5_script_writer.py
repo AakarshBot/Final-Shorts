@@ -66,6 +66,8 @@ SLIDE_1_FILLER_PATTERNS = (
     r"\b(?:make|makes|making) you see (?:the )?(?:game|cricket) differently\b",
     r"\bchange(?:s|d)? the way you see (?:the )?(?:game|cricket)\b",
     r"\b(?:will|could|can) change (?:the )?(?:game|world|cricket)\b",
+    r"\b(?:changing|change(?:s|d)?) (?:the )?world\b",
+    r"\b(?:changing|change(?:s|d)?) (?:the )?game\b",
     r"\bsee (?:the )?(?:game|cricket) differently\b",
     r"\bhere(?:'|’)?s why\b",
     r"\bfind out\b",
@@ -417,8 +419,8 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
         headline = _clean(slide.get("headline"))
         if not headline:
             return False, f"Slide {expected_number} has no headline."
-        if _contains_forbidden_editorial_language(headline):
-            return False, f"Slide {expected_number} contains synthetic editorial language."
+        if _contains_forbidden_editorial_language(headline) or _contains_slide_1_filler(headline):
+            return False, f"Slide {expected_number} contains audience-facing or synthetic filler language."
 
         for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category"):
             if not _clean(slide.get(key)):
@@ -429,8 +431,6 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
                 return False, f"Slide 1 exceeds {SLIDE_1_MAX_WORDS} words."
             if _is_generic_package_headline(headline):
                 return False, "Slide 1 is a generic Top-5 headline."
-            if _contains_forbidden_editorial_language(headline) or _contains_slide_1_filler(headline):
-                return False, "Slide 1 contains audience-facing or synthetic filler language."
             if not _references_any_selected_story(headline, stories):
                 return False, "Slide 1 is not grounded in a selected story."
             if any(
