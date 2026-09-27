@@ -1,0 +1,521 @@
+"""Top-5 cricket Scriptwriter for Function 02.
+
+This module is intentionally independent from script_writer.py. It writes one
+six-slide Top-5 package from five approved Topic Fetcher stories.
+"""
+
+from concurrent.futures import ThreadPoolExecutor
+from difflib import SequenceMatcher
+from html import unescape
+import json
+import os
+from pathlib import Path
+import re
+from urllib.parse import urlparse
+
+import requests
+import trafilatura
+from ddgs import DDGS
+from dotenv import load_dotenv
+
+
+load_dotenv(Path(__file__).resolve().with_name(".env"))
+
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
+TIMEOUT = 30
+RESEARCH_TIMEOUT = 8
+MAX_ARTICLE_CHARS = 5500
+MAX_EVIDENCE_CHARS = 30000
+MIN_ARTICLE_CHARS = 500
+SLIDE_1_MAX_WORDS = 14
+STORY_HEADLINE_MAX_WORDS = 36
+STORY_HEADLINE_TARGET_WORDS = (24, 32)
+BODY_MIN_WORDS = 14
+BODY_MAX_WORDS = 48
+SPEECH_WORDS_PER_MINUTE = 150.0
+MIN_HASHTAGS = 3
+MAX_HASHTAGS = 5
+
+AI_EDITORIAL_PATTERNS = (
+    r"changing the conversation",
+    r"change(?:d|s)? the way .* see",
+    r"everyone is talking about",
+    r"the cricket world is buzzing",
+    r"sending shockwaves",
+    r"shocking the cricket world",
+    r"game[- ]changer",
+    r"big talking point",
+    r"what you need to know",
+    r"here(?:'|’)?s what happened",
+    r"in a major update",
+    r"this could change everything",
+    r"set to change cricket",
+)
+
+GENERIC_PATTERNS = (
+    r"^s*top five cricket stories(?: of the day)?s*$",
+    r"^s*five cricket stories(?: of the day)?s*$",
+    r"^s*cricket news todays*$",
+    r"^s*latest cricket newss*$",
+    r"^s*today(?:'|’)?s cricket roundups*$",
+    r"^s*the biggest cricket stories(?: today)?s*$",
+)
+
+LANGUAGE_PROMPT = (
+    "Write in natural spoken English. Use normal sports-desk vocabulary, "
+    "clean sentence rhythm and no artificial promotional language."
+)
+
+SCHEMA = {
+    "type": "object",
+    "properties": {
+        "slides": {
+            "type": "array",
+            "minItems": 6,
+            "maxItems": 6,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "slide_number": {"type": "integer", "minimum": 1, "maximum": 6},
+                    "story_index": {"type": "integer", "minimum": 0, "maximum": 5},
+                    "headline": {"type": "string"},
+                    "body": {"type": "string"},
+                    "primary_entity": {"type": "string"},
+                    "visual_intent": {"type": "string"},
+                    "specific_search_prompt": {"type": "string"},
+                    "sport_or_topic_category": {"type": "string"},
+                },
+                "required": [
+                    "slide_number",
+                    "story_index",
+                    "headline",
+                    "body",
+                    "primary_entity",
+                    "visual_intent",
+                    "specific_search_prompt",
+                    "sport_or_topic_category",
+                ],
+                "additionalProperties": False,
+            },
+        },
+        "hashtags": {
+            "type": "array",
+            "minItems": MIN_HASHTAGS,
+            "maxItems": MAX_HASHTAGS,
+            "items": {"type": "string"},
+        },
+    },
+    "required": ["slides", "hashtags"],
+    "additionalProperties": False,
+}
+
+SYSTEM_PROMPT = """You are the senior sports desk editor for a human-reviewed YouTube Shorts channel.
+
+You are writing ONE Top-5 cricket Short from exactly five selected stories.
+Treat the five supplied stories as five separate editorial assignments. Do not merge
+their facts, do not invent a common theme, and do not make the package sound like an
+AI-generated roundup.
+
+EDITORIAL STANDARD
+- Use only facts explicitly supported by the supplied evidence.
+- Research evidence is provided for each selected story. Stay inside that story's evidence.
+- A headline must tell the important development, not simply rephrase the source headline.
+- The body is visual-only supporting copy. It must add useful facts, context, timing,
+  consequence or supporting detail from the same story. Never make it a restatement
+  of the headline.
+- Never invent quotes, numbers, motives, reactions, implications, predictions or outcomes.
+- Do not imply public reaction, global importance or a wider trend unless the evidence
+  explicitly establishes it.
+- Write like a sharp human cricket editor: specific, economical and natural.
+- Avoid promotional, dramatic or generic AI language.
+- Do not use phrases such as "changing the conversation", "everyone is talking",
+  "the cricket world is buzzing", "sending shockwaves", "game changer",
+  "what you need to know", "here's what happened", or similar synthetic framing.
+- Do not use a generic roundup headline. Slide 1 must be rooted in the actual five stories.
+- Slide 1 can be smart or quirky only when the wording is grounded in the selected
+  stories. It must never invent a shared theme just to sound clever.
+
+SLIDE STRUCTURE
+- Return exactly six slides.
+- Slide 1 is the package opener. It has ONE spoken headline and no meaningful body copy.
+  Keep it to 14 words or fewer.
+- Slides 2–6 correspond exactly, in order, to selected stories 1–5.
+- For Slides 2–6, the headline IS the spoken narration for that slide.
+- Each story headline must tell the complete important development in ONE clean sentence.
+- Target 24–32 words and never exceed 36 words.
+- It must be natural to speak in under 15 seconds without rushing.
+- Do not merely repeat the source title. Add the key development, context or consequence
+  that makes the story understandable on its own.
+- The body is visual-only. Write 2 or 3 short factual sentences, roughly 14–48 words total.
+  Add useful information not already fully stated in the headline.
+- Keep body copy compact enough for a 9:16 visual card. Do not write a mini article.
+- For every slide, provide a concrete visual entity, visual intent and a specific search prompt.
+  Slide 1 should describe a factual cricket-package visual, not an invented mood or theme.
+- Generate 3–5 relevant hashtags. No spaces inside hashtags.
+- Return JSON only.
+"""
+
+def _clean(value) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _words(value) -> int:
+    return len(re.findall(r"\b[\w]+(?:['’][\w]+)?\b", str(value or ""), flags=re.UNICODE))
+
+
+def _normalise(value) -> str:
+    return re.sub(r"[^\w ]+", " ", str(value or "").casefold(), flags=re.UNICODE).strip()
+
+
+def _story_value(story, key: str) -> str:
+    if hasattr(story, "__dataclass_fields__"):
+        return _clean(getattr(story, key, ""))
+    return _clean(dict(story or {}).get(key))
+
+
+def _source_domain(url: str) -> str:
+    try:
+        return urlparse(str(url or "")).netloc.casefold().removeprefix("www.")
+    except ValueError:
+        return ""
+
+
+def _limit_text(text: str, limit: int = MAX_ARTICLE_CHARS) -> str:
+    clean = _clean(text)
+    if len(clean) <= limit:
+        return clean
+    return clean[:limit].rsplit(" ", 1)[0].rstrip() + "…"
+
+
+def _article_body_from_html(html_text: str) -> str:
+    raw = str(html_text or "")
+    paragraphs = []
+    for paragraph in re.findall(
+        r"<p\b[^>]*>(.*?)</p>",
+        raw,
+        flags=re.IGNORECASE | re.DOTALL,
+    ):
+        value = _clean(unescape(re.sub(r"<[^>]+>", " ", paragraph)))
+        if value:
+            paragraphs.append(value)
+    return "\n".join(paragraphs)
+
+
+def _extract_article(url: str) -> tuple[str, str]:
+    target = _clean(url)
+    if not target:
+        return "", ""
+
+    response = requests.get(
+        target,
+        headers={
+            "User-Agent": "Final-Shorts/1.0",
+            "Accept": "text/html,application/xhtml+xml",
+        },
+        timeout=RESEARCH_TIMEOUT,
+        allow_redirects=True,
+    )
+    response.raise_for_status()
+    resolved_url = str(response.url or target)
+
+    candidates = [
+        trafilatura.extract(
+            response.text,
+            url=resolved_url,
+            favor_recall=True,
+            include_comments=False,
+            include_tables=False,
+            output_format="txt",
+        ),
+        _article_body_from_html(response.text),
+    ]
+    for candidate in candidates:
+        text = _clean(candidate)
+        if len(text) >= MIN_ARTICLE_CHARS:
+            return _limit_text(text), resolved_url
+
+    return "", resolved_url
+
+
+def _title_keywords(title: str) -> set[str]:
+    words = re.findall(r"\b[\w]+\b", title.casefold(), flags=re.UNICODE)
+    stop = {
+        "the", "and", "for", "with", "from", "this", "that", "before", "after",
+        "about", "into", "over", "under", "when", "where", "will", "has", "have",
+        "had", "its", "his", "her", "their", "they", "them", "your", "our",
+        "new", "latest", "update", "news", "team", "match", "game", "sport",
+        "sports", "vs", "versus", "cricket",
+    }
+    return {word for word in words if len(word) >= 3 and word not in stop}
+
+
+def _search_corroborating_article(title: str, original_url: str) -> tuple[str, str]:
+    query = _clean(title)
+    original_domain = _source_domain(original_url)
+    keywords = _title_keywords(query)
+    minimum_overlap = 2 if len(keywords) >= 2 else 1
+    blocked = ("twitter.", "x.com", "facebook.", "instagram.", "youtube.", "google.")
+
+    try:
+        results = DDGS(timeout=5).news(
+            query=query,
+            region="in-en",
+            safesearch="off",
+            timelimit="w",
+            max_results=5,
+        )
+    except Exception:
+        results = []
+
+    candidates = []
+    for result in results or []:
+        url = _clean(result.get("url") or result.get("href"))
+        result_title = _clean(result.get("title"))
+        if not url or url == original_url:
+            continue
+        domain = _source_domain(url)
+        if not domain or domain == original_domain or any(x in domain for x in blocked):
+            continue
+        overlap = len(keywords & _title_keywords(result_title))
+        if keywords and overlap < minimum_overlap:
+            continue
+        candidates.append((overlap, url))
+
+    for _, url in sorted(candidates, key=lambda item: item[0], reverse=True):
+        try:
+            article, resolved = _extract_article(url)
+            if article:
+                return article, resolved
+        except (OSError, ValueError, requests.RequestException):
+            continue
+    return "", ""
+
+
+def _research_story(story: dict) -> str:
+    title = _story_value(story, "title")
+    url = _story_value(story, "url")
+    description = _story_value(story, "article") or _story_value(story, "description")
+    sections = [f"[SELECTED STORY]\n{title}"]
+
+    if url:
+        try:
+            article, resolved = _extract_article(url)
+        except (OSError, ValueError, requests.RequestException):
+            article, resolved = "", url
+
+        if article:
+            sections.append(f"[PRIMARY ARTICLE — {resolved or url}]\n{article}")
+        else:
+            fallback, fallback_url = _search_corroborating_article(title, url)
+            if fallback:
+                sections.append(f"[CORROBORATING ARTICLE — {fallback_url}]\n{fallback}")
+
+    if description:
+        sections.append(f"[TOPIC FETCHER SUMMARY]\n{_limit_text(description, 1800)}")
+
+    evidence = "\n\n".join(sections)
+    if len(evidence) <= MAX_ARTICLE_CHARS + 2200:
+        return evidence
+    return _limit_text(evidence, MAX_ARTICLE_CHARS + 2200)
+
+
+def research_top5_stories(stories: list[dict]) -> list[str]:
+    if len(stories) != 5:
+        raise ValueError("Top-5 Scriptwriter requires exactly five selected stories.")
+    with ThreadPoolExecutor(max_workers=5) as pool:
+        results = list(pool.map(_research_story, stories))
+    if not any(results):
+        raise RuntimeError("Top-5 story research returned no usable evidence.")
+    return results
+
+
+def _evidence_packet(stories: list[dict], research: list[str]) -> str:
+    packets = []
+    for index, (story, evidence) in enumerate(zip(stories, research), 1):
+        title = _story_value(story, "title")
+        url = _story_value(story, "url")
+        packets.append(
+            f"===== STORY {index} =====\n"
+            f"SELECTED HEADLINE: {title}\n"
+            f"SELECTED URL: {url}\n"
+            f"{evidence}"
+        )
+    return _limit_text("\n\n".join(packets), MAX_EVIDENCE_CHARS)
+
+
+def estimate_speech_seconds(text: str) -> float:
+    return _words(text) / (SPEECH_WORDS_PER_MINUTE / 60.0)
+
+
+def _contains_forbidden_editorial_language(text: str) -> bool:
+    return any(re.search(pattern, text, re.IGNORECASE) for pattern in AI_EDITORIAL_PATTERNS)
+
+
+def _is_generic_package_headline(headline: str) -> bool:
+    clean = _clean(headline)
+    return any(re.search(pattern, clean, re.IGNORECASE) for pattern in GENERIC_PATTERNS)
+
+
+def _story_references_headline(headline: str, story: dict) -> bool:
+    headline_words = set(_normalise(headline).split())
+    title_words = _title_keywords(_story_value(story, "title"))
+    if not title_words:
+        return True
+    return bool(headline_words & title_words)
+
+
+def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
+    if not isinstance(result, dict):
+        return False, "The provider returned no Top-5 script object."
+    if len(stories) != 5:
+        return False, "Top-5 Scriptwriter requires exactly five selected stories."
+
+    slides = result.get("slides")
+    if not isinstance(slides, list) or len(slides) != 6:
+        return False, "Top-5 Scriptwriter must return exactly six slides."
+
+    for expected_number, slide in enumerate(slides, 1):
+        if not isinstance(slide, dict):
+            return False, f"Slide {expected_number} is malformed."
+        if slide.get("slide_number") != expected_number:
+            return False, f"Slide {expected_number} has the wrong slide number."
+        if int(slide.get("story_index", -1)) != (expected_number - 1):
+            return False, f"Slide {expected_number} is mapped to the wrong story."
+
+        headline = _clean(slide.get("headline"))
+        if not headline:
+            return False, f"Slide {expected_number} has no headline."
+        if _contains_forbidden_editorial_language(headline):
+            return False, f"Slide {expected_number} contains synthetic editorial language."
+
+        for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category"):
+            if not _clean(slide.get(key)):
+                return False, f"Slide {expected_number} is missing {key}."
+
+        if expected_number == 1:
+            if _words(headline) > SLIDE_1_MAX_WORDS:
+                return False, f"Slide 1 exceeds {SLIDE_1_MAX_WORDS} words."
+            if _is_generic_package_headline(headline):
+                return False, "Slide 1 is a generic Top-5 headline."
+            if any(
+                _clean(other.get("headline")).casefold() == headline.casefold()
+                for other in slides[1:]
+            ):
+                return False, "Slide 1 cannot duplicate a story headline."
+            body = _clean(slide.get("body"))
+            if body and _words(body) > 12:
+                return False, "Slide 1 should not contain a meaningful body."
+        else:
+            story = stories[expected_number - 2]
+            if not _story_references_headline(headline, story):
+                return False, f"Slide {expected_number} does not reference its selected story."
+            if _words(headline) > STORY_HEADLINE_MAX_WORDS:
+                return False, f"Slide {expected_number} exceeds {STORY_HEADLINE_MAX_WORDS} spoken words."
+            if estimate_speech_seconds(headline) >= 15.0:
+                return False, f"Slide {expected_number} is not below 15 seconds at the speech-rate estimate."
+            words = _words(headline)
+            if words < 12:
+                return False, f"Slide {expected_number} is too compressed to tell the full story."
+            body = _clean(slide.get("body"))
+            if not body:
+                return False, f"Slide {expected_number} is missing body copy."
+            body_words = _words(body)
+            if not BODY_MIN_WORDS <= body_words <= BODY_MAX_WORDS:
+                return False, f"Slide {expected_number} body must contain {BODY_MIN_WORDS}–{BODY_MAX_WORDS} words."
+            if SequenceMatcher(None, _normalise(headline), _normalise(body)).ratio() >= 0.88:
+                return False, f"Slide {expected_number} body is too similar to its headline."
+
+    hashtags = result.get("hashtags")
+    if (
+        not isinstance(hashtags, list)
+        or not MIN_HASHTAGS <= len(hashtags) <= MAX_HASHTAGS
+        or any(not _clean(tag).startswith("#") or " " in _clean(tag) for tag in hashtags)
+    ):
+        return False, "Top-5 Scriptwriter must return 3–5 valid hashtags."
+
+    return True, ""
+
+
+def _request(model: str, prompt: str, evidence: str) -> dict:
+    key = _clean(os.getenv("GROQ_API_KEY"))
+    if not key:
+        raise RuntimeError("GROQ_API_KEY is not configured.")
+
+    response = requests.post(
+        GROQ_URL,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": "TOP-5 STORY EVIDENCE:\n" + evidence},
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "top5_cricket_script",
+                    "strict": True,
+                    "schema": SCHEMA,
+                },
+            },
+            "include_reasoning": False,
+            "reasoning_effort": "low",
+            "temperature": 0.35,
+            "max_completion_tokens": 2200,
+        },
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    content = response.json()["choices"][0]["message"]["content"]
+    return content if isinstance(content, dict) else json.loads(content)
+
+
+def generate_top5_script(stories: list[dict]) -> dict:
+    if len(stories) != 5:
+        raise ValueError("Top-5 Scriptwriter requires exactly five selected stories.")
+
+    research = research_top5_stories(stories)
+    if not any(_clean(text) for text in research):
+        raise RuntimeError("Top-5 story research returned no usable evidence.")
+
+    evidence = _evidence_packet(stories, research)
+    errors = []
+    recovery_reason = ""
+
+    for model in MODELS:
+        instruction = SYSTEM_PROMPT + "\n\n" + LANGUAGE_PROMPT
+        if recovery_reason:
+            instruction += (
+                "\n\nRECOVERY:\n"
+                "The previous draft failed local validation. Regenerate the complete "
+                "six-slide JSON and fix this exact validation failure without relaxing "
+                "any other rule.\n"
+                f"Validation failure: {recovery_reason}"
+            )
+        try:
+            result = _request(model, instruction, evidence)
+            valid, reason = validate_top5_script(result, stories)
+            if valid:
+                result["provider_used"] = model
+                result["delivery_profile"] = "TOP-5 CRICKET EDITOR"
+                result["stories"] = [
+                    {
+                        "title": _story_value(story, "title"),
+                        "url": _story_value(story, "url"),
+                        "source": _story_value(story, "source"),
+                        "published_at": _story_value(story, "published_at"),
+                    }
+                    for story in stories
+                ]
+                return result
+            recovery_reason = reason
+            errors.append(f"{model}: {reason}")
+        except Exception as exc:
+            recovery_reason = f"{type(exc).__name__}: {exc}"
+            errors.append(f"{model}: {recovery_reason}")
+
+    raise RuntimeError("Top-5 script generation failed: " + " | ".join(errors))
