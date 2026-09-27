@@ -147,7 +147,7 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 .stProgress > div > div{background:var(--primary);}
 [data-testid="stAudio"]{border-radius:10px;}
 [data-testid="stVideo"]{border-radius:16px;overflow:hidden;}
-.eyebrow,.mini-label,.sidebar-heading{
+.eyebrow,.mini-label{
   font-size:.62rem;
   font-weight:820;
   letter-spacing:.14em;
