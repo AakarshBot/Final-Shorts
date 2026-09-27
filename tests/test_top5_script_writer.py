@@ -110,6 +110,16 @@ def test_story_headline_is_below_fifteen_seconds():
     assert "36 spoken words" in reason
 
 
+def test_story_headline_rejects_hype_filler():
+    result = valid_result()
+    result["slides"][1]["headline"] = (
+        "Story 1 confirmed the cricket record and will change the way you see the game right now"
+    )
+    valid, reason = validate_top5_script(result, stories())
+    assert not valid
+    assert "filler language" in reason
+
+
 def test_body_is_not_a_headline_restatement():
     result = valid_result()
     result["slides"][1]["body"] = result["slides"][1]["headline"]
