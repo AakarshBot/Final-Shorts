@@ -19,6 +19,9 @@ MAX_CONCURRENCY = 2
 MAX_ATTEMPTS = 2
 MAX_DURATION_SECONDS = 30.0
 CORRECTION_TARGET_SECONDS = 29.6
+TOP5_SCENE_COUNT = 6
+TOP5_MAX_SCENE_DURATION_SECONDS = 15.0
+TOP5_CORRECTION_TARGET_SECONDS = 14.6
 
 VOICES = {
     "english": "en-IN-NeerjaNeural",
@@ -279,7 +282,7 @@ async def _scene(
 
 
 async def _generate_at_rate(
-    script: dict,
+    scenes: list[dict[str, Any]],
     language: str,
     rate_percent: float,
     output_dir: Path,
@@ -296,7 +299,7 @@ async def _generate_at_rate(
                 semaphore,
             )
         )
-        for number, scene in enumerate(script["script"], 1)
+        for number, scene in enumerate(scenes, 1)
     ]
     try:
         results = await asyncio.gather(*tasks)
@@ -339,7 +342,7 @@ def generate_audio(
 
     rate_percent = BASE_RATE_PERCENT
     results = asyncio.run(
-        _generate_at_rate(approved_script, language, rate_percent, output_path)
+        _generate_at_rate(scenes, language, rate_percent, output_path)
     )
     total = round(sum(float(item["duration"]) for item in results), 3)
     corrected = False
@@ -371,6 +374,108 @@ def generate_audio(
         "total_duration": total,
         "duration_corrected": corrected,
     }
+
+
+def generate_top5_audio(
+    approved_top5_script: dict[str, Any],
+    output_dir: str | Path = "output/audio_top5_test",
+) -> dict[str, Any]:
+    """Generate one audio scene for each of the six approved Top-5 spoken headlines."""
+    if not isinstance(approved_top5_script, dict):
+        raise ValueError("Top-5 Audio requires the approved Top-5 Scriptwriter handoff.")
+    if approved_top5_script.get("schema") != "final-shorts.top5-script.v1":
+        raise ValueError("Top-5 Audio requires the approved Top-5 Scriptwriter handoff.")
+
+    slides = approved_top5_script.get("slides")
+    if not isinstance(slides, list) or len(slides) != TOP5_SCENE_COUNT:
+        raise ValueError("Top-5 Audio requires exactly six spoken slides.")
+
+    scenes = []
+    for expected_number, slide in enumerate(slides, 1):
+        if not isinstance(slide, dict):
+            raise ValueError(f"Top-5 slide {expected_number} is malformed.")
+        if slide.get("slide_number") != expected_number:
+            raise ValueError(f"Top-5 slide {expected_number} has the wrong slide number.")
+        headline = _clean_text(slide.get("headline"))
+        if not headline:
+            raise ValueError(f"Top-5 slide {expected_number} has no spoken headline.")
+        scenes.append({"voiceover": headline})
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    language = "english"
+    rate_percent = BASE_RATE_PERCENT
+    results = asyncio.run(
+        _generate_at_rate(scenes, language, rate_percent, output_path)
+    )
+    corrected = False
+
+    max_duration = max(float(scene["duration"]) for scene in results)
+    if max_duration >= TOP5_MAX_SCENE_DURATION_SECONDS:
+        multiplier = max_duration / TOP5_CORRECTION_TARGET_SECONDS
+        adjusted = (
+            (1.0 + rate_percent / 100.0) * multiplier - 1.0
+        ) * 100.0
+        adjusted = min(100.0, max(rate_percent + 1.0, adjusted))
+        results = asyncio.run(
+            _generate_at_rate(scenes, language, adjusted, output_path)
+        )
+        max_duration = max(float(scene["duration"]) for scene in results)
+        rate_percent = round(adjusted, 2)
+        corrected = True
+
+    if any(
+        float(scene["duration"]) >= TOP5_MAX_SCENE_DURATION_SECONDS
+        for scene in results
+    ):
+        raise RuntimeError(
+            "Top-5 audio contains a spoken headline at or above 15 seconds "
+            f"after one measured speed correction ({max_duration:.2f}s)."
+        )
+
+    return {
+        "schema": "final-shorts.top5-audio.v1",
+        "source_schema": "final-shorts.top5-script.v1",
+        "language": language,
+        "voice": VOICES[language],
+        "rate_percent": rate_percent,
+        "pitch": PITCH,
+        "scenes": results,
+        "total_duration": round(
+            sum(float(item["duration"]) for item in results),
+            3,
+        ),
+        "max_scene_duration": round(max_duration, 3),
+        "duration_corrected": corrected,
+    }
+
+
+def approve_top5_audio(audio: dict[str, Any]) -> dict[str, Any]:
+    """Mark verified six-scene Top-5 audio as the handoff for Visuals."""
+    if not isinstance(audio, dict) or audio.get("schema") != "final-shorts.top5-audio.v1":
+        raise ValueError("Top-5 Audio output is required for approval.")
+
+    scenes = audio.get("scenes")
+    if not isinstance(scenes, list) or len(scenes) != TOP5_SCENE_COUNT:
+        raise ValueError("Top-5 Audio approval requires exactly six scenes.")
+
+    for expected_number, scene in enumerate(scenes, 1):
+        if scene.get("scene") != expected_number:
+            raise ValueError(f"Top-5 Audio scene {expected_number} is out of order.")
+        if float(scene.get("duration") or 0) >= TOP5_MAX_SCENE_DURATION_SECONDS:
+            raise ValueError(
+                f"Top-5 Audio scene {expected_number} must remain below 15 seconds."
+            )
+        path = Path(scene.get("path", ""))
+        if not path.exists() or path.stat().st_size <= 500:
+            raise ValueError(
+                f"Top-5 Audio file for scene {expected_number} is missing or invalid."
+            )
+
+    result = json.loads(json.dumps(audio, ensure_ascii=False))
+    result["approved_for_visuals"] = True
+    return result
 
 
 def approve_audio(audio: dict[str, Any]) -> dict[str, Any]:
