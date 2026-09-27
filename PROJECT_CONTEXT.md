@@ -322,6 +322,7 @@ Top-5 Test Stage 1 — Topic production:
 - **Do not change the existing Deep-Dive Topic Fetcher functionality or the Live production flow while building Top-5.**
 
 Top-5 Test Stage 2 — Scriptwriter:
+- The Stage 2 test suite includes deterministic validation fixtures for the 14-word Slide 1 cap, the below-15-second story-headline rule, body-vs-headline distinction and the single-package LLM call.
 - Implemented as a completely separate `top5_script_writer.py`; the approved `script_writer.py` is untouched.
 - Input is the exact five-story Stage 1 handoff, in the user's chosen order.
 - The writer researches the five selected story URLs using the same free research resources used by the factory, then makes one combined Groq generation call; the existing 20B Groq model is recovery only after local validation or provider failure.
