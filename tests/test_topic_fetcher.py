@@ -160,10 +160,10 @@ def test_fetch_topics_uses_secondary_source_when_google_clusters_too_heavily(mon
     ]
     gdelt_rows = [
         make_topic(
-            f"Rohit Sharma cricket contract decision event {i}",
+            f"Player{i} cricket record milestone event",
             url=f"https://gdelt.example.com/{i}",
         )
-        for i in range(10)
+        for i in range(19)
     ]
     monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda query: google_rows)
     monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: gdelt_rows)
