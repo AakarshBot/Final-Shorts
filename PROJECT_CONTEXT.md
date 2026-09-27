@@ -302,7 +302,22 @@ Purpose:
 - The five stories must be distinct events/stories rather than five headlines describing the same event.
 - The selection, ranking, script structure, visual treatment and publishing details will be designed in Test first.
 
-Status: **Planned / Test framework WIP.**
+Status: **WIP — Test Stage 1 is implemented.**
+
+Top-5 Test Stage 1 — Topic production:
+- Current active content type is **Cricket**.
+- **General News** is present as a future menu but is not implemented yet.
+- Uses the existing fetch_topics() Topic Fetcher logic; the existing topic-fetching function itself is not changed for Top-5.
+- Initial pool is up to 20 cricket stories.
+- **20 more articles** appends a new unique pool to the existing pool and does not clear prior selections.
+- User manually selects exactly five different headlines.
+- The five selected stories have an explicit order (#1–#5) that can be changed before approval.
+- Approval is allowed only when exactly five stories are selected.
+- The Stage 1 handoff contains the selected five stories' **title, URL, available article/description content, source and publication time**, in the user's chosen order.
+- Approval is the handoff point to the next stage and is the future trigger point for the five-URL article scrape.
+- The article scrape itself is intentionally not implemented yet.
+- Top-5 Stage 1 is a Test-only implementation while the production line is being designed.
+- **Do not change the existing Deep-Dive Topic Fetcher functionality or the Live production flow while building Top-5.**
 
 ### Production Line 03 — On This Day
 
