@@ -87,7 +87,7 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   background:var(--primary);
   border-color:var(--primary);
   color:#fff;
-  box-shadow:0 7px 18px rgba(79,70,229,.20);
+  box-shadow:0 7px 18px rgba(43,93,80,.16);
 }
 [data-testid="stButton"]>button[kind="primary"]:hover,[data-testid="stFormSubmitButton"]>button[kind="primary"]:hover{
   background:var(--primary-hover);
@@ -102,7 +102,7 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 }
 [data-testid="stTextInput"] input:focus,[data-testid="stTextArea"] textarea:focus{
   border-color:var(--primary)!important;
-  box-shadow:0 0 0 3px rgba(79,70,229,.12)!important;
+  box-shadow:0 0 0 3px rgba(43,93,80,.12)!important;
 }
 [data-testid="stFileUploaderDropzone"]{
   background:var(--surface)!important;
@@ -146,7 +146,28 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   padding:.55rem .75rem;
   box-shadow:none;
 }
-.stProgress > div > div{background:var(--primary);}
+.stProgress > div{background:var(--surface-soft);border-radius:999px;padding:2px;}
+.stProgress > div > div{background:var(--primary);border-radius:999px;}
+.pipeline-wrap{margin:18px 0 20px;padding:12px 13px 11px;background:var(--surface);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 2px rgba(28,29,26,.03);}
+.pipeline-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:6px;}
+.pipeline-meta-label{font-size:.62rem;font-weight:820;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);}
+.pipeline-meta-value{font-size:.7rem;font-weight:800;color:var(--ink);text-align:right;}
+.pipeline-steps{display:flex;gap:7px;overflow-x:auto;padding:8px 0 1px;scrollbar-width:none;}
+.pipeline-steps::-webkit-scrollbar{display:none;}
+.pipeline-step{flex:1 0 112px;min-width:112px;padding:8px 9px;border:1px solid var(--line);border-radius:11px;background:var(--surface);}
+.pipeline-step.complete{background:var(--success-soft);border-color:#b7d8c3;}
+.pipeline-step.current{background:var(--primary-soft);border-color:#b9ccc4;}
+.pipeline-step-number{font-size:.56rem;font-weight:820;letter-spacing:.08em;color:var(--subtle);}
+.pipeline-step.current .pipeline-step-number,.pipeline-step.current .pipeline-step-label{color:var(--primary);}
+.pipeline-step.complete .pipeline-step-number,.pipeline-step.complete .pipeline-step-label{color:var(--success);}
+.pipeline-step-label{margin-top:3px;font-size:.68rem;font-weight:780;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.pipeline-step-state{margin-top:3px;font-size:.56rem;font-weight:760;color:var(--subtle);text-transform:uppercase;letter-spacing:.05em;}
+.pipeline-step.current .pipeline-step-state{color:var(--primary);}
+.pipeline-step.complete .pipeline-step-state{color:var(--success);}
+.handoff-card{display:flex;align-items:center;gap:10px;margin:0 0 18px;padding:10px 12px;background:var(--success-soft);border:1px solid #b7d8c3;border-radius:12px;}
+.handoff-mark{flex:0 0 auto;width:23px;height:23px;display:grid;place-items:center;border-radius:50%;background:var(--success);color:#fff;font-size:.72rem;font-weight:900;}
+.handoff-title{font-size:.72rem;font-weight:820;color:var(--ink);line-height:1.2;}
+.handoff-copy{margin-top:2px;font-size:.64rem;color:var(--muted);line-height:1.25;}
 [data-testid="stAudio"]{border-radius:10px;}
 [data-testid="stVideo"]{border-radius:16px;overflow:hidden;}
 .eyebrow,.mini-label{
@@ -358,15 +379,6 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 }
 .choice-title{font-size:2.25rem;font-weight:850;letter-spacing:-.06em;line-height:.94;margin:.45rem 0;}
 .choice-copy{font-size:.8rem;color:var(--muted);line-height:1.35;max-width:360px;}
-.live-card{
-  min-height:72px;
-  padding:12px 14px;
-  border:1px solid var(--line);
-  border-radius:14px;
-  background:var(--surface);
-}
-.live-card.active{background:var(--primary-soft);border-color:#c7d2fe;}.live-card.complete{background:var(--success-soft);border-color:#b7e4ce;}.live-card.complete .stage-state{color:var(--success);}
-.live-card .stage-label{font-size:.78rem;font-weight:820;letter-spacing:.02em;}.live-card .stage-state{font-size:.61rem;color:var(--subtle);font-weight:760;margin-top:4px;}
 .topic-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
 .topic-rank{font-size:.62rem;font-weight:820;letter-spacing:.1em;color:var(--primary);}
 .empty-slot{
@@ -445,6 +457,8 @@ if "test_top5_audio_data" not in st.session_state:
     st.session_state.test_top5_audio_data = None
 if "test_top5_audio_handoff" not in st.session_state:
     st.session_state.test_top5_audio_handoff = None
+if "test_pipeline_notice" not in st.session_state:
+    st.session_state.test_pipeline_notice = None
 if "renderer_previews" not in st.session_state:
     st.session_state.renderer_previews = None
 if "visual_crops" not in st.session_state:
@@ -564,6 +578,8 @@ if "live_upload_hashtags" not in st.session_state:
     st.session_state.live_upload_hashtags = ""
 if "live_upload_comment" not in st.session_state:
     st.session_state.live_upload_comment = ""
+if "live_pipeline_notice" not in st.session_state:
+    st.session_state.live_pipeline_notice = None
 def _asset_to_image(value):
     try:
         if isinstance(value, Image.Image):
@@ -750,17 +766,60 @@ def _render_home():
                 st.session_state.app_mode = "live"
                 st.rerun()
 
-def _stage_status(stage_key:str)->tuple[str,str]:
-    checks={
-        "01 · Topic Fetcher":"Topics" if st.session_state.topics else "Waiting",
-        "02 · Scriptwriter":"Approved" if st.session_state.approved_script else "Waiting",
-        "03 · Audio":"Approved" if st.session_state.approved_audio else "Waiting",
-        "04 · Visuals":"Loaded" if st.session_state.visual_result else "Waiting",
-        "05 · Subtitles":"Approved" if st.session_state.approved_subtitles else "Waiting",
-        "06 · Renderer":"Preview" if st.session_state.renderer_previews else "Waiting",
-        "07 · Upload QC":"Uploaded" if st.session_state.upload_result else "Waiting",
-    }
-    return ("ready",checks.get(stage_key,"Waiting"))
+def _render_pipeline_progress(
+    labels: list[str],
+    current_index: int,
+    complete_last: bool = False,
+):
+    total = len(labels)
+    if not total:
+        return
+    current_index = max(0, min(total - 1, current_index))
+    completed = total if complete_last else current_index
+    progress = completed / total
+
+    st.markdown(
+        '<div class="pipeline-wrap">'
+        '<div class="pipeline-meta">'
+        '<span class="pipeline-meta-label">PRODUCTION PROGRESS</span>'
+        f'<span class="pipeline-meta-value">Step {current_index + 1} of {total} · {labels[current_index]}</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.progress(progress)
+    steps = ['<div class="pipeline-steps">']
+    for index, label in enumerate(labels):
+        if index < completed:
+            state_class, state = "complete", "Done"
+        elif index == current_index:
+            state_class, state = "current", "Now"
+        else:
+            state_class, state = "", "Next"
+        steps.append(
+            f'<div class="pipeline-step {state_class}">'
+            f'<div class="pipeline-step-number">0{index + 1}</div>'
+            f'<div class="pipeline-step-label">{label}</div>'
+            f'<div class="pipeline-step-state">{state}</div>'
+            '</div>'
+        )
+    steps.append("</div></div>")
+    st.markdown("".join(steps), unsafe_allow_html=True)
+
+
+def _render_pipeline_notice(state_key: str):
+    notice = st.session_state.get(state_key)
+    if not isinstance(notice, dict):
+        return
+    st.markdown(
+        '<div class="handoff-card">'
+        '<div class="handoff-mark">✓</div>'
+        '<div>'
+        f'<div class="handoff-title">{notice.get("confirmed") or "QC confirmed"}</div>'
+        f'<div class="handoff-copy">{notice.get("next") or "Ready for the next action."}</div>'
+        '</div></div>',
+        unsafe_allow_html=True,
+    )
+
 
 def _render_app_sidebar():
     with st.container(key="workspace-nav"):
@@ -811,10 +870,12 @@ def _render_app_sidebar():
             ) or current
             if selected != st.session_state.test_stage:
                 st.session_state.test_stage = selected
+                st.session_state.test_pipeline_notice = None
                 st.rerun()
             if st.button("← Production lines", key="test-back-to-lines", width="stretch"):
                 st.session_state.test_production_line = None
                 st.session_state.test_stage = "01 · Topic Fetcher"
+                st.session_state.test_pipeline_notice = None
                 st.rerun()
 
 
@@ -827,6 +888,7 @@ def _live_story_key(topic) -> str:
 def _live_reset_downstream():
     for key, value in {
         "live_selected_topic": None,
+        "live_pipeline_notice": None,
         "live_stage": "01 · Story",
         "live_script_data": None,
         "live_approved_script": None,
@@ -873,6 +935,10 @@ def _live_start_story(index: int):
     _live_reset_downstream()
     st.session_state.live_selected_topic = index
     st.session_state.live_stage = "02 · Script"
+    st.session_state.live_pipeline_notice = {
+        "confirmed": "Story confirmed",
+        "next": "Moving to Script.",
+    }
 
 
 def _live_generate_script():
@@ -1377,6 +1443,10 @@ def _render_live_visuals(slide_count: int):
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
                     st.session_state.live_stage = "05 · Upload"
+                    st.session_state.live_pipeline_notice = {
+                        "confirmed": "Visual QC confirmed",
+                        "next": "Moving to Upload.",
+                    }
                     st.rerun()
                 except (RuntimeError, ValueError, OSError) as exc:
                     st.session_state.live_render_error = str(exc)
@@ -1492,6 +1562,10 @@ def _render_live_script():
             st.session_state.live_script_error = ""
             st.session_state.live_handoff_error = ""
             st.session_state.live_stage = "03 · Audio + Subs"
+            st.session_state.live_pipeline_notice = {
+                "confirmed": "Script QC confirmed",
+                "next": "Moving to Audio + Subtitles.",
+            }
             st.rerun()
 
     if st.session_state.live_approved_script:
@@ -1616,6 +1690,10 @@ def _render_live_upload():
             }
             st.session_state.live_upload_qc_approved = True
             st.session_state.live_upload_result = None
+            st.session_state.live_pipeline_notice = {
+                "confirmed": "Upload QC confirmed",
+                "next": "Upload controls are now unlocked.",
+            }
             st.rerun()
         return
 
@@ -1888,20 +1966,11 @@ def render_live_dashboard():
         return
 
     live_stage_order = ["01 · Story", "02 · Script", "03 · Audio + Subs", "04 · Visuals + Render", "05 · Upload"]
-    live_stage_labels = ["STORY", "SCRIPT", "AUDIO + SUBS", "VISUALS + RENDER", "UPLOAD"]
+    live_stage_labels = ["Story", "Script", "Audio + Subs", "Visuals + Render", "Upload"]
     current_stage = live_stage_order.index(st.session_state.live_stage)
-
-    stage_cols = st.columns(len(live_stage_order), gap="small")
-    for stage_index, (label, stage_key) in enumerate(zip(live_stage_labels, live_stage_order)):
-        with stage_cols[stage_index]:
-            state_label = "✓ COMPLETE" if stage_index < current_stage else "● ACTIVE" if stage_index == current_stage else "LOCKED"
-            st.markdown(
-                f'<div class="live-card {"active" if stage_index == current_stage else "complete" if stage_index < current_stage else ""}">'
-                f'<div class="eyebrow">0{stage_index + 1}</div>'
-                f'<div class="stage-label">{label}</div>'
-                f'<div class="stage-state">{state_label}</div></div>',
-                unsafe_allow_html=True,
-            )
+    upload_complete = current_stage == len(live_stage_order) - 1 and bool(st.session_state.live_upload_result)
+    _render_pipeline_progress(live_stage_labels, current_stage, complete_last=upload_complete)
+    _render_pipeline_notice("live_pipeline_notice")
 
     if st.session_state.live_stage == "01 · Story":
         st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one to start production</div></div>', unsafe_allow_html=True)
@@ -1970,6 +2039,10 @@ def render_live_dashboard():
                     try:
                         _live_generate_audio_and_subtitles()
                         st.session_state.live_stage = "04 · Visuals + Render"
+                        st.session_state.live_pipeline_notice = {
+                            "confirmed": "Audio + Subtitles ready",
+                            "next": "Moving to Visuals + Render.",
+                        }
                         st.rerun()
                     except (RuntimeError, ValueError, OSError) as exc:
                         st.session_state.live_handoff_error = str(exc)
@@ -2107,6 +2180,11 @@ def render_topic_fetcher():
                     label = "Selected" if selected else "Select"
                     if st.button(label, key=f"topic-select-{index}", width="stretch"):
                         st.session_state.selected_topic = index
+                        st.session_state.test_stage = "02 · Scriptwriter"
+                        st.session_state.test_pipeline_notice = {
+                            "confirmed": "Story confirmed",
+                            "next": "Moving to Script.",
+                        }
                         st.session_state.script_data = None
                         st.session_state.approved_script = None
                         st.session_state.audio_data = None
@@ -2202,6 +2280,11 @@ def render_scriptwriter():
                 try:
                     approved=apply_script_edits(script,edited_voiceovers,headline=edited_headline)
                     st.session_state.approved_script=approved
+                    st.session_state.test_stage = "03 · Audio"
+                    st.session_state.test_pipeline_notice = {
+                        "confirmed": "Script QC confirmed",
+                        "next": "Moving to Audio.",
+                    }
                     st.session_state.audio_data=None
                     st.session_state.approved_audio=None
                     st.session_state.renderer_previews=None
@@ -2606,6 +2689,12 @@ def render_subtitles():
             st.markdown(f'<div class="inspector-line"><span>{label}</span><span class="inspector-value">{value}</span></div>',unsafe_allow_html=True)
         if st.button("Approve subtitles",type="primary",width="stretch"):
             st.session_state.approved_subtitles=dict(subtitles)
+            st.session_state.test_stage = "06 · Renderer"
+            st.session_state.test_pipeline_notice = {
+                "confirmed": "Subtitle QC confirmed",
+                "next": "Moving to Renderer.",
+            }
+            st.rerun()
         if st.session_state.approved_subtitles:
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--ok-soft);color:var(--ok);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
@@ -2736,6 +2825,10 @@ def render_upload_qc():
         if st.button("Approve Upload QC", type="primary", width="stretch"):
             st.session_state.upload_qc_approved = True
             st.session_state.upload_result = None
+            st.session_state.test_pipeline_notice = {
+                "confirmed": "Upload QC confirmed",
+                "next": "Upload controls are now unlocked.",
+            }
             st.session_state.upload_qc = {
                 "title": edited_titles[choice].strip(),
                 "description": st.session_state.upload_description,
@@ -2808,6 +2901,8 @@ def render_upload_qc():
             )
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
+    else:
+        st.rerun()
 
 def render_audio():
     script=st.session_state.approved_script
@@ -2850,8 +2945,14 @@ def render_audio():
             if st.button("Approve audio",type="primary",width="stretch"):
                 try:
                     st.session_state.approved_audio=approve_audio(audio)
+                    st.session_state.test_stage = "04 · Visuals"
+                    st.session_state.test_pipeline_notice = {
+                        "confirmed": "Audio QC confirmed",
+                        "next": "Moving to Visuals.",
+                    }
                     st.session_state.subtitle_data=None
                     st.session_state.approved_subtitles=None
+                    st.rerun()
                 except ValueError as exc:
                     st.error(str(exc))
     with right:
@@ -2923,6 +3024,7 @@ elif st.session_state.app_mode == "test":
                         }[eyebrow]
                         if eyebrow == "01 · DEEP-DIVE":
                             st.session_state.test_stage = "01 · Topic Fetcher"
+                        st.session_state.test_pipeline_notice = None
                         st.rerun()
     elif st.session_state.test_production_line:
         line_name = {
@@ -2931,6 +3033,22 @@ elif st.session_state.app_mode == "test":
             "otd": "OTD",
         }[st.session_state.test_production_line]
         stage = st.session_state.test_stage
+
+        test_stage_labels = [item["label"] for item in STAGES]
+        test_current_index = next(
+            index for index, item in enumerate(STAGES)
+            if item["key"] == stage
+        )
+        test_upload_complete = (
+            test_current_index == len(STAGES) - 1
+            and bool(st.session_state.upload_result)
+        )
+        _render_pipeline_progress(
+            test_stage_labels,
+            test_current_index,
+            complete_last=test_upload_complete,
+        )
+        _render_pipeline_notice("test_pipeline_notice")
 
         if line_name == "Deep-Dive":
             if stage == "01 · Topic Fetcher":
@@ -3120,6 +3238,11 @@ elif st.session_state.app_mode == "test":
                         st.session_state.test_top5_script_handoff = None
                         st.session_state.test_top5_audio_data = None
                         st.session_state.test_top5_audio_handoff = None
+                        st.session_state.test_stage = "02 · Scriptwriter"
+                        st.session_state.test_pipeline_notice = {
+                            "confirmed": "Top-5 selection confirmed",
+                            "next": "Moving to Scriptwriter.",
+                        }
                         st.rerun()
 
                 if st.session_state.test_top5_handoff:
@@ -3269,6 +3392,11 @@ elif st.session_state.app_mode == "test":
                         else:
                             st.session_state.test_top5_audio_data = None
                             st.session_state.test_top5_audio_handoff = None
+                            st.session_state.test_stage = "03 · Audio"
+                            st.session_state.test_pipeline_notice = {
+                                "confirmed": "Top-5 Script QC confirmed",
+                                "next": "Moving to Audio.",
+                            }
                             st.session_state.test_top5_script_handoff = {
                                 "schema": "final-shorts.top5-script.v1",
                                 "slides": edited["slides"],
@@ -3350,6 +3478,10 @@ elif st.session_state.app_mode == "test":
                     ):
                         try:
                             st.session_state.test_top5_audio_handoff = approve_top5_audio(audio)
+                            st.session_state.test_pipeline_notice = {
+                                "confirmed": "Top-5 Audio QC confirmed",
+                                "next": "Ready for the next production stage.",
+                            }
                             st.rerun()
                         except ValueError as exc:
                             st.error(str(exc))
