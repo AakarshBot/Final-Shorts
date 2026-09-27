@@ -261,7 +261,8 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 }
 .live-product-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;}.live-product-title{font-size:clamp(2.7rem,5vw,4.8rem);font-weight:880;letter-spacing:-.07em;line-height:.9;margin-top:8px;}.live-status{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:.62rem;font-weight:760;white-space:nowrap;}.live-status span{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 4px var(--success-soft);}
 .hero-subtitle{font-size:.88rem;color:var(--muted);max-width:620px;line-height:1.45;margin-top:6px;}
-.st-key-live-choice-cricket,.st-key-live-choice-niche,.st-key-live-cricket-india,.st-key-live-cricket-global{
+.st-key-live-choice-cricket,.st-key-live-choice-niche,.st-key-live-cricket-india,.st-key-live-cricket-global,
+.st-key-live-line-deep-dive,.st-key-live-line-top-5,.st-key-live-line-otd{
   background:var(--surface);
   border:1px solid var(--line);
   border-radius:18px;
@@ -269,7 +270,10 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   min-height:220px;
   box-shadow:var(--shadow);
 }
-.st-key-live-choice-niche{background:linear-gradient(145deg,#f8f9ff,#f2f4ff);border-color:#dfe3ff;}
+.st-key-live-choice-niche,.st-key-live-line-top-5,.st-key-live-line-otd{
+  background:linear-gradient(145deg,#f8f9ff,#f2f4ff);
+  border-color:#dfe3ff;
+}
 .choice-title{font-size:2.55rem;font-weight:880;letter-spacing:-.07em;line-height:.9;margin:.6rem 0;}
 .choice-copy{font-size:.84rem;color:var(--muted);line-height:1.4;max-width:420px;}
 .live-card{
