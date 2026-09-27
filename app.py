@@ -81,8 +81,8 @@ button:hover{transform:translateY(-1px);}
 .topic-meta{font-size:.64rem;color:var(--muted);line-height:1.35;margin-top:.28rem;}
 .selected-story{background:#f7efe8;border:1px solid #e0cfc2;border-radius:12px;padding:14px 16px;margin-top:.9rem;}
 .selected-story-title{font-size:1.05rem;font-weight:860;letter-spacing:-.026em;}
-.editor-pane{background:#fbf8f3;border:1px solid var(--line);border-radius:13px;padding:14px;}
-.inspector{background:#f0ebe3;border:1px solid var(--line);border-radius:13px;padding:15px;}
+.st-key-script-editor{background:#fbf8f3;border:1px solid var(--line);border-radius:13px;padding:14px;}
+.st-key-script-inspector{background:#f0ebe3;border:1px solid var(--line);border-radius:13px;padding:15px;}
 .inspector-line{display:flex;justify-content:space-between;gap:1rem;padding:.52rem 0;border-bottom:1px solid rgba(112,101,88,.12);font-size:.72rem;}
 .inspector-line:last-child{border-bottom:0;}
 .inspector-value{font-weight:760;color:var(--ink);text-align:right;}
@@ -1738,7 +1738,6 @@ def render_scriptwriter():
     left,right=st.columns([1.55,.55],gap="large")
     with left:
         with st.container(key="script-editor"):
-            st.markdown('<div class="editor-pane">',unsafe_allow_html=True)
             st.markdown('<div class="mini-label">Opening</div>',unsafe_allow_html=True)
             edited_headline=st.text_input("Opening heading (3–4 words)",value=script.get("headline",""),max_chars=48,key="script-headline",label_visibility="collapsed")
             st.markdown('<div style="height:.7rem"></div>',unsafe_allow_html=True)
