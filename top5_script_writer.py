@@ -25,8 +25,9 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
 TIMEOUT = 30
 RESEARCH_TIMEOUT = 8
-MAX_ARTICLE_CHARS = 5500
-MAX_EVIDENCE_CHARS = 30000
+MAX_ARTICLE_CHARS = 4500
+MAX_STORY_EVIDENCE_CHARS = 5000
+MAX_EVIDENCE_CHARS = 29000
 MIN_ARTICLE_CHARS = 500
 SLIDE_1_MAX_WORDS = 14
 STORY_HEADLINE_MAX_WORDS = 36
@@ -315,9 +316,7 @@ def _research_story(story: dict) -> str:
         sections.append(f"[TOPIC FETCHER SUMMARY]\n{_limit_text(description, 1800)}")
 
     evidence = "\n\n".join(sections)
-    if len(evidence) <= MAX_ARTICLE_CHARS + 2200:
-        return evidence
-    return _limit_text(evidence, MAX_ARTICLE_CHARS + 2200)
+    return _limit_text(evidence, MAX_STORY_EVIDENCE_CHARS)
 
 
 def research_top5_stories(stories: list[dict]) -> list[str]:
