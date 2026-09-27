@@ -250,14 +250,9 @@ def _profile_relevant(title: str, description: str, profile: str | None) -> bool
     if profile in {"cricket_india_asia", "cricket_global"}:
         if title_tokens & NON_CRICKET_TERMS:
             return False
-        return bool(title_tokens & CRICKET_TERMS) or (
-            bool(description_tokens & CRICKET_TERMS)
-            and bool(_event_groups(title))
-        )
-    return bool(title_tokens & (SPORT_WORDS - CRICKET_TERMS)) and not (
-        "cricket" in title_tokens
-        and not title_tokens & (SPORT_WORDS - CRICKET_TERMS)
-    )
+        return bool(title_tokens & CRICKET_TERMS) or bool(description_tokens & CRICKET_TERMS)
+    niche_terms = SPORT_WORDS - CRICKET_TERMS
+    return bool(title_tokens & niche_terms) and not bool(title_tokens & CRICKET_TERMS)
 
 
 def _utility(title: str) -> bool:
