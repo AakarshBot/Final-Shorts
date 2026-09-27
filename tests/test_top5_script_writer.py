@@ -84,9 +84,9 @@ def test_story_headline_is_below_fifteen_seconds():
     result["slides"][1]["headline"] = (
         "Story 1 confirmed the cricket record after the match, with the board publishing the result "
         "and explaining the decision to selectors this morning while officials reviewed the wider "
-        "context before the next game"
-    )
-    valid, reason = validate_top5_script(result, stories())
+        "context before the next game and discussed the eligibility question with the coaching staff "
+        "ahead of the following fixture for the team"
+    )    valid, reason = validate_top5_script(result, stories())
     assert not valid
     assert "15 seconds" in reason
 
