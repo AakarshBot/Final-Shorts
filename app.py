@@ -11,6 +11,7 @@ load_dotenv()
 
 from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
+from top5_script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
 from topic_fetcher import fetch_topics
 from visual_fetcher import crawl_visuals, manual_crawl_visuals, ranked_visual_search
 from visual_search import search_images
@@ -338,6 +339,10 @@ if "test_top5_selected" not in st.session_state:
     st.session_state.test_top5_selected = []
 if "test_top5_handoff" not in st.session_state:
     st.session_state.test_top5_handoff = None
+if "test_top5_script_data" not in st.session_state:
+    st.session_state.test_top5_script_data = None
+if "test_top5_script_handoff" not in st.session_state:
+    st.session_state.test_top5_script_handoff = None
 if "renderer_previews" not in st.session_state:
     st.session_state.renderer_previews = None
 if "visual_crops" not in st.session_state:
@@ -2903,18 +2908,24 @@ elif st.session_state.app_mode == "test":
                                 selected[slot - 1], selected[slot] = selected[slot], selected[slot - 1]
                                 st.session_state.test_top5_selected = selected
                                 st.session_state.test_top5_handoff = None
+                                st.session_state.test_top5_script_data = None
+                                st.session_state.test_top5_script_handoff = None
                                 st.rerun()
                         with row[3]:
                             if st.button("↓", key=f"test-top5-down-{topic_index}", disabled=slot == len(selected) - 1, width="stretch"):
                                 selected[slot + 1], selected[slot] = selected[slot], selected[slot + 1]
                                 st.session_state.test_top5_selected = selected
                                 st.session_state.test_top5_handoff = None
+                                st.session_state.test_top5_script_data = None
+                                st.session_state.test_top5_script_handoff = None
                                 st.rerun()
                         with row[4]:
                             if st.button("Remove", key=f"test-top5-remove-{topic_index}", width="stretch"):
                                 selected.remove(topic_index)
                                 st.session_state.test_top5_selected = selected
                                 st.session_state.test_top5_handoff = None
+                                st.session_state.test_top5_script_data = None
+                                st.session_state.test_top5_script_handoff = None
                                 st.rerun()
 
                     st.divider()
@@ -2978,6 +2989,152 @@ elif st.session_state.app_mode == "test":
                             f'**#{number} · {article["title"]}**<br><span class="topic-meta">{article["url"]}</span>',
                             unsafe_allow_html=True,
                         )
+        elif line_name == "Top-5" and stage == "02 · Scriptwriter":
+            stories = list(st.session_state.get("test_top5_handoff") or [])
+            st.markdown(
+                '<div class="section-head"><div><div class="eyebrow">TOP-5 · 02 · SCRIPTWRITER</div>'
+                '<div class="section-title">Write the six-slide package</div></div>'
+                '<div class="section-count">5 stories → 6 slides</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            if len(stories) != 5:
+                st.info("Approve exactly five stories in Top-5 Topic Production first.")
+            else:
+                st.caption(
+                    "The writer researches the five selected stories, then produces one spoken "
+                    "headline per slide and separate visual-only story copy."
+                )
+
+                if st.button("Generate Top-5 script", type="primary", width="stretch", key="test-top5-script-generate"):
+                    with st.spinner("Researching the five stories and writing the six-slide package…"):
+                        try:
+                            result = generate_top5_script(stories)
+                            st.session_state.test_top5_script_data = result
+                            st.session_state.test_top5_script_handoff = None
+                            for slide in result.get("slides") or []:
+                                number = int(slide.get("slide_number") or 0)
+                                st.session_state[f"test-top5-script-headline-{number}"] = str(slide.get("headline") or "")
+                                st.session_state[f"test-top5-script-body-{number}"] = str(slide.get("body") or "")
+                            st.session_state["test-top5-script-hashtags"] = " ".join(
+                                str(tag) for tag in (result.get("hashtags") or [])
+                            )
+                            st.rerun()
+                        except (RuntimeError, ValueError) as exc:
+                            st.error(str(exc))
+
+                result = st.session_state.get("test_top5_script_data") or {}
+                slides = list(result.get("slides") or [])
+
+                if slides:
+                    st.markdown(
+                        '<div class="section-head"><div><div class="eyebrow">EDITORIAL QC</div>'
+                        '<div class="section-title">Edit every headline and visual story</div></div>'
+                        '<div class="section-count">manual approval</div></div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    for slide in slides:
+                        number = int(slide.get("slide_number") or 0)
+                        if number == 1:
+                            st.markdown(
+                                '<div class="mini-label">SLIDE 1 · PACKAGE OPENER · SPOKEN</div>',
+                                unsafe_allow_html=True,
+                            )
+                            headline = st.text_area(
+                                "Slide 1 headline",
+                                key="test-top5-script-headline-1",
+                                height=82,
+                                max_chars=160,
+                                label_visibility="collapsed",
+                            )
+                            st.caption(
+                                f'{len(headline.split())} words · maximum 14 words · '
+                                f'{estimate_speech_seconds(headline):.1f}s estimated speech'
+                            )
+                        else:
+                            story = stories[number - 2]
+                            st.markdown(
+                                f'<div class="mini-label">SLIDE {number} · STORY {number - 1} · SPOKEN</div>'
+                                f'<div class="topic-meta">{story.get("title") or "Selected story"}</div>',
+                                unsafe_allow_html=True,
+                            )
+                            headline = st.text_area(
+                                "Spoken headline",
+                                key=f"test-top5-script-headline-{number}",
+                                height=110,
+                                max_chars=260,
+                                label_visibility="collapsed",
+                            )
+                            st.caption(
+                                f'{len(headline.split())} words · '
+                                f'{estimate_speech_seconds(headline):.1f}s estimated speech · under 15s required'
+                            )
+                            st.text_area(
+                                "Visual story body",
+                                key=f"test-top5-script-body-{number}",
+                                height=110,
+                                max_chars=360,
+                                label_visibility="collapsed",
+                            )
+                        st.divider()
+
+                    st.markdown('<div class="mini-label">HASHTAGS</div>', unsafe_allow_html=True)
+                    st.text_input(
+                        "Hashtags",
+                        key="test-top5-script-hashtags",
+                        label_visibility="collapsed",
+                    )
+
+                    with st.expander("Visual handoff metadata", expanded=False):
+                        for slide in slides:
+                            number = int(slide.get("slide_number") or 0)
+                            st.markdown(
+                                f'**Slide {number}** · {slide.get("primary_entity") or "—"} · '
+                                f'{slide.get("sport_or_topic_category") or "—"}'
+                            )
+                            st.caption(slide.get("visual_intent") or "")
+                            st.code(slide.get("specific_search_prompt") or "")
+
+                    if st.button("Approve Top-5 Script", type="primary", width="stretch", key="test-top5-script-approve"):
+                        edited = {
+                            "slides": [
+                                {
+                                    **slide,
+                                    "headline": st.session_state.get(
+                                        f"test-top5-script-headline-{int(slide.get('slide_number') or 0)}",
+                                        "",
+                                    ).strip(),
+                                    "body": st.session_state.get(
+                                        f"test-top5-script-body-{int(slide.get('slide_number') or 0)}",
+                                        "",
+                                    ).strip(),
+                                }
+                                for slide in slides
+                            ],
+                            "hashtags": [
+                                tag.strip()
+                                for tag in st.session_state.get("test-top5-script-hashtags", "").split()
+                                if tag.strip()
+                            ],
+                        }
+                        valid, reason = validate_top5_script(edited, stories)
+                        if not valid:
+                            st.error(f"Edited Top-5 script failed validation: {reason}")
+                        else:
+                            st.session_state.test_top5_script_handoff = {
+                                "schema": "final-shorts.top5-script.v1",
+                                "slides": edited["slides"],
+                                "hashtags": edited["hashtags"],
+                                "stories": stories,
+                                "provider_used": result.get("provider_used"),
+                            }
+                            st.rerun()
+
+                    if st.session_state.get("test_top5_script_handoff"):
+                        st.success("Top-5 Scriptwriter approved. The six-slide package is ready for the next stage.")
+                        st.caption("Audio will use the six spoken slide headlines; the body copy is visual-only.")
+
         else:
             stage_labels = {
                 "01 · Topic Fetcher": "Topic Fetcher",
