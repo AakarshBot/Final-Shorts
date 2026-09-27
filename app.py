@@ -1167,7 +1167,7 @@ def _render_live_visual_board(slide_count: int):
                     st.markdown(
                         '<div style="min-height:260px;display:flex;align-items:center;'
                         'justify-content:center;border:1px dashed rgba(16,24,40,.10);'
-                        'border-radius:10px;color:#657080;">EMPTY</div>',
+                        'border-radius:10px;color:var(--muted);">EMPTY</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -1764,7 +1764,7 @@ def render_live_dashboard():
             with st.container(key="live-choice-niche"):
                 st.markdown('<div class="eyebrow">02 · NICHE SPORTS</div>', unsafe_allow_html=True)
                 st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">NICHE</div>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:1.02rem;color:#f1eaf8;max-width:430px;">Tennis, badminton, motorsport, athletics, hockey, chess and more.</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:1.02rem;color:var(--muted);max-width:430px;">Tennis, badminton, motorsport, athletics, hockey, chess and more.</div>', unsafe_allow_html=True)
                 st.space("medium")
                 if st.button("Choose Niche Sports →", type="primary", width="stretch", key="live-choose-niche"):
                     st.session_state.live_desk = "niche"
@@ -2018,8 +2018,8 @@ def render_topic_fetcher():
     topics=st.session_state.topics
     if not topics:
         st.markdown(
-            '<div style="padding:3rem 1rem;text-align:center;color:#8f877c;">'
-            '<div style="font-weight:850;color:#4a433b;margin-bottom:.3rem;">No stories loaded</div>'
+            '<div style="padding:3rem 1rem;text-align:center;color:var(--soft);">'
+            '<div style="font-weight:850;color:var(--text);margin-bottom:.3rem;">No stories loaded</div>'
             '<div style="font-size:.78rem;">Fetch the current story pool to start.</div></div>',
             unsafe_allow_html=True,
         )
