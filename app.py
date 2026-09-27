@@ -22,7 +22,7 @@ from uploader import upload_video
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
 STAGES = [
-    {"key": "01 · Topic Fetcher", "number": "01", "icon": "", "label": "Topics", "desc": "Find the story"},
+    {"key": "01 · Topic Fetcher", "number": "01", "label": "Topics", "desc": "Find the story"},
     {"key": "02 · Scriptwriter", "number": "02", "icon": "", "label": "Script", "desc": "Write the Short"},
     {"key": "03 · Audio", "number": "03", "icon": "", "label": "Audio", "desc": "Create voice"},
     {"key": "04 · Visuals", "number": "04", "icon": "", "label": "Visuals", "desc": "Source imagery"},
