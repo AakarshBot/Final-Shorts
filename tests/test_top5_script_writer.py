@@ -73,6 +73,22 @@ def test_exactly_six_slides_required():
     assert "exactly six" in reason
 
 
+def test_slide_one_rejects_viewer_facing_filler():
+    result = valid_result()
+    result["slides"][0]["headline"] = "5 cricket stories you need to see right now"
+    valid, reason = validate_top5_script(result, stories())
+    assert not valid
+    assert "filler language" in reason
+
+
+def test_slide_one_rejects_unprecedented_hype_filler():
+    result = valid_result()
+    result["slides"][0]["headline"] = "Five cricket stories that will change the way you see the game"
+    valid, reason = validate_top5_script(result, stories())
+    assert not valid
+    assert "filler language" in reason
+
+
 def test_slide_one_has_fourteen_word_cap():
     result = valid_result()
     result["slides"][0]["headline"] = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
