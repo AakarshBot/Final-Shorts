@@ -19,7 +19,7 @@ from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle, rend
 from subtitles import generate_subtitles
 from uploader import upload_video
 
-st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
+st.set_page_config(page_title="Final Shorts", page_icon="◼", layout="wide")
 
 STAGES = [
     {"key": "01 · Topic Fetcher", "number": "01", "icon": "", "label": "Topics", "desc": "Find the story"},
@@ -32,72 +32,566 @@ STAGES = [
 ]
 st.markdown("""
 <style>
-:root{--bg:#f4f0e8;--paper:#fffdf9;--paper-2:#eee8de;--ink:#25211c;--muted:#777066;--soft:#9c9388;--line:#ddd5c9;--line-strong:#cbc1b3;--accent:#b65a36;--accent-dark:#8e4328;--ok:#5e7663;--ok-soft:#e6eee7;--shadow:0 12px 32px rgba(47,39,31,.06);}
-html,body,.stApp{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);}
+:root{
+  --bg:#f6f7f9;
+  --surface:#ffffff;
+  --surface-soft:#f8f9fb;
+  --surface-muted:#f1f3f5;
+  --text:#16181d;
+  --muted:#667085;
+  --soft:#98a2b3;
+  --line:#e4e7ec;
+  --line-strong:#d0d5dd;
+  --accent:#0b57d0;
+  --accent-soft:#e8f0fe;
+  --ok:#188038;
+  --ok-soft:#e6f4ea;
+  --warning:#b06000;
+  --warning-soft:#fff4e5;
+  --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 28px rgba(16,24,40,.05);
+}
+html,body,.stApp{
+  font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  color:var(--text);
+  background:var(--bg);
+}
 [data-testid="stAppViewContainer"]{background:var(--bg);}
 [data-testid="stHeader"]{background:transparent;}
-section[data-testid="stSidebar"]{display:block!important;background:#eee8df;border-right:1px solid var(--line);min-width:248px;max-width:248px;}
-[data-testid="stSidebar"] [data-testid="stButton"]>button{min-height:39px;text-align:left;border-color:transparent;background:transparent;box-shadow:none;padding:.2rem .7rem;font-size:.76rem;color:var(--muted);}
-[data-testid="stSidebar"] [data-testid="stButton"]>button:hover{background:rgba(255,253,249,.7);border-color:var(--line);}
-[data-testid="stSidebar"] [data-testid="stButton"]>button[kind="primary"]{background:var(--paper);color:var(--ink);border-color:var(--line);box-shadow:0 4px 14px rgba(47,39,31,.05);}
-section[data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:1.15rem .9rem 1.25rem;}
-footer,#MainMenu{visibility:hidden;}
-.block-container{max-width:1480px;padding:1.35rem 2.2rem 4rem;}
-h1,h2,h3,h4{color:var(--ink);letter-spacing:-.045em;}
-h1{font-weight:900;} h2,h3{font-weight:860;}
-p{color:var(--muted);}
-button{transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease,background .15s ease;}
-button:hover{transform:translateY(-1px);}
-[data-testid="stButton"]>button,[data-testid="stFormSubmitButton"]>button{
-  min-height:42px;border-radius:10px;border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);font-weight:760;box-shadow:0 3px 12px rgba(47,39,31,.035);
+section[data-testid="stSidebar"]{
+  display:block!important;
+  background:#fff;
+  border-right:1px solid var(--line);
+  min-width:236px;
+  max-width:236px;
 }
-[data-testid="stButton"]>button:hover,[data-testid="stFormSubmitButton"]>button:hover{border-color:#bfb4a5;box-shadow:0 8px 18px rgba(47,39,31,.07);}
-[data-testid="stButton"]>button[kind="primary"],[data-testid="stFormSubmitButton"]>button[kind="primary"]{background:var(--ink);color:var(--paper);border-color:var(--ink);box-shadow:0 8px 20px rgba(37,33,28,.12);}
-[data-testid="stButton"]>button[kind="primary"]:hover,[data-testid="stFormSubmitButton"]>button[kind="primary"]:hover{background:#37312a;border-color:#37312a;}
-[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea{background:var(--paper)!important;border:1px solid var(--line-strong)!important;border-radius:10px!important;color:var(--ink)!important;}
-[data-testid="stTextInput"] input:focus,[data-testid="stTextArea"] textarea:focus{border-color:var(--accent)!important;box-shadow:0 0 0 1px var(--accent)!important;}
-[data-testid="stFileUploaderDropzone"]{background:var(--paper)!important;border:1px dashed var(--line-strong)!important;border-radius:12px!important;}
-[data-testid="stPills"]{margin-bottom:.35rem;}
-[data-testid="stPills"] button{background:transparent!important;border:0!important;border-radius:999px!important;color:var(--muted)!important;font-weight:760;}
-[data-testid="stPills"] button[aria-pressed="true"]{background:var(--ink)!important;color:var(--paper)!important;}
-[data-testid="stExpander"]{background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:none;overflow:hidden;}
-[data-testid="stExpander"] summary{padding:.82rem .95rem;color:var(--ink);}
-[data-testid="stMetric"]{background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:.5rem .75rem;}
-.stProgress > div > div{background:var(--accent);}
-.eyebrow{font-size:.60rem;font-weight:860;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);}
-.mini-label{font-size:.62rem;font-weight:820;letter-spacing:.12em;text-transform:uppercase;color:var(--soft);}
-.badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:var(--paper-2);border:1px solid var(--line);color:var(--muted);font-size:.58rem;font-weight:840;letter-spacing:.1em;text-transform:uppercase;}
-.sidebar-brand{padding:.2rem .2rem 1.1rem;}
-.sidebar-brand-name{font-size:1.15rem;font-weight:920;letter-spacing:-.04em;}
-.sidebar-brand-sub{font-size:.62rem;letter-spacing:.13em;text-transform:uppercase;color:var(--soft);margin-top:.15rem;}
-.sidebar-heading{font-size:.58rem;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);margin:1rem .2rem .45rem;}
-.canvas-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem;}
-.canvas-title{font-size:1.55rem;font-weight:900;letter-spacing:-.04em;line-height:1.1;}
-.canvas-copy{font-size:.78rem;color:var(--muted);max-width:720px;line-height:1.5;}
-.topic-toolbar{background:var(--paper);border:1px solid var(--line);border-radius:13px;padding:.55rem .7rem;margin-bottom:.8rem;}
-.topic-index{font-size:.62rem;font-weight:900;color:var(--soft);letter-spacing:.11em;}
-.topic-title{font-size:.98rem;line-height:1.25;font-weight:820;letter-spacing:-.02em;color:var(--ink);}
-.topic-meta{font-size:.64rem;color:var(--muted);line-height:1.35;margin-top:.28rem;}
-.selected-story{background:#f7efe8;border:1px solid #e0cfc2;border-radius:12px;padding:14px 16px;margin-top:.9rem;}
-.selected-story-title{font-size:1.05rem;font-weight:860;letter-spacing:-.026em;}
-.st-key-script-editor,.st-key-subtitle-editor{background:#fbf8f3;border:1px solid var(--line);border-radius:13px;padding:14px;}
-.st-key-script-inspector{background:#f0ebe3;border:1px solid var(--line);border-radius:13px;padding:15px;}
-.inspector-line{display:flex;justify-content:space-between;gap:1rem;padding:.52rem 0;border-bottom:1px solid rgba(112,101,88,.12);font-size:.72rem;}
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"]{
+  padding:18px 12px 20px;
+}
+footer,#MainMenu{visibility:hidden;}
+.block-container{
+  max-width:1500px;
+  padding:28px 42px 72px;
+}
+h1,h2,h3,h4{
+  color:var(--text);
+  letter-spacing:-.045em;
+}
+h1{font-weight:850;}
+h2,h3{font-weight:800;}
+p{color:var(--muted);}
+button{transition:border-color .15s ease,background .15s ease,box-shadow .15s ease,transform .15s ease;}
+[data-testid="stButton"]>button,
+[data-testid="stFormSubmitButton"]>button,
+[data-testid="stLinkButton"]>a{
+  min-height:40px;
+  border-radius:10px;
+  border:1px solid var(--line-strong);
+  background:var(--surface);
+  color:var(--text);
+  font-weight:720;
+  box-shadow:none;
+}
+[data-testid="stButton"]>button:hover,
+[data-testid="stFormSubmitButton"]>button:hover,
+[data-testid="stLinkButton"]>a:hover{
+  border-color:#b8c0cc;
+  background:#fbfcfd;
+  box-shadow:0 4px 12px rgba(16,24,40,.06);
+  transform:none;
+}
+[data-testid="stButton"]>button[kind="primary"],
+[data-testid="stFormSubmitButton"]>button[kind="primary"],
+[data-testid="stLinkButton"]>a[kind="primary"]{
+  background:var(--accent);
+  border-color:var(--accent);
+  color:#fff;
+  box-shadow:0 5px 14px rgba(11,87,208,.18);
+}
+[data-testid="stButton"]>button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"]>button[kind="primary"]:hover,
+[data-testid="stLinkButton"]>a[kind="primary"]:hover{
+  background:#0847ad;
+  border-color:#0847ad;
+}
+[data-testid="stTextInput"] input,
+[data-testid="stTextArea"] textarea,
+[data-testid="stNumberInput"] input{
+  background:var(--surface)!important;
+  border:1px solid var(--line-strong)!important;
+  border-radius:10px!important;
+  color:var(--text)!important;
+  box-shadow:none!important;
+}
+[data-testid="stTextInput"] input:focus,
+[data-testid="stTextArea"] textarea:focus,
+[data-testid="stNumberInput"] input:focus{
+  border-color:var(--accent)!important;
+  box-shadow:0 0 0 3px rgba(11,87,208,.10)!important;
+}
+[data-testid="stFileUploaderDropzone"]{
+  background:var(--surface)!important;
+  border:1px dashed var(--line-strong)!important;
+  border-radius:12px!important;
+}
+[data-testid="stPills"]{margin-bottom:.3rem;}
+[data-testid="stPills"] button{
+  background:var(--surface-soft)!important;
+  border:1px solid transparent!important;
+  border-radius:9px!important;
+  color:var(--muted)!important;
+  font-weight:720;
+}
+[data-testid="stPills"] button[aria-pressed="true"]{
+  background:var(--accent-soft)!important;
+  color:var(--accent)!important;
+  border-color:#c9dafb!important;
+}
+[data-testid="stExpander"]{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:12px;
+  box-shadow:none;
+  overflow:hidden;
+}
+[data-testid="stExpander"] summary{
+  padding:.78rem .95rem;
+  color:var(--text);
+}
+[data-testid="stMetric"]{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:.5rem .75rem;
+}
+.stProgress>div>div{background:var(--accent);}
+.st-key-stage-content{
+  max-width:1420px;
+}
+.st-key-landing-test,
+.st-key-landing-live{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:18px;
+  padding:28px;
+  min-height:270px;
+  box-shadow:var(--shadow);
+}
+.st-key-landing-test:hover,
+.st-key-landing-live:hover{
+  border-color:#cbd2dc;
+}
+[class*="st-key-topic-card-"]{
+  padding:12px 0 14px;
+  border-bottom:1px solid var(--line);
+}
+.st-key-selected-story-card{
+  background:var(--surface);
+  border:1px solid #cfd8e3;
+  border-radius:14px;
+  padding:18px;
+  margin-top:16px;
+  box-shadow:var(--shadow);
+}
+[class*="st-key-live-choice-"]{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:16px;
+  padding:24px;
+  min-height:235px;
+  box-shadow:var(--shadow);
+}
+.st-key-topic-toolbar{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:12px;
+  padding:8px;
+  margin-bottom:12px;
+}
+.st-key-script-editor,
+.st-key-subtitle-editor,
+.st-key-audio-inspector,
+.st-key-renderer-inspector{
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:18px;
+}
+.st-key-script-inspector{
+  background:var(--surface-soft);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:18px;
+}
+.eyebrow{
+  font-size:.60rem;
+  font-weight:800;
+  letter-spacing:.15em;
+  text-transform:uppercase;
+  color:var(--soft);
+}
+.mini-label{
+  font-size:.61rem;
+  font-weight:800;
+  letter-spacing:.11em;
+  text-transform:uppercase;
+  color:var(--soft);
+}
+.badge{
+  display:inline-flex;
+  align-items:center;
+  padding:4px 8px;
+  border-radius:999px;
+  background:var(--surface-muted);
+  border:1px solid var(--line);
+  color:var(--muted);
+  font-size:.58rem;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+}
+.sidebar-brand{
+  padding:4px 6px 16px;
+}
+.sidebar-brand-name{
+  font-size:1rem;
+  font-weight:850;
+  letter-spacing:-.035em;
+}
+.sidebar-brand-sub{
+  font-size:.58rem;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--soft);
+  margin-top:3px;
+}
+.sidebar-heading{
+  font-size:.58rem;
+  font-weight:800;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--soft);
+  margin:16px 6px 7px;
+}
+[data-testid="stSidebar"] [data-testid="stButton"]>button{
+  width:100%;
+  min-height:36px;
+  text-align:left;
+  border:1px solid transparent;
+  background:transparent;
+  box-shadow:none;
+  padding:7px 9px;
+  font-size:.72rem;
+  color:var(--muted);
+}
+[data-testid="stSidebar"] [data-testid="stButton"]>button:hover{
+  background:#f7f8fa;
+  border-color:var(--line);
+}
+[data-testid="stSidebar"] [data-testid="stButton"]>button[kind="primary"]{
+  background:var(--accent-soft);
+  color:var(--accent);
+  border-color:#c9dafb;
+  box-shadow:none;
+}
+.canvas-head{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:18px;
+  margin-bottom:18px;
+}
+.canvas-title{
+  font-size:1.65rem;
+  font-weight:850;
+  letter-spacing:-.045em;
+  line-height:1.08;
+}
+.canvas-copy{
+  font-size:.80rem;
+  color:var(--muted);
+  max-width:760px;
+  line-height:1.55;
+  margin-top:6px;
+}
+.topic-index{
+  font-size:.61rem;
+  font-weight:850;
+  color:var(--soft);
+  letter-spacing:.10em;
+}
+.topic-title{
+  font-size:.96rem;
+  line-height:1.3;
+  font-weight:750;
+  letter-spacing:-.015em;
+  color:var(--text);
+}
+.topic-meta{
+  font-size:.64rem;
+  color:var(--muted);
+  line-height:1.35;
+  margin-top:3px;
+}
+.selected-story-title{
+  font-size:1.08rem;
+  font-weight:800;
+  letter-spacing:-.025em;
+}
+.scene-label{
+  font-size:.59rem;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--soft);
+  margin-bottom:.25rem;
+}
+.inspector{
+  background:var(--surface-soft);
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:16px;
+}
+.inspector-line{
+  display:flex;
+  justify-content:space-between;
+  gap:1rem;
+  padding:.55rem 0;
+  border-bottom:1px solid rgba(16,24,40,.07);
+  font-size:.72rem;
+}
 .inspector-line:last-child{border-bottom:0;}
-.inspector-value{font-weight:760;color:var(--ink);text-align:right;}
-.scene-label{font-size:.59rem;font-weight:860;letter-spacing:.13em;text-transform:uppercase;color:var(--soft);margin-bottom:.25rem;}
-.cue-row{display:grid;grid-template-columns:72px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);}
-.cue-time{font-variant-numeric:tabular-nums;font-size:.67rem;color:var(--soft);}
-.cue-text{font-size:.76rem;color:var(--ink);}
-.media-surface{background:#16130f;border-radius:14px;padding:10px;display:flex;justify-content:center;}
-.home-hero{padding:1rem 0 1.5rem;}
-.home-title{font-size:clamp(3rem,6vw,5.7rem);font-weight:920;line-height:.88;letter-spacing:-.075em;max-width:900px;}
-.home-copy{max-width:720px;color:var(--muted);font-size:1rem;line-height:1.55;margin-top:.8rem;}
-.workspace-name{font-size:2.2rem;font-weight:900;letter-spacing:-.055em;margin:.15rem 0 .45rem;}
-.workspace-desc{font-size:.82rem;color:var(--muted);line-height:1.5;max-width:470px;}
-@media(max-width:1050px){section[data-testid="stSidebar"]{min-width:210px;max-width:210px}.block-container{padding-left:1.1rem;padding-right:1.1rem;}}
-@media(max-width:800px){section[data-testid="stSidebar"]{display:none!important}.block-container{padding-left:.8rem;padding-right:.8rem}.home-title{font-size:3.4rem}.canvas{padding:16px}.shell-title{font-size:2.2rem;}}
-[data-testid="stSidebar"] [data-testid="stButton"]>button{font-size:0;min-height:10px;height:10px;padding:0;border:0;background:transparent;box-shadow:none;color:transparent;}\n</style>\n""", unsafe_allow_html=True)
+.inspector-value{
+  font-weight:760;
+  color:var(--text);
+  text-align:right;
+}
+.cue-row{
+  display:grid;
+  grid-template-columns:72px 1fr;
+  gap:12px;
+  padding:9px 0;
+  border-bottom:1px solid var(--line);
+}
+.cue-time{
+  font-variant-numeric:tabular-nums;
+  font-size:.67rem;
+  color:var(--soft);
+}
+.cue-text{
+  font-size:.76rem;
+  color:var(--text);
+}
+.media-surface{
+  background:#eef1f5;
+  border:1px solid var(--line);
+  border-radius:14px;
+  padding:12px;
+  display:flex;
+  justify-content:center;
+}
+.home-hero{
+  padding:12px 0 34px;
+}
+.home-title{
+  font-size:clamp(3rem,6vw,5rem);
+  font-weight:870;
+  line-height:.92;
+  letter-spacing:-.075em;
+  max-width:840px;
+}
+.home-copy{
+  max-width:700px;
+  color:var(--muted);
+  font-size:1rem;
+  line-height:1.55;
+  margin-top:14px;
+}
+.workspace-name{
+  font-size:2rem;
+  font-weight:850;
+  letter-spacing:-.055em;
+  margin:.15rem 0 .45rem;
+}
+.workspace-desc{
+  font-size:.82rem;
+  color:var(--muted);
+  line-height:1.5;
+  max-width:500px;
+}
+.hero-subtitle{
+  font-size:.82rem;
+  color:var(--muted);
+  line-height:1.55;
+  max-width:760px;
+}
+.section-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:18px;
+  margin:18px 0 12px;
+}
+.section-title{
+  font-size:1.25rem;
+  font-weight:820;
+  letter-spacing:-.035em;
+}
+.section-count{
+  font-size:.65rem;
+  color:var(--soft);
+  white-space:nowrap;
+}
+.crop-dialog-kicker{
+  font-size:.58rem;
+  font-weight:820;
+  letter-spacing:.14em;
+  text-transform:uppercase;
+  color:var(--soft);
+}
+.crop-dialog-title{
+  font-size:1.1rem;
+  font-weight:820;
+  margin:.25rem 0 .4rem;
+}
+.visual-source{
+  font-size:.62rem;
+  font-weight:760;
+  color:var(--muted);
+  margin-top:.35rem;
+}
+.visual-detail{
+  font-size:.65rem;
+  color:var(--soft);
+  line-height:1.35;
+  margin-top:.12rem;
+}
+.visual-crop-label{
+  display:inline-flex;
+  margin-top:.35rem;
+  padding:3px 6px;
+  border-radius:6px;
+  background:var(--accent-soft);
+  color:var(--accent);
+  font-size:.53rem;
+  font-weight:800;
+  letter-spacing:.08em;
+}
+@media(max-width:1050px){
+  section[data-testid="stSidebar"]{min-width:216px;max-width:216px;}
+  .block-container{padding-left:24px;padding-right:24px;}
+}
+@media(max-width:800px){
+  section[data-testid="stSidebar"]{display:none!important;}
+  .block-container{padding-left:14px;padding-right:14px;}
+  .home-title{font-size:3.2rem;}
+}
+
+<style>
+.production-rail{
+  display:flex;
+  align-items:stretch;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 1px 2px rgba(16,24,40,.03);
+  margin:18px 0 20px;
+}
+.production-step{
+  flex:1;
+  min-width:0;
+  padding:12px 14px;
+  border-right:1px solid var(--line);
+  background:var(--surface);
+}
+.production-step:last-child{border-right:0;}
+.production-step.active{background:var(--accent-soft);}
+.production-step.complete{background:#fbfcfd;}
+.production-step-no{
+  display:block;
+  font-size:.56rem;
+  line-height:1;
+  font-weight:850;
+  letter-spacing:.12em;
+  color:var(--soft);
+  margin-bottom:7px;
+}
+.production-step-name{
+  display:block;
+  font-size:.68rem;
+  font-weight:790;
+  color:var(--text);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.production-step-state{
+  display:block;
+  margin-top:4px;
+  font-size:.54rem;
+  font-weight:780;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--soft);
+}
+.production-step.active .production-step-state{color:var(--accent);}
+.production-step.complete .production-step-state{color:var(--ok);}
+[class*="st-key-live-topic-"]{
+  background:var(--surface);
+  border-bottom:1px solid var(--line);
+  padding:14px 2px;
+}
+[class*="st-key-live-topic-"]:first-of-type{border-top:1px solid var(--line);}
+[class*="st-key-live-topic-"] [data-testid="stButton"]>button{
+  min-height:36px;
+  font-size:.67rem;
+  border-radius:9px;
+}
+.live-story-number{
+  font-size:.58rem;
+  font-weight:850;
+  letter-spacing:.10em;
+  color:var(--soft);
+  padding-top:2px;
+}
+.live-story-title{
+  font-size:.91rem;
+  line-height:1.34;
+  font-weight:750;
+  color:var(--text);
+  letter-spacing:-.01em;
+}
+.live-story-meta{
+  font-size:.62rem;
+  color:var(--muted);
+  margin-top:4px;
+}
+.live-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  margin-bottom:2px;
+  background:var(--surface-soft);
+  border:1px solid var(--line);
+  border-radius:12px 12px 0 0;
+}
+.live-toolbar-label{
+  font-size:.61rem;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--soft);
+}
+@media(max-width:800px){
+  .production-step{padding:10px 8px;}
+  .production-step-name{font-size:.59rem;}
+  .production-step-state{font-size:.49rem;}
+  .live-story-title{font-size:.84rem;}
+}
+</style>
+</style>\n""", unsafe_allow_html=True)
 
 if "app_mode" not in st.session_state:
     st.session_state.app_mode = "home"
@@ -284,7 +778,7 @@ def _crop_visual_dialog(
         image,
         realtime_update=True,
         default_coords=_largest_9x16_crop_coords(image),
-        box_color="#8B5CF6",
+        box_color="#0B57D0",
         aspect_ratio=(9, 16),
         return_type="image",
         key=f"cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
@@ -778,8 +1272,8 @@ def _render_live_visual_board(slide_count: int):
                 else:
                     st.markdown(
                         '<div style="min-height:260px;display:flex;align-items:center;'
-                        'justify-content:center;border:1px dashed rgba(255,255,255,.12);'
-                        'border-radius:10px;color:#657080;">EMPTY</div>',
+                        'justify-content:center;border:1px dashed rgba(16,24,40,.10);'
+                        'border-radius:10px;color:var(--muted);">EMPTY</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -1338,7 +1832,7 @@ def render_live_dashboard():
     st.markdown('<div class="eyebrow">PRODUCTION CONTROL ROOM</div>',unsafe_allow_html=True)
     left,right=st.columns([1,.22],gap="large")
     with left:
-        st.markdown('<h1 style="margin:0;font-size:3.2rem;">LIVE</h1>',unsafe_allow_html=True)
+        st.markdown('<h1 style="margin:0;font-size:2.65rem;letter-spacing:-.055em;">LIVE</h1>',unsafe_allow_html=True)
         st.markdown(
             '<div class="hero-subtitle">Choose a desk, choose a story, then move through the finished factory in one continuous production flow.</div>',
             unsafe_allow_html=True,
@@ -1367,7 +1861,7 @@ def render_live_dashboard():
             with st.container(key="live-choice-cricket"):
                 st.markdown('<div class="eyebrow">01 · CRICKET</div>', unsafe_allow_html=True)
                 st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">CRICKET</div>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:1.02rem;color:#f1eaf8;max-width:430px;">India / Asia stories and global cricket stories.</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:1.02rem;color:var(--muted);max-width:430px;">India / Asia stories and global cricket stories.</div>', unsafe_allow_html=True)
                 st.space("medium")
                 if st.button("Choose Cricket →", type="primary", width="stretch", key="live-choose-cricket"):
                     st.session_state.live_desk = "cricket"
@@ -1376,7 +1870,7 @@ def render_live_dashboard():
             with st.container(key="live-choice-niche"):
                 st.markdown('<div class="eyebrow">02 · NICHE SPORTS</div>', unsafe_allow_html=True)
                 st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">NICHE</div>', unsafe_allow_html=True)
-                st.markdown('<div style="font-size:1.02rem;color:#f1eaf8;max-width:430px;">Tennis, badminton, motorsport, athletics, hockey, chess and more.</div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:1.02rem;color:var(--muted);max-width:430px;">Tennis, badminton, motorsport, athletics, hockey, chess and more.</div>', unsafe_allow_html=True)
                 st.space("medium")
                 if st.button("Choose Niche Sports →", type="primary", width="stretch", key="live-choose-niche"):
                     st.session_state.live_desk = "niche"
@@ -1446,38 +1940,57 @@ def render_live_dashboard():
     live_stage_labels = ["STORY", "SCRIPT", "AUDIO + SUBS", "VISUALS + RENDER", "UPLOAD"]
     current_stage = live_stage_order.index(st.session_state.live_stage)
 
-    stage_cols = st.columns(len(live_stage_order), gap="small")
+    st.markdown('<div class="production-rail">', unsafe_allow_html=True)
     for stage_index, (label, stage_key) in enumerate(zip(live_stage_labels, live_stage_order)):
-        with stage_cols[stage_index]:
-            state_label = "✓ COMPLETE" if stage_index < current_stage else "● ACTIVE" if stage_index == current_stage else "LOCKED"
-            st.markdown(
-                f'<div class="live-card" style="min-height:72px;padding:12px 14px;">'
-                f'<div class="eyebrow">0{stage_index + 1}</div>'
-                f'<div style="font-size:.78rem;font-weight:900;letter-spacing:.04em;">{label}</div>'
-                f'<div class="visual-detail">{state_label}</div></div>',
-                unsafe_allow_html=True,
-            )
+        state = "active" if stage_index == current_stage else "complete" if stage_index < current_stage else ""
+        state_label = "Active" if stage_index == current_stage else "Complete" if stage_index < current_stage else "Locked"
+        st.markdown(
+            f'<div class="production-step {state}">'
+            f'<span class="production-step-no">0{stage_index + 1}</span>'
+            f'<span class="production-step-name">{label}</span>'
+            f'<span class="production-step-state">{state_label}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.live_stage == "01 · Story":
-        st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one to start production</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">STORY DESK</div>'
+            '<div class="section-title">Choose your story</div></div>'
+            f'<div class="section-count">{len(st.session_state.live_topics)} available · select one to start</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="live-toolbar"><span class="live-toolbar-label">Current story pool</span>'
+            '<span class="live-toolbar-label">Source · published</span></div>',
+            unsafe_allow_html=True,
+        )
         topics = st.session_state.live_topics
-        for start in range(0, len(topics), 2):
-            row = st.columns(2, gap="medium")
-            for col, (index, topic) in zip(
-                row,
-                enumerate(topics[start:start + 2], start=start),
-            ):
-                with col:
-                    with st.container(key=f"live-topic-{index}"):
-                        st.markdown(
-                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
-                            f'<div class="topic-title">{topic.title}</div>'
-                            f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',
-                            unsafe_allow_html=True,
-                        )
-                        if st.button("Select story →", width="stretch", key=f"live-select-story-{index}"):
-                            _live_start_story(index)
-                            st.rerun()
+        for index, topic in enumerate(topics):
+            with st.container(key=f"live-topic-{index}"):
+                cols = st.columns([.08, 1.60, .38, .25], gap="small")
+                with cols[0]:
+                    st.markdown(
+                        f'<div class="live-story-number">{index + 1:02d}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with cols[1]:
+                    st.markdown(
+                        f'<div class="live-story-title">{topic.title}</div>'
+                        f'<div class="live-story-meta">{topic.source or "Sports desk"}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with cols[2]:
+                    st.markdown(
+                        f'<div class="live-story-meta" style="padding-top:2px;">'
+                        f'{topic.published_at:%d %b · %H:%M UTC}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with cols[3]:
+                    if st.button("Select →", width="stretch", key=f"live-select-story-{index}"):
+                        _live_start_story(index)
+                        st.rerun()
 
         if st.button("Find 20 more unique stories", width="stretch", key="live-find-more"):
             with st.spinner("Searching for 20 additional unique stories…"):
@@ -1630,8 +2143,8 @@ def render_topic_fetcher():
     topics=st.session_state.topics
     if not topics:
         st.markdown(
-            '<div style="padding:3rem 1rem;text-align:center;color:#8f877c;">'
-            '<div style="font-weight:850;color:#4a433b;margin-bottom:.3rem;">No stories loaded</div>'
+            '<div style="padding:3rem 1rem;text-align:center;color:var(--soft);">'
+            '<div style="font-weight:850;color:var(--text);margin-bottom:.3rem;">No stories loaded</div>'
             '<div style="font-size:.78rem;">Fetch the current story pool to start.</div></div>',
             unsafe_allow_html=True,
         )
