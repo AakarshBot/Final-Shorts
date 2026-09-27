@@ -356,7 +356,7 @@ def _strip_source_suffix(title: str, source: str) -> str:
 
 def _contains_any(text: str, terms: set[str]) -> bool:
     return any(
-        re.search(rf"(?<!\\w){re.escape(term)}(?!\\w)", text, flags=re.IGNORECASE)
+        re.search(rf"(?<!\w){re.escape(term)}(?!\w)", text, flags=re.IGNORECASE)
         for term in terms
     )
 
