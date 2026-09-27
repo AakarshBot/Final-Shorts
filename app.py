@@ -11,7 +11,6 @@ load_dotenv()
 
 from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
-from top5_script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
 from topic_fetcher import fetch_topics
 from visual_fetcher import crawl_visuals, manual_crawl_visuals, ranked_visual_search
 from visual_search import search_images
@@ -2998,6 +2997,8 @@ elif st.session_state.app_mode == "test":
                             unsafe_allow_html=True,
                         )
         elif line_name == "Top-5" and stage == "02 · Scriptwriter":
+            from top5_script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
+
             stories = list(st.session_state.get("test_top5_handoff") or [])
             st.markdown(
                 '<div class="section-head"><div><div class="eyebrow">TOP-5 · 02 · SCRIPTWRITER</div>'
