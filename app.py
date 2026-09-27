@@ -240,7 +240,6 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   padding:7px 9px;
   margin-bottom:14px;
 }
-.topic-index{font-size:.62rem;font-weight:800;color:var(--muted);letter-spacing:.08em;padding-top:2px;}
 .topic-title{
   font-size:.96rem;
   line-height:1.24;
@@ -282,9 +281,11 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   justify-content:space-between;
   min-height:14px;
 }
-.topic-card-state .selected{
-  color:var(--primary);
+.topic-state-label{
+  font-size:.61rem;
   font-weight:800;
+  letter-spacing:.04em;
+  color:var(--primary);
 }
 .selected-story-title{
   font-size:1.08rem;
@@ -292,6 +293,14 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   letter-spacing:-.025em;
   line-height:1.18;
   max-width:760px;
+}
+.st-key-selected-story-card{
+  margin-top:18px;
+  background:var(--surface);
+  border:1px solid var(--primary);
+  border-radius:16px;
+  padding:15px 16px;
+  box-shadow:0 4px 18px rgba(43,93,80,.06);
 }
 .st-key-script-editor,.st-key-subtitle-editor,.st-key-renderer-inspector,.st-key-audio-inspector{
   background:var(--surface);
@@ -390,6 +399,16 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 @media(max-width:640px){
   .block-container{padding-left:12px;padding-right:12px;}
   .st-key-workspace-nav{padding:8px;}
+  [data-testid="stHorizontalBlock"]:has([class*="st-key-topic-card-"]),
+  [data-testid="stHorizontalBlock"]:has(.st-key-landing-test){
+    flex-direction:column!important;
+    gap:10px!important;
+  }
+  [data-testid="stHorizontalBlock"]:has([class*="st-key-topic-card-"]) > div,
+  [data-testid="stHorizontalBlock"]:has(.st-key-landing-test) > div{
+    width:100%!important;
+    flex:1 1 100%!important;
+  }
   .home-copy{font-size:.86rem;}
   .home-title{font-size:clamp(2.45rem,13vw,3.7rem);}
   .canvas-title{font-size:1.35rem;}
@@ -2071,10 +2090,15 @@ def render_topic_fetcher():
                 published = topic.published_at.strftime("%d %b")
                 selected = index == st.session_state.selected_topic
                 with st.container(key=f"topic-card-{index}"):
+                    selected_label = (
+                        '<span class="topic-state-label selected">Selected</span>'
+                        if selected
+                        else ""
+                    )
                     st.markdown(
                         f'<div class="topic-card-state">'
                         f'<span class="topic-rank">STORY {index + 1:02d}</span>'
-                        f'<span class="topic-card-state {"selected" if selected else ""}">{"Selected" if selected else ""}</span>'
+                        f'{selected_label}'
                         f'</div>'
                         f'<div class="topic-title">{topic.title}</div>'
                         f'<div class="topic-meta">{source} · {published}</div>',
