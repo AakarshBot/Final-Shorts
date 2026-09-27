@@ -485,6 +485,112 @@ button{transition:border-color .15s ease,background .15s ease,box-shadow .15s ea
   .block-container{padding-left:14px;padding-right:14px;}
   .home-title{font-size:3.2rem;}
 }
+
+<style>
+.production-rail{
+  display:flex;
+  align-items:stretch;
+  background:var(--surface);
+  border:1px solid var(--line);
+  border-radius:14px;
+  overflow:hidden;
+  box-shadow:0 1px 2px rgba(16,24,40,.03);
+  margin:18px 0 20px;
+}
+.production-step{
+  flex:1;
+  min-width:0;
+  padding:12px 14px;
+  border-right:1px solid var(--line);
+  background:var(--surface);
+}
+.production-step:last-child{border-right:0;}
+.production-step.active{background:var(--accent-soft);}
+.production-step.complete{background:#fbfcfd;}
+.production-step-no{
+  display:block;
+  font-size:.56rem;
+  line-height:1;
+  font-weight:850;
+  letter-spacing:.12em;
+  color:var(--soft);
+  margin-bottom:7px;
+}
+.production-step-name{
+  display:block;
+  font-size:.68rem;
+  font-weight:790;
+  color:var(--text);
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.production-step-state{
+  display:block;
+  margin-top:4px;
+  font-size:.54rem;
+  font-weight:780;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--soft);
+}
+.production-step.active .production-step-state{color:var(--accent);}
+.production-step.complete .production-step-state{color:var(--ok);}
+[class*="st-key-live-topic-"]{
+  background:var(--surface);
+  border-bottom:1px solid var(--line);
+  padding:14px 2px;
+}
+[class*="st-key-live-topic-"]:first-of-type{border-top:1px solid var(--line);}
+[class*="st-key-live-topic-"] [data-testid="stButton"]>button{
+  min-height:36px;
+  font-size:.67rem;
+  border-radius:9px;
+}
+.live-story-number{
+  font-size:.58rem;
+  font-weight:850;
+  letter-spacing:.10em;
+  color:var(--soft);
+  padding-top:2px;
+}
+.live-story-title{
+  font-size:.91rem;
+  line-height:1.34;
+  font-weight:750;
+  color:var(--text);
+  letter-spacing:-.01em;
+}
+.live-story-meta{
+  font-size:.62rem;
+  color:var(--muted);
+  margin-top:4px;
+}
+.live-toolbar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding:10px 12px;
+  margin-bottom:2px;
+  background:var(--surface-soft);
+  border:1px solid var(--line);
+  border-radius:12px 12px 0 0;
+}
+.live-toolbar-label{
+  font-size:.61rem;
+  font-weight:800;
+  letter-spacing:.12em;
+  text-transform:uppercase;
+  color:var(--soft);
+}
+@media(max-width:800px){
+  .production-step{padding:10px 8px;}
+  .production-step-name{font-size:.59rem;}
+  .production-step-state{font-size:.49rem;}
+  .live-story-title{font-size:.84rem;}
+}
+</style>
 </style>\n""", unsafe_allow_html=True)
 
 if "app_mode" not in st.session_state:
@@ -1726,7 +1832,7 @@ def render_live_dashboard():
     st.markdown('<div class="eyebrow">PRODUCTION CONTROL ROOM</div>',unsafe_allow_html=True)
     left,right=st.columns([1,.22],gap="large")
     with left:
-        st.markdown('<h1 style="margin:0;font-size:3.2rem;">LIVE</h1>',unsafe_allow_html=True)
+        st.markdown('<h1 style="margin:0;font-size:2.65rem;letter-spacing:-.055em;">LIVE</h1>',unsafe_allow_html=True)
         st.markdown(
             '<div class="hero-subtitle">Choose a desk, choose a story, then move through the finished factory in one continuous production flow.</div>',
             unsafe_allow_html=True,
@@ -1834,38 +1940,57 @@ def render_live_dashboard():
     live_stage_labels = ["STORY", "SCRIPT", "AUDIO + SUBS", "VISUALS + RENDER", "UPLOAD"]
     current_stage = live_stage_order.index(st.session_state.live_stage)
 
-    stage_cols = st.columns(len(live_stage_order), gap="small")
+    st.markdown('<div class="production-rail">', unsafe_allow_html=True)
     for stage_index, (label, stage_key) in enumerate(zip(live_stage_labels, live_stage_order)):
-        with stage_cols[stage_index]:
-            state_label = "✓ COMPLETE" if stage_index < current_stage else "● ACTIVE" if stage_index == current_stage else "LOCKED"
-            st.markdown(
-                f'<div class="live-card" style="min-height:72px;padding:12px 14px;">'
-                f'<div class="eyebrow">0{stage_index + 1}</div>'
-                f'<div style="font-size:.78rem;font-weight:900;letter-spacing:.04em;">{label}</div>'
-                f'<div class="visual-detail">{state_label}</div></div>',
-                unsafe_allow_html=True,
-            )
+        state = "active" if stage_index == current_stage else "complete" if stage_index < current_stage else ""
+        state_label = "Active" if stage_index == current_stage else "Complete" if stage_index < current_stage else "Locked"
+        st.markdown(
+            f'<div class="production-step {state}">'
+            f'<span class="production-step-no">0{stage_index + 1}</span>'
+            f'<span class="production-step-name">{label}</span>'
+            f'<span class="production-step-state">{state_label}</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    st.markdown('</div>', unsafe_allow_html=True)
 
     if st.session_state.live_stage == "01 · Story":
-        st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one to start production</div></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">STORY DESK</div>'
+            '<div class="section-title">Choose your story</div></div>'
+            f'<div class="section-count">{len(st.session_state.live_topics)} available · select one to start</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.markdown(
+            '<div class="live-toolbar"><span class="live-toolbar-label">Current story pool</span>'
+            '<span class="live-toolbar-label">Source · published</span></div>',
+            unsafe_allow_html=True,
+        )
         topics = st.session_state.live_topics
-        for start in range(0, len(topics), 2):
-            row = st.columns(2, gap="medium")
-            for col, (index, topic) in zip(
-                row,
-                enumerate(topics[start:start + 2], start=start),
-            ):
-                with col:
-                    with st.container(key=f"live-topic-{index}"):
-                        st.markdown(
-                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
-                            f'<div class="topic-title">{topic.title}</div>'
-                            f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',
-                            unsafe_allow_html=True,
-                        )
-                        if st.button("Select story →", width="stretch", key=f"live-select-story-{index}"):
-                            _live_start_story(index)
-                            st.rerun()
+        for index, topic in enumerate(topics):
+            with st.container(key=f"live-topic-{index}"):
+                cols = st.columns([.08, 1.60, .38, .25], gap="small")
+                with cols[0]:
+                    st.markdown(
+                        f'<div class="live-story-number">{index + 1:02d}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with cols[1]:
+                    st.markdown(
+                        f'<div class="live-story-title">{topic.title}</div>'
+                        f'<div class="live-story-meta">{topic.source or "Sports desk"}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with cols[2]:
+                    st.markdown(
+                        f'<div class="live-story-meta" style="padding-top:2px;">'
+                        f'{topic.published_at:%d %b · %H:%M UTC}</div>',
+                        unsafe_allow_html=True,
+                    )
+                with cols[3]:
+                    if st.button("Select →", width="stretch", key=f"live-select-story-{index}"):
+                        _live_start_story(index)
+                        st.rerun()
 
         if st.button("Find 20 more unique stories", width="stretch", key="live-find-more"):
             with st.spinner("Searching for 20 additional unique stories…"):
