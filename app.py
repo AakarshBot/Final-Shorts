@@ -2920,8 +2920,8 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_script_data = None
                                 st.session_state.test_top5_script_handoff = None
                                 st.session_state.test_top5_audio_data = None
-                st.session_state.test_top5_audio_handoff = None
-                st.rerun()
+                                st.session_state.test_top5_audio_handoff = None
+                                st.rerun()
                         with row[3]:
                             if st.button("↓", key=f"test-top5-down-{topic_index}", disabled=slot == len(selected) - 1, width="stretch"):
                                 selected[slot + 1], selected[slot] = selected[slot], selected[slot + 1]
@@ -2930,8 +2930,8 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_script_data = None
                                 st.session_state.test_top5_script_handoff = None
                                 st.session_state.test_top5_audio_data = None
-                st.session_state.test_top5_audio_handoff = None
-                st.rerun()
+                                st.session_state.test_top5_audio_handoff = None
+                                st.rerun()
                         with row[4]:
                             if st.button("Remove", key=f"test-top5-remove-{topic_index}", width="stretch"):
                                 selected.remove(topic_index)
@@ -2940,8 +2940,8 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_script_data = None
                                 st.session_state.test_top5_script_handoff = None
                                 st.session_state.test_top5_audio_data = None
-                st.session_state.test_top5_audio_handoff = None
-                st.rerun()
+                                st.session_state.test_top5_audio_handoff = None
+                                st.rerun()
 
                     st.divider()
 
@@ -2982,8 +2982,8 @@ elif st.session_state.app_mode == "test":
                                         st.session_state.test_top5_script_data = None
                                         st.session_state.test_top5_script_handoff = None
                                         st.session_state.test_top5_audio_data = None
-                st.session_state.test_top5_audio_handoff = None
-                st.rerun()
+                                        st.session_state.test_top5_audio_handoff = None
+                                        st.rerun()
 
                 selected = st.session_state.test_top5_selected
                 if len(selected) == 5:
@@ -3001,8 +3001,8 @@ elif st.session_state.app_mode == "test":
                         st.session_state.test_top5_script_data = None
                         st.session_state.test_top5_script_handoff = None
                         st.session_state.test_top5_audio_data = None
-                st.session_state.test_top5_audio_handoff = None
-                st.rerun()
+                        st.session_state.test_top5_audio_handoff = None
+                        st.rerun()
 
                 if st.session_state.test_top5_handoff:
                     st.success("Top-5 selection approved. The five story URLs, titles and available article content are ready for the next stage.")
