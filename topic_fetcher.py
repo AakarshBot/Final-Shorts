@@ -99,6 +99,13 @@ SPORT_WORDS = {
 }
 
 CRICKET_TERMS = {"cricket", "bcci", "wicket", "innings", "batting", "bowling", "odi", "t20", "test"}
+CRICKET_ENTITY_NAMES = {
+    "virat kohli", "rohit sharma", "shubman gill", "jasprit bumrah", "hardik pandya",
+    "ravindra jadeja", "rishabh pant", "kl rahul", "kuldeep yadav", "mohammed siraj",
+    "arshdeep singh", "yashasvi jaiswal", "sanju samson", "suryakumar yadav",
+    "shreyas iyer", "axar patel", "washington sundar", "rinku singh", "prasidh krishna",
+    "smriti mandhana", "harmapreet kaur", "jemimah rodrigues",
+}
 NON_CRICKET_TERMS = {
     "football", "soccer", "tennis", "badminton", "squash", "athletics", "marathon", "swimming",
     "cycling", "boxing", "wrestling", "hockey", "kabaddi", "volleyball", "basketball", "chess",
@@ -246,11 +253,13 @@ def _clean_title(title: str, source: str = "") -> str:
 
 def _profile_relevant(title: str, description: str, profile: str | None) -> bool:
     title_tokens = _tokens(title)
-    description_tokens = _tokens(description[:500])
     if profile in {"cricket_india_asia", "cricket_global"}:
         if title_tokens & NON_CRICKET_TERMS:
             return False
-        return bool(title_tokens & CRICKET_TERMS) or bool(description_tokens & CRICKET_TERMS)
+        title_text = _clean(title).casefold()
+        return bool(title_tokens & CRICKET_TERMS) or any(
+            name in title_text for name in CRICKET_ENTITY_NAMES
+        )
     niche_terms = SPORT_WORDS - CRICKET_TERMS
     return bool(title_tokens & niche_terms) and not bool(title_tokens & CRICKET_TERMS)
 
@@ -380,12 +389,6 @@ def _prepare(
         title_key = " ".join(sorted(_tokens(title)))
         if title_key in seen_titles:
             continue
-        if any(
-            SequenceMatcher(None, title.casefold(), other.title.casefold()).ratio() >= 0.94
-            for other in out
-        ):
-            continue
-
         cleaned = Topic(
             title,
             _clean(topic.source),
