@@ -230,7 +230,7 @@ def test_one_failed_google_query_does_not_abort_fetch(monkeypatch):
 
     assert result
     assert result[0].title == good.title
-    assert len(calls) == len(topic_fetcher.QUERIES["cricket_india_asia"])
+    assert len(calls) == len(topic_fetcher.QUERIES["cricket_india_asia"]) + len(topic_fetcher.MORE_QUERIES["cricket_india_asia"])
 
 
 def test_parse_rss_removes_publisher_suffix():
