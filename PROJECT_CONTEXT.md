@@ -304,7 +304,7 @@ Purpose:
 - The five stories must be distinct events/stories rather than five headlines describing the same event.
 - The selection, ranking, script structure, visual treatment and publishing details will be designed in Test first.
 
-Status: **WIP — Test Stage 1 is implemented.**
+Status: **WIP — Test Stages 1 and 2 are implemented.**
 
 Top-5 Test Stage 1 — Topic production:
 - Current active content type is **Cricket**.
@@ -320,6 +320,22 @@ Top-5 Test Stage 1 — Topic production:
 - The article scrape itself is intentionally not implemented yet.
 - Top-5 Stage 1 is a Test-only implementation while the production line is being designed.
 - **Do not change the existing Deep-Dive Topic Fetcher functionality or the Live production flow while building Top-5.**
+
+Top-5 Test Stage 2 — Scriptwriter:
+- Implemented as a completely separate `top5_script_writer.py`; the approved `script_writer.py` is untouched.
+- Input is the exact five-story Stage 1 handoff, in the user's chosen order.
+- The writer researches the five selected story URLs using the same free research resources used by the factory, then makes one combined Groq generation call; the existing 20B Groq model is recovery only after local validation or provider failure.
+- Output contains exactly **six slides**.
+- Slide 1 contains one package headline, spoken as written, with a maximum of 14 words.
+- Slides 2–6 each contain exactly one spoken headline that must communicate the complete important development of that selected story, rather than simply rephrasing its source headline.
+- Slides 2–6 spoken headlines target 24–32 words, have a hard maximum of 36 words and are locally estimated to remain below 15 seconds.
+- Slides 2–6 also contain separate visual-only body copy. The body adds useful factual detail/context from the same story rather than restating the spoken headline, and is kept compact for later 9:16 card treatment.
+- Every slide also returns visual handoff metadata: primary entity, visual intent, specific search prompt and sport/topic category.
+- The writer does not generate the old Scriptwriter title candidates, SEO description or upload comment. It generates 3–5 relevant hashtags.
+- Slide 1 is not allowed to manufacture a generic or unsupported “AI roundup” theme such as changing the conversation, everyone is talking, sending shockwaves, game changer, or similar language.
+- Test Stage 2 exposes all six headlines and the five body fields as editable manual-QC fields, plus editable hashtags.
+- Approval creates `final-shorts.top5-script.v1` with the six edited slides, hashtags, the five selected story references and provider information for downstream stages.
+- Audio is expected to use only the six spoken headlines; body copy is visual-only. Audio/Visuals/Renderer changes are intentionally not part of this Stage 2 implementation.
 
 ### Production Line 03 — On This Day
 
