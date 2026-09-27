@@ -40,28 +40,44 @@ MIN_HASHTAGS = 3
 MAX_HASHTAGS = 5
 
 AI_EDITORIAL_PATTERNS = (
-    r"changing the conversation",
-    r"change(?:d|s)? the way .* see",
-    r"everyone is talking about",
-    r"the cricket world is buzzing",
-    r"sending shockwaves",
-    r"shocking the cricket world",
-    r"game[- ]changer",
-    r"big talking point",
-    r"what you need to know",
-    r"here(?:'|’)?s what happened",
-    r"in a major update",
-    r"this could change everything",
-    r"set to change cricket",
+    r"\bchanging the conversation\b",
+    r"\bchange(?:d|s)? the way .* see\b",
+    r"\beveryone is talking about\b",
+    r"\bthe cricket world is buzzing\b",
+    r"\bsending shockwaves\b",
+    r"\bshocking the cricket world\b",
+    r"\bgame[- ]changer\b",
+    r"\bbig talking point\b",
+    r"\bwhat you need to know\b",
+    r"\bhere(?:'|’)?s what happened\b",
+    r"\bin a major update\b",
+    r"\bthis could change everything\b",
+    r"\bset to change cricket\b",
+)
+
+SLIDE_1_FILLER_PATTERNS = (
+    r"\bneed to (?:see|watch|know)\b",
+    r"\b(?:you|viewers|fans) (?:need to|have to|got to) (?:see|watch|know)\b",
+    r"\bright now\b",
+    r"\bdon['’]?t miss\b",
+    r"\bcan['’]?t miss\b",
+    r"\bmust[- ](?:see|watch|know)\b",
+    r"\bworth (?:seeing|watching)\b",
+    r"\b(?:make|makes|making) you see (?:the )?(?:game|cricket) differently\b",
+    r"\bchange(?:s|d)? the way you see (?:the )?(?:game|cricket)\b",
+    r"\b(?:will|could|can) change (?:the )?(?:game|world|cricket)\b",
+    r"\bsee (?:the )?(?:game|cricket) differently\b",
+    r"\bhere(?:'|’)?s why\b",
+    r"\bfind out\b",
 )
 
 GENERIC_PATTERNS = (
-    r"^s*top five cricket stories(?: of the day)?s*$",
-    r"^s*five cricket stories(?: of the day)?s*$",
-    r"^s*cricket news todays*$",
-    r"^s*latest cricket newss*$",
-    r"^s*today(?:'|’)?s cricket roundups*$",
-    r"^s*the biggest cricket stories(?: today)?s*$",
+    r"^\s*top five cricket stories(?: of the day)?\s*$",
+    r"^\s*five cricket stories(?: of the day)?\s*$",
+    r"^\s*cricket news today\s*$",
+    r"^\s*latest cricket news\s*$",
+    r"^\s*today(?:'|’)?s cricket roundup\s*$",
+    r"^\s*the biggest cricket stories(?: today)?\s*$",
 )
 
 LANGUAGE_PROMPT = (
@@ -126,13 +142,20 @@ EDITORIAL STANDARD
 - Do not imply public reaction, global importance or a wider trend unless the evidence
   explicitly establishes it.
 - Write like a sharp human cricket editor: specific, economical and natural.
-- Avoid promotional, dramatic or generic AI language.
+- Avoid promotional, dramatic, clickbait or generic AI language.
+- Never address the viewer directly in Slide 1. It is a factual package headline, not a
+  call to action, teaser or reason to watch.
+- Never pad Slide 1 with phrases such as "you need to see", "you need to know", "right now",
+  "don't miss", "can't miss", "must-see", "worth watching", "find out", "here's why",
+  "make you see the game differently", "change the way you see the game", "change the world",
+  or similar audience-facing filler.
 - Do not use phrases such as "changing the conversation", "everyone is talking",
   "the cricket world is buzzing", "sending shockwaves", "game changer",
   "what you need to know", "here's what happened", or similar synthetic framing.
-- Do not use a generic roundup headline. Slide 1 must be rooted in the actual five stories.
-- Slide 1 can be smart or quirky only when the wording is grounded in the selected
-  stories. It must never invent a shared theme just to sound clever.
+- Slide 1 must be grounded in at least one concrete detail from the selected stories and
+  should name a person, team, event, record, result or other story-specific detail.
+- Do not use a generic roundup headline. Do not invent a common theme just to make the
+  opener sound clever.
 
 SLIDE STRUCTURE
 - Return exactly six slides.
@@ -352,6 +375,19 @@ def _is_generic_package_headline(headline: str) -> bool:
     return any(re.search(pattern, clean, re.IGNORECASE) for pattern in GENERIC_PATTERNS)
 
 
+def _contains_slide_1_filler(headline: str) -> bool:
+    clean = _clean(headline)
+    return any(re.search(pattern, clean, re.IGNORECASE) for pattern in SLIDE_1_FILLER_PATTERNS)
+
+
+def _references_any_selected_story(headline: str, stories: list[dict]) -> bool:
+    headline_words = set(_normalise(headline).split())
+    selected_keywords = set()
+    for story in stories:
+        selected_keywords.update(_title_keywords(_story_value(story, "title")))
+    return bool(headline_words & selected_keywords)
+
+
 def _story_references_headline(headline: str, story: dict) -> bool:
     headline_words = set(_normalise(headline).split())
     title_words = _title_keywords(_story_value(story, "title"))
@@ -393,6 +429,10 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
                 return False, f"Slide 1 exceeds {SLIDE_1_MAX_WORDS} words."
             if _is_generic_package_headline(headline):
                 return False, "Slide 1 is a generic Top-5 headline."
+            if _contains_forbidden_editorial_language(headline) or _contains_slide_1_filler(headline):
+                return False, "Slide 1 contains audience-facing or synthetic filler language."
+            if not _references_any_selected_story(headline, stories):
+                return False, "Slide 1 is not grounded in a selected story."
             if any(
                 _clean(other.get("headline")).casefold() == headline.casefold()
                 for other in slides[1:]
