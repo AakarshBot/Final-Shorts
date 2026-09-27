@@ -146,7 +146,7 @@ def test_fetch_topics_uses_secondary_source_when_google_clusters_too_heavily(mon
     ]
     gdelt_rows = [
         make_topic(
-            f"Rohit Sharma contract decision event {i}",
+            f"Rohit Sharma cricket contract decision event {i}",
             url=f"https://gdelt.example.com/{i}",
         )
         for i in range(10)
@@ -171,7 +171,6 @@ def test_more_results_exclude_existing_events():
             url="https://example.com/other",
         ),
     ]
-    monkeypatch = None
     rows = topic_fetcher._prepare(new_rows, {existing[0].url}, profile="cricket_india_asia")
     selected = topic_fetcher._select(rows, 20, {existing[0].url}, existing)
     assert [t.title for t in selected] == [new_rows[1].title]
