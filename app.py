@@ -3844,7 +3844,7 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_top5_audio_handoff = approve_top5_audio(audio)
                             st.session_state.test_pipeline_notice = {
                                 "confirmed": "Top-5 Audio QC confirmed",
-                                "next": "Ready for the next production stage.",
+                                "next": "Ready for Visuals.",
                             }
                             st.rerun()
                         except ValueError as exc:
