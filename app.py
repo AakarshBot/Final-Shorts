@@ -665,24 +665,7 @@ def _render_app_sidebar():
             st.rerun()
 
         if st.session_state.app_mode == "test":
-            if st.session_state.test_production_line is None:
-                st.markdown(
-                    '<div class="nav-sub" style="margin-top:12px;">Production line</div>',
-                    unsafe_allow_html=True,
-                )
-                production_line = st.pills(
-                    "Test production line",
-                    ["Deep-Dive", "Top-5", "OTD"],
-                    default=None,
-                    key="test-production-line-picker",
-                    label_visibility="collapsed",
-                )
-                if production_line:
-                    st.session_state.test_production_line = production_line.casefold().replace("-", "_")
-                    if production_line == "Deep-Dive":
-                        st.session_state.test_stage = "01 · Topic Fetcher"
-                    st.rerun()
-            elif st.session_state.test_production_line == "deep_dive":
+            if st.session_state.test_production_line == "deep_dive":
                 st.markdown(
                     '<div class="nav-sub" style="margin-top:12px;">Deep-Dive · Test stages</div>',
                     unsafe_allow_html=True,
@@ -704,7 +687,7 @@ def _render_app_sidebar():
                     st.session_state.test_production_line = None
                     st.session_state.test_stage = "01 · Topic Fetcher"
                     st.rerun()
-            else:
+            elif st.session_state.test_production_line in {"top_5", "otd"}:
                 line_name = "Top-5" if st.session_state.test_production_line == "top_5" else "OTD"
                 st.markdown(
                     f'<div class="nav-sub" style="margin-top:12px;">{line_name} · Test framework</div>',
