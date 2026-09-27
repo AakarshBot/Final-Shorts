@@ -234,6 +234,132 @@ Important:
 - Do not add new factory logic while doing dashboard UI work unless required to support an existing completed handoff.
 - Preserve the already-approved function contracts.
 
+## Future hardening — mobile-complete dashboard and fully online factory
+
+This work is intentionally **deferred**. The current approved factory contracts remain the baseline; do not reopen completed Functions 01–07 unless a concrete regression or a required migration point is identified.
+
+### Dashboard mobile audit — current finding
+
+The Dashboard is **not yet fully mobile friendly**. The homepage, workspace navigation, story-card layouts and horizontal production-progress rail are responsive, but several production components still need individual mobile layouts.
+
+Known mobile problem areas:
+- Top-5 selected-story ordering uses a multi-column row for rank/title/move-up/move-down/remove and needs a stacked or compact mobile control layout.
+- Deep-Dive Scriptwriter keeps editor and inspector in side-by-side columns and should collapse to a single-column mobile reading/editing order.
+- Audio keeps the main audio workspace and inspector side-by-side and should stack on small screens.
+- Subtitles keeps editor and inspector side-by-side and should stack on small screens.
+- Renderer keeps video and inspector side-by-side and should stack on small screens while preserving a useful video width.
+- Visual asset boards currently use three-column layouts and need explicit mobile stacking.
+- Live visual asset actions can use three controls in one row; these need a touch-friendly mobile arrangement.
+- Live visual slide boards need explicit mobile stacking for the full slide sequence.
+- Public/Private upload controls currently use two columns and should collapse cleanly on narrow screens.
+- Progress navigation should remain horizontally scrollable, but the content inside each stage must also be independently mobile-safe.
+
+Mobile design rule for future work:
+- Design each component separately rather than applying a global theme.
+- Keep touch targets comfortably tappable.
+- Avoid relying on colour alone for state.
+- Keep primary/secondary action hierarchy obvious at small widths.
+- Preserve the existing simple, low-contrast-noise visual direction.
+- Do not introduce global layout CSS that accidentally stacks unrelated components.
+- Prefer direct component-specific responsive rules over wrappers or compatibility scaffolding.
+
+### Live progress / QC UI — current finding
+
+The production progress UI is now state-driven:
+- It shows the current production step and completed/next steps.
+- Manual QC handoff messages explicitly show confirmation and the next stage.
+- The progress bar moves when the production state actually advances.
+
+Important limitation:
+- The current “live” progress bar is **stage-live, not operation-live**. During a blocking scrape/TTS/render call, the UI shows the Streamlit spinner but does not yet expose granular real-time percentages such as 10% → 45% → 80%.
+- Future progress work should only add true operation-level progress where the underlying function can report meaningful progress. Do not fake progress with timers.
+
+### Online / no-local-dependency audit — current finding
+
+The factory can be made fully online, but the repository is **not currently zero-local-dependency**.
+
+The existing editorial/service architecture is already largely cloud-portable:
+- Topic discovery uses remote web/news sources.
+- Scriptwriter uses remote Groq APIs.
+- Audio uses Edge-TTS.
+- Visual retrieval uses remote web/image sources and APIs.
+- AI image generation uses Hugging Face and Cloudflare Workers AI.
+- Upload uses the YouTube API.
+
+The remaining local/runtime dependencies are infrastructure and persistence concerns:
+
+1. **YouTube OAuth**
+   - uploader.py currently requires a local token.json beside app.py.
+   - It reads the file and can refresh/write the token back to disk.
+   - Future online deployment must move OAuth credentials/refresh-token handling into secure server-side storage or managed secrets; the browser should never depend on a project-local token file.
+
+2. **FFmpeg / FFprobe**
+   - renderer.py invokes FFmpeg for rendering.
+   - audio.py invokes FFprobe to measure encoded audio duration.
+   - These are not Python packages; the online runtime must provide the binaries at the server/container level.
+
+3. **Playwright Chromium**
+   - visual_fetcher.py launches headless Chromium.
+   - The online runtime must install/provide the Chromium browser and its required Linux dependencies.
+
+4. **Local artifact storage**
+   - The application currently writes media and intermediate files under paths such as output/live, output/upload_qc, output/audio_test, and output/audio_top5_test.
+   - Audio caching currently uses .audio_cache.
+   - These local filesystem paths are suitable for a single runtime but are not durable cloud storage.
+   - Future online deployment should move durable production assets (audio, crops, images, rendered MP4s and other required handoff artifacts) to persistent object storage such as an S3-compatible bucket/R2 or equivalent.
+
+5. **Session-only production state**
+   - Much of the dashboard workflow is stored in st.session_state.
+   - This is appropriate for current single-session operation, but production state that must survive browser reloads, worker restarts or multiple devices should eventually be stored by production/job ID in a persistent database or equivalent state store.
+   - The browser should become the control surface, not the authoritative storage layer.
+
+6. **Bundled fonts and logo**
+   - The Renderer intentionally uses repository-bundled fonts and logo.png; these are not laptop-specific and can remain packaged with the application.
+   - renderer.py also contains Windows/Linux fallback font paths. These are portability fallbacks, not required deployment dependencies, and should not be necessary when the bundled fonts are present.
+
+7. **Stale theme configuration**
+   - .streamlit/config.toml still contains the older purple/light theme values while app.py now defines the active dashboard styling.
+   - This is configuration duplication/dead styling and should be cleaned up during a future dashboard polish pass rather than maintaining two competing theme systems.
+
+### Target online architecture
+
+The future hosted factory should follow this model:
+
+Browser / mobile / desktop
+→ Streamlit web control surface
+→ persistent production/job state
+→ cloud worker/runtime containing Python + FFmpeg/FFprobe + Chromium
+→ object storage for media/artifacts
+→ remote APIs/services
+→ YouTube OAuth/API
+
+The cloud runtime should own execution and artifact creation. The UI should own human review, approvals and controls. Persistent job state should survive browser reloads and runtime restarts.
+
+### Future implementation order
+
+When this work resumes:
+1. Finish the dashboard's component-by-component mobile audit and make every production screen single-column or otherwise touch-safe at narrow widths.
+2. Define operation-level progress contracts only for functions that can report real progress; keep stage progress state-driven.
+3. Replace local YouTube token.json handling with secure hosted OAuth/token storage.
+4. Containerise the runtime with FFmpeg/FFprobe and Playwright Chromium included.
+5. Move durable media/artifacts from output/ and durable cache requirements from .audio_cache to object storage.
+6. Separate authoritative production state from st.session_state using a persistent job/production record.
+7. Remove stale local-only deployment assumptions and duplicated dashboard theme configuration.
+8. Perform a full online integration test from a phone and desktop against the hosted runtime before calling the factory cloud-ready.
+
+Deployment note:
+- A lightweight hosted Streamlit environment can run the Python UI and dependencies, but the complete media factory should not rely on ephemeral local files for durable production output.
+- Streamlit Community Cloud supports application dependencies, including Linux packages, but generated local files are not a substitute for durable object storage. See Streamlit dependency/secrets documentation when deployment work begins.
+- Google provides server-side OAuth guidance for web applications and YouTube API access; use that approach for the hosted uploader.
+
+Useful references for later deployment work:
+- Streamlit app dependencies: https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/app-dependencies
+- Streamlit secrets management: https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management
+- Streamlit session state: https://docs.streamlit.io/develop/api-reference/caching-and-state/st.session_state
+- Google server-side OAuth: https://developers.google.com/identity/protocols/oauth2/web-server
+- YouTube Data API: https://developers.google.com/youtube/v3/guides/auth/server-side-web-apps
+- Playwright CI/browser installation: https://playwright.dev/python/docs/ci
+
 ## Current development target — Dashboard WIP and new production lines
 
 Dashboard UI v2 is implemented in `app.py` and does not alter the factory function implementations.
