@@ -159,7 +159,7 @@ EVENT_GROUPS = {
     "result": {
         "win", "wins", "won", "beat", "beats", "beaten", "defeat", "defeated",
         "champion", "championship", "final", "upset", "title", "medal", "podium",
-        "victory", "victorious", "qualifies", "qualified",
+        "victory", "victorious", "qualifies", "qualified", "chase", "score", "target",
     },
     "controversy": {
         "controversy", "controversial", "clash", "clashes", "row", "blasts", "slams",
@@ -649,8 +649,8 @@ def _select(
         reverse=True,
     )
 
-    chosen: list[Topic] = []
     blocked = list(existing or [])
+    filtered: list[Topic] = []
     seen_title_keys = {
         " ".join(_tokenise(topic.title))
         for topic in blocked
@@ -660,17 +660,43 @@ def _select(
     for topic in ranked:
         if topic.url in seen_urls:
             continue
-        title_key = " ".join(_tokenise(topic.title))
-        if title_key in seen_title_keys:
-            continue
-        if any(_same_event(topic, other) for other in blocked + chosen):
-            continue
-        chosen.append(topic)
-        seen_title_keys.add(title_key)
-        if len(chosen) >= limit:
-            break
 
-    return chosen
+        title_key = " ".join(_tokenise(topic.title))
+        if not title_key or title_key in seen_title_keys:
+            continue
+        if any(_same_event(topic, other) for other in blocked):
+            continue
+
+        seen_title_keys.add(title_key)
+        filtered.append(topic)
+
+    if not filtered:
+        return []
+
+    parent = list(range(len(filtered)))
+
+    def find(index: int) -> int:
+        while parent[index] != index:
+            parent[index] = parent[parent[index]]
+            index = parent[index]
+        return index
+
+    def union(left: int, right: int) -> None:
+        left_root = find(left)
+        right_root = find(right)
+        if left_root != right_root:
+            parent[right_root] = left_root
+
+    for left in range(len(filtered)):
+        for right in range(left + 1, len(filtered)):
+            if _same_event(filtered[left], filtered[right]):
+                union(left, right)
+
+    representatives: dict[int, Topic] = {}
+    for index, topic in enumerate(filtered):
+        representatives.setdefault(find(index), topic)
+
+    return list(representatives.values())[:limit]
 
 
 def _query_batches(profile: str, more: bool, existing_count: int) -> list[list[str]]:
