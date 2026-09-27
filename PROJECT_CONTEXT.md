@@ -2,7 +2,7 @@
 
 ## Project status
 
-The factory's seven functional stages are implemented on `main` and **all Test Pages are Approved**:
+The factory's seven existing functional stages are implemented on `main` and **Approved**:
 
 01. Topic Fetcher — **Approved**
 02. Scriptwriter — **Approved**
@@ -12,7 +12,13 @@ The factory's seven functional stages are implemented on `main` and **all Test P
 06. Renderer — **Approved**
 07. YouTube Upload — **Approved**
 
-The dashboard now contains the connected **Live production flow**. The current development step is **end-to-end Live runtime verification and concrete integration fixes only**.
+The Dashboard is the only existing area that remains **WIP**.
+
+Two additional production lines are now being added:
+1. **Top 5 cricket stories of the day**
+2. **On This Day**
+
+These are new production-line workstreams and are not yet marked approved.
 
 ## Factory order
 
@@ -207,11 +213,13 @@ Private upload:
 
 The uploader detects the actual privacy status returned by YouTube and reports comment success/failure without introducing another approval gate.
 
-Status: **Implemented and ready for dashboard integration.**
+Status: **Approved.**
 
 ## Dashboard state
 
-Current dashboard contains the approved Test pages and the Live production surface is the next integration target.
+The Dashboard is **WIP**.
+
+Current dashboard contains the approved Test pages and the connected Live production surface, but the Dashboard UI/UX remains under active development.
 
 Implemented:
 - Function selector for stages 01–07.
@@ -224,7 +232,7 @@ Important:
 - Do not add new factory logic while doing dashboard UI work unless required to support an existing completed handoff.
 - Preserve the already-approved function contracts.
 
-## Current development target — Turning Test into Live
+## Current development target — Dashboard WIP and new production lines
 
 Dashboard UI v2 is implemented in `app.py` and does not alter the factory function implementations.
 
@@ -245,9 +253,34 @@ Current UI direction:
 - Media review now uses the MIT-licensed Streamlit Cropper component inside a native Streamlit dialog. The crop is free-size, the original asset is untouched, and the saved result is only a persistent dashboard preview.
 - No completed factory function contract was changed for the dashboard/UI work.
 
-The Live production flow is now connected end-to-end around the approved function contracts. Further work should be limited to runtime verification, usability polish, and concrete integration regressions.
+The Live production flow is connected end-to-end around the approved function contracts. Further Dashboard work is **WIP** and should focus on runtime verification, usability polish, and concrete integration regressions.
 
-Do not reopen completed functions unless Live exposes a concrete integration regression.
+The next factory expansion is the addition of two production lines documented below. These lines should be built as direct, purpose-specific flows without recreating deleted scaffolding or altering approved function behaviour unnecessarily.
+
+Do not reopen completed functions unless a concrete regression or a required integration point for one of the new production lines is identified.
+
+## Additional production lines
+
+### Production Line 08 — Top 5 cricket stories of the day
+
+Purpose:
+- Produce one daily Top-5 cricket package built around the five strongest distinct cricket stories of the day.
+- This is a dedicated production line, not the regular single-story Shorts flow.
+- The line should preserve the factory's approved downstream contracts where they remain applicable, while allowing a line-specific story-selection, script structure, metadata and presentation contract where required.
+- The five stories must be distinct events/stories rather than five headlines about the same event.
+- The exact selection, ranking, script architecture, visual treatment and publishing behaviour will be defined during implementation.
+
+Status: **Planned / not yet implemented.**
+
+### Production Line 09 — On This Day
+
+Purpose:
+- Produce a daily sports-focused historical package based on events associated with the current calendar date.
+- Historical stories must be grounded in verifiable source material and clearly separated from current-day news.
+- The exact date matching, story-selection, script architecture, visual treatment, metadata and publishing behaviour will be defined during implementation.
+- This line is separate from the regular current-news Topic Fetcher flow.
+
+Status: **Planned / not yet implemented.**
 
 ## Repository shape
 
@@ -311,4 +344,4 @@ Do not:
 - add extra upload gates,
 - or modify approved function behavior without a concrete regression.
 
-The immediate next task is **Live end-to-end runtime verification**.
+The immediate next tasks are **Dashboard WIP work and implementation of Production Line 08 (Top 5 cricket stories of the day) and Production Line 09 (On This Day)**.
