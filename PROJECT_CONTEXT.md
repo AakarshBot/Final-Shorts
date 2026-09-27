@@ -257,6 +257,12 @@ The Live production flow is connected end-to-end around the approved function co
 
 The next factory expansion is the addition of two production lines documented below. These lines should be built as direct, purpose-specific flows without recreating deleted scaffolding or altering approved function behaviour unnecessarily.
 
+Development order for the new lines:
+- Build and validate the **Top-5** and **OTD** frameworks on the **Test** dashboard first.
+- The Test dashboard is the design and validation surface for these new production lines.
+- Do not implement the new Top-5 or OTD production logic in Live until their Test menus/frameworks have been reviewed and accepted.
+- Once a new line is accepted in Test, move the same validated structure into Live without duplicating or independently redesigning it.
+
 Do not reopen completed functions unless a concrete regression or a required integration point for one of the new production lines is identified.
 
 ## Additional production lines
