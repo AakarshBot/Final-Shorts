@@ -437,17 +437,51 @@ def _related_event_groups(a: set[str], b: set[str]) -> bool:
 
 
 def _same_event(a: Topic, b: Topic) -> bool:
+    a_title = " ".join(_tokenise(a.title))
+    b_title = " ".join(_tokenise(b.title))
+    if a_title == b_title:
+        return True
+
     shared = _identity_tokens(a.title) & _identity_tokens(b.title)
     if len(shared) < 2:
         return False
 
     groups_a = _event_groups(a.title)
     groups_b = _event_groups(b.title)
+    if not _related_event_groups(groups_a, groups_b):
+        return False
 
-    if _related_event_groups(groups_a, groups_b):
-        return len(shared) >= 3 or bool(shared & {"retire", "injury", "record", "debut", "return", "crash"})
+    combined = _identity_tokens(a.title) | _identity_tokens(b.title)
+    similarity = len(shared) / len(combined or {"_"})
 
-    return len(shared) >= 4
+    strong_events = {
+        "retirement",
+        "injury",
+        "selection",
+        "debut",
+        "comeback",
+        "crash",
+        "wicket",
+    }
+    if strong_events & (groups_a & groups_b):
+        return len(shared) >= 3
+
+    if "result" in groups_a and "result" in groups_b:
+        hours_apart = abs(
+            (a.published_at - b.published_at).total_seconds()
+        ) / 3600
+        return len(shared) >= 2 and hours_apart <= 48
+
+    if "statement" in groups_a and "statement" in groups_b:
+        numeric_a = set(re.findall(r"\\b\\d{2,4}\\b", a.title))
+        numeric_b = set(re.findall(r"\\b\\d{2,4}\\b", b.title))
+        return (
+            len(shared) >= 4
+            and similarity >= 0.45
+            or bool(numeric_a & numeric_b) and len(shared) >= 3
+        )
+
+    return len(shared) >= 4 and similarity >= 0.40
 
 
 def _source_weight(topic: Topic) -> float:
