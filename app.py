@@ -13,6 +13,7 @@ from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
 from topic_fetcher import fetch_topics
 from visual_fetcher import crawl_visuals, manual_crawl_visuals, ranked_visual_search
+from top5_visual_fetcher import crawl_top5_visuals
 from visual_search import search_images
 from visual_generator import generate_images
 from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle, render_production_video
@@ -559,6 +560,24 @@ if "test_top5_audio_data" not in st.session_state:
     st.session_state.test_top5_audio_data = None
 if "test_top5_audio_handoff" not in st.session_state:
     st.session_state.test_top5_audio_handoff = None
+if "test_top5_visual_result" not in st.session_state:
+    st.session_state.test_top5_visual_result = None
+if "test_top5_visual_loaded_key" not in st.session_state:
+    st.session_state.test_top5_visual_loaded_key = None
+if "test_top5_visual_crops" not in st.session_state:
+    st.session_state.test_top5_visual_crops = {}
+if "test_top5_visual_deleted" not in st.session_state:
+    st.session_state.test_top5_visual_deleted = set()
+if "test_top5_visual_assignments" not in st.session_state:
+    st.session_state.test_top5_visual_assignments = {}
+if "test_top5_visual_handoff" not in st.session_state:
+    st.session_state.test_top5_visual_handoff = None
+if "test_top5_manual_visual_result" not in st.session_state:
+    st.session_state.test_top5_manual_visual_result = None
+if "test_top5_real_image_result" not in st.session_state:
+    st.session_state.test_top5_real_image_result = None
+if "test_top5_ai_image_result" not in st.session_state:
+    st.session_state.test_top5_ai_image_result = None
 if "test_pipeline_notice" not in st.session_state:
     st.session_state.test_pipeline_notice = None
 if "renderer_previews" not in st.session_state:
