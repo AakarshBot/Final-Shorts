@@ -278,7 +278,7 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   justify-content:center;
   box-shadow:var(--shadow);
 }
-.live-topline{font-size:.74rem;color:var(--muted);line-height:1.35;}
+.live-product-head{display:flex;align-items:flex-start;justify-content:space-between;gap:24px;}.live-product-title{font-size:clamp(2.7rem,5vw,4.8rem);font-weight:880;letter-spacing:-.07em;line-height:.9;margin-top:8px;}.live-status{display:inline-flex;align-items:center;gap:7px;padding:7px 10px;border:1px solid var(--line);border-radius:999px;background:var(--surface);color:var(--muted);font-size:.62rem;font-weight:760;white-space:nowrap;}.live-status span{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 4px var(--success-soft);}
 .hero-subtitle{font-size:.88rem;color:var(--muted);max-width:620px;line-height:1.45;margin-top:6px;}
 .st-key-live-choice-cricket,.st-key-live-choice-niche,.st-key-live-cricket-india,.st-key-live-cricket-global{
   background:var(--surface);
@@ -298,8 +298,8 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
   border-radius:14px;
   background:var(--surface);
 }
-.live-card.active{background:var(--primary-soft);border-color:#c7d2fe;}
-.live-card .stage-state{font-size:.61rem;color:var(--subtle);font-weight:760;margin-top:4px;}
+.live-card.active{background:var(--primary-soft);border-color:#c7d2fe;}.live-card.complete{background:var(--success-soft);border-color:#b7e4ce;}.live-card.complete .stage-state{color:var(--success);}
+.live-card .stage-label{font-size:.78rem;font-weight:820;letter-spacing:.02em;}.live-card .stage-state{font-size:.61rem;color:var(--subtle);font-weight:760;margin-top:4px;}
 .topic-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
 .topic-rank{font-size:.62rem;font-weight:820;letter-spacing:.1em;color:var(--primary);}
 .empty-slot{
@@ -317,7 +317,7 @@ button{transition:transform .14s ease,box-shadow .14s ease,border-color .14s eas
 }
 .visual-source{font-size:.64rem;font-weight:780;color:var(--ink);margin-top:8px;}
 .visual-detail{font-size:.63rem;color:var(--muted);line-height:1.35;margin-top:3px;}
-.visual-crop-label{display:inline-flex;margin-top:6px;padding:4px 7px;border-radius:999px;background:var(--success-soft);color:var(--success);font-size:.58rem;font-weight:820;letter-spacing:.06em;}
+.empty-state{padding:54px 18px;text-align:center;background:var(--surface);border:1px dashed var(--line-strong);border-radius:16px;box-shadow:none;}.empty-state-title{font-size:.9rem;font-weight:800;color:var(--ink);}.empty-state-copy{font-size:.72rem;color:var(--muted);margin-top:4px;}.visual-crop-label{display:inline-flex;margin-top:6px;padding:4px 7px;border-radius:999px;background:var(--success-soft);color:var(--success);font-size:.58rem;font-weight:820;letter-spacing:.06em;}
 .crop-dialog-kicker{font-size:.62rem;font-weight:820;letter-spacing:.14em;color:var(--primary);text-transform:uppercase;}
 .crop-dialog-title{font-size:1.2rem;font-weight:820;margin:4px 0 10px;letter-spacing:-.025em;}
 @media(max-width:900px){
@@ -524,7 +524,7 @@ def _crop_visual_dialog(
         image,
         realtime_update=True,
         default_coords=_largest_9x16_crop_coords(image),
-        box_color="#8B5CF6",
+        box_color="#4F46E5",
         aspect_ratio=(9, 16),
         return_type="image",
         key=f"cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
@@ -601,7 +601,7 @@ def _render_visual_asset_grid(assets: list[dict], result_key: str):
                         if source_url:
                             st.link_button("Source ↗", source_url, width="stretch")
                         else:
-                            st.markdown('<div class="visual-detail" style="padding-top:.45rem;">No source link</div>', unsafe_allow_html=True)
+                            st.markdown('<div class="visual-detail">No source link</div>', unsafe_allow_html=True)
 
 
 def _render_home():
@@ -650,36 +650,30 @@ def _stage_status(stage_key:str)->tuple[str,str]:
 
 def _render_app_sidebar():
     with st.container(key="workspace-nav"):
-        left, middle, right = st.columns([1.0, 2.8, .55], gap="small")
+        left, right = st.columns([1, .16], gap="small")
         with left:
             st.markdown(
                 '<div class="nav-brand">FINAL SHORTS</div>'
                 '<div class="nav-sub">Editorial production</div>',
                 unsafe_allow_html=True,
             )
-        with middle:
-            current_workspace = "TEST" if st.session_state.app_mode == "test" else "LIVE"
-            workspace = st.pills(
-                "Workspace",
-                ["TEST", "LIVE"],
-                default=current_workspace,
-                key="workspace-switcher",
-                label_visibility="collapsed",
-            ) or current_workspace
-            target_mode = "test" if workspace == "TEST" else "live"
-            if target_mode != st.session_state.app_mode:
-                st.session_state.app_mode = target_mode
-                st.rerun()
-
         with right:
             if st.button("Home", key="workspace-home", width="stretch"):
                 st.session_state.app_mode = "home"
                 st.rerun()
 
-        st.markdown(
-            '<div style="height:2px;"></div>',
-            unsafe_allow_html=True,
-        )
+        current_workspace = "TEST" if st.session_state.app_mode == "test" else "LIVE"
+        workspace = st.pills(
+            "Workspace",
+            ["TEST", "LIVE"],
+            default=current_workspace,
+            key="workspace-switcher",
+            label_visibility="collapsed",
+        ) or current_workspace
+        target_mode = "test" if workspace == "TEST" else "live"
+        if target_mode != st.session_state.app_mode:
+            st.session_state.app_mode = target_mode
+            st.rerun()
 
         if st.session_state.app_mode == "test":
             labels = [stage["key"] for stage in STAGES]
@@ -695,18 +689,7 @@ def _render_app_sidebar():
             if selected != st.session_state.test_stage:
                 st.session_state.test_stage = selected
                 st.rerun()
-        else:
-            live_stage_order = ["01 · Story","02 · Script","03 · Audio + Subs","04 · Visuals + Render","05 · Upload"]
-            current_idx = live_stage_order.index(st.session_state.live_stage) if st.session_state.live_stage in live_stage_order else 0
-            stage_html = "".join(
-                f'<span class="badge" style="margin-right:5px;'
-                f'background:{"var(--primary-soft)" if i == current_idx else "var(--surface)"};'
-                f'color:{"var(--primary)" if i == current_idx else "var(--muted)"};">'
-                f'0{i+1} · {label}'
-                f'{"  ✓" if i < current_idx else ""}</span>'
-                for i, label in enumerate(["Story","Script","Audio + Subs","Visuals + Render","Upload"])
-            )
-            st.markdown(stage_html, unsafe_allow_html=True)
+
 
 def _live_story_key(topic) -> str:
     return hashlib.sha1(
@@ -1013,9 +996,7 @@ def _render_live_visual_board(slide_count: int):
                     st.caption(assignment.get("source") or "Attached visual")
                 else:
                     st.markdown(
-                        '<div style="min-height:260px;display:flex;align-items:center;'
-                        'justify-content:center;border:1px dashed rgba(255,255,255,.12);'
-                        'border-radius:10px;color:#657080;">EMPTY</div>',
+                        '<div class="empty-slot">EMPTY</div>',
                         unsafe_allow_html=True,
                     )
 
@@ -1571,18 +1552,21 @@ def _render_live_upload():
 
 
 def render_live_dashboard():
-    st.markdown('<div class="eyebrow">PRODUCTION CONTROL ROOM</div>',unsafe_allow_html=True)
-    left,right=st.columns([1,.22],gap="large")
+    left, right = st.columns([1.4, .45], gap="large")
     with left:
-        st.markdown('<h1 style="margin:0;font-size:3.2rem;">LIVE</h1>',unsafe_allow_html=True)
         st.markdown(
-            '<div class="hero-subtitle">Select a desk. Select a story. Ship the finished Short.</div>',
+            '<div class="live-product-head">'
+            '<div><div class="eyebrow">LIVE PRODUCTION</div>'
+            '<div class="live-product-title">Make the Short.</div>'
+            '<div class="hero-subtitle">One story. One continuous handoff.</div></div>'
+            '<div class="live-status"><span></span> Ready for a story</div>'
+            '</div>',
             unsafe_allow_html=True,
         )
     with right:
         controls = st.columns(2, gap="small")
         with controls[0]:
-            if st.button("New Short", key="live-new-short", width="stretch"):
+            if st.button("New", key="live-new-short", width="stretch"):
                 _live_reset_downstream()
                 st.session_state.live_desk = None
                 st.session_state.live_cricket_profile = None
@@ -1591,8 +1575,8 @@ def render_live_dashboard():
                 st.session_state.live_stage = "01 · Story"
                 st.rerun()
         with controls[1]:
-            if st.button("← Home",key="live-home",width="stretch"):
-                st.session_state.app_mode="home"
+            if st.button("Home", key="live-home", width="stretch"):
+                st.session_state.app_mode = "home"
                 st.rerun()
 
     if st.session_state.live_desk is None:
@@ -1687,9 +1671,9 @@ def render_live_dashboard():
         with stage_cols[stage_index]:
             state_label = "✓ COMPLETE" if stage_index < current_stage else "● ACTIVE" if stage_index == current_stage else "LOCKED"
             st.markdown(
-                f'<div class="live-card {"active" if stage_index == current_stage else ""}">'
+                f'<div class="live-card {"active" if stage_index == current_stage else "complete" if stage_index < current_stage else ""}">'
                 f'<div class="eyebrow">0{stage_index + 1}</div>'
-                f'<div style="font-size:.78rem;font-weight:820;letter-spacing:.02em;">{label}</div>'
+                f'<div class="stage-label">{label}</div>'
                 f'<div class="stage-state">{state_label}</div></div>',
                 unsafe_allow_html=True,
             )
@@ -1866,53 +1850,54 @@ def render_topic_fetcher():
     topics=st.session_state.topics
     if not topics:
         st.markdown(
-            '<div style="padding:3rem 1rem;text-align:center;color:#8f877c;">'
-            '<div style="font-weight:850;color:#4a433b;margin-bottom:.3rem;">No stories loaded</div>'
-            '<div style="font-size:.78rem;">Fetch the current story pool to start.</div></div>',
+            '<div class="empty-state"><div class="empty-state-title">No stories loaded</div><div class="empty-state-copy">Fetch the current story pool to start.</div></div>',
             unsafe_allow_html=True,
         )
         return
 
-    for index, topic in enumerate(topics):
-        source=topic.source or "Sports desk"
-        published=topic.published_at.strftime("%d %b · %H:%M UTC")
-        with st.container(key=f"topic-card-{index}"):
-            cols=st.columns([.06,1.35,.34,.22],gap="small")
-            with cols[0]:
-                st.markdown(f'<div class="topic-index">{index+1:02d}</div>',unsafe_allow_html=True)
-            with cols[1]:
-                st.markdown(f'<div class="topic-title">{topic.title}</div>',unsafe_allow_html=True)
-                st.markdown(f'<div class="topic-meta">{source}</div>',unsafe_allow_html=True)
-            with cols[2]:
-                st.markdown(f'<div class="topic-meta" style="padding-top:.12rem;">{published}</div>',unsafe_allow_html=True)
-            with cols[3]:
-                label="Selected" if index==st.session_state.selected_topic else "Select"
-                if st.button(label,key=f"topic-select-{index}",width="stretch"):
-                    st.session_state.selected_topic=index
-                    st.session_state.script_data=None
-                    st.session_state.approved_script=None
-                    st.session_state.audio_data=None
-                    st.session_state.approved_audio=None
-                    st.session_state.subtitle_data=None
-                    st.session_state.approved_subtitles=None
-                    st.session_state.renderer_previews=None
-                    st.session_state.rendered_video_path=None
-                    st.session_state.upload_qc_approved=False
-                    st.session_state.upload_result=None
-                    st.session_state.upload_qc=None
-                    st.session_state.upload_title_options=[]
-                    st.session_state.upload_title_choice=0
-                    st.session_state.upload_description=""
-                    st.session_state.upload_hashtags=""
-                    st.session_state.upload_comment=""
-                    st.session_state.manual_visual_result=None
-                    st.session_state.real_image_result=None
-                    st.session_state.ai_image_result=None
-                    st.session_state.ranked_visual_result=None
-                    st.session_state.visual_result=None
-                    st.session_state.visual_loaded_story=None
-                    st.session_state.visual_crops={}
-                    st.rerun()
+    for start in range(0, len(topics), 2):
+        row = st.columns(2, gap="medium")
+        for col, (index, topic) in zip(
+            row,
+            enumerate(topics[start:start + 2], start=start),
+        ):
+            with col:
+                source = topic.source or "Sports desk"
+                published = topic.published_at.strftime("%d %b · %H:%M UTC")
+                with st.container(key=f"topic-card-{index}"):
+                    st.markdown(
+                        f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
+                        f'<div class="topic-title">{topic.title}</div>'
+                        f'<div class="topic-meta">{source} · {published}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    label = "Selected" if index == st.session_state.selected_topic else "Select story"
+                    if st.button(label, key=f"topic-select-{index}", width="stretch"):
+                        st.session_state.selected_topic = index
+                        st.session_state.script_data = None
+                        st.session_state.approved_script = None
+                        st.session_state.audio_data = None
+                        st.session_state.approved_audio = None
+                        st.session_state.subtitle_data = None
+                        st.session_state.approved_subtitles = None
+                        st.session_state.renderer_previews = None
+                        st.session_state.rendered_video_path = None
+                        st.session_state.upload_qc_approved = False
+                        st.session_state.upload_result = None
+                        st.session_state.upload_qc = None
+                        st.session_state.upload_title_options = []
+                        st.session_state.upload_title_choice = 0
+                        st.session_state.upload_description = ""
+                        st.session_state.upload_hashtags = ""
+                        st.session_state.upload_comment = ""
+                        st.session_state.manual_visual_result = None
+                        st.session_state.real_image_result = None
+                        st.session_state.ai_image_result = None
+                        st.session_state.ranked_visual_result = None
+                        st.session_state.visual_result = None
+                        st.session_state.visual_loaded_story = None
+                        st.session_state.visual_crops = {}
+                        st.rerun()
 
     if st.session_state.selected_topic is not None:
         index=st.session_state.selected_topic
@@ -2653,27 +2638,21 @@ if st.session_state.app_mode == "home":
     _render_home()
 elif st.session_state.app_mode == "test":
     _render_app_sidebar()
-    stage=st.session_state.test_stage
-    stage_info=next(item for item in STAGES if item["key"]==stage)
-    with st.container(key="stage-content"):
-        st.markdown(
-            f'<div class="eyebrow">{stage_info["number"]} · {stage_info["label"]}</div>',
-            unsafe_allow_html=True,
-        )
-        if stage == "01 · Topic Fetcher":
-            render_topic_fetcher()
-        elif stage == "02 · Scriptwriter":
-            render_scriptwriter()
-        elif stage == "03 · Audio":
-            render_audio()
-        elif stage == "04 · Visuals":
-            render_visuals()
-        elif stage == "05 · Subtitles":
-            render_subtitles()
-        elif stage == "06 · Renderer":
-            render_renderer_test()
-        elif stage == "07 · Upload QC":
-            render_upload_qc()
+    stage = st.session_state.test_stage
+    if stage == "01 · Topic Fetcher":
+        render_topic_fetcher()
+    elif stage == "02 · Scriptwriter":
+        render_scriptwriter()
+    elif stage == "03 · Audio":
+        render_audio()
+    elif stage == "04 · Visuals":
+        render_visuals()
+    elif stage == "05 · Subtitles":
+        render_subtitles()
+    elif stage == "06 · Renderer":
+        render_renderer_test()
+    elif stage == "07 · Upload QC":
+        render_upload_qc()
 elif st.session_state.app_mode == "live":
     _render_app_sidebar()
     render_live_dashboard()
