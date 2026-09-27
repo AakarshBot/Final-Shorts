@@ -2753,7 +2753,7 @@ elif st.session_state.app_mode == "test":
                 "test-line-deep-dive",
                 "01 · DEEP-DIVE",
                 "DEEP-DIVE",
-                "Existing seven-stage single-story test pipeline.",
+                "Single-story production line using the shared seven-stage factory.",
             ),
             (
                 "test-line-top-5",
