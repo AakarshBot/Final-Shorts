@@ -27,7 +27,8 @@ TIMEOUT = 30
 RESEARCH_TIMEOUT = 8
 MAX_ARTICLE_CHARS = 4500
 MAX_STORY_EVIDENCE_CHARS = 5000
-MAX_EVIDENCE_CHARS = 29000
+MAX_EVIDENCE_CHARS = 6500
+MAX_PACKAGE_STORY_CHARS = 1200
 MIN_ARTICLE_CHARS = 500
 SLIDE_1_MAX_WORDS = 14
 STORY_HEADLINE_MAX_WORDS = 36
@@ -329,14 +330,13 @@ def _evidence_packet(stories: list[dict], research: list[str]) -> str:
     packets = []
     for index, (story, evidence) in enumerate(zip(stories, research), 1):
         title = _story_value(story, "title")
-        url = _story_value(story, "url")
         packets.append(
             f"===== STORY {index} =====\n"
-            f"SELECTED HEADLINE: {title}\n"
-            f"SELECTED URL: {url}\n"
-            f"{evidence}"
+            f"TITLE: {title}\n"
+            f"TEXT: {_limit_text(evidence, MAX_PACKAGE_STORY_CHARS)}"
         )
-    return _limit_text("\n\n".join(packets), MAX_EVIDENCE_CHARS)
+    packet = "\n\n".join(packets)
+    return _limit_text(packet, MAX_EVIDENCE_CHARS)
 
 
 def estimate_speech_seconds(text: str) -> float:
