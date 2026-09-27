@@ -845,6 +845,249 @@ def _render_visual_asset_grid(assets: list[dict], result_key: str):
                             st.markdown('<div class="visual-detail">No source link</div>', unsafe_allow_html=True)
 
 
+
+def _top5_visual_asset_key(result_key: str, index: int, asset: dict) -> str:
+    return _visual_asset_key(f"top5-{result_key}", index, asset)
+
+
+def _top5_fit_preview(value, width=300, height=533):
+    image = _asset_to_image(value)
+    if image is None:
+        return None
+    target_ratio = width / height
+    current_ratio = image.width / image.height
+    if current_ratio > target_ratio:
+        crop_width = max(1, int(image.height * target_ratio))
+        left = (image.width - crop_width) // 2
+        image = image.crop((left, 0, left + crop_width, image.height))
+    elif current_ratio < target_ratio:
+        crop_height = max(1, int(image.width / target_ratio))
+        top = (image.height - crop_height) // 2
+        image = image.crop((0, top, image.width, top + crop_height))
+    return image.resize((width, height), Image.Resampling.LANCZOS)
+
+
+def _top5_delete_asset(result_key: str, index: int, asset: dict):
+    asset_key = _top5_visual_asset_key(result_key, index, asset)
+    st.session_state.test_top5_visual_deleted.add(asset_key)
+    for slide, assignment in list(st.session_state.test_top5_visual_assignments.items()):
+        if assignment.get("asset_key") == asset_key:
+            del st.session_state.test_top5_visual_assignments[slide]
+    st.session_state.test_top5_visual_crops.pop(asset_key, None)
+
+
+def _top5_attach_asset(result_key: str, index: int, asset: dict, slide: int):
+    raw = asset.get("bytes")
+    if not isinstance(raw, (bytes, bytearray)):
+        st.warning("This visual has no usable image payload.")
+        return
+
+    asset_key = _top5_visual_asset_key(result_key, index, asset)
+    cropped = st.session_state.test_top5_visual_crops.get(asset_key)
+    selected_bytes = bytes(cropped) if cropped else bytes(raw)
+    st.session_state.test_top5_visual_assignments[slide] = {
+        "asset_key": asset_key,
+        "result_key": result_key,
+        "slide_number": slide,
+        "story_index": None if slide == 1 else slide - 2,
+        "source": str(
+            asset.get("publisher")
+            or asset.get("source")
+            or asset.get("model")
+            or "Web source"
+        ),
+        "label": str(
+            asset.get("article_title")
+            or asset.get("model")
+            or "Selected visual"
+        ),
+        "source_page_url": str(asset.get("source_page_url") or ""),
+        "source_image_url": str(asset.get("source_image_url") or ""),
+        "bytes": selected_bytes,
+    }
+    st.session_state.test_top5_visual_handoff = None
+
+
+@st.dialog("Crop visual", width="large")
+def _top5_crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
+    image = _asset_to_image(image_bytes)
+    if image is None:
+        st.error("This visual could not be opened for cropping.")
+        return
+
+    st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
+    st.caption(
+        "9:16 crop · drag the frame to position it, or drag a corner to show more or less of the full image. "
+        "The original visual stays untouched."
+    )
+
+    from streamlit_cropper import st_cropper
+
+    cropped = st_cropper(
+        image,
+        realtime_update=True,
+        default_coords=_largest_9x16_crop_coords(image),
+        box_color="#4F46E5",
+        aspect_ratio=(9, 16),
+        return_type="image",
+        key=f"top5-cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
+        stroke_width=2,
+    )
+
+    left, right = st.columns([1.2, .8], gap="large")
+    with left:
+        st.markdown('<div class="crop-dialog-kicker">PREVIEW</div>', unsafe_allow_html=True)
+        st.image(cropped, width="stretch")
+    with right:
+        st.markdown('<div class="crop-dialog-kicker">ORIGINAL SIZE</div>', unsafe_allow_html=True)
+        st.caption(f"{image.width} × {image.height}px")
+        st.markdown('<div class="crop-dialog-kicker" style="margin-top:1rem;">OUTPUT</div>', unsafe_allow_html=True)
+        st.caption("Applying the crop changes the selected slide framing only; the original visual stays untouched.")
+        if st.button("Apply crop", type="primary", width="stretch", key=f"top5-apply-crop-{asset_key}"):
+            buffer = BytesIO()
+            cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
+            crop_bytes = buffer.getvalue()
+            st.session_state.test_top5_visual_crops[asset_key] = crop_bytes
+            for assignment in st.session_state.test_top5_visual_assignments.values():
+                if assignment.get("asset_key") == asset_key:
+                    assignment["bytes"] = crop_bytes
+            st.rerun()
+
+
+def _render_top5_asset_pool(
+    assets: list[dict],
+    result_key: str,
+    allowed_slides: list[int],
+):
+    visible_assets = [
+        (index, asset)
+        for index, asset in enumerate(assets)
+        if _top5_visual_asset_key(result_key, index, asset)
+        not in st.session_state.test_top5_visual_deleted
+    ]
+    if not visible_assets:
+        st.caption("No images are currently available from this option.")
+        return
+
+    for start in range(0, len(visible_assets), 3):
+        cols = st.columns(3, gap="medium")
+        for col, (index, asset) in zip(cols, visible_assets[start:start + 3]):
+            with col:
+                asset_key = _top5_visual_asset_key(result_key, index, asset)
+                crop = st.session_state.test_top5_visual_crops.get(asset_key)
+                preview = _top5_fit_preview(crop or asset.get("bytes"))
+                with st.container(key=f"top5-visual-card-{result_key}-{index}"):
+                    if preview is not None:
+                        st.image(preview, width="stretch")
+
+                    source = str(
+                        asset.get("publisher")
+                        or asset.get("source")
+                        or asset.get("model")
+                        or "Web source"
+                    )
+                    label = str(
+                        asset.get("article_title")
+                        or asset.get("model")
+                        or "Selected visual"
+                    )
+                    st.markdown(
+                        f'<div class="visual-source">{source}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if label:
+                        st.markdown(
+                            f'<div class="visual-detail">{label}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    if crop:
+                        st.markdown(
+                            '<div class="visual-crop-label">CROP APPLIED</div>',
+                            unsafe_allow_html=True,
+                        )
+
+                    choose_col, crop_col, delete_col = st.columns(3, gap="small")
+                    with choose_col:
+                        with st.popover("Choose"):
+                            selected_slide = st.selectbox(
+                                "Slide",
+                                allowed_slides,
+                                index=0,
+                                key=f"top5-attach-slide-{asset_key}",
+                            )
+                            if st.button(
+                                "Attach",
+                                type="primary",
+                                width="stretch",
+                                key=f"top5-attach-{asset_key}",
+                            ):
+                                _top5_attach_asset(
+                                    result_key,
+                                    index,
+                                    asset,
+                                    selected_slide,
+                                )
+                                st.rerun()
+                    with crop_col:
+                        raw = asset.get("bytes")
+                        if st.button(
+                            "Crop",
+                            width="stretch",
+                            key=f"top5-crop-{asset_key}",
+                        ):
+                            if isinstance(raw, (bytes, bytearray)):
+                                _top5_crop_visual_dialog(
+                                    asset_key,
+                                    bytes(raw),
+                                    source,
+                                )
+                            else:
+                                st.warning("This visual does not have a crop-ready image payload.")
+                    with delete_col:
+                        if st.button(
+                            "Delete",
+                            width="stretch",
+                            key=f"top5-delete-{asset_key}",
+                        ):
+                            _top5_delete_asset(result_key, index, asset)
+                            st.rerun()
+
+
+def _render_top5_visual_board():
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">VISUAL BOARD</div>'
+        '<div class="section-title">Attach one visual to every slide</div></div>'
+        '<div class="section-count">6 slides required</div>',
+        unsafe_allow_html=True,
+    )
+
+    cols = st.columns(6, gap="small")
+    for slide in range(1, 7):
+        with cols[slide - 1]:
+            assignment = st.session_state.test_top5_visual_assignments.get(slide)
+            with st.container(key=f"test-top5-slide-{slide}"):
+                st.markdown(
+                    f'<div class="eyebrow">SLIDE {slide}</div>',
+                    unsafe_allow_html=True,
+                )
+                preview = _top5_fit_preview(
+                    assignment.get("bytes") if assignment else None,
+                    240,
+                    427,
+                )
+                if preview is not None:
+                    st.image(preview, width="stretch")
+                    st.caption(assignment.get("source") or "Attached visual")
+                    if assignment.get("label"):
+                        st.caption(assignment["label"])
+                else:
+                    st.markdown(
+                        '<div class="empty-slot">EMPTY</div>',
+                        unsafe_allow_html=True,
+                    )
+
+
 def _render_home():
     st.markdown(
         '<div class="home-hero">'
