@@ -3,6 +3,8 @@ from top5_script_writer import (
     BODY_MIN_WORDS,
     SLIDE_1_MAX_WORDS,
     STORY_HEADLINE_MAX_WORDS,
+    MAX_EVIDENCE_CHARS,
+    _evidence_packet,
     estimate_speech_seconds,
     validate_top5_script,
 )
@@ -108,6 +110,13 @@ def test_body_bounds_are_fixed():
 def test_speech_estimate_is_word_based_and_under_limit():
     assert estimate_speech_seconds(" ".join(["word"] * STORY_HEADLINE_MAX_WORDS)) < 15
 
+
+def test_evidence_packet_keeps_all_five_stories_within_payload_budget():
+    research = [f"evidence for story {index} " * 300 for index in range(1, 6)]
+    packet = _evidence_packet(stories(), research)
+
+    assert len(packet) <= MAX_EVIDENCE_CHARS
+    assert all(f"===== STORY {index} =====" in packet for index in range(1, 6))
 
 def test_generate_top5_script_uses_one_package_call(monkeypatch):
     import top5_script_writer
