@@ -265,28 +265,62 @@ Development order for the new lines:
 
 Do not reopen completed functions unless a concrete regression or a required integration point for one of the new production lines is identified.
 
-## Additional production lines
+## Production lines and shared factory stages
 
-### Production Line 08 — Top 5 cricket stories of the day
+The factory has one shared seven-stage production pipeline:
+
+01. Topic Fetcher
+02. Scriptwriter
+03. Audio
+04. Visuals
+05. Subtitles
+06. Renderer
+07. YouTube Upload
+
+The production line changes **how each stage operates and what it produces**; it does not create a new set of stages or a parallel factory architecture.
+
+Current production-line entry menu:
+1. **Deep-Dive**
+2. **Top-5**
+3. **OTD**
+
+### Production Line 01 — Deep-Dive
 
 Purpose:
-- Produce one daily Top-5 cricket package built around the five strongest distinct cricket stories of the day.
-- This is a dedicated production line, not the regular single-story Shorts flow.
-- The line should preserve the factory's approved downstream contracts where they remain applicable, while allowing a line-specific story-selection, script structure, metadata and presentation contract where required.
-- The five stories must be distinct events/stories rather than five headlines about the same event.
-- The exact selection, ranking, script architecture, visual treatment and publishing behaviour will be defined during implementation.
+- Existing single-story sports production line.
+- Current approved stage implementations continue to run here.
+- Deep-Dive currently exposes Cricket (India / Asia and Global) and Niche Sports.
 
-Status: **Planned / not yet implemented.**
+Status: **Existing / Approved stage implementations.**
 
-### Production Line 09 — On This Day
+### Production Line 02 — Top 5 cricket stories of the day
+
+Purpose:
+- Produce one daily Top-5 cricket package built around five distinct cricket stories/events.
+- It uses the same seven factory stages as every other production line.
+- Each stage may have line-specific behaviour, inputs, outputs or presentation rules where required.
+- The five stories must be distinct events/stories rather than five headlines describing the same event.
+- The selection, ranking, script structure, visual treatment and publishing details will be designed in Test first.
+
+Status: **Planned / Test framework WIP.**
+
+### Production Line 03 — On This Day
 
 Purpose:
 - Produce a daily sports-focused historical package based on events associated with the current calendar date.
+- It uses the same seven factory stages as every other production line.
 - Historical stories must be grounded in verifiable source material and clearly separated from current-day news.
-- The exact date matching, story-selection, script architecture, visual treatment, metadata and publishing behaviour will be defined during implementation.
-- This line is separate from the regular current-news Topic Fetcher flow.
+- The date matching, story selection, script structure, visual treatment and publishing details will be designed in Test first.
 
-Status: **Planned / not yet implemented.**
+Status: **Planned / Test framework WIP.**
+
+### New-line development rule
+
+- Build and validate Top-5 and OTD in **Test** first.
+- All three production lines use the same seven-stage factory framework.
+- Do not create a separate stage pipeline, parallel model, duplicate metadata system or duplicate runtime architecture for a new line.
+- Line-specific depth belongs inside the existing stage contracts and handoffs.
+- Do not move a new line into Live until its Test implementation is accepted.
 
 ## Repository shape
 
