@@ -101,6 +101,34 @@ def test_same_person_different_event_is_kept():
     assert len(chosen) == 2
 
 
+def test_same_person_different_statement_is_kept():
+    rows = [
+        make_topic("Virat Kohli confirms 2027 ODI World Cup will be his final ODI"),
+        make_topic("Virat Kohli reveals key mentality switch in ODIs"),
+    ]
+
+    chosen = topic_fetcher._select(rows, 20, set())
+
+    assert len(chosen) == 2
+
+
+def test_same_match_result_reports_cluster_as_one_story():
+    rows = [
+        make_topic(
+            "Nepal chase 102-run target against Afghanistan at Asian Games",
+            hours=3,
+        ),
+        make_topic(
+            "Nepal defeat Afghanistan by five wickets at Asian Games",
+            hours=5,
+        ),
+    ]
+
+    chosen = topic_fetcher._select(rows, 20, set())
+
+    assert len(chosen) == 1
+
+
 def test_exact_duplicate_headline_is_only_selected_once():
     duplicate = make_topic("Cricket Player01 record 1")
     rows = [duplicate, duplicate]
