@@ -32,59 +32,85 @@ STAGES = [
 ]
 st.markdown("""
 <style>
-:root{--bg:#f5f1e9;--surface:#fffdfa;--surface-2:#f1ece3;--ink:#211e1a;--muted:#756f65;--soft:#9a9388;--line:#e2dbd0;--line-strong:#d4ccbf;--accent:#b75a36;--accent-dark:#8f4226;--sage:#617565;--sage-soft:#e7eee8;--shadow:0 16px 44px rgba(52,43,34,.075);}
+:root{--bg:#f4f0e8;--paper:#fffdf9;--paper-2:#eee8de;--ink:#25211c;--muted:#777066;--soft:#9c9388;--line:#ddd5c9;--line-strong:#cbc1b3;--accent:#b65a36;--accent-dark:#8e4328;--ok:#5e7663;--ok-soft:#e6eee7;--shadow:0 12px 32px rgba(47,39,31,.06);}
 html,body,.stApp{font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--ink);}
-[data-testid="stAppViewContainer"]{background:radial-gradient(circle at 8% 0%,rgba(183,90,54,.075),transparent 27%),radial-gradient(circle at 94% 8%,rgba(97,117,101,.065),transparent 23%),linear-gradient(180deg,#f8f5ef 0%,var(--bg) 100%);}
-[data-testid="stHeader"]{background:transparent;} section[data-testid="stSidebar"]{display:none;} footer,#MainMenu{visibility:hidden;}
-.block-container{max-width:1440px;padding:1.35rem 2rem 4rem;} h1,h2,h3,h4{color:var(--ink);letter-spacing:-.045em;} p,li{line-height:1.55;}
-button{transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease,background .16s ease;} button:hover{transform:translateY(-1px);}
-[data-testid="stButton"]>button,[data-testid="stFormSubmitButton"]>button,[data-testid="stDownloadButton"]>button{min-height:44px;border-radius:11px;border:1px solid var(--line-strong);background:var(--surface);color:var(--ink);font-weight:760;box-shadow:0 4px 14px rgba(52,43,34,.045);}
-[data-testid="stButton"]>button:hover,[data-testid="stFormSubmitButton"]>button:hover{border-color:#c8beb0;box-shadow:0 9px 22px rgba(52,43,34,.075);}
-[data-testid="stButton"]>button[kind="primary"],[data-testid="stFormSubmitButton"]>button[kind="primary"]{background:var(--ink);color:#fffdfa;border-color:var(--ink);box-shadow:0 10px 24px rgba(33,30,26,.13);}
-[data-testid="stButton"]>button[kind="primary"]:hover,[data-testid="stFormSubmitButton"]>button[kind="primary"]:hover{background:#35302a;border-color:#35302a;}
-[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea,[data-testid="stFileUploaderDropzone"]{background:rgba(255,253,250,.86)!important;border:1px solid var(--line-strong)!important;border-radius:11px!important;color:var(--ink)!important;}
+[data-testid="stAppViewContainer"]{background:var(--bg);}
+[data-testid="stHeader"]{background:transparent;}
+section[data-testid="stSidebar"]{display:block!important;background:#eee8df;border-right:1px solid var(--line);min-width:248px;max-width:248px;}
+section[data-testid="stSidebar"] [data-testid="stSidebarContent"]{padding:1.15rem .9rem 1.25rem;}
+footer,#MainMenu{visibility:hidden;}
+.block-container{max-width:1480px;padding:1.35rem 2.2rem 4rem;}
+h1,h2,h3,h4{color:var(--ink);letter-spacing:-.045em;}
+h1{font-weight:900;} h2,h3{font-weight:860;}
+p{color:var(--muted);}
+button{transition:transform .15s ease,box-shadow .15s ease,border-color .15s ease,background .15s ease;}
+button:hover{transform:translateY(-1px);}
+[data-testid="stButton"]>button,[data-testid="stFormSubmitButton"]>button{
+  min-height:42px;border-radius:10px;border:1px solid var(--line-strong);background:var(--paper);color:var(--ink);font-weight:760;box-shadow:0 3px 12px rgba(47,39,31,.035);
+}
+[data-testid="stButton"]>button:hover,[data-testid="stFormSubmitButton"]>button:hover{border-color:#bfb4a5;box-shadow:0 8px 18px rgba(47,39,31,.07);}
+[data-testid="stButton"]>button[kind="primary"],[data-testid="stFormSubmitButton"]>button[kind="primary"]{background:var(--ink);color:var(--paper);border-color:var(--ink);box-shadow:0 8px 20px rgba(37,33,28,.12);}
+[data-testid="stButton"]>button[kind="primary"]:hover,[data-testid="stFormSubmitButton"]>button[kind="primary"]:hover{background:#37312a;border-color:#37312a;}
+[data-testid="stTextInput"] input,[data-testid="stTextArea"] textarea{background:var(--paper)!important;border:1px solid var(--line-strong)!important;border-radius:10px!important;color:var(--ink)!important;}
 [data-testid="stTextInput"] input:focus,[data-testid="stTextArea"] textarea:focus{border-color:var(--accent)!important;box-shadow:0 0 0 1px var(--accent)!important;}
-[data-testid="stCaptionContainer"],.stCaption{color:var(--muted);} [data-testid="stAlert"]{border-radius:12px;}
-[data-testid="stExpander"]{background:rgba(255,253,250,.92);border:1px solid var(--line);border-radius:15px;box-shadow:0 8px 26px rgba(52,43,34,.045);overflow:hidden;}
-[data-testid="stExpander"] summary{padding:.85rem 1rem;color:var(--ink);} [data-testid="stExpander"] details{border:0!important;}
-[data-testid="stPills"] button{background:rgba(255,253,250,.74)!important;border:1px solid var(--line)!important;border-radius:999px!important;color:var(--muted)!important;}
-[data-testid="stPills"] button[aria-pressed="true"]{background:var(--ink)!important;border-color:var(--ink)!important;color:#fffdfa!important;}
-.badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;background:var(--surface-2);border:1px solid var(--line);font-size:.64rem;font-weight:850;letter-spacing:.10em;text-transform:uppercase;color:var(--muted);}
-.eyebrow,.home-kicker{color:var(--soft);font-size:.64rem;font-weight:850;letter-spacing:.17em;text-transform:uppercase;} .home-kicker{color:var(--accent-dark);}
-.hero-title{font-size:clamp(2.65rem,5.1vw,5rem);line-height:.94;font-weight:900;letter-spacing:-.062em;margin:.15rem 0 0;max-width:940px;}
-.hero-subtitle{color:var(--muted);font-size:1rem;line-height:1.55;max-width:720px;margin-top:.72rem;}
-.home-note{display:flex;align-items:center;gap:.55rem;margin-top:1rem;color:var(--muted);font-size:.78rem;} .home-note-dot{width:7px;height:7px;border-radius:50%;background:var(--sage);}
-.st-key-landing-test,.st-key-landing-live{min-height:420px;border-radius:24px;padding:30px;overflow:hidden;position:relative;border:1px solid var(--line);box-shadow:var(--shadow);}
-.st-key-landing-test{background:linear-gradient(135deg,rgba(255,255,255,.98),rgba(244,239,231,.95));}
-.st-key-landing-live{background:radial-gradient(circle at 86% 8%,rgba(183,90,54,.11),transparent 22%),linear-gradient(135deg,#fffdfa 0%,#f7eee8 100%);}
-.st-key-landing-test:before,.st-key-landing-live:before{content:"";position:absolute;left:30px;right:30px;top:0;height:3px;border-radius:999px;background:var(--ink);opacity:.9;} .st-key-landing-live:before{background:var(--accent);}
-.st-key-landing-test button,.st-key-landing-live button{min-height:52px;border-radius:11px;}
-.st-key-stage-shell{position:sticky;top:.65rem;z-index:30;background:rgba(255,253,250,.92);border:1px solid var(--line);border-radius:15px;padding:8px;backdrop-filter:blur(14px);box-shadow:0 12px 30px rgba(52,43,34,.07);}
-.st-key-stage-content{background:rgba(255,253,250,.7);border:1px solid var(--line);border-radius:17px;padding:20px 22px 28px;margin-top:12px;box-shadow:var(--shadow);}
-.st-key-stage-shell [data-testid="stButton"]>button{min-height:40px;border-radius:9px;font-size:.8rem;font-weight:850;} .st-key-stage-shell [data-testid="stButton"]>button[kind="primary"]{background:var(--ink);}
-.stage-rail-label{font-size:.60rem;color:var(--soft);text-align:center;letter-spacing:.11em;text-transform:uppercase;margin-top:4px;} .stage-rail-line{height:1px;background:linear-gradient(90deg,transparent,var(--line-strong),transparent);margin:0 8% 4px;}
-.live-glow{height:3px;border-radius:999px;background:var(--accent);box-shadow:0 3px 12px rgba(183,90,54,.2);}
-.live-card{min-height:124px;border-radius:15px;border:1px solid var(--line);background:var(--surface);padding:18px;box-shadow:0 10px 30px rgba(52,43,34,.055);}
-.live-card:hover{border-color:#cdc3b6;box-shadow:0 15px 34px rgba(52,43,34,.075);}
-.muted{color:var(--muted);} .section-head{display:flex;align-items:end;justify-content:space-between;gap:1rem;margin:.3rem 0 .95rem;} .section-title{font-size:1.38rem;font-weight:900;letter-spacing:-.038em;} .section-count{font-size:.63rem;color:var(--soft);letter-spacing:.12em;text-transform:uppercase;}
-.card{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:18px 20px;margin:10px 0;box-shadow:0 10px 28px rgba(52,43,34,.05);}
-.topic-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;} .topic-rank{font-size:.60rem;color:var(--soft);font-weight:850;letter-spacing:.13em;text-transform:uppercase;} .topic-rating{display:none;}
-.topic-selected{display:inline-flex;padding:4px 8px;border-radius:999px;background:var(--sage-soft);border:1px solid #d4e1d5;color:var(--sage);font-size:.57rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;margin-bottom:9px;}
-.topic-title{font-size:1.18rem;line-height:1.18;font-weight:860;letter-spacing:-.027em;margin:.12rem 0 .7rem;} .topic-meta{font-size:.69rem;color:var(--muted);line-height:1.35;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-div[class*="st-key-topic-card-"]{background:var(--surface);border:1px solid var(--line);border-radius:15px;padding:16px 16px 14px;min-height:168px;box-shadow:0 10px 28px rgba(52,43,34,.05);position:relative;overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
-div[class*="st-key-topic-card-"]:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent);opacity:.2;} div[class*="st-key-topic-card-"]:hover{transform:translateY(-1px);border-color:#cfc5b8;box-shadow:0 16px 34px rgba(52,43,34,.075);} div[class*="st-key-topic-card-"] button{border-radius:9px;}
-div[class*="st-key-selected-story-"]{background:linear-gradient(135deg,#fffdfa,#f4eee7);border:1px solid #dfd0c5;border-radius:15px;padding:18px 20px;box-shadow:0 12px 32px rgba(52,43,34,.055);}
-div[class*="st-key-visual-card-"],div[class*="st-key-live-visual-card-"]{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:9px;box-shadow:0 9px 26px rgba(52,43,34,.05);overflow:hidden;transition:transform .16s ease,border-color .16s ease,box-shadow .16s ease;}
-div[class*="st-key-visual-card-"]:hover,div[class*="st-key-live-visual-card-"]:hover{transform:translateY(-1px);border-color:#cfc5b8;box-shadow:0 14px 30px rgba(52,43,34,.075);} div[class*="st-key-visual-card-"] img,div[class*="st-key-live-visual-card-"] img{border-radius:9px;}
-.visual-source{font-size:.64rem;font-weight:800;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;} .visual-detail{font-size:.60rem;color:var(--muted);line-height:1.35;}
-.visual-crop-label{font-size:.55rem;font-weight:900;letter-spacing:.12em;text-transform:uppercase;color:var(--accent-dark);margin:.5rem 0 .25rem;} .crop-dialog-kicker{font-size:.65rem;font-weight:900;letter-spacing:.13em;text-transform:uppercase;color:var(--muted);} .crop-dialog-title{font-size:1.42rem;font-weight:900;letter-spacing:-.034em;margin-top:.15rem;}
-div[class*="st-key-live-choice-"]{min-height:280px;border-radius:20px;padding:28px;overflow:hidden;position:relative;border:1px solid var(--line);background:linear-gradient(135deg,#fffdfa,#f6eee8);box-shadow:var(--shadow);}
-div[class*="st-key-live-cricket-"]{min-height:200px;background:linear-gradient(145deg,#fffdfa,#f2eee6);}
-div[class*="st-key-live-slide-"]{min-height:370px;border-radius:13px;border:1px solid var(--line);background:var(--surface);padding:11px;box-shadow:0 10px 28px rgba(52,43,34,.05);} div[class*="st-key-live-slide-"] img{border-radius:9px;}
-[data-testid="stMetric"]{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:8px 12px;} .stProgress > div > div{background:var(--accent);}
-@media (max-width:900px){.block-container{padding-left:1rem;padding-right:1rem;}.st-key-landing-test,.st-key-landing-live{min-height:360px;padding:24px;}.hero-title{font-size:3rem;}.topic-title{font-size:1.05rem;}.st-key-stage-shell{position:static;}}
-</style>
-""", unsafe_allow_html=True)
+[data-testid="stFileUploaderDropzone"]{background:var(--paper)!important;border:1px dashed var(--line-strong)!important;border-radius:12px!important;}
+[data-testid="stPills"]{margin-bottom:.35rem;}
+[data-testid="stPills"] button{background:transparent!important;border:0!important;border-radius:999px!important;color:var(--muted)!important;font-weight:760;}
+[data-testid="stPills"] button[aria-pressed="true"]{background:var(--ink)!important;color:var(--paper)!important;}
+[data-testid="stExpander"]{background:var(--paper);border:1px solid var(--line);border-radius:12px;box-shadow:none;overflow:hidden;}
+[data-testid="stExpander"] summary{padding:.82rem .95rem;color:var(--ink);}
+[data-testid="stMetric"]{background:var(--paper);border:1px solid var(--line);border-radius:11px;padding:.5rem .75rem;}
+.stProgress > div > div{background:var(--accent);}
+.eyebrow{font-size:.60rem;font-weight:860;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);}
+.mini-label{font-size:.62rem;font-weight:820;letter-spacing:.12em;text-transform:uppercase;color:var(--soft);}
+.shell-title{font-size:2.65rem;line-height:.95;font-weight:900;letter-spacing:-.06em;margin:.1rem 0 .2rem;}
+.shell-subtitle{max-width:780px;color:var(--muted);font-size:.92rem;line-height:1.5;}
+.badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:var(--paper-2);border:1px solid var(--line);color:var(--muted);font-size:.58rem;font-weight:840;letter-spacing:.1em;text-transform:uppercase;}
+.sidebar-brand{padding:.2rem .2rem 1.1rem;}
+.sidebar-brand-name{font-size:1.15rem;font-weight:920;letter-spacing:-.04em;}
+.sidebar-brand-sub{font-size:.62rem;letter-spacing:.13em;text-transform:uppercase;color:var(--soft);margin-top:.15rem;}
+.sidebar-heading{font-size:.58rem;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);margin:1rem .2rem .45rem;}
+.sidebar-stage{display:flex;align-items:center;gap:.55rem;padding:.48rem .55rem;border-radius:9px;margin:.12rem 0;color:var(--muted);font-size:.74rem;}
+.sidebar-stage.active{background:var(--paper);color:var(--ink);box-shadow:0 4px 14px rgba(47,39,31,.05);}
+.sidebar-dot{width:7px;height:7px;border-radius:50%;border:1px solid var(--line-strong);background:transparent;flex:0 0 auto;}
+.sidebar-stage.active .sidebar-dot{background:var(--accent);border-color:var(--accent);}
+.sidebar-stage.done .sidebar-dot{background:var(--ok);border-color:var(--ok);}
+.workspace-rule{height:1px;background:var(--line);margin:.2rem 0 1.15rem;}
+.canvas{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:22px 24px 28px;box-shadow:var(--shadow);}
+.canvas-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem;}
+.canvas-title{font-size:1.55rem;font-weight:900;letter-spacing:-.04em;line-height:1.1;}
+.canvas-copy{font-size:.78rem;color:var(--muted);max-width:720px;line-height:1.5;}
+.topic-toolbar{background:var(--paper);border:1px solid var(--line);border-radius:13px;padding:.55rem .7rem;margin-bottom:.8rem;}
+.topic-row{background:var(--paper);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin:6px 0;box-shadow:0 4px 14px rgba(47,39,31,.035);}
+.topic-row:hover{border-color:#c9beb0;box-shadow:0 8px 20px rgba(47,39,31,.05);}
+.topic-index{font-size:.62rem;font-weight:900;color:var(--soft);letter-spacing:.11em;}
+.topic-title{font-size:.98rem;line-height:1.25;font-weight:820;letter-spacing:-.02em;color:var(--ink);}
+.topic-meta{font-size:.64rem;color:var(--muted);line-height:1.35;margin-top:.28rem;}
+.selected-story{background:#f7efe8;border:1px solid #e0cfc2;border-radius:12px;padding:14px 16px;margin-top:.9rem;}
+.selected-story-title{font-size:1.05rem;font-weight:860;letter-spacing:-.026em;}
+.editor-pane{background:#fbf8f3;border:1px solid var(--line);border-radius:13px;padding:14px;}
+.inspector{background:#f0ebe3;border:1px solid var(--line);border-radius:13px;padding:15px;}
+.inspector-line{display:flex;justify-content:space-between;gap:1rem;padding:.52rem 0;border-bottom:1px solid rgba(112,101,88,.12);font-size:.72rem;}
+.inspector-line:last-child{border-bottom:0;}
+.inspector-value{font-weight:760;color:var(--ink);text-align:right;}
+.scene-label{font-size:.59rem;font-weight:860;letter-spacing:.13em;text-transform:uppercase;color:var(--soft);margin-bottom:.25rem;}
+.cue-row{display:grid;grid-template-columns:72px 1fr;gap:12px;padding:9px 0;border-bottom:1px solid var(--line);}
+.cue-time{font-variant-numeric:tabular-nums;font-size:.67rem;color:var(--soft);}
+.cue-text{font-size:.76rem;color:var(--ink);}
+.media-surface{background:#16130f;border-radius:14px;padding:10px;display:flex;justify-content:center;}
+.publish-panel{background:#f0ebe3;border:1px solid var(--line);border-radius:13px;padding:15px;}
+.home-hero{padding:1rem 0 1.5rem;}
+.home-title{font-size:clamp(3rem,6vw,5.7rem);font-weight:920;line-height:.88;letter-spacing:-.075em;max-width:900px;}
+.home-copy{max-width:720px;color:var(--muted);font-size:1rem;line-height:1.55;margin-top:.8rem;}
+.workspace-card{background:var(--paper);border:1px solid var(--line);border-radius:18px;padding:22px;min-height:250px;box-shadow:var(--shadow);position:relative;overflow:hidden;}
+.workspace-card.live{background:#f7eee8;border-color:#e0cfc2;}
+.workspace-card:before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--ink);opacity:.14;}
+.workspace-card.live:before{background:var(--accent);opacity:.75;}
+.workspace-name{font-size:2.2rem;font-weight:900;letter-spacing:-.055em;margin:.15rem 0 .45rem;}
+.workspace-desc{font-size:.82rem;color:var(--muted);line-height:1.5;max-width:470px;}
+@media(max-width:1050px){section[data-testid="stSidebar"]{min-width:210px;max-width:210px}.block-container{padding-left:1.1rem;padding-right:1.1rem;}}
+@media(max-width:800px){section[data-testid="stSidebar"]{display:none!important}.block-container{padding-left:.8rem;padding-right:.8rem}.home-title{font-size:3.4rem}.canvas{padding:16px}.shell-title{font-size:2.2rem;}}
+[data-testid="stSidebar"] [data-testid="stButton"]>button{font-size:0;min-height:10px;height:10px;padding:0;border:0;background:transparent;box-shadow:none;color:transparent;}\n</style>\n""", unsafe_allow_html=True)
 
 if "app_mode" not in st.session_state:
     st.session_state.app_mode = "home"
@@ -352,44 +378,42 @@ def _render_visual_asset_grid(assets: list[dict], result_key: str):
 
 
 def _render_home():
-    st.markdown('<div class="home-kicker">FINAL SHORTS · NEWSROOM</div>', unsafe_allow_html=True)
-    st.markdown('<div class="hero-title">From story to Short.</div>', unsafe_allow_html=True)
+    st.markdown('<div class="home-hero">', unsafe_allow_html=True)
+    st.markdown('<div class="eyebrow">FINAL SHORTS · NEWSROOM</div>', unsafe_allow_html=True)
+    st.markdown('<div class="home-title">Build the story.<br>Ship the Short.</div>', unsafe_allow_html=True)
     st.markdown(
-        '<div class="hero-subtitle">A focused workspace for finding the story, shaping the script and shipping the finished Short — without getting in the way.</div>',
+        '<div class="home-copy">A production workspace for sports stories — from the first source to the final upload. Nothing extra between you and the work.</div>',
         unsafe_allow_html=True,
     )
-    st.markdown(
-        '<div class="home-note"><span class="home-note-dot"></span><span>Test is the build lab. Live is the production room.</span></div>',
-        unsafe_allow_html=True,
-    )
-    st.space("medium")
+    st.markdown('</div>', unsafe_allow_html=True)
+
     left, right = st.columns(2, gap="medium")
     with left:
         with st.container(key="landing-test"):
-            st.markdown('<div class="eyebrow">01 · BUILD LAB</div>', unsafe_allow_html=True)
-            st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">TEST</div>', unsafe_allow_html=True)
+            st.markdown('<div class="eyebrow">BUILD LAB</div>', unsafe_allow_html=True)
+            st.markdown('<div class="workspace-name">Test</div>', unsafe_allow_html=True)
             st.markdown(
-                '<div style="font-size:1rem;color:#756f65;max-width:480px;">Inspect each production stage, test handoffs and tune the factory without touching a live upload.</div>',
+                '<div class="workspace-desc">Run individual stages, inspect outputs and tune the factory without touching production.</div>',
                 unsafe_allow_html=True,
             )
             st.space("medium")
             st.markdown('<span class="badge">7 stages</span> <span class="badge">manual review</span>', unsafe_allow_html=True)
             st.space("medium")
-            if st.button("Open Test Lab  →", key="open-test", width="stretch"):
+            if st.button("Open Test Lab  →", key="open-test", type="primary", width="stretch"):
                 st.session_state.app_mode = "test"
                 st.rerun()
     with right:
         with st.container(key="landing-live"):
-            st.markdown('<div class="eyebrow">02 · PRODUCTION</div>', unsafe_allow_html=True)
-            st.markdown('<div style="font-size:3rem;font-weight:900;letter-spacing:-.05em;">LIVE</div>', unsafe_allow_html=True)
+            st.markdown('<div class="eyebrow">PRODUCTION</div>', unsafe_allow_html=True)
+            st.markdown('<div class="workspace-name">Live</div>', unsafe_allow_html=True)
             st.markdown(
-                '<div style="font-size:1rem;color:#756f65;max-width:480px;">The production room for selecting a story, approving the handoffs and publishing the finished Short.</div>',
+                '<div class="workspace-desc">Move one story through the finished production flow and publish the completed Short.</div>',
                 unsafe_allow_html=True,
             )
             st.space("medium")
             st.markdown('<span class="badge">production</span> <span class="badge">public / private</span>', unsafe_allow_html=True)
             st.space("medium")
-            if st.button("Open Live Control Room  →", key="open-live", width="stretch"):
+            if st.button("Open Live Production  →", key="open-live", type="primary", width="stretch"):
                 st.session_state.app_mode = "live"
                 st.rerun()
 
@@ -405,42 +429,64 @@ def _stage_status(stage_key:str)->tuple[str,str]:
     }
     return ("ready",checks.get(stage_key,"Waiting"))
 
-def _render_test_nav():
-    home_col, title_col, status_col = st.columns([.14, 1, .28], gap="medium")
-    with home_col:
-        if st.button("←", key="test-home", width="stretch", help="Back to home"):
-            st.session_state.app_mode = "home"
-            st.rerun()
-    with title_col:
-        st.markdown('<div class="eyebrow">BUILD LAB</div>', unsafe_allow_html=True)
-        st.markdown('<h1 style="margin:0;">Test workspace</h1>', unsafe_allow_html=True)
-    with status_col:
-        completed = sum(_stage_status(stage["key"])[1] != "Waiting" for stage in STAGES)
+def _render_app_sidebar():
+    with st.sidebar:
         st.markdown(
-            f'<div style="text-align:right;padding-top:9px;"><span class="badge">{completed} / 7 stages active</span></div>',
+            '<div class="sidebar-brand"><div class="sidebar-brand-name">FINAL SHORTS</div>'
+            '<div class="sidebar-brand-sub">Editorial production</div></div>',
             unsafe_allow_html=True,
         )
-    st.space("small")
-    with st.container(key="stage-shell"):
-        nav_cols = st.columns(7, gap="small")
-        for col, stage_info in zip(nav_cols, STAGES):
-            with col:
-                active = st.session_state.test_stage == stage_info["key"]
-                clicked = st.button(
-                    f'{stage_info["icon"]} {stage_info["number"]}',
-                    key=f'stage-nav-{stage_info["number"]}',
-                    type="primary" if active else "secondary",
-                    width="stretch",
-                    help=f'{stage_info["label"]} · {stage_info["desc"]}',
-                )
+        if st.button("⌂  Home", key="sidebar-home", width="stretch"):
+            st.session_state.app_mode = "home"
+            st.rerun()
+
+        current_workspace = "Test Lab" if st.session_state.app_mode == "test" else "Live Production"
+        workspace = st.radio(
+            "Workspace",
+            ["Test Lab", "Live Production"],
+            index=0 if current_workspace == "Test Lab" else 1,
+            key="sidebar-workspace",
+            label_visibility="collapsed",
+        )
+        target_mode = "test" if workspace == "Test Lab" else "live"
+        if target_mode != st.session_state.app_mode:
+            st.session_state.app_mode = target_mode
+            st.rerun()
+
+        if st.session_state.app_mode == "test":
+            st.markdown('<div class="sidebar-heading">Pipeline</div>', unsafe_allow_html=True)
+            stage_map = {item["key"]: item for item in STAGES}
+            current = st.session_state.test_stage
+            for stage in STAGES:
+                done = _stage_status(stage["key"])[1] != "Waiting"
+                active = current == stage["key"]
+                cls = "sidebar-stage active" if active else "sidebar-stage done" if done else "sidebar-stage"
+                dot = "done" if done else ""
                 st.markdown(
-                    f'<div class="stage-rail-label" style="color:{"#211e1a" if active else "#9a9388"};">{stage_info["label"]}</div>',
+                    f'<div class="{cls}"><span class="sidebar-dot {dot}"></span>'
+                    f'<span>{stage["number"]} &nbsp; {stage["label"]}</span></div>',
                     unsafe_allow_html=True,
                 )
-                if clicked:
-                    st.session_state.test_stage = stage_info["key"]
+                if st.button(
+                    stage["label"],
+                    key=f"sidebar-stage-{stage['number']}",
+                    width="stretch",
+                    help=stage["desc"],
+                ):
+                    st.session_state.test_stage = stage["key"]
                     st.rerun()
-    st.markdown('<div class="stage-rail-line"></div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div class="sidebar-heading">Production</div>', unsafe_allow_html=True)
+            live_stage_order = ["01 · Story", "02 · Script", "03 · Audio + Subs", "04 · Visuals + Render", "05 · Upload"]
+            live_labels = ["Story", "Script", "Audio + Subs", "Visuals + Render", "Upload"]
+            current = st.session_state.live_stage
+            current_idx = live_stage_order.index(current) if current in live_stage_order else 0
+            for idx, label in enumerate(live_labels):
+                cls = "sidebar-stage active" if idx == current_idx else "sidebar-stage done" if idx < current_idx else "sidebar-stage"
+                st.markdown(
+                    f'<div class="{cls}"><span class="sidebar-dot"></span><span>0{idx+1} &nbsp; {label}</span></div>',
+                    unsafe_allow_html=True,
+                )
 
 def _live_story_key(topic) -> str:
     return hashlib.sha1(
@@ -1543,7 +1589,13 @@ profiles = {
 
 
 def render_topic_fetcher():
-    st.header("01 · Topic Fetcher")
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">01 · STORY DESK</div>'
+        '<div class="canvas-title">Find the next story</div>'
+        '<div class="canvas-copy">Choose a desk, pull the current story pool, then select one story to hand to the Scriptwriter.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
     desk = st.pills(
         "Desk",
         list(profiles),
@@ -1553,235 +1605,193 @@ def render_topic_fetcher():
     ) or "Cricket India / Asia"
     previous_desk = st.session_state.get("topic_desk_profile")
     if previous_desk and previous_desk != profiles[desk]:
-        st.session_state.topics = []
-        st.session_state.selected_topic = None
-        st.session_state.script_data = None
-        st.session_state.approved_script = None
-        st.session_state.audio_data = None
-        st.session_state.approved_audio = None
-        st.session_state.subtitle_data = None
-        st.session_state.approved_subtitles = None
-        st.session_state.visual_result = None
-        st.session_state.visual_loaded_story = None
-        st.session_state.renderer_previews = None
-        st.session_state.rendered_video_path = None
-        st.session_state.upload_qc_approved = False
-        st.session_state.upload_result = None
-        st.session_state.upload_qc = None
-        st.session_state.manual_visual_result = None
-        st.session_state.real_image_result = None
-        st.session_state.ai_image_result = None
-        st.session_state.visual_crops = {}
+        for key, value in {
+            "topics": [], "selected_topic": None, "script_data": None, "approved_script": None,
+            "audio_data": None, "approved_audio": None, "subtitle_data": None, "approved_subtitles": None,
+            "visual_result": None, "visual_loaded_story": None, "renderer_previews": None,
+            "rendered_video_path": None, "upload_qc_approved": False, "upload_result": None,
+            "upload_qc": None, "manual_visual_result": None, "real_image_result": None,
+            "ai_image_result": None, "ranked_visual_result": None, "visual_crops": {},
+        }.items():
+            st.session_state[key] = value
     st.session_state.topic_desk_profile = profiles[desk]
-    col1, col2 = st.columns(2)
-    with col1:
-        fetch = st.button("Fetch topics", type="primary", width="stretch")
-    with col2:
-        more = st.button("Find 20 more", width="stretch")
+
+    with st.container(key="topic-toolbar"):
+        a,b,cnt=st.columns([1,.72,1.6],gap="small")
+        with a:
+            fetch=st.button("Fetch current stories",type="primary",width="stretch")
+        with b:
+            more=st.button("Find 20 more",width="stretch")
+        with cnt:
+            st.markdown(
+                f'<div style="text-align:right;padding:.65rem .15rem;"><span class="badge">{len(st.session_state.topics)} stories</span></div>',
+                unsafe_allow_html=True,
+            )
 
     if fetch or more:
         with st.spinner("Fetching current sports stories…"):
-            existing_topics = list(st.session_state.topics) if more else []
-            new_topics = fetch_topics(
-                profiles[desk],
-                more=more,
-                exclude_topics=existing_topics,
-                limit=20,
-            )
-            st.session_state.topics = (
-                existing_topics + new_topics if more else new_topics
-            )
-        st.session_state.selected_topic = None
-        st.session_state.script_data = None
-        st.session_state.approved_script = None
-        st.session_state.audio_data = None
-        st.session_state.approved_audio = None
-        st.session_state.subtitle_data = None
-        st.session_state.approved_subtitles = None
-        st.session_state.visual_result = None
-        st.session_state.visual_loaded_story = None
+            existing_topics=list(st.session_state.topics) if more else []
+            new_topics=fetch_topics(profiles[desk],more=more,exclude_topics=existing_topics,limit=20)
+            st.session_state.topics=existing_topics+new_topics if more else new_topics
+        st.session_state.selected_topic=None
+        st.session_state.script_data=None
+        st.session_state.approved_script=None
+        st.session_state.audio_data=None
+        st.session_state.approved_audio=None
+        st.session_state.subtitle_data=None
+        st.session_state.approved_subtitles=None
+        st.session_state.visual_result=None
+        st.session_state.visual_loaded_story=None
 
-    st.markdown(
-        f"<span class='badge'>{len(st.session_state.topics)} topics</span>",
-        unsafe_allow_html=True,
-    )
+    topics=st.session_state.topics
+    if not topics:
+        st.markdown(
+            '<div style="padding:3rem 1rem;text-align:center;color:#8f877c;">'
+            '<div style="font-weight:850;color:#4a433b;margin-bottom:.3rem;">No stories loaded</div>'
+            '<div style="font-size:.78rem;">Fetch the current story pool to start.</div></div>',
+            unsafe_allow_html=True,
+        )
+        return
 
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose the next story</div></div><div class="section-count">'
-        + f'{len(st.session_state.topics)} stories'
-        + '</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    topics = st.session_state.topics
-    for start in range(0, len(topics), 2):
-        row = st.columns(2, gap="medium")
-        for col, (index, topic) in zip(
-            row,
-            enumerate(topics[start:start + 2], start=start),
-        ):
-            with col:
-                source = topic.source or "Sports desk"
-                published = topic.published_at.strftime("%d %b · %H:%M UTC")
-                with st.container(key=f"topic-card-{index}"):
-                    if index == st.session_state.selected_topic:
-                        st.markdown('<div class="topic-selected">SELECTED</div>', unsafe_allow_html=True)
-                    st.markdown(
-                        f'''
-                        <div class="topic-top">
-                            <span class="topic-rank">STORY {index + 1:02d}</span>
-                        </div>
-                        <div class="topic-title">{topic.title}</div>
-                        <div class="topic-meta">{source} · {published}</div>
-                        ''',
-                        unsafe_allow_html=True,
-                    )
-                    if st.button(
-                        "Select story  →",
-                        key=f"topic-select-{index}",
-                        width="stretch",
-                    ):
-                        st.session_state.selected_topic = index
-                        st.session_state.script_data = None
-                        st.session_state.approved_script = None
-                        st.session_state.audio_data = None
-                        st.session_state.approved_audio = None
-                        st.session_state.subtitle_data = None
-                        st.session_state.approved_subtitles = None
-                        st.session_state.renderer_previews = None
-                        st.session_state.rendered_video_path = None
-                        st.session_state.upload_qc_approved = False
-                        st.session_state.upload_result = None
-                        st.session_state.upload_qc = None
-                        st.session_state.upload_title_options = []
-                        st.session_state.upload_title_choice = 0
-                        st.session_state.upload_description = ""
-                        st.session_state.upload_hashtags = ""
-                        st.session_state.upload_comment = ""
-                        st.session_state.manual_visual_result = None
-                        st.session_state.real_image_result = None
-                        st.session_state.ai_image_result = None
-                        st.session_state.ranked_visual_result = None
-                        st.session_state.visual_result = None
-                        st.session_state.visual_loaded_story = None
-                        st.session_state.visual_crops = {}
+    for index, topic in enumerate(topics):
+        source=topic.source or "Sports desk"
+        published=topic.published_at.strftime("%d %b · %H:%M UTC")
+        with st.container(key=f"topic-card-{index}"):
+            cols=st.columns([.06,1.35,.34,.22],gap="small")
+            with cols[0]:
+                st.markdown(f'<div class="topic-index">{index+1:02d}</div>',unsafe_allow_html=True)
+            with cols[1]:
+                st.markdown(f'<div class="topic-title">{topic.title}</div>',unsafe_allow_html=True)
+                st.markdown(f'<div class="topic-meta">{source}</div>',unsafe_allow_html=True)
+            with cols[2]:
+                st.markdown(f'<div class="topic-meta" style="padding-top:.12rem;">{published}</div>',unsafe_allow_html=True)
+            with cols[3]:
+                label="Selected" if index==st.session_state.selected_topic else "Select"
+                if st.button(label,key=f"topic-select-{index}",width="stretch"):
+                    st.session_state.selected_topic=index
+                    st.session_state.script_data=None
+                    st.session_state.approved_script=None
+                    st.session_state.audio_data=None
+                    st.session_state.approved_audio=None
+                    st.session_state.subtitle_data=None
+                    st.session_state.approved_subtitles=None
+                    st.session_state.renderer_previews=None
+                    st.session_state.rendered_video_path=None
+                    st.session_state.upload_qc_approved=False
+                    st.session_state.upload_result=None
+                    st.session_state.upload_qc=None
+                    st.session_state.upload_title_options=[]
+                    st.session_state.upload_title_choice=0
+                    st.session_state.upload_description=""
+                    st.session_state.upload_hashtags=""
+                    st.session_state.upload_comment=""
+                    st.session_state.manual_visual_result=None
+                    st.session_state.real_image_result=None
+                    st.session_state.ai_image_result=None
+                    st.session_state.ranked_visual_result=None
+                    st.session_state.visual_result=None
+                    st.session_state.visual_loaded_story=None
+                    st.session_state.visual_crops={}
+                    st.rerun()
 
     if st.session_state.selected_topic is not None:
-        index = st.session_state.selected_topic
-        if index < len(st.session_state.topics):
-            topic = st.session_state.topics[index]
+        index=st.session_state.selected_topic
+        if index < len(topics):
+            topic=topics[index]
             with st.container(key="selected-story-card"):
-                st.markdown('<div class="eyebrow">SELECTED STORY</div>', unsafe_allow_html=True)
-                st.markdown(f'<div style="font-size:1.18rem;font-weight:900;letter-spacing:-.02em;">{topic.title}</div>', unsafe_allow_html=True)
-                st.caption(topic.description or f"{topic.source} · {topic.published_at.strftime('%d %b · %H:%M UTC')}")
-                if topic.url:
-                    st.link_button("Open original story ↗", topic.url, width="stretch")
-
-
+                left,right=st.columns([1.5,.4],gap="medium")
+                with left:
+                    st.markdown('<div class="eyebrow">SELECTED STORY</div>',unsafe_allow_html=True)
+                    st.markdown(f'<div class="selected-story-title">{topic.title}</div>',unsafe_allow_html=True)
+                    st.markdown(f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',unsafe_allow_html=True)
+                    if topic.description:
+                        st.caption(topic.description)
+                with right:
+                    if topic.url:
+                        st.link_button("Open source ↗",topic.url,width="stretch")
 def render_scriptwriter():
-    st.header("02 · Scriptwriter")
-
     if not st.session_state.topics:
-        st.info("Run the Topic Fetcher first, then select a story here.")
+        st.info("Run the Topic Fetcher first.")
         return
-
-    selected_index = st.session_state.selected_topic
+    selected_index=st.session_state.selected_topic
     if selected_index is None or not 0 <= selected_index < len(st.session_state.topics):
-        st.info("Choose a story in 01 · Topic Fetcher first.")
+        st.info("Select a story in the Story Desk first.")
         return
-    topic = st.session_state.topics[selected_index]
+    topic=st.session_state.topics[selected_index]
 
-    st.markdown("<div class='card'>", unsafe_allow_html=True)
-    st.markdown(f"**{topic.title}**")
-    st.caption(topic.description or "The Topic Fetcher did not provide a longer description.")
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.markdown(
+        f'<div class="canvas-head"><div><div class="eyebrow">02 · SCRIPT</div>'
+        f'<div class="canvas-title">Shape the Short</div>'
+        f'<div class="canvas-copy">{topic.title}</div></div></div>',
+        unsafe_allow_html=True,
+    )
+    top_left, top_right=st.columns([1,.72],gap="medium")
+    with top_left:
+        language=st.pills("Language",["English","Hindi","Telugu"],default="English",key="script_language",label_visibility="collapsed") or "English"
+    with top_right:
+        if st.button("Generate script",type="primary",width="stretch"):
+            with st.spinner("Writing the Short…"):
+                st.session_state.script_data=write_script({
+                    "title":topic.title,"description":topic.description,"url":topic.url,"source":topic.source,
+                },language=language.casefold())
+            st.session_state.approved_script=None
+            st.session_state.audio_data=None
+            st.session_state.approved_audio=None
+            st.session_state.subtitle_data=None
+            st.session_state.approved_subtitles=None
+            st.session_state.renderer_previews=None
+            st.session_state.rendered_video_path=None
+            st.session_state.upload_qc_approved=False
+            st.session_state.upload_result=None
+            st.session_state.upload_qc=None
 
-    language = st.pills(
-        "Language",
-        ["English", "Hindi", "Telugu"],
-        default="English",
-        key="script_language",
-        label_visibility="collapsed",
-    ) or "English"
-
-    if st.button("Generate script", type="primary", width="stretch"):
-        with st.spinner("Writing the Short…"):
-            st.session_state.script_data = write_script(
-                {
-                    "title": topic.title,
-                    "description": topic.description,
-                    "url": topic.url,
-                    "source": topic.source,
-                },
-                language=language.casefold(),
-            )
-        st.session_state.approved_script = None
-        st.session_state.audio_data = None
-        st.session_state.approved_audio = None
-        st.session_state.subtitle_data = None
-        st.session_state.approved_subtitles = None
-        st.session_state.renderer_previews = None
-        st.session_state.rendered_video_path = None
-        st.session_state.upload_qc_approved = False
-        st.session_state.upload_result = None
-        st.session_state.upload_qc = None
-
-    script = st.session_state.script_data
+    script=st.session_state.script_data
     if not script:
         return
 
-    st.divider()
-    st.subheader("Script review")
-    st.caption("Edit the headline or any narration scene. Titles, description and hashtags are stored for later upload QC.")
+    left,right=st.columns([1.55,.55],gap="large")
+    with left:
+        with st.container(key="script-editor"):
+            st.markdown('<div class="editor-pane">',unsafe_allow_html=True)
+            st.markdown('<div class="mini-label">Opening</div>',unsafe_allow_html=True)
+            edited_headline=st.text_input("Opening heading (3–4 words)",value=script.get("headline",""),max_chars=48,key="script-headline",label_visibility="collapsed")
+            st.markdown('<div style="height:.7rem"></div>',unsafe_allow_html=True)
+            edited_voiceovers=[]
+            for index,scene in enumerate(script.get("script",[]),1):
+                st.markdown(f'<div class="scene-label">Scene {index}</div>',unsafe_allow_html=True)
+                edited_voiceovers.append(st.text_area("Narration",value=scene.get("voiceover",""),height=105,key=f"script-slide-{index}",label_visibility="collapsed"))
+            if st.button("Approve script",type="primary",width="stretch"):
+                try:
+                    approved=apply_script_edits(script,edited_voiceovers,headline=edited_headline)
+                    st.session_state.approved_script=approved
+                    st.session_state.audio_data=None
+                    st.session_state.approved_audio=None
+                    st.session_state.renderer_previews=None
+                    st.session_state.upload_qc_approved=False
+                    st.session_state.upload_result=None
+                    st.session_state.rendered_video_path=None
+                    st.session_state.upload_qc=None
+                    for index in range(1,4):
+                        st.session_state.pop(f"upload-title-{index}",None)
+                    st.session_state.pop("upload_video_file",None)
+                    st.session_state.upload_title_options=list(approved.get("titles") or [])
+                    st.session_state.upload_title_choice=0
+                    st.session_state.upload_description=str(approved.get("seo_description") or "")
+                    st.session_state.upload_hashtags=" ".join(approved.get("hashtags") or [])
+                    st.session_state.upload_comment=str(approved.get("comment") or "")
+                except ValueError as exc:
+                    st.error(str(exc))
 
-    edited_headline = st.text_input(
-        "Opening heading (3–4 words)",
-        value=script.get("headline", ""),
-        max_chars=48,
-        key="script-headline",
-    )
-
-    edited_voiceovers = []
-    for index, scene in enumerate(script.get("script", []), 1):
-        edited_voiceovers.append(
-            st.text_area(
-                f"Slide {index}",
-                value=scene.get("voiceover", ""),
-                height=110,
-                key=f"script-slide-{index}",
-            )
-        )
-
-    if st.button("Approve script", type="primary", width="stretch"):
-        try:
-            approved = apply_script_edits(
-                script,
-                edited_voiceovers,
-                headline=edited_headline,
-            )
-            st.session_state.approved_script = approved
-            st.session_state.audio_data = None
-            st.session_state.approved_audio = None
-            st.session_state.renderer_previews = None
-            st.session_state.upload_qc_approved = False
-            st.session_state.upload_result = None
-            st.session_state.rendered_video_path = None
-            st.session_state.upload_qc = None
-            for index in range(1, 4):
-                st.session_state.pop(f"upload-title-{index}", None)
-            st.session_state.pop("upload_video_file", None)
-            st.session_state.upload_title_options = list(approved.get("titles") or [])
-            st.session_state.upload_title_choice = 0
-            st.session_state.upload_description = str(approved.get("seo_description") or "")
-            st.session_state.upload_hashtags = " ".join(approved.get("hashtags") or [])
-            st.session_state.upload_comment = str(approved.get("comment") or "")
-        except ValueError as exc:
-            st.error(str(exc))
-
-    if st.session_state.approved_script:
-        st.success("Script approved and stored as the handoff for Function 03 · Audio.")
-
-
+    with right:
+        st.markdown('<div class="inspector">',unsafe_allow_html=True)
+        st.markdown('<div class="mini-label">Story</div>',unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight:820;line-height:1.35;margin:.25rem 0 1rem;">{topic.title}</div>',unsafe_allow_html=True)
+        st.markdown('<div class="inspector-line"><span>Language</span><span class="inspector-value">'+str(script.get("language_used") or language)+'</span></div>',unsafe_allow_html=True)
+        st.markdown('<div class="inspector-line"><span>Scenes</span><span class="inspector-value">'+str(len(script.get("script") or []))+'</span></div>',unsafe_allow_html=True)
+        st.markdown('<div class="inspector-line"><span>Word count</span><span class="inspector-value">'+str(script.get("word_count") or "")+'</span></div>',unsafe_allow_html=True)
+        if st.session_state.approved_script:
+            st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--ok-soft);color:var(--ok);">Approved</span></div>',unsafe_allow_html=True)
+        st.markdown('</div>',unsafe_allow_html=True)
 def render_visuals_crawler():
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first, then select a story for Visuals.")
@@ -2121,99 +2131,85 @@ def render_visuals():
 
 
 def render_subtitles():
-    st.header("05 · Subtitles")
-    st.caption("Build captions directly from the approved Scriptwriter text and native Audio word timings.")
-
-    script = st.session_state.approved_script
-    audio = st.session_state.approved_audio
-    if not script or not audio:
+    if not st.session_state.approved_script or not st.session_state.approved_audio:
         st.info("Approve the Scriptwriter and Audio handoffs first.")
         return
 
-    if st.button("Generate subtitles", type="primary", width="stretch"):
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">05 · SUBTITLES</div>'
+        '<div class="canvas-title">Review captions</div>'
+        '<div class="canvas-copy">Native Audio word timings are used directly; there is no second transcription pass.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+    if st.button("Generate subtitles",type="primary",width="stretch"):
         try:
-            st.session_state.subtitle_data = generate_subtitles(script, audio)
-            st.session_state.approved_subtitles = None
+            st.session_state.subtitle_data=generate_subtitles(st.session_state.approved_script,st.session_state.approved_audio)
+            st.session_state.approved_subtitles=None
         except ValueError as exc:
             st.error(str(exc))
-
-    subtitles = st.session_state.subtitle_data
+    subtitles=st.session_state.subtitle_data
     if not subtitles:
         return
 
-    st.divider()
-    st.subheader("Subtitle review")
-    st.caption(
-        f'{len(subtitles["cues"])} cues · {subtitles["language"]} · '
-        "native Audio timings · no second transcription"
-    )
-
-    for index, cue in enumerate(subtitles["cues"], 1):
-        words = " ".join(word["text"] for word in cue["words"])
-        st.write(
-            f'{index:02d} · {cue["start"]:.2f}s–{cue["end"]:.2f}s · {words}'
-        )
-
-    if st.button("Approve subtitles", type="primary", width="stretch"):
-        st.session_state.approved_subtitles = dict(subtitles)
-
-    if st.session_state.approved_subtitles:
-        st.success("Subtitles approved and stored as the handoff for Function 06 · Renderer.")
-
-
-def render_renderer_test():
-    st.header("06 · Renderer")
-    approved_script = st.session_state.get("approved_script")
-    headline_text = (
-        str(approved_script.get("headline") or "").strip()
-        if isinstance(approved_script, dict)
-        else ""
-    ) or HEADLINE_TEXT
-    headline_enabled = True
-
-    st.caption(
-        "Uses the approved Scriptwriter heading when available; otherwise uses the renderer test fallback."
-    )
-    st.code(headline_text, language="text")
-
-    st.caption(
-        f"{FINAL_STYLE_NAME} · Oswald Bold block headline · clean word-highlight captions"
-    )
-
-    if st.button("Build preview", type="primary", width="stretch"):
-        with st.spinner("Rendering preview…"):
-            try:
-                st.session_state.renderer_previews = build_preview_bundle(
-                    headline_enabled=headline_enabled,
-                    headline_text=headline_text.strip() or HEADLINE_TEXT,
-                )
-            except (RuntimeError, ValueError) as exc:
-                st.error(str(exc))
-
-    previews = st.session_state.get("renderer_previews") or {}
-    if not previews:
-        st.info("Build the preview to see the opening treatment and final overlay.")
-        return
-
-    opening = previews.get("opening")
-    final = previews.get("final")
-
-    left, right = st.columns(2, gap="large")
-
+    left,right=st.columns([1.55,.45],gap="large")
     with left:
-        st.markdown("**Opening**")
-        if opening and Path(opening).exists():
-            st.video(str(opening), width=320)
-        st.caption("Optional headline enters from the left while spoken captions remain visible.")
-
+        with st.container(key="subtitle-editor"):
+            st.markdown('<div class="editor-pane">',unsafe_allow_html=True)
+            for index,cue in enumerate(subtitles["cues"],1):
+                words=" ".join(word["text"] for word in cue["words"])
+                st.markdown(
+                    f'<div class="cue-row"><div class="cue-time">{cue["start"]:.2f}s<br>{cue["end"]:.2f}s</div><div class="cue-text">{words}</div></div>',
+                    unsafe_allow_html=True,
+                )
+            st.markdown('</div>',unsafe_allow_html=True)
     with right:
-        st.markdown("**Final overlay**")
-        if final and Path(final).exists():
-            st.video(str(final), width=300)
-        st.caption("Large bold captions · yellow active word · logo top-right · source bottom-right")
+        st.markdown('<div class="inspector">',unsafe_allow_html=True)
+        st.markdown('<div class="mini-label">Caption set</div>',unsafe_allow_html=True)
+        for label,value in [("Cues",len(subtitles["cues"])),("Language",subtitles["language"]),("Timing","Audio-native")]:
+            st.markdown(f'<div class="inspector-line"><span>{label}</span><span class="inspector-value">{value}</span></div>',unsafe_allow_html=True)
+        if st.button("Approve subtitles",type="primary",width="stretch"):
+            st.session_state.approved_subtitles=dict(subtitles)
+        if st.session_state.approved_subtitles:
+            st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--ok-soft);color:var(--ok);">Approved</span></div>',unsafe_allow_html=True)
+        st.markdown('</div>',unsafe_allow_html=True)
+def render_renderer_test():
+    approved_script=st.session_state.get("approved_script")
+    headline_text=(str(approved_script.get("headline") or "").strip() if isinstance(approved_script,dict) else "") or HEADLINE_TEXT
 
-
-
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">06 · RENDER</div>'
+        '<div class="canvas-title">Preview the finished treatment</div>'
+        '<div class="canvas-copy">Check the opening headline and final caption treatment before the production render.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+    left,right=st.columns([1.15,.85],gap="large")
+    with left:
+        st.markdown('<div class="media-surface">',unsafe_allow_html=True)
+        previews=st.session_state.get("renderer_previews") or {}
+        if previews.get("final") and Path(previews["final"]).exists():
+            st.video(str(previews["final"]),width=380)
+        elif previews.get("opening") and Path(previews["opening"]).exists():
+            st.video(str(previews["opening"]),width=380)
+        else:
+            st.caption("Build a preview to see the video treatment.")
+        st.markdown('</div>',unsafe_allow_html=True)
+    with right:
+        with st.container(key="renderer-inspector"):
+            st.markdown('<div class="inspector">',unsafe_allow_html=True)
+            st.markdown('<div class="mini-label">Treatment</div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="inspector-line"><span>Opening</span><span class="inspector-value">{headline_text}</span></div>',unsafe_allow_html=True)
+            st.markdown(f'<div class="inspector-line"><span>Style</span><span class="inspector-value">{FINAL_STYLE_NAME}</span></div>',unsafe_allow_html=True)
+            st.markdown('<div class="inspector-line"><span>Captions</span><span class="inspector-value">Word highlight</span></div>',unsafe_allow_html=True)
+            st.markdown('<div class="inspector-line"><span>Headline</span><span class="inspector-value">Enabled</span></div>',unsafe_allow_html=True)
+            if st.button("Build preview",type="primary",width="stretch"):
+                with st.spinner("Rendering preview…"):
+                    try:
+                        st.session_state.renderer_previews=build_preview_bundle(headline_enabled=True,headline_text=headline_text.strip() or HEADLINE_TEXT)
+                    except (RuntimeError,ValueError) as exc:
+                        st.error(str(exc))
+            if previews:
+                st.markdown('<div style="margin-top:.8rem;color:var(--muted);font-size:.72rem;">Preview bundle ready.</div>',unsafe_allow_html=True)
+            st.markdown('</div>',unsafe_allow_html=True)
 def render_upload_qc():
     st.header("07 · Upload QC")
     script = st.session_state.get("approved_script")
@@ -2377,77 +2373,71 @@ def render_upload_qc():
         st.error(str(exc))
 
 def render_audio():
-    st.header("03 · Audio")
-
-    script = st.session_state.approved_script
+    script=st.session_state.approved_script
     if not script:
-        st.info("Approve a Scriptwriter result first. Audio only accepts the approved narration handoff.")
+        st.info("Approve the Scriptwriter result first.")
         return
 
-    languages = ["English", "Hindi", "Telugu"]
-    stored = str(script.get("language_used") or "english").casefold()
-    default_language = stored if stored in {"english", "hindi", "telugu"} else "english"
-    language = st.pills(
-        "Language",
-        languages,
-        default=default_language.title(),
-        key="audio_language",
-        label_visibility="collapsed",
-    ) or default_language.title()
-    st.caption("HYPE COMMENTATOR · female Indian voice · native Edge-TTS word timings")
-
-    if st.button("Generate audio", type="primary", width="stretch"):
-        selected = dict(script)
-        selected["language_used"] = language.casefold()
-        with st.spinner("Generating voiceover…"):
-            try:
-                st.session_state.audio_data = generate_audio(selected)
-                st.session_state.approved_audio = None
-            except (RuntimeError, ValueError) as exc:
-                st.error(str(exc))
-                st.session_state.audio_data = None
-                st.session_state.approved_audio = None
-        st.session_state.subtitle_data = None
-        st.session_state.approved_subtitles = None
-
-    audio = st.session_state.audio_data
-    if not audio:
-        return
-
-    st.divider()
-    st.subheader("Audio review")
-    correction = " · one speed correction applied" if audio["duration_corrected"] else ""
-    st.caption(
-        f'{audio["voice"]} · {audio["rate_percent"]:+.0f}% · '
-        f'{audio["total_duration"]:.2f}s total{correction}'
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">03 · AUDIO</div>'
+        '<div class="canvas-title">Build the voice track</div>'
+        '<div class="canvas-copy">Generate the approved narration voice and inspect each scene before handing it to Visuals.</div></div></div>',
+        unsafe_allow_html=True,
     )
+    left,right=st.columns([1.15,.85],gap="large")
+    languages=["English","Hindi","Telugu"]
+    stored=str(script.get("language_used") or "english").casefold()
+    default_language=stored if stored in {"english","hindi","telugu"} else "english"
+    with left:
+        language=st.pills("Language",languages,default=default_language.title(),key="audio_language",label_visibility="collapsed") or default_language.title()
+        st.markdown('<div class="mini-label" style="margin:.55rem 0;">VOICE</div>',unsafe_allow_html=True)
+        st.caption("HYPE COMMENTATOR · female Indian voice · native Edge-TTS word timings")
+        if st.button("Generate audio",type="primary",width="stretch"):
+            selected=dict(script); selected["language_used"]=language.casefold()
+            with st.spinner("Generating voiceover…"):
+                try:
+                    st.session_state.audio_data=generate_audio(selected)
+                    st.session_state.approved_audio=None
+                except (RuntimeError,ValueError) as exc:
+                    st.error(str(exc)); st.session_state.audio_data=None; st.session_state.approved_audio=None
+            st.session_state.subtitle_data=None
+            st.session_state.approved_subtitles=None
 
-    for scene in audio["scenes"]:
-        st.markdown(
-            f'**Slide {scene["scene"]}** · {scene["duration"]:.2f}s · '
-            f'{len(scene["timings"])} word timings'
-        )
-        st.audio(scene["path"], format="audio/mp3")
-        st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
-
-    if st.button("Approve audio", type="primary", width="stretch"):
-        try:
-            st.session_state.approved_audio = approve_audio(audio)
-            st.session_state.subtitle_data = None
-            st.session_state.approved_subtitles = None
-        except ValueError as exc:
-            st.error(str(exc))
-
-    if st.session_state.approved_audio:
-        st.success("Audio approved and stored as the handoff for Function 04 · Visuals.")
+        audio=st.session_state.audio_data
+        if audio:
+            for scene in audio["scenes"]:
+                with st.container(key=f"audio-scene-{scene['scene']}"):
+                    st.markdown(f'**Scene {scene["scene"]}** <span class="topic-meta">· {scene["duration"]:.2f}s · {len(scene["timings"])} timings</span>',unsafe_allow_html=True)
+                    st.audio(scene["path"],format="audio/mp3")
+                    st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
+            if st.button("Approve audio",type="primary",width="stretch"):
+                try:
+                    st.session_state.approved_audio=approve_audio(audio)
+                    st.session_state.subtitle_data=None
+                    st.session_state.approved_subtitles=None
+                except ValueError as exc:
+                    st.error(str(exc))
+    with right:
+        with st.container(key="audio-inspector"):
+            st.markdown('<div class="inspector">',unsafe_allow_html=True)
+            audio=st.session_state.audio_data
+            if audio:
+                correction="Speed corrected" if audio["duration_corrected"] else "No correction"
+                for label,value in [("Voice",audio["voice"]),("Rate",f'{audio["rate_percent"]:+.0f}%'),("Duration",f'{audio["total_duration"]:.2f}s'),("Timing",correction)]:
+                    st.markdown(f'<div class="inspector-line"><span>{label}</span><span class="inspector-value">{value}</span></div>',unsafe_allow_html=True)
+                if st.session_state.approved_audio:
+                    st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--ok-soft);color:var(--ok);">Approved</span></div>',unsafe_allow_html=True)
+            else:
+                st.caption("Audio metrics will appear after generation.")
+            st.markdown('</div>',unsafe_allow_html=True)
 
 if st.session_state.app_mode == "home":
     _render_home()
 elif st.session_state.app_mode == "test":
-    _render_test_nav()
+    _render_app_sidebar()
+    stage=st.session_state.test_stage
+    stage_info=next(item for item in STAGES if item["key"]==stage)
     with st.container(key="stage-content"):
-        stage = st.session_state.test_stage
-        stage_info = next(item for item in STAGES if item["key"] == stage)
         st.markdown(
             f'<div class="eyebrow">{stage_info["number"]} · {stage_info["label"]}</div>',
             unsafe_allow_html=True,
@@ -2467,4 +2457,5 @@ elif st.session_state.app_mode == "test":
         elif stage == "07 · Upload QC":
             render_upload_qc()
 elif st.session_state.app_mode == "live":
+    _render_app_sidebar()
     render_live_dashboard()
