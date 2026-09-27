@@ -354,6 +354,13 @@ def _strip_source_suffix(title: str, source: str) -> str:
     return title
 
 
+def _contains_any(text: str, terms: set[str]) -> bool:
+    return any(
+        re.search(rf"(?<!\\w){re.escape(term)}(?!\\w)", text, flags=re.IGNORECASE)
+        for term in terms
+    )
+
+
 def _profile_terms(profile: str) -> set[str]:
     if profile.startswith("cricket_"):
         return CRICKET_TERMS
@@ -365,15 +372,19 @@ def _sports_relevant(profile: str, title: str, description: str = "") -> bool:
     description_text = _clean(description).casefold()
 
     wanted = _profile_terms(profile)
-    title_has_wanted = any(term in title_text for term in wanted)
-    if title_has_wanted:
+    if _contains_any(title_text, wanted):
         return True
 
-    if profile == "cricket_india_asia" or profile == "cricket_global":
-        return any(term in description_text for term in wanted) and len(_tokens(title)) >= 4
+    if profile.startswith("cricket_"):
+        return (
+            len(_tokens(title)) >= 4
+            and _contains_any(description_text, wanted)
+            and not _contains_any(title_text, OTHER_SPORT_TERMS | NICHE_SPORT_TERMS)
+        )
 
-    return any(term in description_text for term in wanted) and not any(
-        term in title_text for term in OTHER_SPORT_TERMS
+    return (
+        _contains_any(description_text, wanted)
+        and not _contains_any(title_text, OTHER_SPORT_TERMS)
     )
 
 
@@ -633,9 +644,6 @@ def _query_batches(profile: str, more: bool, existing_count: int) -> list[list[s
         bank[index:index + QUERY_WINDOW]
         for index in range(start, len(bank), QUERY_WINDOW)
     ]
-
-    if not batches and more:
-        batches = [MORE_QUERIES[profile]]
 
     return [batch for batch in batches if batch]
 
