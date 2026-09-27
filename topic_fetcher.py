@@ -473,8 +473,8 @@ def _same_event(a: Topic, b: Topic) -> bool:
         return len(shared) >= 2 and hours_apart <= 48
 
     if "statement" in groups_a and "statement" in groups_b:
-        numeric_a = set(re.findall(r"\\b\\d{2,4}\\b", a.title))
-        numeric_b = set(re.findall(r"\\b\\d{2,4}\\b", b.title))
+        numeric_a = set(re.findall(r"\b\d{2,4}\b", a.title))
+        numeric_b = set(re.findall(r"\b\d{2,4}\b", b.title))
         return (
             len(shared) >= 4
             and similarity >= 0.45
