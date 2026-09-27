@@ -102,3 +102,26 @@ def test_body_bounds_are_fixed():
 
 def test_speech_estimate_is_word_based_and_under_limit():
     assert estimate_speech_seconds(" ".join(["word"] * STORY_HEADLINE_MAX_WORDS)) < 15
+
+
+def test_generate_top5_script_uses_one_package_call(monkeypatch):
+    import top5_script_writer
+
+    calls = []
+
+    monkeypatch.setattr(
+        top5_script_writer,
+        "research_top5_stories",
+        lambda stories: [f"evidence {index}" for index in range(5)],
+    )
+
+    def fake_request(model, prompt, evidence):
+        calls.append((model, evidence))
+        return valid_result()
+
+    monkeypatch.setattr(top5_script_writer, "_request", fake_request)
+    result = top5_script_writer.generate_top5_script(stories())
+
+    assert calls == [("openai/gpt-oss-120b", calls[0][1])]
+    assert [slide["story_index"] for slide in result["slides"]] == [0, 1, 2, 3, 4, 5]
+    assert result["provider_used"] == "openai/gpt-oss-120b"
