@@ -342,6 +342,10 @@ if "test_top5_script_data" not in st.session_state:
     st.session_state.test_top5_script_data = None
 if "test_top5_script_handoff" not in st.session_state:
     st.session_state.test_top5_script_handoff = None
+if "test_top5_audio_data" not in st.session_state:
+    st.session_state.test_top5_audio_data = None
+if "test_top5_audio_handoff" not in st.session_state:
+    st.session_state.test_top5_audio_handoff = None
 if "renderer_previews" not in st.session_state:
     st.session_state.renderer_previews = None
 if "visual_crops" not in st.session_state:
@@ -2849,6 +2853,8 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_handoff = None
                 st.session_state.test_top5_script_data = None
                 st.session_state.test_top5_script_handoff = None
+                st.session_state.test_top5_audio_data = None
+                st.session_state.test_top5_audio_handoff = None
                 st.rerun()
 
             if content_type == "General News":
@@ -2913,7 +2919,9 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_handoff = None
                                 st.session_state.test_top5_script_data = None
                                 st.session_state.test_top5_script_handoff = None
-                                st.rerun()
+                                st.session_state.test_top5_audio_data = None
+                st.session_state.test_top5_audio_handoff = None
+                st.rerun()
                         with row[3]:
                             if st.button("↓", key=f"test-top5-down-{topic_index}", disabled=slot == len(selected) - 1, width="stretch"):
                                 selected[slot + 1], selected[slot] = selected[slot], selected[slot + 1]
@@ -2921,7 +2929,9 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_handoff = None
                                 st.session_state.test_top5_script_data = None
                                 st.session_state.test_top5_script_handoff = None
-                                st.rerun()
+                                st.session_state.test_top5_audio_data = None
+                st.session_state.test_top5_audio_handoff = None
+                st.rerun()
                         with row[4]:
                             if st.button("Remove", key=f"test-top5-remove-{topic_index}", width="stretch"):
                                 selected.remove(topic_index)
@@ -2929,7 +2939,9 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_handoff = None
                                 st.session_state.test_top5_script_data = None
                                 st.session_state.test_top5_script_handoff = None
-                                st.rerun()
+                                st.session_state.test_top5_audio_data = None
+                st.session_state.test_top5_audio_handoff = None
+                st.rerun()
 
                     st.divider()
 
@@ -2969,7 +2981,9 @@ elif st.session_state.app_mode == "test":
                                         st.session_state.test_top5_handoff = None
                                         st.session_state.test_top5_script_data = None
                                         st.session_state.test_top5_script_handoff = None
-                                        st.rerun()
+                                        st.session_state.test_top5_audio_data = None
+                st.session_state.test_top5_audio_handoff = None
+                st.rerun()
 
                 selected = st.session_state.test_top5_selected
                 if len(selected) == 5:
@@ -2986,7 +3000,9 @@ elif st.session_state.app_mode == "test":
                         ]
                         st.session_state.test_top5_script_data = None
                         st.session_state.test_top5_script_handoff = None
-                        st.rerun()
+                        st.session_state.test_top5_audio_data = None
+                st.session_state.test_top5_audio_handoff = None
+                st.rerun()
 
                 if st.session_state.test_top5_handoff:
                     st.success("Top-5 selection approved. The five story URLs, titles and available article content are ready for the next stage.")
@@ -3021,6 +3037,8 @@ elif st.session_state.app_mode == "test":
                             result = generate_top5_script(stories)
                             st.session_state.test_top5_script_data = result
                             st.session_state.test_top5_script_handoff = None
+                            st.session_state.test_top5_audio_data = None
+                            st.session_state.test_top5_audio_handoff = None
                             for slide in result.get("slides") or []:
                                 number = int(slide.get("slide_number") or 0)
                                 st.session_state[f"test-top5-script-headline-{number}"] = str(slide.get("headline") or "")
@@ -3131,6 +3149,8 @@ elif st.session_state.app_mode == "test":
                         if not valid:
                             st.error(f"Edited Top-5 script failed validation: {reason}")
                         else:
+                            st.session_state.test_top5_audio_data = None
+                            st.session_state.test_top5_audio_handoff = None
                             st.session_state.test_top5_script_handoff = {
                                 "schema": "final-shorts.top5-script.v1",
                                 "slides": edited["slides"],
@@ -3143,6 +3163,82 @@ elif st.session_state.app_mode == "test":
                     if st.session_state.get("test_top5_script_handoff"):
                         st.success("Top-5 Scriptwriter approved. The six-slide package is ready for the next stage.")
                         st.caption("Audio will use the six spoken slide headlines; the body copy is visual-only.")
+
+        elif line_name == "Top-5" and stage == "03 · Audio":
+            from audio import approve_top5_audio, generate_top5_audio
+
+            handoff = st.session_state.get("test_top5_script_handoff")
+            st.markdown(
+                '<div class="section-head"><div><div class="eyebrow">TOP-5 · 03 · AUDIO</div>'
+                '<div class="section-title">Build the six-line voice track</div></div>'
+                '<div class="section-count">headlines only</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            if not handoff:
+                st.info("Approve the Top-5 Scriptwriter result first.")
+            else:
+                st.caption(
+                    "Top-5 Audio narrates only the six approved spoken headlines. "
+                    "Visual story bodies are never sent to speech."
+                )
+
+                with st.expander("Spoken lines", expanded=True):
+                    for slide in handoff.get("slides") or []:
+                        number = int(slide.get("slide_number") or 0)
+                        headline = str(slide.get("headline") or "").strip()
+                        st.markdown(f"**Line {number}** · {headline}")
+
+                if st.button(
+                    "Generate Top-5 audio",
+                    type="primary",
+                    width="stretch",
+                    key="test-top5-audio-generate",
+                ):
+                    with st.spinner("Generating the six spoken Top-5 lines…"):
+                        try:
+                            st.session_state.test_top5_audio_data = generate_top5_audio(handoff)
+                            st.session_state.test_top5_audio_handoff = None
+                            st.rerun()
+                        except (RuntimeError, ValueError) as exc:
+                            st.session_state.test_top5_audio_data = None
+                            st.session_state.test_top5_audio_handoff = None
+                            st.error(str(exc))
+
+                audio = st.session_state.get("test_top5_audio_data")
+                if audio:
+                    for scene in audio["scenes"]:
+                        with st.container(key=f"test-top5-audio-scene-{scene['scene']}"):
+                            st.markdown(
+                                f'**Line {scene["scene"]}** '
+                                f'<span class="topic-meta">· {scene["duration"]:.2f}s · '
+                                f'{len(scene["timings"])} timings</span>',
+                                unsafe_allow_html=True,
+                            )
+                            st.audio(scene["path"], format="audio/mp3")
+                            st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
+
+                    st.caption(
+                        f'Voice: {audio["voice"]} · Rate: {audio["rate_percent"]:+.0f}% · '
+                        f'Total: {audio["total_duration"]:.2f}s · '
+                        f'Longest line: {audio["max_scene_duration"]:.2f}s'
+                    )
+
+                    if st.button(
+                        "Approve Top-5 audio",
+                        type="primary",
+                        width="stretch",
+                        key="test-top5-audio-approve",
+                    ):
+                        try:
+                            st.session_state.test_top5_audio_handoff = approve_top5_audio(audio)
+                            st.rerun()
+                        except ValueError as exc:
+                            st.error(str(exc))
+
+                if st.session_state.get("test_top5_audio_handoff"):
+                    st.success("Top-5 Audio approved. All six spoken lines are ready for the next stage.")
+                    st.caption("Each audio scene maps to the corresponding spoken headline; visual story bodies remain silent.")
 
         else:
             stage_labels = {
