@@ -373,6 +373,8 @@ if "real_image_result" not in st.session_state:
 if "ai_image_result" not in st.session_state:
     st.session_state.ai_image_result = None
 
+if "live_production_line" not in st.session_state:
+    st.session_state.live_production_line = None
 if "live_desk" not in st.session_state:
     st.session_state.live_desk = None
 if "live_cricket_profile" not in st.session_state:
@@ -1539,7 +1541,7 @@ def render_live_dashboard():
             '<div class="live-product-head">'
             '<div><div class="eyebrow">LIVE PRODUCTION</div>'
             '<div class="live-product-title">Make the Short.</div>'
-            '<div class="hero-subtitle">One story. One continuous handoff.</div></div>'
+            '<div class="hero-subtitle">Choose a production line to start.</div></div>'
             '<div class="live-status"><span></span> Ready for a story</div>'
             '</div>',
             unsafe_allow_html=True,
@@ -1549,6 +1551,7 @@ def render_live_dashboard():
         with controls[0]:
             if st.button("New", key="live-new-short", width="stretch"):
                 _live_reset_downstream()
+                st.session_state.live_production_line = None
                 st.session_state.live_desk = None
                 st.session_state.live_cricket_profile = None
                 st.session_state.live_topics = []
@@ -1560,9 +1563,106 @@ def render_live_dashboard():
                 st.session_state.app_mode = "home"
                 st.rerun()
 
-    if st.session_state.live_desk is None:
+    if st.session_state.live_production_line is None:
         st.space("medium")
-        st.markdown('<div class="section-head"><div><div class="eyebrow">START PRODUCTION</div><div class="section-title">Choose your sports desk</div></div></div>', unsafe_allow_html=True)
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">START PRODUCTION</div>'
+            '<div class="section-title">Choose a production line</div></div>'
+            '<div class="section-count">select one to begin</div></div>',
+            unsafe_allow_html=True,
+        )
+        choices = [
+            (
+                "live-line-deep-dive",
+                "01 · DEEP-DIVE",
+                "DEEP-DIVE",
+                "Single-story production. Choose Cricket or Niche Sports after entering.",
+            ),
+            (
+                "live-line-top-5",
+                "02 · TOP-5",
+                "TOP-5",
+                "Five cricket stories in one daily production package. Design in progress.",
+            ),
+            (
+                "live-line-otd",
+                "03 · OTD",
+                "ON THIS DAY",
+                "A daily historical sports package built around the date. Design in progress.",
+            ),
+        ]
+        cols = st.columns(3, gap="small")
+        for col, (key, eyebrow, title, copy) in zip(cols, choices):
+            with col:
+                with st.container(key=key):
+                    st.markdown(f'<div class="eyebrow">{eyebrow}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="choice-title">{title}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="choice-copy">{copy}</div>', unsafe_allow_html=True)
+                    st.space("medium")
+                    button_label = {
+                        "01 · DEEP-DIVE": "Choose Deep-Dive →",
+                        "02 · TOP-5": "Open Top-5 →",
+                        "03 · OTD": "Open OTD →",
+                    }[eyebrow]
+                    if st.button(button_label, type="primary", width="stretch", key=f"{key}-button"):
+                        st.session_state.live_production_line = {
+                            "01 · DEEP-DIVE": "deep_dive",
+                            "02 · TOP-5": "top_5",
+                            "03 · OTD": "otd",
+                        }[eyebrow]
+                        st.session_state.live_desk = None
+                        st.session_state.live_cricket_profile = None
+                        st.session_state.live_topics_profile = None
+                        st.session_state.live_topics = []
+                        st.rerun()
+        return
+
+    if st.session_state.live_production_line == "top_5":
+        st.space("medium")
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">TOP-5 · WIP</div>'
+            '<div class="section-title">Top 5 cricket stories of the day</div></div></div>',
+            unsafe_allow_html=True,
+        )
+        st.info("This production line is reserved for the Top-5 design we are building next.")
+        if st.button("← Back to production lines", key="live-back-from-top-5"):
+            st.session_state.live_production_line = None
+            st.session_state.live_desk = None
+            st.rerun()
+        return
+
+    if st.session_state.live_production_line == "otd":
+        st.space("medium")
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">OTD · WIP</div>'
+            '<div class="section-title">On This Day</div></div></div>',
+            unsafe_allow_html=True,
+        )
+        st.info("This production line is reserved for the On This Day design we are building next.")
+        if st.button("← Back to production lines", key="live-back-from-otd"):
+            st.session_state.live_production_line = None
+            st.session_state.live_desk = None
+            st.rerun()
+        return
+
+    if st.session_state.live_production_line == "deep_dive":
+        st.space("medium")
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">DEEP-DIVE</div>'
+            '<div class="section-title">Choose your sports desk</div></div>'
+            '<div class="section-count">single-story production</div></div>',
+            unsafe_allow_html=True,
+        )
+        if st.button("← Back to production lines", key="live-back-from-deep-dive"):
+            _live_reset_downstream()
+            st.session_state.live_production_line = None
+            st.session_state.live_desk = None
+            st.session_state.live_cricket_profile = None
+            st.session_state.live_topics_profile = None
+            st.session_state.live_topics = []
+            st.rerun()
+
+    if st.session_state.live_desk is None:
         left, right = st.columns(2, gap="small")
         with left:
             with st.container(key="live-choice-cricket"):
