@@ -617,13 +617,22 @@ def _select(
 
     chosen: list[Topic] = []
     blocked = list(existing or [])
+    seen_title_keys = {
+        " ".join(_tokenise(topic.title))
+        for topic in blocked
+        if topic.title
+    }
 
     for topic in ranked:
         if topic.url in seen_urls:
             continue
+        title_key = " ".join(_tokenise(topic.title))
+        if title_key in seen_title_keys:
+            continue
         if any(_same_event(topic, other) for other in blocked + chosen):
             continue
         chosen.append(topic)
+        seen_title_keys.add(title_key)
         if len(chosen) >= limit:
             break
 
