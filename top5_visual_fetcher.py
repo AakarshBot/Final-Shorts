@@ -6,6 +6,7 @@ import asyncio
 import hashlib
 import html
 import io
+import json
 import re
 from html.parser import HTMLParser
 from typing import Any
@@ -387,7 +388,7 @@ async def _browser_page(context, request: dict[str, Any]) -> dict[str, Any]:
 
         for raw in data.get("jsonLd") or []:
             try:
-                value = raw if isinstance(raw, (dict, list)) else __import__("json").loads(raw)
+                value = raw if isinstance(raw, (dict, list)) else json.loads(raw)
             except (TypeError, ValueError):
                 continue
             for target in _walk_json_images(value):
@@ -625,7 +626,6 @@ class _StaticParser(HTMLParser):
             raw = "".join(self.script_parts).strip()
             if raw:
                 try:
-                    import json
                     self.json_ld.append(json.loads(html.unescape(raw)))
                 except (TypeError, ValueError, json.JSONDecodeError):
                     pass
