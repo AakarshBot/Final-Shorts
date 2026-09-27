@@ -99,10 +99,10 @@ SPORT_WORDS = {
 }
 
 CRICKET_TERMS = {"cricket", "bcci", "wicket", "innings", "batting", "bowling", "odi", "t20", "test"}
-ASIA_TERMS = {
-    "india", "indian", "bcci", "pakistan", "pakistani", "sri", "lanka", "bangladesh",
-    "bangladeshi", "afghanistan", "afghan", "nepal", "japan", "oman", "malaysia",
-    "hong", "kong", "asia", "asian", "asiad",
+NON_CRICKET_TERMS = {
+    "football", "soccer", "tennis", "badminton", "squash", "athletics", "marathon", "swimming",
+    "cycling", "boxing", "wrestling", "hockey", "kabaddi", "volleyball", "basketball", "chess",
+    "motorsport", "motogp", "formula", "f1",
 }
 UTILITY_PATTERNS = (
     r"how to watch",
@@ -170,6 +170,13 @@ AUDIENCE_PULL_TERMS = {
     "controversy", "clash", "upset", "record", "milestone", "injury", "targeted", "viral",
 }
 PUBLISHER_PENALTIES = {"cricketwebs", "cricketnmore", "socialnews.xyz", "northdesk.in"}
+LOW_SIGNAL_PATTERNS = (
+    r"\bcalled on\b",
+    r"\barrives? in\b",
+    r"\bset to face\b",
+    r"\broad map\b",
+    r"\broadmap\b",
+)
 
 
 @dataclass(frozen=True)
@@ -239,9 +246,18 @@ def _clean_title(title: str, source: str = "") -> str:
 
 def _profile_relevant(title: str, description: str, profile: str | None) -> bool:
     title_tokens = _tokens(title)
+    description_tokens = _tokens(description[:500])
     if profile in {"cricket_india_asia", "cricket_global"}:
-        return bool(title_tokens & CRICKET_TERMS)
-    return bool(title_tokens & SPORT_WORDS)
+        if title_tokens & NON_CRICKET_TERMS:
+            return False
+        return bool(title_tokens & CRICKET_TERMS) or (
+            bool(description_tokens & CRICKET_TERMS)
+            and bool(_event_groups(title))
+        )
+    return bool(title_tokens & (SPORT_WORDS - CRICKET_TERMS)) and not (
+        "cricket" in title_tokens
+        and not title_tokens & (SPORT_WORDS - CRICKET_TERMS)
+    )
 
 
 def _utility(title: str) -> bool:
@@ -282,8 +298,9 @@ def _score(topic: Topic) -> float:
     distinctive = _tokens(topic.title) - SPORT_WORDS - set().union(*EVENT_GROUPS.values()) - EVENT_CONTEXT
     specificity = min(2.0, max(0, len(distinctive) - 2) * 0.35)
     source_penalty = 1.0 if _source_key(topic.source) in PUBLISHER_PENALTIES else 0.0
+    low_signal_penalty = 1.5 if any(re.search(pattern, topic.title, re.IGNORECASE) for pattern in LOW_SIGNAL_PATTERNS) else 0.0
     generic_penalty = 3.0 if _utility(topic.title) else 0.0
-    return freshness + event_bonus + pull_bonus + specificity - source_penalty - generic_penalty
+    return freshness + event_bonus + pull_bonus + specificity - source_penalty - low_signal_penalty - generic_penalty
 
 
 def _parse_rss(xml_text: str) -> list[Topic]:
