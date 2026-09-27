@@ -354,7 +354,7 @@ def generate_audio(
         ) * 100.0
         adjusted = min(100.0, max(rate_percent + 1.0, adjusted))
         results = asyncio.run(
-            _generate_at_rate(approved_script, language, adjusted, output_path)
+            _generate_at_rate(scenes, language, adjusted, output_path)
         )
         total = round(sum(float(item["duration"]) for item in results), 3)
         rate_percent = round(adjusted, 2)
