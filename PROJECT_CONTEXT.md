@@ -314,12 +314,20 @@ Purpose:
 
 Status: **Planned / Test framework WIP.**
 
-### New-line development rule
+### Production-line development rule
 
-- Build and validate Top-5 and OTD in **Test** first.
+- The **production-line menu is the first menu in Test**.
+- The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
+- **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
+- **Top-5** is **WIP**.
+- **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
+- The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
+- Build and validate Top-5 and OTD in **Test** first.
 - Do not create a separate stage pipeline, parallel model, duplicate metadata system or duplicate runtime architecture for a new line.
-- Line-specific depth belongs inside the existing stage contracts and handoffs.
+- **Do not touch, regress, replace or redesign the functionality of the current factory** while building these new production lines.
+- Existing approved function behaviour and handoffs remain the baseline.
+- New line-specific behaviour must be added only where required and must not change existing Deep-Dive/Cricket/Niche Sports functionality.
 - Do not move a new line into Live until its Test implementation is accepted.
 
 ## Repository shape
