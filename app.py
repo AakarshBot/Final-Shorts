@@ -71,7 +71,6 @@ button:hover{transform:translateY(-1px);}
 .sidebar-brand-name{font-size:1.15rem;font-weight:920;letter-spacing:-.04em;}
 .sidebar-brand-sub{font-size:.62rem;letter-spacing:.13em;text-transform:uppercase;color:var(--soft);margin-top:.15rem;}
 .sidebar-heading{font-size:.58rem;font-weight:850;letter-spacing:.16em;text-transform:uppercase;color:var(--soft);margin:1rem .2rem .45rem;}
-.canvas{background:var(--paper);border:1px solid var(--line);border-radius:16px;padding:22px 24px 28px;box-shadow:var(--shadow);}
 .canvas-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;margin-bottom:1rem;}
 .canvas-title{font-size:1.55rem;font-weight:900;letter-spacing:-.04em;line-height:1.1;}
 .canvas-copy{font-size:.78rem;color:var(--muted);max-width:720px;line-height:1.5;}
@@ -81,7 +80,7 @@ button:hover{transform:translateY(-1px);}
 .topic-meta{font-size:.64rem;color:var(--muted);line-height:1.35;margin-top:.28rem;}
 .selected-story{background:#f7efe8;border:1px solid #e0cfc2;border-radius:12px;padding:14px 16px;margin-top:.9rem;}
 .selected-story-title{font-size:1.05rem;font-weight:860;letter-spacing:-.026em;}
-.st-key-script-editor{background:#fbf8f3;border:1px solid var(--line);border-radius:13px;padding:14px;}
+.st-key-script-editor,.st-key-subtitle-editor{background:#fbf8f3;border:1px solid var(--line);border-radius:13px;padding:14px;}
 .st-key-script-inspector{background:#f0ebe3;border:1px solid var(--line);border-radius:13px;padding:15px;}
 .inspector-line{display:flex;justify-content:space-between;gap:1rem;padding:.52rem 0;border-bottom:1px solid rgba(112,101,88,.12);font-size:.72rem;}
 .inspector-line:last-child{border-bottom:0;}
@@ -91,7 +90,6 @@ button:hover{transform:translateY(-1px);}
 .cue-time{font-variant-numeric:tabular-nums;font-size:.67rem;color:var(--soft);}
 .cue-text{font-size:.76rem;color:var(--ink);}
 .media-surface{background:#16130f;border-radius:14px;padding:10px;display:flex;justify-content:center;}
-.publish-panel{background:#f0ebe3;border:1px solid var(--line);border-radius:13px;padding:15px;}
 .home-hero{padding:1rem 0 1.5rem;}
 .home-title{font-size:clamp(3rem,6vw,5.7rem);font-weight:920;line-height:.88;letter-spacing:-.075em;max-width:900px;}
 .home-copy{max-width:720px;color:var(--muted);font-size:1rem;line-height:1.55;margin-top:.8rem;}
@@ -2139,7 +2137,6 @@ def render_subtitles():
     left,right=st.columns([1.55,.45],gap="large")
     with left:
         with st.container(key="subtitle-editor"):
-            st.markdown('<div class="editor-pane">',unsafe_allow_html=True)
             for index,cue in enumerate(subtitles["cues"],1):
                 words=" ".join(word["text"] for word in cue["words"])
                 st.markdown(
