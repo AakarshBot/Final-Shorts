@@ -2848,6 +2848,8 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_topics = []
                 st.session_state.test_top5_selected = []
                 st.session_state.test_top5_handoff = None
+                st.session_state.test_top5_script_data = None
+                st.session_state.test_top5_script_handoff = None
                 st.rerun()
 
             if content_type == "General News":
@@ -2879,6 +2881,8 @@ elif st.session_state.app_mode == "test":
                     if not more:
                         st.session_state.test_top5_selected = []
                         st.session_state.test_top5_handoff = None
+                        st.session_state.test_top5_script_data = None
+                        st.session_state.test_top5_script_handoff = None
                     st.rerun()
 
                 topics = st.session_state.test_top5_topics
@@ -2964,6 +2968,8 @@ elif st.session_state.app_mode == "test":
                                             selected.append(index)
                                         st.session_state.test_top5_selected = selected
                                         st.session_state.test_top5_handoff = None
+                                        st.session_state.test_top5_script_data = None
+                                        st.session_state.test_top5_script_handoff = None
                                         st.rerun()
 
                 selected = st.session_state.test_top5_selected
@@ -2979,6 +2985,8 @@ elif st.session_state.app_mode == "test":
                             }
                             for index in selected
                         ]
+                        st.session_state.test_top5_script_data = None
+                        st.session_state.test_top5_script_handoff = None
                         st.rerun()
 
                 if st.session_state.test_top5_handoff:
