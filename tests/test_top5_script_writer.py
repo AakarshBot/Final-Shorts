@@ -89,7 +89,7 @@ def test_story_headline_is_below_fifteen_seconds():
     )
     valid, reason = validate_top5_script(result, stories())
     assert not valid
-    assert "15 seconds" in reason
+    assert "36 spoken words" in reason
 
 
 def test_body_is_not_a_headline_restatement():
