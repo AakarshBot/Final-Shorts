@@ -3854,6 +3854,282 @@ elif st.session_state.app_mode == "test":
                     st.success("Top-5 Audio approved. All six spoken lines are ready for the next stage.")
                     st.caption("Each audio scene maps to the corresponding spoken headline; visual story bodies remain silent.")
 
+        elif line_name == "Top-5" and stage == "04 · Visuals":
+            audio_handoff = st.session_state.get("test_top5_audio_handoff")
+            script_handoff = st.session_state.get("test_top5_script_handoff")
+            stories = script_handoff.get("stories") if isinstance(script_handoff, dict) else None
+
+            st.markdown(
+                '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
+                '<div class="section-title">Build the six-slide visual set</div>'
+                '<div class="canvas-copy">Five source-story image pools plus one manually generated opener.</div></div>'
+                '<div class="section-count">5 story pools · 6 slides</div></div>',
+                unsafe_allow_html=True,
+            )
+
+            if (
+                not audio_handoff
+                or not script_handoff
+                or not isinstance(stories, list)
+                or len(stories) != 5
+            ):
+                st.info("Approve the Top-5 Scriptwriter and Audio stages first.")
+            else:
+                story_key = "|".join(
+                    f'{str(story.get("url") or "")}::{str(story.get("title") or "")}'
+                    for story in stories
+                )
+
+                if story_key != st.session_state.test_top5_visual_loaded_key:
+                    st.session_state.test_top5_visual_result = None
+                    st.session_state.test_top5_visual_crops = {}
+                    st.session_state.test_top5_visual_deleted = set()
+                    st.session_state.test_top5_visual_assignments = {}
+                    st.session_state.test_top5_visual_handoff = None
+
+                    with st.spinner("Scraping the five selected source URLs…"):
+                        try:
+                            st.session_state.test_top5_visual_result = crawl_top5_visuals(stories)
+                        except Exception as exc:
+                            st.session_state.test_top5_visual_result = {
+                                "error": f"{type(exc).__name__}: {exc}"
+                            }
+                    st.session_state.test_top5_visual_loaded_key = story_key
+
+                result = st.session_state.get("test_top5_visual_result") or {}
+                if result.get("error"):
+                    st.error(result["error"])
+                    if st.button(
+                        "Retry automatic scrape",
+                        type="primary",
+                        width="stretch",
+                        key="test-top5-visual-retry-error",
+                    ):
+                        st.session_state.test_top5_visual_loaded_key = None
+                        st.rerun()
+                else:
+                    _render_top5_visual_board()
+
+                    automatic_stories = list(result.get("stories") or [])
+                    for story_index, story in enumerate(automatic_stories[:5], 1):
+                        title = str(
+                            story.get("title")
+                            or stories[story_index - 1].get("title")
+                            or ""
+                        )
+                        count = len(story.get("assets") or [])
+                        status = "Ready" if count >= 4 else "Underfilled"
+                        with st.expander(
+                            f"Story {story_index} · {title}",
+                            expanded=(count < 4),
+                        ):
+                            st.caption(
+                                f'Slide {story_index + 1} · {count} images · {status} · '
+                                f'{len(story.get("urls_scraped") or [])} URL(s) scraped'
+                            )
+                            st.code(
+                                str(
+                                    story.get("url")
+                                    or stories[story_index - 1].get("url")
+                                    or ""
+                                ),
+                                language="text",
+                            )
+
+                            related = list(story.get("related_urls") or [])
+                            if related:
+                                st.caption("Related URL fallback used:")
+                                for related_url in related:
+                                    st.code(related_url, language="text")
+
+                            assets = list(story.get("assets") or [])
+                            if assets:
+                                _render_top5_asset_pool(
+                                    assets,
+                                    f"story-{story_index}",
+                                    [story_index + 1],
+                                )
+                            else:
+                                st.warning(
+                                    "No automatic images were found for this story. "
+                                    "Use a manual visual option below."
+                                )
+
+                    with st.expander("Option 2 · Manual Scraper", expanded=False):
+                        st.caption("Manual publisher scrape. Attach its images to any slide.")
+                        with st.form("test-top5-manual-crawler-form"):
+                            query = st.text_input(
+                                "Search query",
+                                placeholder="e.g. Virat Kohli century",
+                                key="test-top5-manual-crawler-query",
+                            )
+                            run = st.form_submit_button(
+                                "Run manual scrape",
+                                type="primary",
+                                width="stretch",
+                            )
+                        if run:
+                            query = query.strip()
+                            if not query:
+                                st.warning("Enter a query first.")
+                            else:
+                                with st.spinner("Searching and scraping publisher pages…"):
+                                    try:
+                                        st.session_state.test_top5_manual_visual_result = manual_crawl_visuals(query)
+                                    except Exception as exc:
+                                        st.session_state.test_top5_manual_visual_result = {
+                                            "error": f"{type(exc).__name__}: {exc}"
+                                        }
+
+                        manual_result = st.session_state.get("test_top5_manual_visual_result") or {}
+                        if manual_result.get("error"):
+                            st.error(manual_result["error"])
+                        elif manual_result:
+                            assets = list(manual_result.get("assets") or [])
+                            st.caption(
+                                f'{len(assets)} images · '
+                                f'{int(manual_result.get("pages_scraped") or 0)} pages'
+                            )
+                            if assets:
+                                _render_top5_asset_pool(
+                                    assets,
+                                    "manual",
+                                    list(range(1, 7)),
+                                )
+                            else:
+                                st.warning("No usable images were returned.")
+
+                    with st.expander("Option 3 · Manual Image Search / Commons", expanded=False):
+                        st.caption(
+                            "Manual query only. Uses the existing real-image search providers, including Commons."
+                        )
+                        with st.form("test-top5-real-image-form"):
+                            query = st.text_input(
+                                "Manual query",
+                                placeholder="e.g. Vaibhav Sooryavanshi batting",
+                                key="test-top5-real-image-query",
+                            )
+                            run = st.form_submit_button(
+                                "Search images",
+                                type="primary",
+                                width="stretch",
+                            )
+                        if run:
+                            query = query.strip()
+                            if not query:
+                                st.warning("Enter a query first.")
+                            else:
+                                with st.spinner("Searching real-image sources…"):
+                                    try:
+                                        st.session_state.test_top5_real_image_result = search_images(query)
+                                    except Exception as exc:
+                                        st.session_state.test_top5_real_image_result = {
+                                            "error": f"{type(exc).__name__}: {exc}"
+                                        }
+
+                        real_result = st.session_state.get("test_top5_real_image_result") or {}
+                        if real_result.get("error"):
+                            st.error(real_result["error"])
+                        elif real_result:
+                            assets = list(real_result.get("assets") or [])
+                            st.caption(f"{len(assets)} images")
+                            if assets:
+                                _render_top5_asset_pool(
+                                    assets,
+                                    "real",
+                                    list(range(1, 7)),
+                                )
+                            else:
+                                st.warning("No usable images were returned.")
+
+                    with st.expander("Option 4 · AI Generation", expanded=False):
+                        st.caption("Use this manual AI option to create the Slide 1 opener image.")
+                        with st.form("test-top5-ai-image-form"):
+                            query = st.text_input(
+                                "Manual prompt",
+                                placeholder="e.g. dramatic collage representing today's five biggest stories",
+                                key="test-top5-ai-image-query",
+                            )
+                            run = st.form_submit_button(
+                                "Generate opener",
+                                type="primary",
+                                width="stretch",
+                            )
+                        if run:
+                            query = query.strip()
+                            if not query:
+                                st.warning("Enter a prompt first.")
+                            else:
+                                with st.spinner("Generating opener image…"):
+                                    try:
+                                        st.session_state.test_top5_ai_image_result = generate_images(query)
+                                    except Exception as exc:
+                                        st.session_state.test_top5_ai_image_result = {
+                                            "error": f"{type(exc).__name__}: {exc}"
+                                        }
+
+                        ai_result = st.session_state.get("test_top5_ai_image_result") or {}
+                        if ai_result.get("error"):
+                            st.error(ai_result["error"])
+                        elif ai_result:
+                            assets = list(ai_result.get("assets") or [])
+                            st.caption(f"{len(assets)} generated images")
+                            if assets:
+                                _render_top5_asset_pool(assets, "ai", [1])
+                            else:
+                                st.warning("No configured AI provider returned an image.")
+
+                    assigned = len(st.session_state.test_top5_visual_assignments)
+                    st.caption(f"{assigned}/6 slides attached.")
+
+                    if assigned == 6 and not st.session_state.test_top5_visual_handoff:
+                        if st.button(
+                            "Approve Top-5 visuals",
+                            type="primary",
+                            width="stretch",
+                            key="test-top5-visual-approve",
+                        ):
+                            visuals = []
+                            slides = []
+                            for slide in range(1, 7):
+                                assignment = dict(
+                                    st.session_state.test_top5_visual_assignments[slide]
+                                )
+                                assignment["slide_number"] = slide
+                                assignment["story_index"] = None if slide == 1 else slide - 2
+                                visuals.append(assignment)
+                                slides.append(
+                                    {
+                                        "slide_number": slide,
+                                        "story_index": None if slide == 1 else slide - 2,
+                                        "source": assignment.get("source", ""),
+                                        "label": assignment.get("label", ""),
+                                        "source_page_url": assignment.get("source_page_url", ""),
+                                        "source_image_url": assignment.get("source_image_url", ""),
+                                    }
+                                )
+
+                            st.session_state.test_top5_visual_handoff = {
+                                "schema": "final-shorts.top5-visuals.v1",
+                                "slides": slides,
+                                "visuals": visuals,
+                                "stories": stories,
+                                "approved_for_renderer": True,
+                            }
+                            st.session_state.test_pipeline_notice = {
+                                "confirmed": "Top-5 Visual QC confirmed",
+                                "next": "Six approved visuals are ready for Renderer.",
+                            }
+                            st.rerun()
+
+                    if st.session_state.get("test_top5_visual_handoff"):
+                        st.success(
+                            "Top-5 Visuals approved. All six selected visuals are ready for Renderer."
+                        )
+                        st.caption(
+                            "Slide 1 is the manually generated opener; Slides 2–6 map to the five selected stories."
+                        )
+
         else:
             stage_labels = {
                 "01 · Topic Fetcher": "Topic Fetcher",
