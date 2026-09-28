@@ -430,7 +430,7 @@ Purpose:
 - The five stories must be distinct events/stories rather than five headlines describing the same event.
 - The selection, ranking, script structure, visual treatment and publishing details will be designed in Test first.
 
-Status: **WIP — Test Stages 1 and 2 are implemented.**
+Status: **WIP — Test Stages 1–4 are implemented; Stage 4 Visuals is pending manual approval.**
 
 Top-5 Test Stage 1 — Topic production:
 - Current active content type is **Cricket**.
@@ -463,7 +463,25 @@ Top-5 Test Stage 2 — Scriptwriter:
 - Slide 1 is not allowed to manufacture a generic or unsupported “AI roundup” theme such as changing the conversation, everyone is talking, sending shockwaves, game changer, or similar language.
 - Test Stage 2 exposes all six headlines and the five body fields as editable manual-QC fields, plus editable hashtags.
 - Approval creates `final-shorts.top5-script.v1` with the six edited slides, hashtags, the five selected story references and provider information for downstream stages.
-- Audio is expected to use only the six spoken headlines; body copy is visual-only. Audio/Visuals/Renderer changes are intentionally not part of this Stage 2 implementation.
+
+Top-5 Test Stage 3 — Audio:
+- Implemented with the separate Top-5 Audio path in `audio.py`.
+- Generates six spoken audio scenes from the six approved headlines only; Slides 2–6 body copy is never narrated.
+- Native word timings and the existing bounded duration correction/approval flow are used.
+- Approval produces `final-shorts.top5-audio.v1` for the Visuals stage.
+
+Top-5 Test Stage 4 — Visuals:
+- **Implemented, pending manual approval.**
+- Implemented as a separate `top5_visual_fetcher.py`; the approved regular `visual_fetcher.py` is untouched.
+- The five approved story URLs are scraped concurrently, one story at a time, with a 4–6 image review pool targeted per story.
+- The original source URL is always scraped first. A related publisher URL is searched only when that story remains under four usable images.
+- Each related URL is scraped only as needed to bring that story to four usable images; unrelated or same-domain fallback results are rejected.
+- Browser extraction plus same-URL static fallback handles article image markup, lazy images, metadata, JSON-LD, responsive image sources and loaded network images.
+- Test UI provides per-story pools for Slides 2–6, plus Manual Scraper, Manual Image Search/Commons and AI Generation options.
+- Slide 1 is the manually selected/generated opener; Slides 2–6 map directly to the five selected stories.
+- User manually chooses, crops, deletes and replaces visuals. Automatic visual selection is not performed.
+- Visual approval requires all six slide assignments and creates `final-shorts.top5-visuals.v1` for the Renderer.
+- **Do not mark Top-5 Visuals complete until the user has manually tested and approved this Stage 4 flow.**
 
 ### Production Line 03 — On This Day
 
