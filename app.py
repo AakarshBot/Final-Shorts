@@ -832,17 +832,19 @@ def _render_visual_asset_grid(assets: list[dict], result_key: str):
                     intent = str(scene.get("visual_intent") or "").strip()
                     if not voiceover and not intent:
                         continue
+                    intent_html = (
+                        f'<div style="font-size:.66rem;color:var(--muted);line-height:1.35;margin-top:.22rem;">'
+                        f'{intent}</div>'
+                        if intent else ""
+                    )
                     st.markdown(
                         f'<div style="padding:.62rem .78rem;margin:0 0 .5rem;border:1px solid var(--line);'
                         f'border-radius:10px;background:var(--surface);">'
                         f'<div class="mini-label">SCENE {number}</div>'
                         f'<div style="font-size:.78rem;font-weight:760;line-height:1.35;color:var(--ink);margin-top:.18rem;">'
-                        f'{voiceover}</div>'
-                        f'{f"<div style=\"font-size:.66rem;color:var(--muted);line-height:1.35;margin-top:.22rem;\">{intent}</div>" if intent else ""}'
-                        f'</div>',
+                        f'{voiceover}</div>{intent_html}</div>',
                         unsafe_allow_html=True,
                     )
-    for start in range(0, len(assets), 3):
     for start in range(0, len(assets), 3):
         cols = st.columns(3, gap="medium")
         for index, (col, asset) in enumerate(zip(cols, assets[start:start + 3]), start=start):
