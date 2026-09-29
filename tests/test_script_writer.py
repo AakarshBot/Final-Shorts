@@ -1,7 +1,7 @@
 from script_writer import MAX_WORDS, SCENE_1_MAX_WORDS, apply_script_edits, write_script
 
 
-def valid_result(scene1="Gill suffers a fresh injury scare before India’s ODI."):
+def valid_result(scene1="Gill faces a fresh injury scare before ODI."):
     return {
         "headline": "Gill Injury Scare",
         "titles": [
@@ -279,6 +279,27 @@ def test_approved_edits_preserve_titles_and_metadata_and_mark_audio_handoff():
     assert edited["script"][0]["voiceover"].startswith("Gill faces")
     assert edited["human_script_edited"] is True
     assert edited["approved_for_audio"] is True
+
+
+def test_writer_rejects_hook_over_three_seconds(monkeypatch):
+    def fake_request(model, prompt, story):
+        return valid_result(
+            "Gill faces a fresh injury scare before India starts the ODI this week."
+        )
+
+    monkeypatch.setattr("script_writer._request", fake_request)
+
+    try:
+        write_script(
+            {
+                "title": "Gill injury scare",
+                "description": "Shubman Gill was hit in training before the ODI.",
+            }
+        )
+    except RuntimeError as exc:
+        assert "3-second hook limit" in str(exc)
+    else:
+        raise AssertionError("A hook above three seconds should not pass validation.")
 
 
 def test_writer_rejects_retention_bait(monkeypatch):

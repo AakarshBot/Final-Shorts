@@ -22,6 +22,8 @@ RESEARCH_TIMEOUT = 8
 MAX_SOURCE_CHARS = 12000
 MIN_ARTICLE_CHARS = 600
 SCENE_1_MAX_WORDS = 14
+HOOK_MAX_SECONDS = 3.0
+SPEECH_WORDS_PER_MINUTE = 170.0
 MAX_WORDS = 75
 
 LANGUAGE_INSTRUCTIONS = {
@@ -105,7 +107,8 @@ SHORTS STYLE
 
 HOOK
 - Scene 1 is the Short's cold open, not an article lead.
-- Target 10–12 words; hard maximum 14.
+- Target 6–8 spoken words and keep the hook at or below 3 seconds of estimated natural speech.
+- Hard maximum 14 words remains a structural ceiling, but the 3-second time limit is the real hook constraint.
 - Choose the strongest truthful hook type for the story:
   - result-first: lead with the result or decision;
   - consequence-first: lead with what the development affects;
@@ -242,6 +245,17 @@ def _words(value) -> int:
 
 def _normalise(value) -> str:
     return re.sub(r"[^\w ]+", " ", str(value or "").casefold(), flags=re.UNICODE).strip()
+
+
+def estimate_spoken_seconds(text: str) -> float:
+    clean = _clean(text)
+    if not clean:
+        return 0.0
+    seconds = _words(clean) / (SPEECH_WORDS_PER_MINUTE / 60.0)
+    seconds += 0.05 * len(re.findall(r"[,;:]", clean))
+    seconds += 0.15 * len(re.findall(r"[.!?]", clean))
+    seconds += 0.04 * len(re.findall(r"\b\w{10,}\b", clean, flags=re.UNICODE))
+    return round(seconds, 3)
 
 
 def _story_value(story, key: str) -> str:
@@ -615,6 +629,12 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     first_words = _words(scenes[0]["voiceover"])
     if first_words > SCENE_1_MAX_WORDS:
         return False, f"Scene 1 exceeds {SCENE_1_MAX_WORDS} words."
+    hook_seconds = estimate_spoken_seconds(scenes[0]["voiceover"])
+    if hook_seconds > HOOK_MAX_SECONDS:
+        return False, (
+            f"Scene 1 exceeds the 3-second hook limit "
+            f"({hook_seconds:.2f}s estimated)."
+        )
 
     narration = " ".join(_clean(scene["voiceover"]) for scene in scenes)
     if _words(narration) > MAX_WORDS:

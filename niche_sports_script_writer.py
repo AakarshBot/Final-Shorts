@@ -9,6 +9,7 @@ from script_writer import (
     _story_value,
     _source_text,
     validate_script,
+    HOOK_MAX_SECONDS,
 )
 
 NICHE_SYSTEM_PROMPT = """You are the original editorial writer for a human-reviewed niche-sports YouTube Shorts channel.
@@ -93,7 +94,8 @@ CHESS:
 
 HOOK
 - Scene 1 is a cold open, not an article lead.
-- Target 10–12 words; hard maximum 14.
+- Target 6–8 spoken words and keep the hook at or below 3 seconds of estimated natural speech.
+- Hard maximum 14 words remains a structural ceiling, but the 3-second time limit is the real hook constraint.
 - Choose the strongest truthful form for this particular event:
   - result or upset;
   - record or breakthrough;

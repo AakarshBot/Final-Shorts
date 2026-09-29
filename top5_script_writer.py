@@ -31,6 +31,7 @@ MAX_EVIDENCE_CHARS = 6500
 MAX_PACKAGE_STORY_CHARS = 1200
 MIN_ARTICLE_CHARS = 500
 SLIDE_1_MAX_WORDS = 14
+HOOK_MAX_SECONDS = 3.0
 STORY_HEADLINE_MAX_WORDS = 36
 STORY_HEADLINE_TARGET_WORDS = (24, 32)
 BODY_MIN_WORDS = 14
@@ -162,7 +163,8 @@ EDITORIAL STANDARD
 SLIDE STRUCTURE
 - Return exactly six slides.
 - Slide 1 is the package opener. It has ONE spoken headline and no meaningful body copy.
-  Keep it to 14 words or fewer.
+  Target 6–8 spoken words and keep it at or below 3 seconds of estimated natural speech.
+  The 14-word limit remains a structural ceiling, not the target.
 - Slides 2–6 correspond exactly, in order, to selected stories 1–5.
 - For Slides 2–6, the headline IS the spoken narration for that slide.
 - Each story headline must tell the complete important development in ONE clean sentence.
@@ -429,6 +431,12 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
         if expected_number == 1:
             if _words(headline) > SLIDE_1_MAX_WORDS:
                 return False, f"Slide 1 exceeds {SLIDE_1_MAX_WORDS} words."
+            hook_seconds = estimate_speech_seconds(headline)
+            if hook_seconds > HOOK_MAX_SECONDS:
+                return False, (
+                    f"Slide 1 exceeds the 3-second hook limit "
+                    f"({hook_seconds:.2f}s estimated)."
+                )
             if _is_generic_package_headline(headline):
                 return False, "Slide 1 is a generic Top-5 headline."
             if not _references_any_selected_story(headline, stories):

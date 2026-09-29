@@ -97,6 +97,14 @@ def test_slide_one_has_fourteen_word_cap():
     assert "Slide 1" in reason
 
 
+def test_slide_one_rejects_hook_over_three_seconds():
+    result = valid_result()
+    result["slides"][0]["headline"] = "Five cricket updates from India before the championship final today"
+    valid, reason = validate_top5_script(result, stories())
+    assert not valid
+    assert "3-second hook limit" in reason
+
+
 def test_story_headline_is_below_fifteen_seconds():
     result = valid_result()
     result["slides"][1]["headline"] = (

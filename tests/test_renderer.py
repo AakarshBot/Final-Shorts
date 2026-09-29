@@ -219,6 +219,14 @@ def test_subtitle_layout_uses_second_line_only_when_needed():
     assert sum(len(line) for line in two_lines) == len(long_words)
 
 
+def test_subtitle_dash_variants_are_normalised():
+    values = ["left‐right", "left‑right", "left–right", "left—right", "left−right"]
+    assert [
+        value.translate(renderer.DASH_TRANSLATION)
+        for value in values
+    ] == ["left-right"] * len(values)
+
+
 def test_subtitle_handoff_contract():
     assert renderer.validate_subtitle_handoff(renderer.PREVIEW_SUBTITLE_DATA)
 

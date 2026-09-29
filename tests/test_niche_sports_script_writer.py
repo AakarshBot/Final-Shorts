@@ -81,6 +81,7 @@ def test_niche_writer_uses_niche_prompt_and_profile(monkeypatch):
     assert "Never use cricket-specific framing" in captured["prompt"]
     assert "RACKET SPORTS" in captured["prompt"]
     assert "Carlos Alcaraz wins Tokyo title" in captured["source"]
+    assert "3 seconds" in captured["prompt"] or "3-second" in captured["prompt"]
 
 
 def test_niche_writer_retries_same_model_after_validation_failure(monkeypatch):

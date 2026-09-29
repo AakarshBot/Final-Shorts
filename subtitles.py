@@ -6,6 +6,10 @@ import re
 from typing import Any
 
 SCHEMA = "final-shorts.subtitles.v1"
+DASH_TRANSLATION = str.maketrans({
+    "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "−": "-",
+    "﹘": "-", "﹣": "-", "－": "-",
+})
 MAX_WORDS_PER_CUE = 4
 MAX_CUE_SECONDS = 1.6
 STRONG_BREAK = re.compile(r"[.!?][\"'”’)]?$")
@@ -13,6 +17,10 @@ STRONG_BREAK = re.compile(r"[.!?][\"'”’)]?$")
 
 def _clean(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _subtitle_text(value: Any) -> str:
+    return _clean(value).translate(DASH_TRANSLATION)
 
 
 def _normalise_word(value: str) -> str:
@@ -32,10 +40,10 @@ def _display_words(script_text: str, timings: list[dict[str, Any]]) -> list[str]
         if index < len(tokens):
             script_word = tokens[index]
             if _normalise_word(script_word) == _normalise_word(timed_word):
-                result.append(script_word)
+                result.append(_subtitle_text(script_word))
                 continue
 
-        result.append(timed_word)
+        result.append(_subtitle_text(timed_word))
 
     return result
 

@@ -40,6 +40,11 @@ SUBTITLE_WORD_SPACING = 10
 SUBTITLE_LINE_GAP = 14
 SUBTITLE_Y = 1390
 
+DASH_TRANSLATION = str.maketrans({
+    "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "−": "-",
+    "﹘": "-", "﹣": "-", "－": "-",
+})
+
 ACCENT = (255, 205, 66)
 BRAND_BLUE = (35, 105, 255)
 WHITE = (249, 250, 252)
@@ -129,8 +134,7 @@ def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
             root / "NotoSansTelugu-Bold.ttf",
         )
     return (
-        root / "Montserrat-ExtraBold.ttf",
-        root / "Montserrat-Bold.ttf",
+        root / "Oswald-Bold.ttf",
     )
 
 
@@ -514,7 +518,7 @@ def _draw_subtitles(
 
         for offset, word in enumerate(line):
             index = word_index + offset
-            text = str(word["text"])
+            text = str(word["text"]).translate(DASH_TRANSLATION)
             box = measurements[index]
             width = box[2] - box[0]
             start = float(word["start"])

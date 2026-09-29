@@ -75,6 +75,16 @@ def test_subtitles_break_into_small_readable_cues():
     assert len(result["cues"]) >= 2
 
 
+def test_subtitles_normalise_unicode_dashes():
+    script = approved_script()
+    script["script"][0]["voiceover"] = "India won — the match."
+    audio = approved_audio()
+    result = generate_subtitles(script, audio)
+    texts = [word["text"] for cue in result["cues"] for word in cue["words"]]
+    assert "—" not in "".join(texts)
+    assert "match." in texts
+
+
 def test_subtitles_require_approved_handoffs():
     with pytest.raises(ValueError, match="approved Scriptwriter"):
         generate_subtitles({}, approved_audio())
