@@ -11,6 +11,7 @@ load_dotenv()
 
 from audio import approve_audio, generate_audio
 from script_writer import apply_script_edits, write_script
+from niche_sports_script_writer import write_niche_sports_script
 from topic_fetcher import fetch_topics
 from visual_fetcher import crawl_visuals, manual_crawl_visuals, ranked_visual_search
 from top5_visual_fetcher import crawl_top5_visuals
@@ -1312,7 +1313,12 @@ def _live_generate_script():
         raise ValueError("No valid Live story is selected.")
 
     story = _live_story(topics[selected_index])
-    script = write_script(
+    writer = (
+        write_niche_sports_script
+        if st.session_state.get("live_topics_profile") == "niche_sports"
+        else write_script
+    )
+    script = writer(
         story,
         language=st.session_state.get("live_script_language", "english"),
     )
@@ -2612,7 +2618,12 @@ def render_scriptwriter():
     with top_right:
         if st.button("Generate script",type="primary",width="stretch"):
             with st.spinner("Writing the Short…"):
-                st.session_state.script_data=write_script({
+                writer = (
+                    write_niche_sports_script
+                    if st.session_state.get("topic_desk_profile") == "niche_sports"
+                    else write_script
+                )
+                st.session_state.script_data=writer({
                     "title":topic.title,"description":topic.description,"url":topic.url,"source":topic.source,
                 },language=language.casefold())
             st.session_state.approved_script=None
