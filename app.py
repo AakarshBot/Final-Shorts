@@ -815,6 +815,34 @@ def _crop_visual_dialog(
 
 
 def _render_visual_asset_grid(assets: list[dict], result_key: str):
+    approved_script = st.session_state.get("approved_script")
+    if isinstance(approved_script, dict) and st.session_state.get("topics") and st.session_state.get("selected_topic") is not None:
+        topic = st.session_state.topics[st.session_state.selected_topic]
+        if str(approved_script.get("source_title") or "").strip() == str(topic.title).strip():
+            scenes = [scene for scene in (approved_script.get("script") or []) if isinstance(scene, dict)]
+            if scenes:
+                st.markdown(
+                    '<div class="section-head"><div><div class="eyebrow">SCRIPT CONTEXT</div>'
+                    '<div class="section-title">Use the approved script to judge each visual</div></div>'
+                    '<div class="section-count">scene by scene</div></div>',
+                    unsafe_allow_html=True,
+                )
+                for number, scene in enumerate(scenes, 1):
+                    voiceover = str(scene.get("voiceover") or "").strip()
+                    intent = str(scene.get("visual_intent") or "").strip()
+                    if not voiceover and not intent:
+                        continue
+                    st.markdown(
+                        f'<div style="padding:.62rem .78rem;margin:0 0 .5rem;border:1px solid var(--line);'
+                        f'border-radius:10px;background:var(--surface);">'
+                        f'<div class="mini-label">SCENE {number}</div>'
+                        f'<div style="font-size:.78rem;font-weight:760;line-height:1.35;color:var(--ink);margin-top:.18rem;">'
+                        f'{voiceover}</div>'
+                        f'{f"<div style=\"font-size:.66rem;color:var(--muted);line-height:1.35;margin-top:.22rem;\">{intent}</div>" if intent else ""}'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+    for start in range(0, len(assets), 3):
     for start in range(0, len(assets), 3):
         cols = st.columns(3, gap="medium")
         for index, (col, asset) in enumerate(zip(cols, assets[start:start + 3]), start=start):
