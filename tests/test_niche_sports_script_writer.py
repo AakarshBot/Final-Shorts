@@ -110,5 +110,5 @@ def test_niche_writer_retries_same_model_after_validation_failure(monkeypatch):
 
     assert result["delivery_profile"] == "NICHE SPORTS"
     assert calls[0][0] == niche.MODELS[0]
-    assert calls[1][0] == niche.MODELS[0]
+    assert calls[1][0] == niche.MODELS[1]
     assert "Validation failure:" in calls[1][1]
