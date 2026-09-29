@@ -18,7 +18,7 @@ load_dotenv(Path(__file__).resolve().with_name(".env"))
 GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
 TIMEOUT = 30
-RESEARCH_TIMEOUT = 8
+RESEARCH_TIMEOUT = 10
 MAX_SOURCE_CHARS = 12000
 MIN_ARTICLE_CHARS = 600
 SCENE_1_MAX_WORDS = 14
@@ -329,8 +329,9 @@ def _extract_article(url: str) -> tuple[str, str]:
     response = requests.get(
         target,
         headers={
-            "User-Agent": "Final-Shorts/1.0",
-            "Accept": "text/html,application/xhtml+xml",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/151.0 Safari/537.36 Final-Shorts/1.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-IN,en;q=0.9",
         },
         timeout=RESEARCH_TIMEOUT,
         allow_redirects=True,
@@ -394,9 +395,14 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
                 continue
             candidate_keywords = _story_title_keywords(title)
             overlap = len(keywords & candidate_keywords)
-            if keywords and overlap < minimum_overlap:
+            similarity = SequenceMatcher(
+                None,
+                _normalise(query),
+                _normalise(title),
+            ).ratio()
+            if keywords and overlap < minimum_overlap and similarity < 0.35:
                 continue
-            candidates.append((overlap, url))
+            candidates.append((overlap + similarity, url))
         return sorted(candidates, key=lambda item: item[0], reverse=True)
 
     try:
@@ -406,7 +412,7 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
             region="in-en",
             safesearch="off",
             timelimit="w",
-            max_results=5,
+            max_results=8,
         )
         candidates = candidate_urls(results)
     except Exception:
@@ -426,7 +432,7 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
             region="in-en",
             safesearch="off",
             timelimit="w",
-            max_results=5,
+            max_results=8,
         )
     except Exception:
         return "", ""
