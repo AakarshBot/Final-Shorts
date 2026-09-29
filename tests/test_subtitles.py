@@ -79,10 +79,17 @@ def test_subtitles_normalise_unicode_dashes():
     script = approved_script()
     script["script"][0]["voiceover"] = "India won — the match."
     audio = approved_audio()
+    audio["scenes"][0]["timings"] = [
+        {"word": "India", "start": 0.0, "end": 0.2},
+        {"word": "won", "start": 0.2, "end": 0.4},
+        {"word": "—", "start": 0.4, "end": 0.5},
+        {"word": "the", "start": 0.5, "end": 0.7},
+        {"word": "match.", "start": 0.7, "end": 1.0},
+    ]
     result = generate_subtitles(script, audio)
     texts = [word["text"] for cue in result["cues"] for word in cue["words"]]
     assert "—" not in "".join(texts)
-    assert "match." in texts
+    assert "-" in texts
 
 
 def test_subtitles_require_approved_handoffs():
