@@ -7,6 +7,7 @@ from script_writer import (
     _research_story,
     _request,
     _story_value,
+    _source_text,
     validate_script,
 )
 
@@ -164,7 +165,6 @@ def write_niche_sports_script(story, language: str = "english") -> dict:
     source = _research_story(story)
     has_story_url = bool(_story_value(story, "url"))
     if not source and not has_story_url:
-        from script_writer import _source_text
         source = _source_text(story)
     if not source:
         if has_story_url:
