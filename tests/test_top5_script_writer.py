@@ -29,7 +29,7 @@ def valid_result():
         {
             "slide_number": 1,
             "story_index": 0,
-            "headline": "Five cricket updates, including a newly confirmed record",
+            "headline": "Five cricket updates, one new record",
             "body": "",
             "primary_entity": "India cricket",
             "visual_intent": "five selected cricket stories",
