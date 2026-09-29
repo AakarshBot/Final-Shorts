@@ -4,7 +4,7 @@ from io import BytesIO
 from pathlib import Path
 
 from dotenv import load_dotenv
-from PIL import Image
+from PIL import Image, ImageFilter, ImageOps
 import streamlit as st
 
 load_dotenv()
@@ -757,15 +757,35 @@ def _crop_visual_dialog(
 
     st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
-    st.caption("9:16 crop · drag the frame to position it, or drag a corner to show more or less of the full image. The original visual stays untouched.")
+    st.caption("9:16 frame · drag the frame to reposition it, or drag a corner outward to zoom out and reveal more of the original. Any exposed area uses a blurred extension of the same image.")
 
     from streamlit_cropper import st_cropper
 
+    canvas_width = max(image.width, int(round(image.height * 9 / 16)))
+    canvas_height = int(round(canvas_width * 16 / 9))
+    background = ImageOps.fit(
+        image.convert("RGB"),
+        (canvas_width, canvas_height),
+        method=Image.Resampling.LANCZOS,
+    ).filter(ImageFilter.GaussianBlur(radius=max(18, canvas_width // 55)))
+    canvas = background.copy()
+    offset_x = (canvas_width - image.width) // 2
+    offset_y = (canvas_height - image.height) // 2
+    canvas.paste(image.convert("RGB"), (offset_x, offset_y))
+
+    default = _largest_9x16_crop_coords(image)
+    default_coords = (
+        offset_x + default[0],
+        offset_x + default[1],
+        offset_y + default[2],
+        offset_y + default[3],
+    )
+
     store = st.session_state.setdefault(crop_store, {})
     cropped = st_cropper(
-        image,
+        canvas,
         realtime_update=True,
-        default_coords=_largest_9x16_crop_coords(image),
+        default_coords=default_coords,
         box_color="#4F46E5",
         aspect_ratio=(9, 16),
         return_type="image",
@@ -919,16 +939,36 @@ def _top5_crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
     st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
     st.caption(
-        "9:16 crop · drag the frame to position it, or drag a corner to show more or less of the full image. "
-        "The original visual stays untouched."
+        "9:16 frame · drag the frame to reposition it, or drag a corner outward to zoom out and reveal more of the original. "
+        "Any exposed area uses a blurred extension of the same image."
     )
 
     from streamlit_cropper import st_cropper
 
+    canvas_width = max(image.width, int(round(image.height * 9 / 16)))
+    canvas_height = int(round(canvas_width * 16 / 9))
+    background = ImageOps.fit(
+        image.convert("RGB"),
+        (canvas_width, canvas_height),
+        method=Image.Resampling.LANCZOS,
+    ).filter(ImageFilter.GaussianBlur(radius=max(18, canvas_width // 55)))
+    canvas = background.copy()
+    offset_x = (canvas_width - image.width) // 2
+    offset_y = (canvas_height - image.height) // 2
+    canvas.paste(image.convert("RGB"), (offset_x, offset_y))
+
+    default = _largest_9x16_crop_coords(image)
+    default_coords = (
+        offset_x + default[0],
+        offset_x + default[1],
+        offset_y + default[2],
+        offset_y + default[3],
+    )
+
     cropped = st_cropper(
-        image,
+        canvas,
         realtime_update=True,
-        default_coords=_largest_9x16_crop_coords(image),
+        default_coords=default_coords,
         box_color="#4F46E5",
         aspect_ratio=(9, 16),
         return_type="image",
