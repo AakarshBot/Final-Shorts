@@ -1063,15 +1063,32 @@ def _render_top5_visual_board():
         unsafe_allow_html=True,
     )
 
+    script_handoff = st.session_state.get("test_top5_script_handoff") or {}
+    script_slides = script_handoff.get("slides") or []
+
     cols = st.columns(6, gap="small")
     for slide in range(1, 7):
         with cols[slide - 1]:
             assignment = st.session_state.test_top5_visual_assignments.get(slide)
+            script = script_slides[slide - 1] if slide <= len(script_slides) else {}
+            spoken_line = str(script.get("headline") or "").strip()
+            body = str(script.get("body") or "").strip()
             with st.container(key=f"test-top5-slide-{slide}"):
                 st.markdown(
                     f'<div class="eyebrow">SLIDE {slide}</div>',
                     unsafe_allow_html=True,
                 )
+                if spoken_line:
+                    st.markdown(
+                        '<div class="mini-label" style="margin-top:.45rem;">SCRIPT</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.markdown(
+                        f'<div style="font-size:.76rem;font-weight:760;line-height:1.3;color:var(--ink);margin:.18rem 0 .5rem;">{spoken_line}</div>',
+                        unsafe_allow_html=True,
+                    )
+                if body:
+                    st.caption(body)
                 preview = _top5_fit_preview(
                     assignment.get("bytes") if assignment else None,
                     240,
