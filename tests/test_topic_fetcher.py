@@ -64,9 +64,10 @@ def test_many_articles_of_one_event_do_not_fill_twenty():
         )
         for i in range(18)
     ]
+    categories = ["appointment", "record", "injury", "retention"]
     rows.extend(
         make_topic(
-            f"Alpha{i} Beta{i} cricket development",
+            f"Alpha{i} Beta{i} cricket {categories[i % len(categories)]}",
             url=f"https://x/e{i}",
         )
         for i in range(20)
@@ -160,3 +161,13 @@ def test_invalid_dates_are_not_fresh():
 def test_niche_profile_rejects_cricket():
     row = make_topic("India cricket team wins", description="Cricket update")
     assert topic_fetcher._prepare([row], set(), profile="niche_sports") == []
+
+def test_similar_boilerplate_does_not_merge_distinct_events():
+    rows = [
+        make_topic("Alpha player appointed as coach", description="Cricket appointment"),
+        make_topic("Beta player appointed as coach", description="Cricket appointment"),
+        make_topic("Gamma player appointed as coach", description="Cricket appointment"),
+    ]
+    prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
+    chosen = topic_fetcher._select(prepared, 3, set(), profile="cricket_india_asia")
+    assert len(chosen) == 3

@@ -601,3 +601,12 @@ Regression coverage now includes:
 - “More” excluding previously selected events.
 - Trend signals becoming targeted news searches.
 - Existing keyword search and Topic handoff behaviour remaining intact.
+
+
+## Topic Fetcher v2.1 correction — event clustering precision (2026-10-01)
+
+CI exposed that character-level title similarity was still too aggressive for generic headlines. The selector now uses shared cricket entities and shared event groups first; character similarity is only a final fallback when enough meaningful tokens are shared. This prevents different stories with boilerplate wording from collapsing into one event.
+
+The cricket relevance gate no longer treats generic words such as “coach” or “appointment” alone as cricket evidence. Strong cricket evidence or a recognised cricket publisher/source remains necessary.
+
+The downstream Topic contract is unchanged and no downstream factory function was modified.

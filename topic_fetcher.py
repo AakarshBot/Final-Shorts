@@ -110,7 +110,13 @@ CRICKET_ENTITY_NAMES = {
     "axar patel", "washington sundar", "rinku singh", "prasidh krishna", "smriti mandhana",
     "harmanpreet kaur", "jemimah rodrigues", "babar azam", "mohammad rizwan", "shaheen afridi",
     "naseem shah", "haris rauf", "mark boucher", "fraser stewart",
+    "cricket south africa", "mi emirates", "mcc",
 }
+CRICKET_TEAM_ENTITIES = {
+    "india", "west indies", "australia", "england", "south africa", "new zealand",
+    "pakistan", "sri lanka", "bangladesh", "afghanistan", "ireland",
+}
+CRICKET_KNOWN_ENTITIES = CRICKET_ENTITY_NAMES | CRICKET_TEAM_ENTITIES | CRICKET_COMPETITIONS
 CRICKET_COMPETITIONS = {
     "world cup", "champions trophy", "wpl", "ipl", "psl", "bbl", "cpl", "sa20", "ilt20", "mlc",
     "test championship", "ashes", "county championship", "big bash", "mi emirates",
@@ -246,26 +252,38 @@ def _profile_relevant(title: str, description: str, profile: str | None, source:
     strong_cricket = any(term in text for term in STRONG_CRICKET_TERMS) or any(name in text for name in CRICKET_ENTITY_NAMES) or any(comp in text for comp in CRICKET_COMPETITIONS)
     if title_tokens & NON_CRICKET_TERMS and not strong_cricket:
         return False
-    if strong_cricket or any(term in text for term in {"retention", "franchise", "coach", "appointment", "pitch", "law", "rules"}):
+    if strong_cricket:
         return True
     source_key = _source_key(source)
     return any(token in source_key for token in ("cric", "espn", "icc", "wisden", "bcci", "pcb", "cricket"))
 
 
+def _known_entities(value: str) -> set[str]:
+    text = _clean(value).casefold()
+    return {entity for entity in CRICKET_KNOWN_ENTITIES if entity in text}
+
+
 def _same_event(a: Topic, b: Topic) -> bool:
     ta, tb = _tokens(a.title), _tokens(b.title)
-    groups_a, groups_b = _event_groups(a.title), _event_groups(b.title)
     title_a, title_b = _clean(a.title).casefold(), _clean(b.title).casefold()
+    evidence_a = f"{title_a} {_clean(a.description).casefold()}".strip()
+    evidence_b = f"{title_b} {_clean(b.description).casefold()}".strip()
+    groups = _event_groups(a.title) & _event_groups(b.title)
+    entities = _known_entities(evidence_a) & _known_entities(evidence_b)
+    specific_entities = entities - CRICKET_TEAM_ENTITIES
     shared = (ta & tb) - TITLE_NOISE
-    if groups_a and groups_b and groups_a.isdisjoint(groups_b):
-        shared_names = {name for name in CRICKET_ENTITY_NAMES if name in title_a and name in title_b}
-        if not shared_names:
-            return False
     ratio = SequenceMatcher(None, title_a, title_b).ratio()
-    if ratio >= 0.58 or len(shared) >= 3:
+
+    if groups:
+        if specific_entities and shared:
+            return True
+        if len(entities) >= 2 and len(shared) >= 2:
+            return True
+
+    if len(entities) >= 2 and len(shared) >= 3 and ratio >= 0.55:
         return True
-    shared_names = {name for name in CRICKET_ENTITY_NAMES if name in title_a and name in title_b}
-    return bool(shared_names and groups_a and groups_a & groups_b)
+
+    return len(shared) >= 4 and ratio >= 0.82
 
 
 def _trend_value(value) -> float:
