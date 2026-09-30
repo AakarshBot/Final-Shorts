@@ -146,6 +146,90 @@ def subtitle_font(size: int = SUBTITLE_MAX_SIZE, language: str = "english"):
     return _font(_font_candidates("subtitle", language), size)
 
 
+def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
+    root = Path(__file__).resolve().parent / "fonts"
+    candidates = list(_font_candidates("headline", language))
+    candidates.extend(
+        [
+            Path("C:/Windows/Fonts/seguiemj.ttf"),
+            Path("C:/Windows/Fonts/seguisym.ttf"),
+            Path("C:/Windows/Fonts/arialuni.ttf"),
+            Path("C:/Windows/Fonts/seguisb.ttf"),
+            Path("C:/Windows/Fonts/arial.ttf"),
+            Path("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf"),
+            Path("/usr/share/fonts/opentype/noto/NotoSansSymbols2-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ]
+    )
+    fonts = []
+    seen = set()
+    for path in candidates:
+        key = str(path).casefold()
+        if key in seen or not path.exists():
+            continue
+        seen.add(key)
+        try:
+            fonts.append(ImageFont.truetype(str(path), size))
+        except OSError:
+            continue
+    if not fonts:
+        fonts.append(ImageFont.load_default())
+    return tuple(fonts)
+
+
+def _headline_font_supports(font, char: str) -> bool:
+    if not char or char in "\n\r\t":
+        return True
+    try:
+        actual = font.getmask(char)
+        missing = font.getmask("\U0010ffff")
+        return actual.size != missing.size or bytes(actual) != bytes(missing)
+    except (AttributeError, OSError, ValueError):
+        return True
+
+
+def _headline_runs(text: str, fonts: tuple[object, ...]) -> list[tuple[str, object]]:
+    if not text:
+        return []
+    runs = []
+    current_font = None
+    current_text = []
+    for char in text:
+        font = next((candidate for candidate in fonts if _headline_font_supports(candidate, char)), fonts[-1])
+        if current_font is not None and font is not current_font:
+            runs.append(("".join(current_text), current_font))
+            current_text = []
+        if current_font is None or font is not current_font:
+            current_font = font
+        current_text.append(char)
+    if current_text:
+        runs.append(("".join(current_text), current_font))
+    return runs
+
+
+def _measure_headline_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    fonts: tuple[object, ...],
+) -> tuple[int, int]:
+    runs = _headline_runs(text, fonts)
+    if not runs:
+        return 0, 0
+    widths = []
+    heights = []
+    for run, font in runs:
+        box = draw.textbbox(
+            (0, 0),
+            run,
+            font=font,
+            stroke_width=HEADLINE_STROKE_WIDTH,
+        )
+        widths.append(box[2] - box[0])
+        heights.append(box[3] - box[1])
+    return sum(widths), max(heights)
+
+
 def _measure(
     draw: ImageDraw.ImageDraw,
     text: str,
@@ -164,14 +248,14 @@ def _measure(
 def _headline_lines(
     text: str,
     draw: ImageDraw.ImageDraw,
-    font,
+    fonts: tuple[object, ...],
 ) -> list[list[str]]:
     words = text.split()
     if not words:
         return []
 
     measurements = [
-        _measure(draw, word, font, HEADLINE_STROKE_WIDTH)[0]
+        _measure_headline_text(draw, word, fonts)[0]
         for word in words
     ]
     max_line_width = HEADLINE_MAX_WIDTH - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
@@ -213,12 +297,12 @@ def _fit_headline_font(
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
     for size in range(HEADLINE_MAX_SIZE, HEADLINE_MIN_SIZE - 1, -1):
-        font = headline_font(size, language)
+        fonts = _headline_font_stack(size, language)
         try:
-            lines = _headline_lines(clean, probe, font)
+            lines = _headline_lines(clean, probe, fonts)
         except ValueError:
             continue
-        return font, clean, lines
+        return fonts, clean, lines
 
     raise ValueError("Headline is too long to fit in two lines.")
 def make_sample_background() -> Image.Image:
@@ -275,21 +359,24 @@ def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
 
 
 def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
-    font, clean, lines = _fit_headline_font(text, language)
+    fonts, clean, lines = _fit_headline_font(text, language)
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
 
     line_boxes = [
-        draw.textbbox(
-            (0, 0),
-            " ".join(line),
-            font=font,
-            stroke_width=HEADLINE_STROKE_WIDTH,
+        (
+            0,
+            0,
+            *_measure_headline_text(
+                draw,
+                " ".join(line),
+                fonts,
+            ),
         )
         for line in lines
     ]
-    line_widths = [box[2] - box[0] for box in line_boxes]
-    line_heights = [box[3] - box[1] for box in line_boxes]
+    line_widths = [box[2] for box in line_boxes]
+    line_heights = [box[3] for box in line_boxes]
 
     text_block_width = max(line_widths)
     text_block_height = (
@@ -336,15 +423,26 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
         line_text = " ".join(line)
         line_width = line_widths[row]
         line_x = text_x + (text_block_width - line_width) // 2
-        box = line_boxes[row]
-        draw.text(
-            (line_x - box[0], cursor_y - box[1]),
-            line_text,
-            font=font,
-            fill=WHITE,
-            stroke_width=HEADLINE_STROKE_WIDTH,
-            stroke_fill=DARK,
-        )
+        runs = _headline_runs(line_text, fonts)
+        cursor_x = line_x
+        for run, font in runs:
+            box = draw.textbbox(
+                (0, 0),
+                run,
+                font=font,
+                stroke_width=HEADLINE_STROKE_WIDTH,
+            )
+            run_height = box[3] - box[1]
+            run_y = cursor_y + (line_heights[row] - run_height) // 2
+            draw.text(
+                (cursor_x - box[0], run_y - box[1]),
+                run,
+                font=font,
+                fill=WHITE,
+                stroke_width=HEADLINE_STROKE_WIDTH,
+                stroke_fill=DARK,
+            )
+            cursor_x += box[2] - box[0]
         cursor_y += line_heights[row] + HEADLINE_LINE_GAP
 
     if t < 0.68 and progress < 1.0:
