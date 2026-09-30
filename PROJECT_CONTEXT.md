@@ -572,3 +572,32 @@ Do not:
 - or modify approved function behavior without a concrete regression.
 
 The immediate next tasks are **Dashboard WIP work and implementation of Production Line 08 (Top 5 cricket stories of the day) and Production Line 09 (On This Day)**.
+
+## Topic Fetcher v2 — trend-led discovery (2026-10-01)
+
+Function 01 was rewritten without changing the downstream handoff contract.
+
+Discovery now combines:
+- Google Trends Trending Now as a current attention signal for India, using the shortest supported live window exposed by the maintained Trendflow client and prioritising trends that started within roughly the last hour.
+- Broad Google News cricket discovery instead of relying on a country/player allow-list.
+- Trend-derived Google News queries so new entities, leagues, appointments, laws, innovations and other developments can be discovered without being hard-coded first.
+- GDELT as a secondary coverage source, not merely a failure fallback.
+- Event clustering before final selection so multiple articles about one match/development are treated as one event.
+- Event-level coverage and source-diversity bonuses rather than rewarding every duplicate article as a separate story.
+- Diversity-aware selection that prefers distinct events and sources first, then uses additional articles only when necessary to preserve the requested pool size.
+
+The former hard profile filter was broadened. Cricket India/Asia now gives India/Asia stories a relevance boost but can admit strong global cricket stories, which allows developments such as MCC law changes, WPL retention/releases, Cricket South Africa innovations and franchise coaching appointments into the same discovery pool.
+
+“Find 20 more” remains compatible with the existing dashboard call. It now adds a wider discovery query set while excluding both previously returned URLs and previously selected events, so the second batch explores the next layer of the news cycle instead of re-serving the same event.
+
+The existing `fetch_topics(profile, more, exclude_topics, limit, keyword)` signature and `Topic(title, source, published_at, url, description, score)` handoff remain unchanged. No changes were made to app.py or Functions 02–07.
+
+A new `trendflow-py` dependency was added as the free real-time search-trend client. Trend discovery is non-authoritative: if the trend request fails or is rate-limited, the normal multi-query news discovery continues.
+
+Regression coverage now includes:
+- MCC law changes, WPL retention/release news, Cricket South Africa pitch innovation and Mark Boucher/MI Emirates surviving cricket relevance filtering.
+- One dominant India–West Indies event not consuming the story selection ahead of distinct events.
+- Returning the full 20-story pool when sufficient unique articles exist.
+- “More” excluding previously selected events.
+- Trend signals becoming targeted news searches.
+- Existing keyword search and Topic handoff behaviour remaining intact.

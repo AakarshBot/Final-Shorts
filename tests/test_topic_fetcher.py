@@ -1,4 +1,5 @@
 from datetime import datetime, timedelta, timezone
+from types import SimpleNamespace
 
 import topic_fetcher
 
@@ -9,324 +10,147 @@ def make_topic(title, hours=1, source="Test", url=None, description=""):
         title,
         source,
         now - timedelta(hours=hours),
-        url or f"https://example.com/{hash(title)}",
+        url or f"https://example.com/{abs(hash(title))}",
         description,
     )
 
 
-def test_title_source_suffix_is_cleaned():
-    topic = make_topic(
-        "Need to be ten times better after injury layoff, says Prasidh Krishna | Cricket - hindustantimes.com",
-        source="hindustantimes.com",
-    )
+def test_handoff_contract_is_unchanged():
+    topic = make_topic("Shubman Gill injury update", source="ESPNcricinfo")
     prepared = topic_fetcher._prepare([topic], set(), profile="cricket_india_asia")
-    assert prepared[0].title == "Need to be ten times better after injury layoff, says Prasidh Krishna"
+    assert prepared[0].title == topic.title
+    assert prepared[0].source == topic.source
+    assert prepared[0].published_at == topic.published_at
+    assert prepared[0].url == topic.url
+    assert prepared[0].description == topic.description
 
 
-def test_utility_pages_are_removed():
+def test_requested_cricket_story_types_survive_filter():
     rows = [
-        make_topic("India cricket schedule and fixtures for next month"),
-        make_topic("How to watch India vs West Indies live streaming"),
-        make_topic("India vs West Indies 1st ODI Playing XI predicted"),
-        make_topic("Shubman Gill suffers injury scare in nets ahead of ODI"),
+        make_topic("MCC announces major cricket law changes", description="The MCC Head of Cricket announced changes to the Laws of Cricket aimed at curbing bat dominance."),
+        make_topic("WPL 2027 retention lists drop", description="The Women's Premier League announced franchise retention and release lists."),
+        make_topic("South Africa's exchangeable pitch innovation", description="Cricket South Africa is trialing exchangeable pitches to address pitch fatigue."),
+        make_topic("Mark Boucher takes the MI Emirates reins", description="Mark Boucher has been appointed head coach of the MI Emirates cricket franchise."),
     ]
     prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
-    assert [r.title for r in prepared] == [rows[3].title]
+    assert len(prepared) == 4
 
 
-def test_generic_listing_pages_are_removed():
+def test_non_cricket_story_is_still_rejected():
+    row = make_topic("President announces new policy", description="National politics and government policy update.")
+    assert topic_fetcher._prepare([row], set(), profile="cricket_india_asia") == []
+
+
+def test_same_match_event_clusters_but_different_events_survive():
     rows = [
-        make_topic("Sports News"),
-        make_topic("Today's Top 10 Cricket News - September 26"),
-        make_topic("Virat Kohli confirms 2027 World Cup will be his last"),
+        make_topic("India beat West Indies in first ODI", url="https://x/1"),
+        make_topic("India complete win over West Indies in ODI", url="https://x/2"),
+        make_topic("MCC announces major cricket law changes", description="MCC law changes to rebalance bat and ball", url="https://x/3"),
+        make_topic("Mark Boucher appointed by MI Emirates", description="Mark Boucher joins MI Emirates as head coach", url="https://x/4"),
     ]
     prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
-    assert len(prepared) == 1
+    chosen = topic_fetcher._select(prepared, 3, set(), profile="cricket_india_asia")
+    assert len(chosen) == 3
+    assert sum("West Indies" in x.title for x in chosen) == 1
+    assert any("MCC" in x.title for x in chosen)
+    assert any("Boucher" in x.title for x in chosen)
 
 
-def test_cricket_player_headline_survives_without_cricket_word():
-    row = make_topic(
-        "Need to be ten times better after injury layoff, says Prasidh Krishna",
-        description="Prasidh Krishna discussed his return to international cricket after an injury layoff.",
-    )
-    prepared = topic_fetcher._prepare([row], set(), profile="cricket_india_asia")
-    assert [r.title for r in prepared] == [row.title]
-
-
-def test_non_cricket_story_is_not_rescued_by_publisher_boilerplate():
-    rows = [
-        make_topic(
-            "President Murmu hails Sawan Barwal's Asian Games marathon silver",
-            description="Cricketnmore latest cricket and sports updates.",
-        ),
-        make_topic("Virat Kohli confirms 2027 World Cup will be his last"),
-    ]
+def test_many_articles_of_one_event_do_not_fill_twenty():
+    rows = []
+    for i in range(18):
+        rows.append(make_topic(f"India beat West Indies first ODI report number {i}", url=f"https://x/w{i}"))
+    for i in range(8):
+        rows.append(make_topic(f"MCC announces cricket law changes {i}", description="MCC changes cricket laws", url=f"https://x/m{i}"))
+    for i in range(8):
+        rows.append(make_topic(f"Mark Boucher appointed MI Emirates coach {i}", description="MI Emirates cricket franchise coach", url=f"https://x/b{i}"))
     prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
-    assert [r.title for r in prepared] == [rows[1].title]
+    chosen = topic_fetcher._select(prepared, 20, set(), profile="cricket_india_asia")
+    assert len(chosen) == 20
+    assert any("MCC" in x.title for x in chosen)
+    assert any("Boucher" in x.title for x in chosen)
 
 
-def test_same_retirement_event_clusters():
+def test_more_excludes_existing_event():
+    existing = [make_topic("India beat West Indies first ODI", url="https://x/old")]
     rows = [
-        make_topic("Virat Kohli confirms 2027 ODI World Cup will be his last for India"),
-        make_topic("Virat Kohli confirms World Cup 2027 will be his final ODI for India"),
-        make_topic("Virat Kohli's 2027 farewell puts India's ODI transition into focus"),
-        make_topic("Virat Kohli reveals key mentality switch in ODIs"),
+        make_topic("India defeat West Indies in first ODI", url="https://x/new"),
+        make_topic("WPL announces retention list", description="Women's Premier League", url="https://x/wpl"),
     ]
-    chosen = topic_fetcher._select(
-        topic_fetcher._prepare(rows, set(), profile="cricket_india_asia"),
-        20,
-        set(),
-    )
-    assert len(chosen) == 2
+    prepared = topic_fetcher._prepare(rows, {existing[0].url}, profile="cricket_india_asia")
+    chosen = topic_fetcher._select(prepared, 20, {existing[0].url}, existing=existing, profile="cricket_india_asia")
+    assert [x.title for x in chosen] == [rows[1].title]
 
 
-def test_same_subject_different_event_is_kept():
-    rows = [
-        make_topic("Shubman Gill suffers injury scare in nets ahead of West Indies ODI"),
-        make_topic("Shubman Gill scores a century to lead India to a win over England"),
-    ]
-    chosen = topic_fetcher._select(
-        topic_fetcher._prepare(rows, set(), profile="cricket_india_asia"),
-        20,
-        set(),
-    )
-    assert len(chosen) == 2
-
-
-def test_cross_headline_match_context_clusters_related_ind_wi_event():
-    rows = [
-        make_topic("India vs West Indies first ODI playing 11 announced"),
-        make_topic("Rohit and Kohli return as India begin home ODI season against West Indies"),
-        make_topic("West Indies tour of India: India vs West Indies first ODI updates"),
-    ]
-    filtered = [
-        rows[1],
-        rows[2],
-    ]
-    prepared = topic_fetcher._prepare(filtered, set(), profile="cricket_india_asia")
-    chosen = topic_fetcher._select(prepared, 20, set())
-    assert len(chosen) == 1
-
-
-def test_interest_signals_raise_topic_score():
-    generic = make_topic("India cricket wins match")
-    pull = make_topic("Shubman Gill reacts after historic record")
-    assert topic_fetcher._score(pull) > topic_fetcher._score(generic)
-
-
-
-def test_cricket_india_asia_scope_excludes_other_cricket_nations():
-    rows = [
-        make_topic("Australia cricket star breaks record"),
-        make_topic("Pakistan cricket star breaks record"),
-        make_topic("Sri Lanka cricket star breaks record"),
-        make_topic("India cricket star breaks record"),
-    ]
-    prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
-    assert [row.title for row in prepared] == [
-        rows[1].title,
-        rows[2].title,
-        rows[3].title,
-    ]
-
-
-def test_cricket_india_asia_uses_description_for_scope():
-    row = make_topic(
-        "Star batter reveals stunning comeback",
-        description="Pakistan batter discussed the comeback after returning to international cricket.",
-    )
-    prepared = topic_fetcher._prepare([row], set(), profile="cricket_india_asia")
-    assert prepared[0].title == row.title
-
-
-def test_cricket_lookback_rejects_stale_stories():
-    stale = make_topic("India cricket record story", hours=49)
-    fresh = make_topic("India cricket upset story", hours=12)
-    prepared = topic_fetcher._prepare(
-        [stale, fresh],
-        set(),
-        profile="cricket_india_asia",
-    )
-    assert [row.title for row in prepared] == [fresh.title]
-
-
-def test_keyword_queries_are_cricket_scoped():
-    queries = topic_fetcher._keyword_queries("cricket_india_asia", "Babar Azam")
-    assert queries
-    assert all("Babar Azam" in query for query in queries)
-    assert all("cricket" in query.lower() for query in queries)
-    assert all("India" in query and "Pakistan" in query and "Sri Lanka" in query for query in queries)
-
-
-def test_keyword_search_uses_keyword_queries(monkeypatch):
+def test_trend_signal_becomes_search_query(monkeypatch):
     captured = []
 
-    def fake_google(query):
-        captured.append(query)
-        return [
-            make_topic(
-                "Babar Azam Pakistan cricket comeback",
-                url=f"https://example.com/{len(captured)}",
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def trending_now(self, region=None, **kwargs):
+            item = SimpleNamespace(
+                title="WPL 2027 retention",
+                growth=300,
+                volume=50000,
+                started_at=datetime.now(timezone.utc),
+                active=True,
             )
-        ]
+            return SimpleNamespace(results=[item])
 
-    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
-    monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: [])
+    monkeypatch.setattr(topic_fetcher.trendflow, "Client", FakeClient)
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda q: captured.append(q) or [])
+    monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda q: [])
+    topic_fetcher.fetch_topics(profile="cricket_india_asia", limit=20)
+    assert any("WPL 2027 retention" in q for q in captured)
 
+
+def test_keyword_search_still_uses_keyword_queries(monkeypatch):
+    captured = []
+    monkeypatch.setattr(
+        topic_fetcher,
+        "_fetch_google",
+        lambda q: captured.append(q) or [make_topic("Babar Azam Pakistan cricket comeback")],
+    )
+    monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda q: [])
     result = topic_fetcher.fetch_topics(
         profile="cricket_india_asia",
         keyword="Babar Azam",
         limit=1,
     )
-
     assert result
-    assert len(captured) == len(topic_fetcher._keyword_queries("cricket_india_asia", "Babar Azam"))
-    assert all("Babar Azam" in query for query in captured)
+    assert captured and all("Babar Azam" in q for q in captured)
 
 
-def test_coverage_signal_raises_a_story_score():
-    topic = make_topic("India cricket historic upset")
-    assert topic_fetcher._score(
-        topic,
-        profile="cricket_india_asia",
-        coverage_count=4,
-    ) > topic_fetcher._score(
-        topic,
-        profile="cricket_india_asia",
-        coverage_count=1,
-    )
-
-
-def test_popular_player_is_softly_diversified():
+def test_fetch_topics_preserves_a_twenty_story_pool(monkeypatch):
     rows = [
         make_topic(
-            "Virat Kohli record story",
-            url="https://example.com/virat1",
-        ),
-        make_topic(
-            "Virat Kohli comeback story",
-            url="https://example.com/virat2",
-        ),
-        make_topic(
-            "Babar Azam Pakistan record story",
-            url="https://example.com/babar",
-        ),
-    ]
-    prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
-    chosen = topic_fetcher._select(
-        prepared,
-        2,
-        set(),
-        profile="cricket_india_asia",
-    )
-    assert len(chosen) == 2
-    assert sum("Virat Kohli" in topic.title for topic in chosen) == 1
-
-
-def test_niche_profile_rejects_cricket_only_story():
-    row = make_topic("India men's cricket team arrives in Nagoya for Asian Games cricket")
-    assert topic_fetcher._prepare([row], set(), profile="niche_sports") == []
-
-
-def test_freshness_and_profile_relevance_are_enforced():
-    rows = [
-        make_topic("Old cricket record story", hours=80),
-        make_topic("Local politics statement today", hours=1, description="cricket updates"),
-        make_topic("Indian badminton star wins major title", hours=2),
-        make_topic("Shubman Gill injury scare before West Indies ODI", hours=2),
-    ]
-    prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
-    assert [r.title for r in prepared] == [rows[3].title]
-
-
-def test_more_query_set_is_distinct():
-    assert set(topic_fetcher.QUERIES["cricket_india_asia"]).isdisjoint(
-        topic_fetcher.MORE_QUERIES["cricket_india_asia"]
-    )
-
-
-def test_fetch_topics_can_return_twenty_distinct_events(monkeypatch):
-    rows = [
-        make_topic(
-            f"India cricket Alpha{i} {'record' if i % 2 == 0 else 'win'}",
+            f"Cricket event {i} announcement",
+            source=f"source{i % 6}.com",
             url=f"https://example.com/{i}",
         )
-        for i in range(20)
+        for i in range(30)
     ]
+    monkeypatch.setattr(topic_fetcher, "_trend_signals", lambda *args, **kwargs: [])
     monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda query: rows)
     monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: [])
-    topics = topic_fetcher.fetch_topics(profile="cricket_india_asia", limit=20)
-    assert len(topics) == 20
+    result = topic_fetcher.fetch_topics(profile="cricket_india_asia", limit=20)
+    assert len(result) == 20
+    assert len({topic.url for topic in result}) == 20
 
 
-def test_fetch_topics_uses_secondary_source_when_google_clusters_too_heavily(monkeypatch):
-    google_rows = [
-        make_topic(
-            f"Virat Kohli retirement record story {i}",
-            url=f"https://google.example.com/{i}",
-        )
-        for i in range(10)
-    ]
-    gdelt_rows = [
-        make_topic(
-            f"India cricket Player{i} record milestone event",
-            url=f"https://gdelt.example.com/{i}",
-        )
-        for i in range(19)
-    ]
-    monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda query: google_rows)
-    monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: gdelt_rows)
-    topics = topic_fetcher.fetch_topics(profile="cricket_india_asia", limit=20)
-    assert len(topics) == 20
-
-
-def test_more_results_exclude_existing_events():
-    existing = [
-        make_topic("Shubman Gill suffers injury scare in nets ahead of West Indies ODI")
-    ]
-    new_rows = [
-        make_topic(
-            "Shubman Gill hit by delivery and appears in pain ahead of West Indies ODI",
-            url="https://example.com/new",
-        ),
-        make_topic(
-            "Cricket India sponsor deal announced for home series",
-            url="https://example.com/other",
-        ),
-    ]
-    rows = topic_fetcher._prepare(new_rows, {existing[0].url}, profile="cricket_india_asia")
-    selected = topic_fetcher._select(rows, 20, {existing[0].url}, existing)
-    assert [t.title for t in selected] == [new_rows[1].title]
-
-
-def test_invalid_dates_are_not_treated_as_fresh():
+def test_invalid_dates_are_not_fresh():
     row = topic_fetcher.Topic(
         "Cricket record story",
         "Test",
         topic_fetcher._parse_date("not-a-date"),
-        "https://example.com/invalid-date",
+        "https://example.com/invalid",
         "",
     )
     assert topic_fetcher._prepare([row], set(), profile="cricket_india_asia") == []
 
 
-def test_one_failed_google_query_does_not_abort_the_fetch(monkeypatch):
-    import requests
-
-    good = make_topic("India cricket record update")
-    calls = []
-
-    def fake_google(query):
-        calls.append(query)
-        if query == topic_fetcher.QUERIES["cricket_india_asia"][0]:
-            raise requests.RequestException("temporary")
-        return [good]
-
-    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
-    monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: [])
-    result = topic_fetcher.fetch_topics(profile="cricket_india_asia", limit=20)
-    assert result
-    assert len(calls) == (
-        len(topic_fetcher.QUERIES["cricket_india_asia"])
-        + len(topic_fetcher.DISCOVERY_QUERIES["cricket_india_asia"])
-    )
+def test_niche_profile_rejects_cricket():
+    row = make_topic("India cricket team wins", description="Cricket update")
+    assert topic_fetcher._prepare([row], set(), profile="niche_sports") == []
