@@ -147,7 +147,6 @@ def subtitle_font(size: int = SUBTITLE_MAX_SIZE, language: str = "english"):
 
 
 def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
-    root = Path(__file__).resolve().parent / "fonts"
     candidates = list(_font_candidates("headline", language))
     candidates.extend(
         [
@@ -186,7 +185,7 @@ def _headline_font_supports(font, char: str) -> bool:
         missing = font.getmask("\U0010ffff")
         return actual.size != missing.size or bytes(actual) != bytes(missing)
     except (AttributeError, OSError, ValueError):
-        return True
+        return False
 
 
 def _headline_runs(text: str, fonts: tuple[object, ...]) -> list[tuple[str, object]]:
@@ -302,7 +301,7 @@ def _fit_headline_font(
             lines = _headline_lines(clean, probe, fonts)
         except ValueError:
             continue
-        return fonts, clean, lines
+        return fonts[0], clean, lines
 
     raise ValueError("Headline is too long to fit in two lines.")
 def make_sample_background() -> Image.Image:
@@ -359,7 +358,8 @@ def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
 
 
 def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
-    fonts, clean, lines = _fit_headline_font(text, language)
+    primary_font, clean, lines = _fit_headline_font(text, language)
+    fonts = _headline_font_stack(primary_font.size, language)
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
     draw = ImageDraw.Draw(layer)
 
