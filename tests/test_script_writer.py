@@ -632,4 +632,4 @@ def test_writer_research_keeps_primary_and_caps_independent_reports(monkeypatch)
 def test_writer_keeps_existing_retention_limits():
     assert SCENE_1_MAX_WORDS == 14
     assert MAX_WORDS == 75
-    assert "exactly 4 or 5 narration scenes" in __import__("script_writer").SYSTEM_PROMPT
+    assert "Use 4 narration scenes by default" in __import__("script_writer").SYSTEM_PROMPT
