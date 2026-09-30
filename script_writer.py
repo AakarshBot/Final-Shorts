@@ -626,7 +626,7 @@ def _research_story(story, profile: str | None = None) -> str:
         if primary:
             sections.append(
                 f"[PRIMARY ARTICLE — {resolved_primary_url or original_url}]\n"
-                f"{_limit_source_text(primary, CRICKET_RESEARCH_MAX_SOURCE_CHARS)}"
+                f"{_limit_source_text(primary, CRICKET_RESEARCH_PRIMARY_CHARS)}"
             )
 
         independent = []
