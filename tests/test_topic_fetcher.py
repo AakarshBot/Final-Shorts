@@ -326,4 +326,7 @@ def test_one_failed_google_query_does_not_abort_the_fetch(monkeypatch):
     monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: [])
     result = topic_fetcher.fetch_topics(profile="cricket_india_asia", limit=20)
     assert result
-    assert len(calls) == len(topic_fetcher.QUERIES["cricket_india_asia"])
+    assert len(calls) == (
+        len(topic_fetcher.QUERIES["cricket_india_asia"])
+        + len(topic_fetcher.DISCOVERY_QUERIES["cricket_india_asia"])
+    )
