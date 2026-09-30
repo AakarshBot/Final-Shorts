@@ -587,6 +587,8 @@ if "visual_crops" not in st.session_state:
     st.session_state.visual_crops = {}
 if "topics" not in st.session_state:
     st.session_state.topics = []
+if "topic_keyword" not in st.session_state:
+    st.session_state.topic_keyword = ""
 if "selected_topic" not in st.session_state:
     st.session_state.selected_topic = None
 if "script_data" not in st.session_state:
@@ -638,6 +640,8 @@ if "live_cricket_profile" not in st.session_state:
     st.session_state.live_cricket_profile = None
 if "live_topics" not in st.session_state:
     st.session_state.live_topics = []
+if "live_topic_keyword" not in st.session_state:
+    st.session_state.live_topic_keyword = ""
 if "live_selected_topic" not in st.session_state:
     st.session_state.live_selected_topic = None
 if "live_stage" not in st.session_state:
@@ -2432,6 +2436,27 @@ def render_live_dashboard():
     if st.session_state.live_stage == "01 · Story":
         st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one to start production</div></div>', unsafe_allow_html=True)
         topics = st.session_state.live_topics
+        cricket_profile = st.session_state.live_topics_profile in {"cricket_india_asia", "cricket_global"}
+
+        if cricket_profile:
+            search_col, button_col = st.columns([3, 1], gap="small")
+            with search_col:
+                keyword = st.text_input(
+                    "Search by player, team, event or keyword",
+                    placeholder="e.g. Babar Azam, Asia Cup, record",
+                    key="live_topic_keyword",
+                    label_visibility="collapsed",
+                ).strip()
+            with button_col:
+                keyword_search = st.button(
+                    "Search keyword",
+                    width="stretch",
+                    key="live-topic-keyword-search",
+                )
+        else:
+            keyword = ""
+            keyword_search = False
+
         for start in range(0, len(topics), 2):
             row = st.columns(2, gap="medium")
             for col, (index, topic) in zip(
@@ -2450,17 +2475,25 @@ def render_live_dashboard():
                             _live_start_story(index)
                             st.rerun()
 
-        if st.button("Find 20 more unique stories", width="stretch", key="live-find-more"):
-            with st.spinner("Searching for 20 additional unique stories…"):
-                existing = list(st.session_state.live_topics)
-                new_topics = fetch_topics(
-                    st.session_state.live_topics_profile,
-                    more=True,
-                    exclude_topics=existing,
-                    limit=20,
-                )
-                st.session_state.live_topics = existing + new_topics
-            st.rerun()
+        more_clicked = st.button("Find 20 more unique stories", width="stretch", key="live-find-more")
+        if keyword_search or more_clicked:
+            if keyword_search and not keyword:
+                st.warning("Enter a keyword first.")
+            else:
+                with st.spinner(
+                    "Searching targeted cricket stories…" if keyword_search
+                    else "Searching for 20 additional unique stories…"
+                ):
+                    existing = list(st.session_state.live_topics)
+                    new_topics = fetch_topics(
+                        st.session_state.live_topics_profile,
+                        more=more_clicked and not keyword_search,
+                        exclude_topics=existing,
+                        limit=20,
+                        keyword=keyword if keyword_search else None,
+                    )
+                    st.session_state.live_topics = existing + new_topics
+                st.rerun()
         return
 
     selected_index = st.session_state.live_selected_topic
@@ -2564,7 +2597,7 @@ def render_topic_fetcher():
     previous_desk = st.session_state.get("topic_desk_profile")
     if previous_desk and previous_desk != profiles[desk]:
         for key, value in {
-            "topics": [], "selected_topic": None, "script_data": None, "approved_script": None,
+            "topics": [], "topic_keyword": "", "selected_topic": None, "script_data": None, "approved_script": None,
             "audio_data": None, "approved_audio": None, "subtitle_data": None, "approved_subtitles": None,
             "visual_result": None, "visual_loaded_story": None, "renderer_previews": None,
             "rendered_video_path": None, "upload_qc_approved": False, "upload_result": None,
@@ -2574,32 +2607,65 @@ def render_topic_fetcher():
             st.session_state[key] = value
     st.session_state.topic_desk_profile = profiles[desk]
 
+    profile = profiles[desk]
     with st.container(key="topic-toolbar"):
-        a,b,cnt=st.columns([1,.72,1.6],gap="small")
+        a, b, cnt = st.columns([1, .72, 1.6], gap="small")
         with a:
-            fetch=st.button("Fetch current stories",type="primary",width="stretch")
+            fetch = st.button("Fetch current stories", type="primary", width="stretch")
         with b:
-            more=st.button("Find 20 more",width="stretch")
+            more = st.button("Find 20 more", width="stretch")
         with cnt:
             st.markdown(
                 f'<div style="text-align:right;padding:.65rem .15rem;"><span class="badge">{len(st.session_state.topics)} stories</span></div>',
                 unsafe_allow_html=True,
             )
 
-    if fetch or more:
-        with st.spinner("Fetching current sports stories…"):
-            existing_topics=list(st.session_state.topics) if more else []
-            new_topics=fetch_topics(profiles[desk],more=more,exclude_topics=existing_topics,limit=20)
-            st.session_state.topics=existing_topics+new_topics if more else new_topics
-        st.session_state.selected_topic=None
-        st.session_state.script_data=None
-        st.session_state.approved_script=None
-        st.session_state.audio_data=None
-        st.session_state.approved_audio=None
-        st.session_state.subtitle_data=None
-        st.session_state.approved_subtitles=None
-        st.session_state.visual_result=None
-        st.session_state.visual_loaded_story=None
+    keyword_search = False
+    if profile in {"cricket_india_asia", "cricket_global"}:
+        search_col, button_col = st.columns([3, 1], gap="small")
+        with search_col:
+            keyword = st.text_input(
+                "Search by player, team, event or keyword",
+                placeholder="e.g. Babar Azam, Asia Cup, record",
+                key="topic_keyword",
+                label_visibility="collapsed",
+            ).strip()
+        with button_col:
+            keyword_search = st.button(
+                "Search keyword",
+                width="stretch",
+                key="topic-keyword-search",
+            )
+    else:
+        keyword = ""
+
+    if fetch or more or keyword_search:
+        if keyword_search and not keyword:
+            st.warning("Enter a keyword first.")
+        else:
+            with st.spinner(
+                "Searching targeted cricket stories…" if keyword_search
+                else "Fetching current sports stories…"
+            ):
+                existing_topics = list(st.session_state.topics)
+                new_topics = fetch_topics(
+                    profile,
+                    more=more and not keyword_search,
+                    exclude_topics=existing_topics,
+                    limit=20,
+                    keyword=keyword if keyword_search else None,
+                )
+                st.session_state.topics = existing_topics + new_topics if (more or keyword_search) else new_topics
+
+            st.session_state.selected_topic = None
+            st.session_state.script_data = None
+            st.session_state.approved_script = None
+            st.session_state.audio_data = None
+            st.session_state.approved_audio = None
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
+            st.session_state.visual_result = None
+            st.session_state.visual_loaded_story = None
 
     topics=st.session_state.topics
     if not topics:
