@@ -363,14 +363,45 @@ def _score(
     profile: str | None = None,
     coverage_count: int = 1,
 ) -> float:
-    lookback_hours = PROFILE_LOOKBACK_HOURS.get(profile, LOOKBACK_HOURS)
     age_hours = max(
         0.0,
         (datetime.now(timezone.utc) - topic.published_at).total_seconds() / 3600,
     )
+
+    if profile in {None, "niche_sports"}:
+        freshness = max(0.0, LOOKBACK_HOURS - age_hours) / LOOKBACK_HOURS * 5
+        event_bonus = min(2.8, len(_event_groups(topic.title)) * 0.8)
+        pull_bonus = min(4.0, len(_tokens(topic.title) & AUDIENCE_PULL_TERMS) * 1.0)
+        distinctive = (
+            _tokens(topic.title)
+            - SPORT_WORDS
+            - set().union(*EVENT_GROUPS.values())
+            - EVENT_CONTEXT
+        )
+        specificity = min(2.0, max(0, len(distinctive) - 2) * 0.35)
+        source_penalty = 1.0 if _source_key(topic.source) in PUBLISHER_PENALTIES else 0.0
+        low_signal_penalty = (
+            1.5
+            if any(
+                re.search(pattern, topic.title, re.IGNORECASE)
+                for pattern in LOW_SIGNAL_PATTERNS
+            )
+            else 0.0
+        )
+        generic_penalty = 3.0 if _utility(topic.title) else 0.0
+        return (
+            freshness
+            + event_bonus
+            + pull_bonus
+            + specificity
+            - source_penalty
+            - low_signal_penalty
+            - generic_penalty
+        )
+
+    lookback_hours = PROFILE_LOOKBACK_HOURS.get(profile, LOOKBACK_HOURS)
     freshness_ratio = max(0.0, lookback_hours - age_hours) / lookback_hours
     freshness = 6.5 * (freshness_ratio ** 1.7)
-
     event_bonus = min(2.8, len(_event_groups(topic.title)) * 0.8)
     pull_bonus = min(4.5, len(_tokens(topic.title) & AUDIENCE_PULL_TERMS) * 1.0)
 
@@ -387,7 +418,6 @@ def _score(
         - EVENT_CONTEXT
     )
     specificity = min(2.0, max(0, len(distinctive) - 2) * 0.35)
-
     coverage_bonus = min(2.4, max(0, coverage_count - 1) * 0.6)
     source_penalty = 1.0 if _source_key(topic.source) in PUBLISHER_PENALTIES else 0.0
     low_signal_penalty = (
@@ -396,10 +426,11 @@ def _score(
         else 0.0
     )
     generic_penalty = 3.0 if _utility(topic.title) else 0.0
-
-    stale_penalty = 0.0
-    if profile in {"cricket_india_asia", "cricket_global"} and age_hours > 36:
-        stale_penalty = min(2.5, (age_hours - 36) * 0.2)
+    stale_penalty = (
+        min(2.5, (age_hours - 36) * 0.2)
+        if age_hours > 36
+        else 0.0
+    )
 
     return (
         freshness
@@ -529,6 +560,54 @@ def _select(
 ) -> list[Topic]:
     if limit <= 0:
         return []
+
+    if profile in {None, "niche_sports"}:
+        ranked = sorted(
+            (
+                Topic(
+                    r.title,
+                    r.source,
+                    r.published_at,
+                    r.url,
+                    r.description,
+                    _score(r, profile=profile),
+                )
+                for r in rows
+            ),
+            key=lambda topic: topic.score,
+            reverse=True,
+        )
+
+        blocked = list(existing or [])
+        chosen: list[Topic] = []
+        source_counts: dict[str, int] = {}
+        deferred: list[Topic] = []
+        seen_canonical = {_canonical_url(url) for url in seen_urls}
+
+        for topic in ranked:
+            if _canonical_url(topic.url) in seen_canonical:
+                continue
+            if any(_same_event(topic, other) for other in blocked + chosen):
+                continue
+            source = _source_key(topic.source)
+            if source and source_counts.get(source, 0) >= 2 and len(chosen) < max(1, limit // 2):
+                deferred.append(topic)
+                continue
+            chosen.append(topic)
+            if source:
+                source_counts[source] = source_counts.get(source, 0) + 1
+            if len(chosen) >= limit:
+                break
+
+        if len(chosen) < limit:
+            for topic in deferred:
+                if any(_same_event(topic, other) for other in blocked + chosen):
+                    continue
+                chosen.append(topic)
+                if len(chosen) >= limit:
+                    break
+
+        return chosen
 
     blocked = list(existing or [])
     seen_canonical = {_canonical_url(url) for url in seen_urls}
