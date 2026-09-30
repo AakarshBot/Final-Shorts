@@ -475,7 +475,10 @@ def _research_story(story) -> str:
                 f"[TOPIC FETCHER SUMMARY]\n{description}"
             )
 
-        return ""
+        return _limit_source_text(
+            f"[SELECTED STORY]\n{title}\n\n"
+            f"[TOPIC FETCHER SUMMARY]\n{description}"
+        )
 
     sections = []
     if title:
@@ -691,10 +694,6 @@ def _request(model: str, prompt: str, story: str) -> dict:
 def write_script(story, language: str = "english") -> dict:
     """Generate one sports Shorts script and return its later-stage metadata too."""
     source = _research_story(story)
-    if not source:
-        fallback = _source_text(story)
-        if _story_value(story, "title") and _story_value(story, "description"):
-            source = fallback
     if not source:
         raise ValueError("The selected story contains no usable evidence.")
 
