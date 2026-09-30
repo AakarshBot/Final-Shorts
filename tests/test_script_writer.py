@@ -529,12 +529,11 @@ def test_writer_research_uses_text_search_when_news_fallback_is_empty(monkeypatc
     assert "text" in FakeDDGS.calls
 
 
-def test_writer_does_not_generate_from_teaser_when_article_research_fails(monkeypatch):
-    called = False
+def test_writer_can_use_topic_evidence_when_article_research_fails(monkeypatch):
+    captured = []
 
     def fake_request(model, prompt, story):
-        nonlocal called
-        called = True
+        captured.append(story)
         return valid_result()
 
     monkeypatch.setattr("script_writer._request", fake_request)
@@ -547,19 +546,18 @@ def test_writer_does_not_generate_from_teaser_when_article_research_fails(monkey
         lambda title, url: ("", ""),
     )
 
-    try:
-        write_script(
-            {
-                "title": "Shubman Gill injury scare",
-                "description": "Gill was hit during training before the ODI.",
-                "url": "https://example.com/story",
-            }
-        )
-    except RuntimeError as exc:
-        assert "story research failed" in str(exc).lower()
-    else:
-        raise AssertionError("A reachable story URL must not silently degrade to its teaser.")
-    assert called is False
+    result = write_script(
+        {
+            "title": "Shubman Gill injury scare",
+            "description": "Gill was hit during training before the ODI.",
+            "url": "https://example.com/story",
+        }
+    )
+
+    assert result["provider_used"] == "openai/gpt-oss-120b"
+    assert "[SELECTED STORY]" in captured[0]
+    assert "Shubman Gill injury scare" in captured[0]
+    assert "Gill was hit during training before the ODI." in captured[0]
 
 
 def test_writer_research_falls_back_to_another_article_when_primary_is_thin(monkeypatch):
