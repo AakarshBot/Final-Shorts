@@ -116,11 +116,12 @@ CRICKET_TEAM_ENTITIES = {
     "india", "west indies", "australia", "england", "south africa", "new zealand",
     "pakistan", "sri lanka", "bangladesh", "afghanistan", "ireland",
 }
-CRICKET_KNOWN_ENTITIES = CRICKET_ENTITY_NAMES | CRICKET_TEAM_ENTITIES | CRICKET_COMPETITIONS
 CRICKET_COMPETITIONS = {
     "world cup", "champions trophy", "wpl", "ipl", "psl", "bbl", "cpl", "sa20", "ilt20", "mlc",
     "test championship", "ashes", "county championship", "big bash", "mi emirates",
 }
+CRICKET_KNOWN_ENTITIES = CRICKET_ENTITY_NAMES | CRICKET_TEAM_ENTITIES | CRICKET_COMPETITIONS
+
 EVENT_GROUPS = {
     "injury": {"injury", "injured", "scare", "pain", "blow", "hurt", "ruled", "layoff"},
     "selection": {"selection", "selected", "dropped", "recalled", "squad", "picked", "omitted"},
