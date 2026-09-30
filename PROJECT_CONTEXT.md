@@ -610,3 +610,8 @@ CI exposed that character-level title similarity was still too aggressive for ge
 The cricket relevance gate no longer treats generic words such as “coach” or “appointment” alone as cricket evidence. Strong cricket evidence or a recognised cricket publisher/source remains necessary.
 
 The downstream Topic contract is unchanged and no downstream factory function was modified.
+
+### Topic Fetcher import/test correction (2026-10-01)
+- The live-test failure after the v2.1 clustering change was traced to module initialization order, not the clustering algorithm: `CRICKET_KNOWN_ENTITIES` referenced `CRICKET_COMPETITIONS` before that set was defined.
+- The fix moves `CRICKET_KNOWN_ENTITIES` below `CRICKET_COMPETITIONS`. No dashboard, downstream handoff, fetch contract, or production-line code was changed.
+- Verification branch CI passed the full repository suite (`116 passed`) and the full compile step before this context update.
