@@ -152,6 +152,11 @@ def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
         [
             Path("C:/Windows/Fonts/seguiemj.ttf"),
             Path("C:/Windows/Fonts/seguisym.ttf"),
+            Path("C:/Windows/Fonts/Nirmala.ttf"),
+            Path("C:/Windows/Fonts/NirmalaUI.ttf"),
+            Path("C:/Windows/Fonts/msyh.ttc"),
+            Path("C:/Windows/Fonts/msgothic.ttc"),
+            Path("C:/Windows/Fonts/malgun.ttf"),
             Path("C:/Windows/Fonts/arialuni.ttf"),
             Path("C:/Windows/Fonts/seguisb.ttf"),
             Path("C:/Windows/Fonts/arial.ttf"),
