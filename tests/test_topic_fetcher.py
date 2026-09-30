@@ -57,18 +57,24 @@ def test_same_match_event_clusters_but_different_events_survive():
 
 
 def test_many_articles_of_one_event_do_not_fill_twenty():
-    rows = []
-    for i in range(18):
-        rows.append(make_topic(f"India beat West Indies first ODI report number {i}", url=f"https://x/w{i}"))
-    for i in range(8):
-        rows.append(make_topic(f"MCC announces cricket law changes {i}", description="MCC changes cricket laws", url=f"https://x/m{i}"))
-    for i in range(8):
-        rows.append(make_topic(f"Mark Boucher appointed MI Emirates coach {i}", description="MI Emirates cricket franchise coach", url=f"https://x/b{i}"))
+    rows = [
+        make_topic(
+            f"India beat West Indies first ODI report number {i}",
+            url=f"https://x/w{i}",
+        )
+        for i in range(18)
+    ]
+    rows.extend(
+        make_topic(
+            f"Alpha{i} Beta{i} cricket development",
+            url=f"https://x/e{i}",
+        )
+        for i in range(20)
+    )
     prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
     chosen = topic_fetcher._select(prepared, 20, set(), profile="cricket_india_asia")
     assert len(chosen) == 20
-    assert any("MCC" in x.title for x in chosen)
-    assert any("Boucher" in x.title for x in chosen)
+    assert sum("West Indies" in x.title for x in chosen) == 1
 
 
 def test_more_excludes_existing_event():
