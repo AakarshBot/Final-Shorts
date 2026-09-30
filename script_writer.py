@@ -20,10 +20,15 @@ MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
 TIMEOUT = 30
 RESEARCH_TIMEOUT = 10
 MAX_SOURCE_CHARS = 12000
+CRICKET_RESEARCH_MAX_ARTICLES = 2
+CRICKET_RESEARCH_CANDIDATE_LIMIT = 6
+CRICKET_RESEARCH_MAX_SOURCE_CHARS = 9000
+CRICKET_RESEARCH_MAX_PACKET_CHARS = 24000
 MIN_ARTICLE_CHARS = 600
 SCENE_1_MAX_WORDS = 14
 HOOK_MAX_SECONDS = 3.0
 SPEECH_WORDS_PER_MINUTE = 170.0
+MAX_ESTIMATED_NARRATION_SECONDS = 29.2
 MAX_WORDS = 75
 
 LANGUAGE_INSTRUCTIONS = {
@@ -80,9 +85,21 @@ SCHEMA = {
 
 SYSTEM_PROMPT = """You are the original editorial writer for a human-reviewed cricket and sports YouTube Shorts channel.
 
-Your job is NOT to summarize the article. Your job is to turn the strongest supported development in the selected story into a fast, vivid, spoken Short that earns the next sentence.
+Your job is NOT to summarize one article. Your job is to turn the strongest supported development in the selected Cricket story into a fast, vivid, spoken Short that covers the full news development without wasting words.
 
-Use only the supplied story evidence. Prefer the primary article evidence when available; use corroborating evidence only when it supports the same event. Never invent facts, quotes, motives, numbers, predictions, outcomes or causal claims. Never copy a complete source sentence.
+Use only the supplied research evidence. The packet may contain the selected story, a primary article, and up to two independent reports. Treat the primary article as the main source; use independent reports to confirm facts, resolve missing details, establish what changed, and add outside context only when that context materially improves the Short.
+
+Never invent facts, quotes, motives, numbers, predictions, outcomes or causal claims. Never use outside knowledge that is not supported by the supplied evidence. If sources disagree, do not silently merge them: use the clearest supported version, attribute the disagreement when it matters, or omit the disputed detail. Never copy a complete source sentence.
+
+RESEARCH-TO-STORY CHECK
+Before writing, silently build the shortest accurate timeline:
+1. What exactly happened?
+2. What important detail proves or defines it?
+3. Why does it matter now?
+4. What useful context, if any, changes how the viewer should understand it?
+5. What is the latest confirmed status or consequence?
+
+Do not force all five into the narration. Use only the facts that make the story more complete, clear and compelling.
 
 EDITORIAL SPINE
 Before writing the JSON, silently identify:
@@ -120,22 +137,25 @@ HOOK
 - Do not start with "Shubman Gill is...", "India are...", "Today...", or similar boilerplate when a sharper fact is available.
 
 STORY FLOW
-- Use exactly 4 or 5 narration scenes.
-- Scene 1 = HOOK: strongest concrete fact/tension.
-- Scene 2 = DEVELOPMENT / RE-HOOK: immediately add a new specific detail. It should make the story more consequential, clearer or more surprising than Scene 1. Never merely restate the hook.
-- Middle scene(s) = CONTEXT / ESCALATION: explain the relevant circumstance, timing, result, record, opposition, selection consequence, reaction, or other fact that actually matters. Cut generic background.
-- Final scene = CONSEQUENCE / PAYOFF: close the central question created by the story with the latest confirmed status or concrete consequence. Do not end on empty "key question" language when the evidence gives the answer.
-- Every scene must add new information or materially sharpen the meaning of the previous scene.
+- Use 4 narration scenes by default. Use a 5th scene only when a distinct, verified fact materially improves the story; never create a fifth scene just to add structure.
+- Scene 1 = HOOK: strongest concrete fact or tension.
+- Scene 2 = DEVELOPMENT: immediately explain what actually happened and add a new specific detail. Never merely restate the hook.
+- Scene 3 = CONTEXT / SIGNIFICANCE: give the exact score, result, record, opponent, timing, selection implication, injury status, reaction or other fact that explains why the development matters.
+- If a 5th scene is justified, Scene 4 = EXTRA EDGE: one useful, verified outside fact or second-order detail that makes the story more understandable, surprising or consequential. Skip this scene entirely when it would be trivia or padding.
+- Final scene = CONSEQUENCE / PAYOFF: close the central question with the latest confirmed status, result, consequence or next step supported by the evidence.
+- Every scene must add new information or materially sharpen the meaning of the previous scene. Adjacent scenes must not repeat the same fact in different words.
+- A 4-scene Short should normally follow HOOK → DEVELOPMENT → CONTEXT → CONSEQUENCE.
+- A 5-scene Short should normally follow HOOK → DEVELOPMENT → CONTEXT → EXTRA EDGE → CONSEQUENCE.
 - Keep the story moving. Each scene should make the next sentence feel necessary.
 - When the evidence contains a useful number, time, margin, record or sequence, use it. Precision creates punch.
 - When the story contains a clear contrast, use it naturally: expected vs actual, before vs after, selected vs ruled out, return vs setback, result vs consequence.
-- Do not force a twist. Do not manufacture stakes when the story does not contain them.
-- For very simple stories, prefer 4 strong scenes over padding to reach 5.
+- Do not force a twist. Do not manufacture stakes when the evidence does not contain them.
 
 PACING AND LENGTH
-- Target roughly 22–27 seconds of natural narration and never exceed 30 seconds.
-- Aim for compact, information-dense narration rather than a mini article.
-- As a guide, most successful drafts should land around 55–68 spoken words while remaining within the existing 75-word hard cap.
+- Target roughly 22–27 seconds of natural narration.
+- Never rely on audio speed correction to rescue an overlong draft; write it within the factory limit.
+- Aim for roughly 55–68 spoken words, while staying under the 75-word hard cap and the estimated narration-time ceiling.
+- A 5-scene script still has to fit the same time budget as a 4-scene script.
 - Do not pad a short story with generic context just to hit a word count.
 - Write sentences that sound natural at the current HYPE COMMENTATOR audio profile.
 
@@ -148,6 +168,7 @@ VISUAL HANDOFF
 - The visual entity should be the strongest identifiable subject for that scene, usually a player, team, coach, venue or event.
 - The search prompt must describe a concrete thing a real-image search can plausibly find. Avoid vague mood prompts such as "dramatic cricket moment".
 - Keep visual metadata subordinate to the narration: first make the spoken story strong, then make the visual fields useful.
+- Visual prompts must reflect the exact scene fact whenever possible: for example, a training incident, match result, trophy, lineup, venue or player action—not generic player portraits when the scene is about a specific event.
 
 PUBLISH METADATA
 - Generate exactly one opening headline of strictly 3 or 4 words. It must be a concise, factual summary of the story and work as the renderer overlay.
@@ -162,15 +183,18 @@ PUBLISH METADATA
 - Generate one concise, story-specific public-upload comment that asks a natural discussion question tied to a concrete person, team, event or fact from the story.
 
 FINAL EDITOR CHECK — apply silently before returning JSON
-- Can a viewer understand the story from the narration alone?
-- Does Scene 1 make me want the next sentence because of a real fact, not a gimmick?
-- Does Scene 2 add a genuinely new detail?
-- Is every middle scene earning its place?
-- Does the final scene deliver a concrete status or consequence?
+- Can a viewer understand the entire news development from the narration alone?
+- Does Scene 1 earn the next sentence because of a real fact, not a gimmick?
+- Does Scene 2 clearly explain what happened rather than repeat the hook?
+- Does the middle contain the key proof or significance?
+- If a 5th scene exists, does it add a genuinely useful verified fact rather than trivia?
+- Does the final scene deliver the latest confirmed status or concrete consequence?
+- Is every claim supported by the supplied research packet?
+- Has any useful outside fact been included only because it materially improves the story?
+- Would removing any scene or sentence make the story less complete?
 - Would this sound natural spoken aloud?
 - Is there any sentence that sounds like a news article instead of a person talking?
 - Is there any generic filler that can simply be deleted?
-- Does the script stay strictly inside the supplied evidence?
 - Return only JSON matching the supplied schema.
 
 LANGUAGE
@@ -271,18 +295,29 @@ def _source_domain(url: str) -> str:
         return ""
 
 
-def _limit_source_text(text: str) -> str:
+def _limit_source_text(text: str, max_chars: int = MAX_SOURCE_CHARS) -> str:
     lines = [
         _clean(line)
         for line in str(text or "").splitlines()
         if _clean(line)
     ]
     clean = "\n".join(lines)
-    if len(clean) <= MAX_SOURCE_CHARS:
+    max_chars = max(1000, int(max_chars))
+    if len(clean) <= max_chars:
         return clean
-    head = int(MAX_SOURCE_CHARS * 0.72)
-    tail = MAX_SOURCE_CHARS - head
-    return clean[:head].rstrip() + "\n\n[ARTICLE CONTINUES]\n\n" + clean[-tail:].lstrip()
+
+    head = int(max_chars * 0.55)
+    middle = int(max_chars * 0.25)
+    tail = max_chars - head - middle
+    middle_start = max(0, (len(clean) - middle) // 2)
+    middle_end = middle_start + middle
+    return (
+        clean[:head].rstrip()
+        + "\n\n[ARTICLE MIDDLE]\n\n"
+        + clean[middle_start:middle_end].strip()
+        + "\n\n[ARTICLE END]\n\n"
+        + clean[-tail:].lstrip()
+    )
 
 
 def _article_body_from_html(html_text: str) -> str:
@@ -448,10 +483,161 @@ def _fallback_article(story_title: str, original_url: str) -> tuple[str, str]:
     return "", ""
 
 
-def _research_story(story) -> str:
+def _cricket_research_candidates(story_title: str, original_url: str) -> list[dict]:
+    query = _clean(story_title)
+    original_domain = _source_domain(original_url)
+    keywords = _story_title_keywords(query)
+    minimum_overlap = 2 if len(keywords) >= 2 else 1
+    blocked_domains = (
+        "twitter.", "x.com", "facebook.", "instagram.", "youtube.", "google."
+    )
+
+    raw_results = []
+    try:
+        raw_results = list(
+            DDGS(timeout=5).news(
+                query=query,
+                region="in-en",
+                safesearch="off",
+                timelimit="w",
+                max_results=8,
+            )
+            or []
+        )
+    except Exception:
+        raw_results = []
+
+    if not raw_results:
+        try:
+            raw_results = list(
+                DDGS(timeout=5).text(
+                    query=query,
+                    region="in-en",
+                    safesearch="off",
+                    timelimit="w",
+                    max_results=8,
+                )
+                or []
+            )
+        except Exception:
+            raw_results = []
+
+    candidates = []
+    seen_urls = set()
+    seen_domains = set()
+    for result in raw_results:
+        url = _clean(result.get("url") or result.get("href"))
+        title = _clean(result.get("title"))
+        if not url or url == original_url:
+            continue
+
+        domain = _source_domain(url)
+        if not domain or domain == original_domain:
+            continue
+        if any(blocked in domain for blocked in blocked_domains):
+            continue
+
+        overlap = len(keywords & _story_title_keywords(title))
+        similarity = SequenceMatcher(
+            None,
+            _normalise(query),
+            _normalise(title),
+        ).ratio()
+        if keywords and overlap < minimum_overlap and similarity < 0.38:
+            continue
+
+        canonical = url.rstrip("/").casefold()
+        if canonical in seen_urls or domain in seen_domains:
+            continue
+
+        seen_urls.add(canonical)
+        seen_domains.add(domain)
+        candidates.append(
+            {
+                "title": title,
+                "url": url,
+                "domain": domain,
+                "score": overlap * 2.0 + similarity,
+            }
+        )
+
+    candidates.sort(key=lambda item: item["score"], reverse=True)
+    return candidates[:CRICKET_RESEARCH_CANDIDATE_LIMIT]
+
+
+def _research_story(story, profile: str | None = None) -> str:
     title = _story_value(story, "title")
     description = _story_value(story, "description")
     original_url = _story_value(story, "url")
+
+    if profile == "cricket":
+        sections = []
+        if title:
+            sections.append(f"[SELECTED STORY]\n{title}")
+
+        primary = ""
+        resolved_primary_url = original_url
+        if original_url:
+            try:
+                primary, resolved_primary_url = _extract_article(original_url)
+            except (requests.RequestException, OSError, ValueError):
+                primary = ""
+
+        if primary:
+            sections.append(
+                f"[PRIMARY ARTICLE — {resolved_primary_url or original_url}]\n"
+                f"{_limit_source_text(primary, CRICKET_RESEARCH_MAX_SOURCE_CHARS)}"
+            )
+
+        independent = []
+        if title:
+            for candidate in _cricket_research_candidates(title, original_url):
+                if len(independent) >= CRICKET_RESEARCH_MAX_ARTICLES:
+                    break
+
+                candidate_url = candidate["url"]
+                if (
+                    resolved_primary_url
+                    and _source_domain(candidate_url) == _source_domain(resolved_primary_url)
+                ):
+                    continue
+
+                try:
+                    extracted, resolved_url = _extract_article(candidate_url)
+                except (requests.RequestException, OSError, ValueError):
+                    continue
+
+                if not extracted:
+                    continue
+
+                if any(
+                    _source_domain(resolved_url) == _source_domain(item["url"])
+                    for item in independent
+                ):
+                    continue
+
+                independent.append(
+                    {
+                        "title": candidate["title"],
+                        "url": resolved_url or candidate_url,
+                        "text": extracted,
+                    }
+                )
+
+            for number, article in enumerate(independent, 1):
+                sections.append(
+                    f"[INDEPENDENT REPORT {number} — "
+                    f"{article['title']} — {article['url']}]\n"
+                    f"{_limit_source_text(article['text'], CRICKET_RESEARCH_MAX_SOURCE_CHARS)}"
+                )
+
+        if description:
+            sections.append(f"[TOPIC FETCHER SUMMARY]\n{description}")
+
+        return _limit_source_text(
+            "\n\n".join(sections),
+            CRICKET_RESEARCH_MAX_PACKET_CHARS,
+        )
 
     if original_url:
         extracted, resolved_url = "", ""
@@ -646,8 +832,24 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
         )
 
     narration = " ".join(_clean(scene["voiceover"]) for scene in scenes)
-    if _words(narration) > MAX_WORDS:
+    word_count = _words(narration)
+    if word_count > MAX_WORDS:
         return False, "The narration is likely longer than 30 seconds."
+    estimated_seconds = estimate_spoken_seconds(narration)
+    if estimated_seconds > MAX_ESTIMATED_NARRATION_SECONDS:
+        return False, (
+            "The narration exceeds the writer's estimated time ceiling "
+            f"({estimated_seconds:.2f}s)."
+        )
+    for previous, current in zip(scenes, scenes[1:]):
+        previous_text = _normalise(previous.get("voiceover"))
+        current_text = _normalise(current.get("voiceover"))
+        if (
+            _words(previous_text) >= 7
+            and _words(current_text) >= 7
+            and SequenceMatcher(None, previous_text, current_text).ratio() >= 0.90
+        ):
+            return False, "Adjacent scenes repeat the same narration."
     if _copied(source, narration):
         return False, "The narration is too close to source wording."
 
@@ -692,8 +894,8 @@ def _request(model: str, prompt: str, story: str) -> dict:
 
 
 def write_script(story, language: str = "english") -> dict:
-    """Generate one sports Shorts script and return its later-stage metadata too."""
-    source = _research_story(story)
+    """Generate one regular Cricket Shorts script and return its later-stage metadata too."""
+    source = _research_story(story, profile="cricket")
     if not source:
         raise ValueError("The selected story contains no usable evidence.")
 
@@ -725,6 +927,12 @@ def write_script(story, language: str = "english") -> dict:
                 result["provider_used"] = model
                 result["delivery_profile"] = "HYPE COMMENTATOR"
                 result["language_used"] = str(language or "english").strip().lower()
+                result["word_count"] = _words(
+                    " ".join(
+                        _clean(scene.get("voiceover"))
+                        for scene in result.get("script") or []
+                    )
+                )
                 result["source_title"] = _clean(
                     getattr(story, "title", "")
                     if hasattr(story, "__dataclass_fields__")
