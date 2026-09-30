@@ -114,6 +114,115 @@ def test_interest_signals_raise_topic_score():
     assert topic_fetcher._score(pull) > topic_fetcher._score(generic)
 
 
+
+def test_cricket_india_asia_scope_excludes_other_cricket_nations():
+    rows = [
+        make_topic("Australia cricket star breaks record"),
+        make_topic("Pakistan cricket star breaks record"),
+        make_topic("Sri Lanka cricket star breaks record"),
+        make_topic("India cricket star breaks record"),
+    ]
+    prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
+    assert [row.title for row in prepared] == [
+        rows[1].title,
+        rows[2].title,
+        rows[3].title,
+    ]
+
+
+def test_cricket_india_asia_uses_description_for_scope():
+    row = make_topic(
+        "Star batter reveals stunning comeback",
+        description="Pakistan batter discussed the comeback after returning to international cricket.",
+    )
+    prepared = topic_fetcher._prepare([row], set(), profile="cricket_india_asia")
+    assert prepared[0].title == row.title
+
+
+def test_cricket_lookback_rejects_stale_stories():
+    stale = make_topic("India cricket record story", hours=49)
+    fresh = make_topic("India cricket upset story", hours=12)
+    prepared = topic_fetcher._prepare(
+        [stale, fresh],
+        set(),
+        profile="cricket_india_asia",
+    )
+    assert [row.title for row in prepared] == [fresh.title]
+
+
+def test_keyword_queries_are_cricket_scoped():
+    queries = topic_fetcher._keyword_queries("cricket_india_asia", "Babar Azam")
+    assert queries
+    assert all("Babar Azam" in query for query in queries)
+    assert all("cricket" in query.lower() for query in queries)
+    assert all("India" in query and "Pakistan" in query and "Sri Lanka" in query for query in queries)
+
+
+def test_keyword_search_uses_keyword_queries(monkeypatch):
+    captured = []
+
+    def fake_google(query):
+        captured.append(query)
+        return [
+            make_topic(
+                "Babar Azam Pakistan cricket comeback",
+                url=f"https://example.com/{len(captured)}",
+            )
+        ]
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: [])
+
+    result = topic_fetcher.fetch_topics(
+        profile="cricket_india_asia",
+        keyword="Babar Azam",
+        limit=1,
+    )
+
+    assert result
+    assert len(captured) == len(topic_fetcher._keyword_queries("cricket_india_asia", "Babar Azam"))
+    assert all("Babar Azam" in query for query in captured)
+
+
+def test_coverage_signal_raises_a_story_score():
+    topic = make_topic("India cricket historic upset")
+    assert topic_fetcher._score(
+        topic,
+        profile="cricket_india_asia",
+        coverage_count=4,
+    ) > topic_fetcher._score(
+        topic,
+        profile="cricket_india_asia",
+        coverage_count=1,
+    )
+
+
+def test_popular_player_is_softly_diversified():
+    rows = [
+        make_topic(
+            "Virat Kohli record story",
+            url="https://example.com/virat1",
+        ),
+        make_topic(
+            "Virat Kohli comeback story",
+            url="https://example.com/virat2",
+        ),
+        make_topic(
+            "Babar Azam Pakistan record story",
+            url="https://example.com/babar",
+        ),
+    ]
+    prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
+    chosen = topic_fetcher._select(
+        prepared,
+        2,
+        set(),
+        profile="cricket_india_asia",
+    )
+    assert len(chosen) == 2
+    assert sum("Virat Kohli" in topic.title for topic in chosen) == 1
+
+
 def test_niche_profile_rejects_cricket_only_story():
     row = make_topic("India men's cricket team arrives in Nagoya for Asian Games cricket")
     assert topic_fetcher._prepare([row], set(), profile="niche_sports") == []
@@ -160,7 +269,7 @@ def test_fetch_topics_uses_secondary_source_when_google_clusters_too_heavily(mon
     ]
     gdelt_rows = [
         make_topic(
-            f"Player{i} cricket record milestone event",
+            f"India cricket Player{i} record milestone event",
             url=f"https://gdelt.example.com/{i}",
         )
         for i in range(19)
