@@ -691,15 +691,11 @@ def _request(model: str, prompt: str, story: str) -> dict:
 def write_script(story, language: str = "english") -> dict:
     """Generate one sports Shorts script and return its later-stage metadata too."""
     source = _research_story(story)
-    has_story_url = bool(_story_value(story, "url"))
-    if not source and not has_story_url:
-        source = _source_text(story)
     if not source:
-        if has_story_url:
-            raise RuntimeError(
-                "Story research failed: the selected article could not be extracted "
-                "and no corroborating full article was reachable."
-            )
+        fallback = _source_text(story)
+        if _story_value(story, "title") and _story_value(story, "description"):
+            source = fallback
+    if not source:
         raise ValueError("The selected story contains no usable evidence.")
 
     instruction = (
