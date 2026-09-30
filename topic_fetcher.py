@@ -21,26 +21,28 @@ MAX_QUERY_RESULTS = 100
 
 QUERIES = {
     "cricket_india_asia": [
-        'Indian cricket (reacts OR reveals OR confirms OR says OR denies OR admits OR injury OR selection OR record OR retirement OR comeback OR controversy) when:3d',
-        '"Virat Kohli" cricket when:3d',
-        '"Rohit Sharma" cricket when:3d',
-        '"Shubman Gill" cricket when:3d',
-        '"BCCI" cricket (decision OR announcement OR sponsor OR selection OR injury OR statement) when:3d',
-        '(India OR Pakistan OR Sri Lanka OR Bangladesh OR Afghanistan) cricket (upset OR record OR debut OR comeback OR controversy OR statement) when:3d',
-        'women cricket India (record OR selection OR statement OR upset OR comeback OR controversy) when:3d',
-        '(Asian Games OR Asia) cricket (India OR Pakistan OR Nepal OR Afghanistan OR Japan OR Oman) when:3d',
-        'India cricket (fans OR reaction OR statement OR interview OR milestone) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (breaking OR result OR upset OR record OR milestone OR comeback OR debut OR retirement OR injury) when:3d',
+        'India cricket (record OR upset OR comeback OR debut OR retirement OR injury OR selection OR controversy) when:3d',
+        'Pakistan cricket (record OR upset OR comeback OR debut OR retirement OR injury OR selection OR controversy) when:3d',
+        '"Sri Lanka" cricket (record OR upset OR comeback OR debut OR retirement OR injury OR selection OR controversy) when:3d',
+        '(BCCI OR PCB OR "Sri Lanka Cricket") cricket (decision OR announcement OR selection OR contract OR ban OR suspension OR statement) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (reacts OR responds OR reveals OR confirms OR admits OR slams OR criticizes OR controversy) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (viral OR "social media" OR "fans react" OR bizarre OR unusual OR stunning OR shocking) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket ("last ball" OR "last over" OR turnaround OR comeback OR upset OR "record-breaking") when:3d',
+        '(India OR Pakistan OR "Sri Lanka") women cricket (record OR upset OR medal OR selection OR reaction OR breakthrough OR controversy) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (youngster OR debutant OR breakthrough OR uncapped OR emerging) when:3d',
     ],
     "cricket_global": [
-        'international cricket (reacts OR reveals OR confirms OR says OR denies OR admits OR injury OR selection OR record OR retirement OR comeback OR controversy) when:3d',
-        '"Australia" cricket (injury OR selection OR record OR retirement OR comeback OR statement OR upset) when:3d',
-        '"England" cricket (injury OR selection OR record OR retirement OR comeback OR statement OR upset) when:3d',
-        '"South Africa" cricket (injury OR selection OR record OR retirement OR comeback OR statement OR upset) when:3d',
-        '"New Zealand" cricket (injury OR selection OR record OR retirement OR comeback OR statement OR upset) when:3d',
-        '"West Indies" cricket (injury OR selection OR record OR retirement OR comeback OR statement OR upset) when:3d',
-        'women cricket international (record OR selection OR statement OR upset OR comeback OR controversy) when:3d',
-        'cricket (fans OR reaction OR interview OR statement OR milestone) international when:3d',
-        'cricket (upset OR breakthrough OR debut OR comeback OR controversy) international when:3d',
+        'international cricket (breaking OR result OR upset OR record OR milestone OR comeback OR debut OR retirement OR injury) when:3d',
+        'Australia cricket (record OR upset OR comeback OR debut OR retirement OR injury OR selection OR controversy) when:3d',
+        'England cricket (record OR upset OR comeback OR debut OR retirement OR injury OR selection OR controversy) when:3d',
+        'South Africa cricket (record OR upset OR comeback OR debut OR retirement OR injury OR selection OR controversy) when:3d',
+        'New Zealand cricket (record OR upset OR comeback OR debut OR retirement OR injury OR selection OR controversy) when:3d',
+        'West Indies cricket (record OR upset OR comeback OR debut OR retirement OR injury OR selection OR controversy) when:3d',
+        'women international cricket (record OR upset OR medal OR selection OR reaction OR breakthrough OR controversy) when:3d',
+        'international cricket (reacts OR responds OR reveals OR confirms OR admits OR slams OR criticizes OR controversy) when:3d',
+        'international cricket (viral OR "social media" OR "fans react" OR bizarre OR unusual OR stunning OR shocking) when:3d',
+        'international cricket ("last ball" OR "last over" OR turnaround OR comeback OR upset OR "record-breaking") when:3d',
     ],
     "niche_sports": [
         '(tennis OR badminton OR squash OR "table tennis") (reacts OR reveals OR injury OR upset OR record OR debut OR comeback OR statement) when:3d',
@@ -57,26 +59,28 @@ QUERIES = {
 
 MORE_QUERIES = {
     "cricket_india_asia": [
-        '(India OR Pakistan OR Sri Lanka OR Bangladesh OR Afghanistan OR Nepal) cricket (change OR dropped OR recalled OR ruled out OR signed OR fined OR banned OR suspended OR targeted) when:3d',
-        'Indian cricket (captain OR coach OR player) (statement OR interview OR reaction OR criticism OR praise) when:3d',
-        'India women cricket (captain OR player OR coach) (statement OR record OR selection OR reaction) when:3d',
-        '"Asian Games" cricket (upset OR record OR debut OR controversy OR reaction) when:3d',
-        'India cricket (sponsor OR board OR contract OR venue OR rule OR announcement) when:3d',
-        '(Virat Kohli OR Rohit Sharma OR Shubman Gill OR Jasprit Bumrah OR Hardik Pandya) cricket (statement OR reaction OR injury OR record) when:3d',
-        '(Nepal OR Japan OR Oman OR Malaysia OR Hong Kong) cricket (upset OR record OR reaction OR statement) when:3d',
-        'women cricket India (fans OR reaction OR interview OR controversy) when:3d',
-        'India cricket (off-field OR controversy OR viral OR fans) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (dropped OR recalled OR ruled out OR signed OR fined OR banned OR suspended OR contract) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (statement OR interview OR reaction OR criticism OR praise OR apology OR row) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (viral OR fans OR "social media" OR unusual OR bizarre OR heated OR clash) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (records OR milestones OR first-ever OR youngest OR fastest OR highest) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (dramatic OR thriller OR "last ball" OR comeback OR upset) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (youngster OR debutant OR uncapped OR breakout OR emerging star) when:3d',
+        'India women cricket (record OR upset OR breakthrough OR controversy OR reaction OR selection) when:3d',
+        'Pakistan women cricket (record OR upset OR breakthrough OR controversy OR reaction OR selection) when:3d',
+        '"Sri Lanka" women cricket (record OR upset OR breakthrough OR controversy OR reaction OR selection) when:3d',
+        '(BCCI OR PCB OR "Sri Lanka Cricket") (contract OR sponsor OR coach OR captain OR disciplinary OR board) cricket when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (off-field OR feud OR dispute OR apology OR criticism) when:3d',
     ],
     "cricket_global": [
-        'international cricket (change OR dropped OR recalled OR ruled out OR signed OR fined OR banned OR suspended) when:3d',
-        'Australia cricket (captain OR coach OR player) (statement OR interview OR reaction OR criticism OR praise) when:3d',
-        'England cricket (captain OR coach OR player) (statement OR interview OR reaction OR criticism OR praise) when:3d',
-        'South Africa cricket (captain OR coach OR player) (statement OR interview OR reaction OR criticism OR praise) when:3d',
-        'West Indies cricket (captain OR coach OR player) (statement OR interview OR reaction OR criticism OR praise) when:3d',
-        'women cricket global (fans OR reaction OR interview OR controversy OR record) when:3d',
-        'cricket (off-field OR controversy OR viral OR fans OR reaction) when:3d',
-        'cricket (contract OR sponsor OR venue OR rule OR board) international when:3d',
-        'cricket (breakthrough OR debut OR comeback OR upset) international when:3d',
+        'international cricket (dropped OR recalled OR ruled out OR signed OR fined OR banned OR suspended OR contract) when:3d',
+        'international cricket (statement OR interview OR reaction OR criticism OR praise OR apology OR row) when:3d',
+        'international cricket (viral OR fans OR "social media" OR unusual OR bizarre OR heated OR clash) when:3d',
+        'international cricket (records OR milestones OR first-ever OR youngest OR fastest OR highest) when:3d',
+        'international cricket (dramatic OR thriller OR "last ball" OR comeback OR upset) when:3d',
+        'international cricket (youngster OR debutant OR breakout OR emerging star) when:3d',
+        'women international cricket (record OR upset OR breakthrough OR controversy OR reaction OR selection) when:3d',
+        'international cricket (off-field OR feud OR dispute OR apology OR criticism) when:3d',
+        'international cricket (contract OR sponsor OR venue OR rule OR board) when:3d',
     ],
     "niche_sports": [
         '(tennis OR badminton OR squash OR "table tennis") (change OR coach OR injury OR suspended OR fined OR contract OR statement) when:3d',
@@ -89,6 +93,56 @@ MORE_QUERIES = {
         'motorsport (viral OR fans OR controversy OR reaction OR interview) when:3d',
         'athletics (viral OR fans OR controversy OR reaction OR interview) when:3d',
     ],
+}
+
+DISCOVERY_QUERIES = {
+    "cricket_india_asia": [
+        '(India OR Pakistan OR "Sri Lanka") cricket (unexpected OR surprising OR stunning OR bizarre OR bizarrely OR extraordinary) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (viral OR trending OR "social media" OR fans) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (clash OR row OR feud OR apology OR backlash OR slammed) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (upset OR shock OR "record crowd" OR "record viewership" OR historic) when:3d',
+        '(India OR Pakistan OR "Sri Lanka") cricket (newcomer OR debutant OR youngster OR breakout OR uncapped) when:3d',
+    ],
+    "cricket_global": [
+        'international cricket (unexpected OR surprising OR stunning OR bizarre OR extraordinary) when:3d',
+        'international cricket (viral OR trending OR "social media" OR fans) when:3d',
+        'international cricket (clash OR row OR feud OR apology OR backlash OR slammed) when:3d',
+        'international cricket (upset OR shock OR "record crowd" OR "record viewership" OR historic) when:3d',
+        'international cricket (newcomer OR debutant OR youngster OR breakout OR uncapped) when:3d',
+    ],
+    "niche_sports": [],
+}
+
+PROFILE_LOOKBACK_HOURS = {
+    "cricket_india_asia": 48,
+    "cricket_global": 48,
+    "niche_sports": 72,
+}
+
+CRICKET_INDIA_ASIA_SCOPE = (
+    "india",
+    "indian",
+    "pakistan",
+    "pakistani",
+    "sri lanka",
+    "sri lankan",
+    "bcci",
+    "pcb",
+    "sri lanka cricket",
+)
+
+CRICKET_INDIA_ASIA_ENTITIES = {
+    "virat kohli", "rohit sharma", "shubman gill", "jasprit bumrah", "hardik pandya",
+    "ravindra jadeja", "rishabh pant", "kl rahul", "kuldeep yadav", "mohammed siraj",
+    "arshdeep singh", "yashasvi jaiswal", "sanju samson", "suryakumar yadav",
+    "shreyas iyer", "axar patel", "washington sundar", "rinku singh", "prasidh krishna",
+    "smriti mandhana", "harmapreet kaur", "jemimah rodrigues",
+    "babar azam", "mohammad rizwan", "shaheen afridi", "naseem shah", "haris rauf",
+    "fakhar zaman", "imam-ul-haq", "shadab khan", "mohammad nawaz", "salman ali agha",
+    "abdullah shafique", "saim ayub", "mohammad amir",
+    "wanindu hasaranga", "kusal mendis", "pathum nissanka", "charith asalanka",
+    "maheesh theekshana", "dhananjaya de silva", "matheesha pathirana", "kusal perera",
+    "angelo mathews", "dushmantha chameera", "kamindu mendis",
 }
 
 SPORT_WORDS = {
@@ -256,13 +310,23 @@ def _profile_relevant(title: str, description: str, profile: str | None) -> bool
     if profile in {"cricket_india_asia", "cricket_global"}:
         if title_tokens & NON_CRICKET_TERMS:
             return False
+
         title_text = _clean(title).casefold()
+        description_text = _clean(description).casefold()
+        evidence_text = f"{title_text} {description_text}".strip()
+
+        if profile == "cricket_india_asia":
+            return (
+                any(scope in evidence_text for scope in CRICKET_INDIA_ASIA_SCOPE)
+                or any(entity in evidence_text for entity in CRICKET_INDIA_ASIA_ENTITIES)
+            )
+
         return bool(title_tokens & CRICKET_TERMS) or any(
             name in title_text for name in CRICKET_ENTITY_NAMES
         )
+
     niche_terms = SPORT_WORDS - CRICKET_TERMS
     return bool(title_tokens & niche_terms) and not bool(title_tokens & CRICKET_TERMS)
-
 
 def _utility(title: str) -> bool:
     text = _clean(title).casefold()
@@ -294,18 +358,61 @@ def _same_event(a: Topic, b: Topic) -> bool:
     return False
 
 
-def _score(topic: Topic) -> float:
-    age_hours = max(0.0, (datetime.now(timezone.utc) - topic.published_at).total_seconds() / 3600)
-    freshness = max(0.0, LOOKBACK_HOURS - age_hours) / LOOKBACK_HOURS * 5
-    event_bonus = min(2.8, len(_event_groups(topic.title)) * 0.8)
-    pull_bonus = min(4.0, len(_tokens(topic.title) & AUDIENCE_PULL_TERMS) * 1.0)
-    distinctive = _tokens(topic.title) - SPORT_WORDS - set().union(*EVENT_GROUPS.values()) - EVENT_CONTEXT
-    specificity = min(2.0, max(0, len(distinctive) - 2) * 0.35)
-    source_penalty = 1.0 if _source_key(topic.source) in PUBLISHER_PENALTIES else 0.0
-    low_signal_penalty = 1.5 if any(re.search(pattern, topic.title, re.IGNORECASE) for pattern in LOW_SIGNAL_PATTERNS) else 0.0
-    generic_penalty = 3.0 if _utility(topic.title) else 0.0
-    return freshness + event_bonus + pull_bonus + specificity - source_penalty - low_signal_penalty - generic_penalty
+def _score(
+    topic: Topic,
+    profile: str | None = None,
+    coverage_count: int = 1,
+) -> float:
+    lookback_hours = PROFILE_LOOKBACK_HOURS.get(profile, LOOKBACK_HOURS)
+    age_hours = max(
+        0.0,
+        (datetime.now(timezone.utc) - topic.published_at).total_seconds() / 3600,
+    )
+    freshness_ratio = max(0.0, lookback_hours - age_hours) / lookback_hours
+    freshness = 6.5 * (freshness_ratio ** 1.7)
 
+    event_bonus = min(2.8, len(_event_groups(topic.title)) * 0.8)
+    pull_bonus = min(4.5, len(_tokens(topic.title) & AUDIENCE_PULL_TERMS) * 1.0)
+
+    viral_terms = {
+        "viral", "trending", "social", "fans", "reaction", "reacts", "responds",
+        "backlash", "bizarre", "unusual", "stunning", "shocking", "clash", "feud",
+    }
+    novelty_bonus = min(2.8, len(_tokens(topic.title) & viral_terms) * 0.7)
+
+    distinctive = (
+        _tokens(topic.title)
+        - SPORT_WORDS
+        - set().union(*EVENT_GROUPS.values())
+        - EVENT_CONTEXT
+    )
+    specificity = min(2.0, max(0, len(distinctive) - 2) * 0.35)
+
+    coverage_bonus = min(2.4, max(0, coverage_count - 1) * 0.6)
+    source_penalty = 1.0 if _source_key(topic.source) in PUBLISHER_PENALTIES else 0.0
+    low_signal_penalty = (
+        1.5
+        if any(re.search(pattern, topic.title, re.IGNORECASE) for pattern in LOW_SIGNAL_PATTERNS)
+        else 0.0
+    )
+    generic_penalty = 3.0 if _utility(topic.title) else 0.0
+
+    stale_penalty = 0.0
+    if profile in {"cricket_india_asia", "cricket_global"} and age_hours > 36:
+        stale_penalty = min(2.5, (age_hours - 36) * 0.2)
+
+    return (
+        freshness
+        + event_bonus
+        + pull_bonus
+        + novelty_bonus
+        + specificity
+        + coverage_bonus
+        - source_penalty
+        - low_signal_penalty
+        - generic_penalty
+        - stale_penalty
+    )
 
 def _parse_rss(xml_text: str) -> list[Topic]:
     root = ET.fromstring(xml_text)
@@ -371,9 +478,10 @@ def _prepare(
     seen_urls: set[str],
     profile: str | None = None,
 ) -> list[Topic]:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
+    lookback_hours = PROFILE_LOOKBACK_HOURS.get(profile, LOOKBACK_HOURS)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours)
     out: list[Topic] = []
-    seen_urls: set[str] = {_canonical_url(url) for url in seen_urls}
+    seen_urls = {_canonical_url(url) for url in seen_urls}
     seen_titles: set[str] = set()
 
     for topic in rows:
@@ -389,6 +497,7 @@ def _prepare(
         title_key = " ".join(sorted(_tokens(title)))
         if title_key in seen_titles:
             continue
+
         cleaned = Topic(
             title,
             _clean(topic.source),
@@ -402,13 +511,44 @@ def _prepare(
 
     return out
 
+def _entity_hits(topic: Topic) -> set[str]:
+    text = _clean(topic.title).casefold()
+    known = (
+        CRICKET_ENTITY_NAMES
+        | CRICKET_INDIA_ASIA_ENTITIES
+    )
+    return {entity for entity in known if entity in text}
+
 
 def _select(
     rows: list[Topic],
     limit: int,
     seen_urls: set[str],
     existing: list[Topic] | None = None,
+    profile: str | None = None,
 ) -> list[Topic]:
+    if limit <= 0:
+        return []
+
+    blocked = list(existing or [])
+    seen_canonical = {_canonical_url(url) for url in seen_urls}
+
+    base_ranked = sorted(
+        rows,
+        key=lambda r: _score(r, profile=profile),
+        reverse=True,
+    )
+
+    coverage_rows = base_ranked[: min(len(base_ranked), 350)]
+    coverage_cache: dict[str, int] = {}
+    for topic in coverage_rows:
+        key = _canonical_url(topic.url)
+        coverage_cache[key] = 1 + sum(
+            1
+            for other in coverage_rows
+            if key != _canonical_url(other.url) and _same_event(topic, other)
+        )
+
     ranked = sorted(
         (
             Topic(
@@ -417,7 +557,11 @@ def _select(
                 r.published_at,
                 r.url,
                 r.description,
-                _score(r),
+                _score(
+                    r,
+                    profile=profile,
+                    coverage_count=coverage_cache.get(_canonical_url(r.url), 1),
+                ),
             )
             for r in rows
         ),
@@ -425,29 +569,70 @@ def _select(
         reverse=True,
     )
 
-    blocked = list(existing or [])
     chosen: list[Topic] = []
     source_counts: dict[str, int] = {}
+    entity_counts: dict[str, int] = {}
     deferred: list[Topic] = []
-    seen_canonical = {_canonical_url(url) for url in seen_urls}
 
     for topic in ranked:
         if _canonical_url(topic.url) in seen_canonical:
             continue
         if any(_same_event(topic, other) for other in blocked + chosen):
             continue
+
         source = _source_key(topic.source)
-        if source and source_counts.get(source, 0) >= 2 and len(chosen) < max(1, limit // 2):
+        if (
+            source
+            and source_counts.get(source, 0) >= 2
+            and len(chosen) < max(1, limit // 2)
+        ):
             deferred.append(topic)
             continue
-        chosen.append(topic)
+
+        entity_hits = _entity_hits(topic)
+        repeat_penalty = sum(
+            0.9 * min(2, entity_counts.get(entity, 0))
+            for entity in entity_hits
+        )
+
+        country_boost = 0.0
+        if profile == "cricket_india_asia":
+            evidence = f"{topic.title} {topic.description}".casefold()
+            countries = {
+                country
+                for country in ("india", "pakistan", "sri lanka")
+                if country in evidence
+            }
+            for country in countries:
+                if not any(
+                    country in f"{other.title} {other.description}".casefold()
+                    for other in chosen
+                ):
+                    country_boost += 0.35
+
+        adjusted = topic.score - min(2.7, repeat_penalty) + min(0.7, country_boost)
+        adjusted_topic = Topic(
+            topic.title,
+            topic.source,
+            topic.published_at,
+            topic.url,
+            topic.description,
+            adjusted,
+        )
+        chosen.append(adjusted_topic)
+
         if source:
             source_counts[source] = source_counts.get(source, 0) + 1
+        for entity in entity_hits:
+            entity_counts[entity] = entity_counts.get(entity, 0) + 1
+
         if len(chosen) >= limit:
             break
 
     if len(chosen) < limit:
         for topic in deferred:
+            if _canonical_url(topic.url) in seen_canonical:
+                continue
             if any(_same_event(topic, other) for other in blocked + chosen):
                 continue
             chosen.append(topic)
@@ -456,24 +641,57 @@ def _select(
 
     return chosen
 
+def _keyword_queries(profile: str, keyword: str) -> list[str]:
+    keyword = _clean(keyword).replace('"', " ")
+    if not keyword:
+        return []
+
+    phrase = f'"{keyword}"' if " " in keyword else keyword
+    scope = '(India OR Pakistan OR "Sri Lanka") ' if profile == "cricket_india_asia" else ""
+
+    return [
+        f"{phrase} cricket {scope}(breaking OR result OR upset OR record OR milestone OR comeback OR debut OR injury) when:3d",
+        f"{phrase} cricket {scope}(reacts OR responds OR reveals OR confirms OR admits OR controversy OR backlash) when:3d",
+        f"{phrase} cricket {scope}(viral OR trending OR fans OR 'social media' OR unusual OR bizarre OR stunning) when:3d",
+        f"{phrase} cricket {scope}(selection OR retirement OR contract OR banned OR suspended OR statement) when:3d",
+    ]
+
+
+def _gdelt_query(profile: str, keyword: str | None = None) -> str:
+    if keyword:
+        scope = '(India Pakistan "Sri Lanka") ' if profile == "cricket_india_asia" else ""
+        return f'"{_clean(keyword)}" cricket {scope}'
+    return {
+        "cricket_india_asia": "(cricket India Pakistan "Sri Lanka")",
+        "cricket_global": "(cricket Australia England South Africa New Zealand West Indies international)",
+        "niche_sports": "(tennis badminton F1 MotoGP athletics swimming golf boxing hockey kabaddi basketball chess)",
+    }[profile]
+
 
 def fetch_topics(
     profile: str = "cricket_india_asia",
     more: bool = False,
     exclude_topics: list[Topic] | None = None,
     limit: int = TARGET,
+    keyword: str | None = None,
 ) -> list[Topic]:
     if profile not in QUERIES:
         raise ValueError(f"Unknown profile: {profile}")
     if limit <= 0:
         return []
 
-    queries = (MORE_QUERIES if more else QUERIES)[profile]
+    keyword = _clean(keyword or "")
+    if keyword:
+        queries = _keyword_queries(profile, keyword)
+    else:
+        queries = list(QUERIES[profile] if not more else MORE_QUERIES[profile])
+        queries.extend(DISCOVERY_QUERIES.get(profile, []))
+
     existing = list(exclude_topics or [])
     seen_urls = {_canonical_url(topic.url) for topic in existing}
 
     rows: list[Topic] = []
-    with ThreadPoolExecutor(max_workers=min(8, len(queries))) as pool:
+    with ThreadPoolExecutor(max_workers=min(10, max(1, len(queries)))) as pool:
         futures = [pool.submit(_fetch_google, query) for query in queries]
         for future in futures:
             try:
@@ -482,17 +700,18 @@ def fetch_topics(
                 continue
 
     prepared = _prepare(rows, seen_urls, profile=profile)
-    chosen = _select(prepared, limit, seen_urls, existing)
+    chosen = _select(
+        prepared,
+        limit,
+        seen_urls,
+        existing,
+        profile=profile,
+    )
 
     if len(chosen) < limit or len(prepared) < limit * 3:
-        gdelt_query = {
-            "cricket_india_asia": "(cricket India Pakistan Sri Lanka Bangladesh Afghanistan Nepal Asia)",
-            "cricket_global": "(cricket Australia England South Africa New Zealand West Indies international)",
-            "niche_sports": "(tennis badminton F1 MotoGP athletics swimming golf boxing hockey kabaddi basketball chess)",
-        }[profile]
         try:
             gdelt_rows = _prepare(
-                _fetch_gdelt(gdelt_query),
+                _fetch_gdelt(_gdelt_query(profile, keyword)),
                 seen_urls | {_canonical_url(topic.url) for topic in chosen},
                 profile=profile,
             )
@@ -502,6 +721,7 @@ def fetch_topics(
                     limit - len(chosen),
                     seen_urls | {_canonical_url(topic.url) for topic in chosen},
                     existing + chosen,
+                    profile=profile,
                 )
             )
         except (requests.RequestException, ValueError):
