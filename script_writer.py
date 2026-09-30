@@ -22,8 +22,9 @@ RESEARCH_TIMEOUT = 10
 MAX_SOURCE_CHARS = 12000
 CRICKET_RESEARCH_MAX_ARTICLES = 2
 CRICKET_RESEARCH_CANDIDATE_LIMIT = 6
-CRICKET_RESEARCH_MAX_SOURCE_CHARS = 9000
-CRICKET_RESEARCH_MAX_PACKET_CHARS = 24000
+CRICKET_RESEARCH_PRIMARY_CHARS = 8000
+CRICKET_RESEARCH_REPORT_CHARS = 5500
+CRICKET_RESEARCH_MAX_PACKET_CHARS = 22000
 MIN_ARTICLE_CHARS = 600
 SCENE_1_MAX_WORDS = 14
 HOOK_MAX_SECONDS = 3.0
@@ -507,21 +508,6 @@ def _cricket_research_candidates(story_title: str, original_url: str) -> list[di
     except Exception:
         raw_results = []
 
-    if not raw_results:
-        try:
-            raw_results = list(
-                DDGS(timeout=5).text(
-                    query=query,
-                    region="in-en",
-                    safesearch="off",
-                    timelimit="w",
-                    max_results=8,
-                )
-                or []
-            )
-        except Exception:
-            raw_results = []
-
     candidates = []
     seen_urls = set()
     seen_domains = set()
@@ -560,6 +546,60 @@ def _cricket_research_candidates(story_title: str, original_url: str) -> list[di
                 "score": overlap * 2.0 + similarity,
             }
         )
+
+    if not candidates:
+        try:
+            raw_results = list(
+                DDGS(timeout=5).text(
+                    query=query,
+                    region="in-en",
+                    safesearch="off",
+                    timelimit="w",
+                    max_results=8,
+                )
+                or []
+            )
+        except Exception:
+            raw_results = []
+
+        seen_urls.clear()
+        seen_domains.clear()
+        candidates = []
+        for result in raw_results:
+            url = _clean(result.get("url") or result.get("href"))
+            title = _clean(result.get("title"))
+            if not url or url == original_url:
+                continue
+
+            domain = _source_domain(url)
+            if not domain or domain == original_domain:
+                continue
+            if any(blocked in domain for blocked in blocked_domains):
+                continue
+
+            overlap = len(keywords & _story_title_keywords(title))
+            similarity = SequenceMatcher(
+                None,
+                _normalise(query),
+                _normalise(title),
+            ).ratio()
+            if keywords and overlap < minimum_overlap and similarity < 0.38:
+                continue
+
+            canonical = url.rstrip("/").casefold()
+            if canonical in seen_urls or domain in seen_domains:
+                continue
+
+            seen_urls.add(canonical)
+            seen_domains.add(domain)
+            candidates.append(
+                {
+                    "title": title,
+                    "url": url,
+                    "domain": domain,
+                    "score": overlap * 2.0 + similarity,
+                }
+            )
 
     candidates.sort(key=lambda item: item["score"], reverse=True)
     return candidates[:CRICKET_RESEARCH_CANDIDATE_LIMIT]
@@ -628,7 +668,7 @@ def _research_story(story, profile: str | None = None) -> str:
                 sections.append(
                     f"[INDEPENDENT REPORT {number} — "
                     f"{article['title']} — {article['url']}]\n"
-                    f"{_limit_source_text(article['text'], CRICKET_RESEARCH_MAX_SOURCE_CHARS)}"
+                    f"{_limit_source_text(article['text'], CRICKET_RESEARCH_REPORT_CHARS)}"
                 )
 
         if description:
