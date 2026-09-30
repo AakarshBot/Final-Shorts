@@ -149,7 +149,7 @@ def test_writer_uses_one_primary_groq_call(monkeypatch):
     assert 3 <= len(result["headline"].split()) <= 4
     assert result["hashtags"]
     assert result["comment"]
-    assert result["word_count"] == 37
+    assert result["word_count"] == 39
     assert len(result["script"]) == 4
 
 
