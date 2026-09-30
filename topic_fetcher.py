@@ -731,7 +731,7 @@ def _keyword_queries(profile: str, keyword: str) -> list[str]:
     return [
         f"{phrase} cricket {scope}(breaking OR result OR upset OR record OR milestone OR comeback OR debut OR injury) when:3d",
         f"{phrase} cricket {scope}(reacts OR responds OR reveals OR confirms OR admits OR controversy OR backlash) when:3d",
-        f"{phrase} cricket {scope}(viral OR trending OR fans OR 'social media' OR unusual OR bizarre OR stunning) when:3d",
+        f'{phrase} cricket {scope}(viral OR trending OR fans OR "social media" OR unusual OR bizarre OR stunning) when:3d',
         f"{phrase} cricket {scope}(selection OR retirement OR contract OR banned OR suspended OR statement) when:3d",
     ]
 
@@ -741,7 +741,7 @@ def _gdelt_query(profile: str, keyword: str | None = None) -> str:
         scope = '(India Pakistan "Sri Lanka") ' if profile == "cricket_india_asia" else ""
         return f'"{_clean(keyword)}" cricket {scope}'
     return {
-        "cricket_india_asia": "(cricket India Pakistan "Sri Lanka")",
+        "cricket_india_asia": '(cricket India Pakistan "Sri Lanka")',
         "cricket_global": "(cricket Australia England South Africa New Zealand West Indies international)",
         "niche_sports": "(tennis badminton F1 MotoGP athletics swimming golf boxing hockey kabaddi basketball chess)",
     }[profile]
