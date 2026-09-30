@@ -1,4 +1,14 @@
+import pytest
+
 from script_writer import MAX_WORDS, SCENE_1_MAX_WORDS, apply_script_edits, write_script
+
+
+@pytest.fixture(autouse=True)
+def disable_live_cricket_research(monkeypatch):
+    monkeypatch.setattr(
+        "script_writer._cricket_research_candidates",
+        lambda *args, **kwargs: [],
+    )
 
 
 def valid_result(scene1="Gill faces a fresh injury scare before ODI."):
@@ -139,6 +149,7 @@ def test_writer_uses_one_primary_groq_call(monkeypatch):
     assert 3 <= len(result["headline"].split()) <= 4
     assert result["hashtags"]
     assert result["comment"]
+    assert result["word_count"] == 37
     assert len(result["script"]) == 4
 
 
@@ -463,51 +474,33 @@ def test_writer_research_reads_jsonld_article_body_when_trafilatura_is_thin(monk
     assert "India are assessing his availability" in captured[0]
 
 
-def test_writer_research_uses_text_search_when_news_fallback_is_empty(monkeypatch):
-    class FakeResponse:
-        def __init__(self, url, text):
-            self.url = url
-            self.text = text
+def test_writer_research_uses_independent_report_for_cricket_context(monkeypatch):
+    calls = []
 
-        def raise_for_status(self):
-            return None
-
-    urls = []
-
-    def fake_get(url, **kwargs):
-        urls.append(url)
+    def fake_extract(url):
+        calls.append(url)
         if url == "https://example.com/story":
-            return FakeResponse(url, "<html><body><p>Thin page.</p></body></html>")
-        return FakeResponse(
-            url,
-            "<html><body>" +
-            "<p>" + (
-                "Shubman Gill was hit in training before the ODI. "
+            return "", url
+        return (
+            (
+                "Independent report: Shubman Gill was hit in training before the ODI. "
                 "India are assessing his availability after the incident. "
-                "The coaching staff reviewed his condition before the next session. "
-            ) * 8 + "</p></body></html>",
+            ) * 6,
+            url,
         )
 
-    class FakeDDGS:
-        calls = []
-
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def news(self, **kwargs):
-            self.calls.append("news")
-            return []
-
-        def text(self, **kwargs):
-            self.calls.append("text")
-            return [{
+    monkeypatch.setattr("script_writer._extract_article", fake_extract)
+    monkeypatch.setattr(
+        "script_writer._cricket_research_candidates",
+        lambda title, url: [
+            {
                 "title": "Shubman Gill injury update before ODI",
-                "href": "https://other.com/gill-story",
-            }]
-
-    monkeypatch.setattr("script_writer.requests.get", fake_get)
-    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: "")
-    monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
+                "url": "https://other.com/gill-story",
+                "domain": "other.com",
+                "score": 8.0,
+            }
+        ],
+    )
 
     captured = []
 
@@ -524,9 +517,10 @@ def test_writer_research_uses_text_search_when_news_fallback_is_empty(monkeypatc
         }
     )
 
-    assert "https://other.com/gill-story" in captured[0]
-    assert "India are assessing his availability" in captured[0]
-    assert "text" in FakeDDGS.calls
+    assert calls == ["https://example.com/story", "https://other.com/gill-story"]
+    assert "[INDEPENDENT REPORT 1 — Shubman Gill injury update before ODI — https://other.com/gill-story]" in captured[0]
+    assert "Independent report: Shubman Gill was hit in training before the ODI." in captured[0]
+
 
 
 def test_writer_can_use_topic_evidence_when_article_research_fails(monkeypatch):
@@ -560,49 +554,53 @@ def test_writer_can_use_topic_evidence_when_article_research_fails(monkeypatch):
     assert "Gill was hit during training before the ODI." in captured[0]
 
 
-def test_writer_research_falls_back_to_another_article_when_primary_is_thin(monkeypatch):
-    class FakeResponse:
-        def __init__(self, url, text):
-            self.url = url
-            self.text = text
+def test_writer_research_keeps_primary_and_caps_independent_reports(monkeypatch):
+    primary = (
+        "Primary report: Shubman Gill was struck during practice and returned after treatment. "
+        "India are assessing his availability for the ODI. "
+    ) * 6
+    alternate = (
+        "Independent report: Gill continued training after the incident and the team reviewed his status. "
+        "His availability remains under assessment. "
+    ) * 6
 
-        def raise_for_status(self):
-            return None
-
-    urls = []
-
-    def fake_get(url, **kwargs):
-        urls.append(url)
+    def fake_extract(url):
         if url == "https://example.com/story":
-            return FakeResponse(url, "<html>thin page</html>")
-        return FakeResponse(url, "<html>alternate article</html>")
+            return primary, url
+        return alternate, url
 
-    class FakeDDGS:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def news(self, **kwargs):
-            return [
-                {
-                    "title": "Shubman Gill injury update before ODI",
-                    "url": "https://other.com/gill-story",
-                }
-            ]
-
-    monkeypatch.setattr("script_writer.requests.get", fake_get)
+    monkeypatch.setattr("script_writer._extract_article", fake_extract)
     monkeypatch.setattr(
-        "script_writer.trafilatura.extract",
-        lambda html, **kwargs: (
-            ""
-            if "thin page" in html
-            else (
-                "Shubman Gill was hit in training before the ODI and returned to continue "
-                "his session. The coaching staff reviewed his condition before the next "
-                "session while India assessed his availability for the match. "
-            ) * 5
-        ),
+        "script_writer._cricket_research_candidates",
+        lambda title, url: [
+            {
+                "title": "Gill injury update before ODI",
+                "url": "https://other.com/gill-story",
+                "domain": "other.com",
+                "score": 7.5,
+            },
+            {
+                "title": "Gill training status ahead of India ODI",
+                "url": "https://third.com/gill-status",
+                "domain": "third.com",
+                "score": 7.0,
+            },
+            {
+                "title": "Gill training story from another outlet",
+                "url": "https://fourth.com/gill-status",
+                "domain": "fourth.com",
+                "score": 6.5,
+            },
+        ],
     )
-    monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
+
+    extracted_urls = []
+
+    def capture_extract(url):
+        extracted_urls.append(url)
+        return fake_extract(url)
+
+    monkeypatch.setattr("script_writer._extract_article", capture_extract)
 
     captured = []
 
@@ -619,9 +617,16 @@ def test_writer_research_falls_back_to_another_article_when_primary_is_thin(monk
         }
     )
 
-    assert "https://other.com/gill-story" in captured[0]
-    assert "returned to continue his session" in captured[0]
-    assert urls == ["https://example.com/story", "https://other.com/gill-story"]
+    packet = captured[0]
+    assert "[PRIMARY ARTICLE — https://example.com/story]" in packet
+    assert "[INDEPENDENT REPORT 1 — Gill injury update before ODI — https://other.com/gill-story]" in packet
+    assert "[INDEPENDENT REPORT 2 — Gill training status ahead of India ODI — https://third.com/gill-status]" in packet
+    assert "https://fourth.com/gill-status" not in packet
+    assert extracted_urls == [
+        "https://example.com/story",
+        "https://other.com/gill-story",
+        "https://third.com/gill-status",
+    ]
 
 
 def test_writer_keeps_existing_retention_limits():
