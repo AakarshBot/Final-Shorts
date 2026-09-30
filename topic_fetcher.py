@@ -217,6 +217,11 @@ EVENT_GROUPS = {
     "discipline": {"banned", "ban", "fined", "fine", "suspended", "sanctioned"},
 }
 EVENT_CONTEXT = {"odi", "t20", "test", "series", "tour", "season", "world", "cup", "final", "match", "championship"}
+TITLE_NOISE = {
+    "story", "stories", "event", "events", "update", "updates", "player",
+    "players", "star", "stars", "team", "teams", "news", "report", "reports",
+}
+
 STOPWORDS = {
     "the", "a", "an", "and", "or", "for", "to", "of", "in", "on", "at", "by", "with", "from",
     "ahead", "after", "before", "as", "is", "are", "was", "were", "has", "have", "had", "vs",
@@ -342,12 +347,13 @@ def _event_groups(title: str) -> set[str]:
 
 def _same_event(a: Topic, b: Topic) -> bool:
     ta, tb = _tokens(a.title), _tokens(b.title)
-    shared = (ta & tb) - SPORT_WORDS - set().union(*EVENT_GROUPS.values())
+    excluded = SPORT_WORDS | TITLE_NOISE | set().union(*EVENT_GROUPS.values())
+    shared = (ta & tb) - excluded
     if len(shared) >= 2 and _event_groups(a.title) & _event_groups(b.title):
         return True
 
     shared_context = (ta & tb) & EVENT_CONTEXT
-    shared_entities = (ta & tb) - SPORT_WORDS - set().union(*EVENT_GROUPS.values()) - EVENT_CONTEXT
+    shared_entities = (ta & tb) - excluded - EVENT_CONTEXT
     if len(shared_entities) >= 3 and shared_context:
         similarity = SequenceMatcher(None, _clean(a.title).casefold(), _clean(b.title).casefold()).ratio()
         if similarity >= 0.42:
