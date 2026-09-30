@@ -1137,12 +1137,9 @@ def _render_top5_visual_board():
         unsafe_allow_html=True,
     )
 
-    script_source = (
-        st.session_state.get("test_top5_script_handoff")
-        or st.session_state.get("test_top5_script_data")
-        or {}
-    )
-    script_slides = script_source.get("slides") or []
+    script_handoff = st.session_state.get("test_top5_script_handoff") or {}
+    script_data = st.session_state.get("test_top5_script_data") or {}
+    script_slides = script_handoff.get("slides") or script_data.get("slides") or []
 
     cols = st.columns(6, gap="small")
     for slide in range(1, 7):
