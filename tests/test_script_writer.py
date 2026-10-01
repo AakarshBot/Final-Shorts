@@ -631,7 +631,7 @@ def test_writer_research_keeps_primary_and_caps_independent_reports(monkeypatch)
     ]
 
 
-def test_writer_uses_low_reasoning_effort_for_groq():
+def test_writer_uses_low_reasoning_effort_for_groq(monkeypatch):
     import script_writer
 
     captured = {}
@@ -648,8 +648,8 @@ def test_writer_uses_low_reasoning_effort_for_groq():
 
         return Response()
 
-    script_writer.requests.post = fake_post
-    script_writer.os.environ["GROQ_API_KEY"] = "test-key"
+    monkeypatch.setattr(script_writer.requests, "post", fake_post)
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
     script_writer._request("openai/gpt-oss-120b", "test prompt", "test story")
 
     assert captured["payload"]["reasoning_effort"] == "low"
