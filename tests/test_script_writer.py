@@ -3,7 +3,7 @@ import json
 import pytest
 
 import script_writer
-from script_writer import SYSTEM_PROMPT, _article_body_from_html, _request, _request_coverage_audit, apply_script_edits, validate_script, write_script
+from script_writer import SYSTEM_PROMPT, _article_body_from_html, _request, _request_coverage_audit, apply_script_edits, validate_cricket_script, validate_script, write_script
 
 
 def valid_result(scene1="Gill faces fresh injury scare."):
@@ -59,25 +59,25 @@ def test_slide_one_is_strictly_less_than_14_words():
     assert len(result["script"][0]["voiceover"].split()) < 14
     assert validate_script(result, "")[0]
 
-    invalid = valid_result("Gill faces a fresh injury scare before India's next big ODI match.")
+    invalid = valid_result("Gill faces a fresh injury scare before India's next ODI against West Indies today.")
     assert len(invalid["script"][0]["voiceover"].split()) == 14
-    assert validate_script(invalid, "")[0] is False
+    assert validate_cricket_script(invalid, "")[0] is False
 
 
 def test_titles_description_and_hashtags_are_required_outputs():
     result = valid_result()
-    assert validate_script(result, "")[0]
+    assert validate_cricket_script(result, "")[0]
 
     result["titles"] = []
-    assert validate_script(result, "")[0] is False
+    assert validate_cricket_script(result, "")[0] is False
 
     result = valid_result()
     result["seo_description"] = ""
-    assert validate_script(result, "")[0] is False
+    assert validate_cricket_script(result, "")[0] is False
 
     result = valid_result()
     result["hashtags"] = []
-    assert validate_script(result, "")[0] is False
+    assert validate_cricket_script(result, "")[0] is False
 
 
 def test_no_extra_editorial_rules_are_applied():
@@ -87,7 +87,7 @@ def test_no_extra_editorial_rules_are_applied():
     result["titles"] = ["A", "B", "C"]
     result["seo_description"] = "Everything important from the source."
     result["hashtags"] = ["#Cricket"]
-    valid, _ = validate_script(result, "")
+    valid, _ = validate_cricket_script(result, "")
     assert valid
 
 
@@ -269,7 +269,7 @@ def test_apply_edits_preserves_four_slides_and_checks_slide_one():
     with pytest.raises(ValueError):
         apply_script_edits(
             result,
-            ["This slide has fourteen words and therefore must fail the rule today.", *[scene["voiceover"] for scene in result["script"][1:]]],
+            ["Gill faces a fresh injury scare before India's next ODI against West Indies today.", *[scene["voiceover"] for scene in result["script"][1:]]],
         )
 
 
@@ -277,5 +277,5 @@ def test_prompt_contains_only_the_requested_editorial_constraints():
     assert "fewer than 14 words" in SYSTEM_PROMPT
     assert "less than 30 seconds" in SYSTEM_PROMPT
     assert "roughly 90%" in SYSTEM_PROMPT
-    assert "every slide must contain important information" in SYSTEM_PROMPT
+    assert "Every slide must contain important information" in SYSTEM_PROMPT
     assert "related current reporting" in SYSTEM_PROMPT
