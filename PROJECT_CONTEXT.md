@@ -573,95 +573,50 @@ Do not:
 
 The immediate next tasks are **Dashboard WIP work and implementation of Production Line 08 (Top 5 cricket stories of the day) and Production Line 09 (On This Day)**.
 
-## Topic Fetcher v2 — trend-led discovery (2026-10-01)
+## Cricket Topic Fetcher + Scriptwriter baseline — 2026-10-01
 
-Function 01 was rewritten without changing the downstream handoff contract.
+### Cricket Topic Fetcher
 
-Discovery now combines:
-- Google Trends Trending Now as a current attention signal for India, using the shortest supported live window exposed by the maintained Trendflow client and prioritising trends that started within roughly the last hour.
-- Broad Google News cricket discovery instead of relying on a country/player allow-list.
-- Trend-derived Google News queries so new entities, leagues, appointments, laws, innovations and other developments can be discovered without being hard-coded first.
-- GDELT as a secondary coverage source, not merely a failure fallback.
-- Event clustering before final selection so multiple articles about one match/development are treated as one event.
-- Event-level coverage and source-diversity bonuses rather than rewarding every duplicate article as a separate story.
-- Diversity-aware selection that prefers distinct events and sources first, then uses additional articles only when necessary to preserve the requested pool size.
+Function 01 exists to produce a large, current, useful cricket story pool. The implementation is free to change as long as the factory requirements are preserved.
 
-The former hard profile filter was broadened. Cricket India/Asia now gives India/Asia stories a relevance boost but can admit strong global cricket stories, which allows developments such as MCC law changes, WPL retention/releases, Cricket South Africa innovations and franchise coaching appointments into the same discovery pool.
+Requirements:
+- Current cricket news, not a narrow hard-coded list of players or one repeated event.
+- Cricket India / Asia and Cricket Global lanes remain available.
+- The initial fetch returns up to 20 strong, distinct stories.
+- The pool must be capable of finding 100+ unique relevant articles when the source cycle supports it.
+- “Find 20 more” appends another batch to the existing pool rather than shrinking or replacing it.
+- More results must exclude previously returned stories and repeated versions of the same event.
+- Keyword search remains available for player, team, event or keyword discovery.
+- The pool should favour real, distinct stories and sources rather than multiple headlines about one event.
+- The current Topic handoff remains the existing Topic object used by the dashboard. Its internal schema is an implementation detail, not a product constraint.
+- No new runtime dependency may make the existing Python 3.11 factory unable to run.
 
-“Find 20 more” remains compatible with the existing dashboard call. It now adds a wider discovery query set while excluding both previously returned URLs and previously selected events, so the second batch explores the next layer of the news cycle instead of re-serving the same event.
+The current implementation uses Google News plus GDELT and deliberately does not require Trendflow. Trend/trending services may be added later only when they remain optional and do not break the existing runtime.
 
-The existing `fetch_topics(profile, more, exclude_topics, limit, keyword)` signature and `Topic(title, source, published_at, url, description, score)` handoff remain unchanged. No changes were made to app.py or Functions 02–07.
+### Cricket Scriptwriter
 
-Trendflow is treated as an optional search-trend signal only. The core discovery path must run without it; when Trendflow is unavailable, the normal multi-query Google News/GDELT discovery continues. The required factory dependencies therefore remain compatible with the existing Python 3.11 runtime.
+Function 02 is responsible for turning the full researched story into a four-slide Short.
 
-Regression coverage now includes:
-- MCC law changes, WPL retention/release news, Cricket South Africa pitch innovation and Mark Boucher/MI Emirates surviving cricket relevance filtering.
-- One dominant India–West Indies event not consuming the story selection ahead of distinct events.
-- Returning the full 20-story pool when sufficient unique articles exist.
-- “More” excluding previously selected events.
-- Trend signals becoming targeted news searches.
-- Existing keyword search and Topic handoff behaviour remaining intact.
+Only these editorial rules are authoritative:
+- Slide 1 must contain **fewer than 14 words**.
+- The finished Short must be **less than 30 seconds**. Audio may use the existing speed correction when a generated draft is slightly long.
+- The Scriptwriter must generate the titles, SEO description and hashtags.
+- Exactly four slides are produced.
+- Every slide must contain important information.
+- The four slides should cover roughly **90% of the materially important information in the entire story**, not merely the headline or the latest event.
+- The writer must not invent a story or pad/prolong the headline.
+- Research must use the full selected article plus other relevant current reporting where available. One source is acceptable; source count is not a requirement.
+- Related current/trending information should be incorporated when it is genuinely part of the same story.
+- Manual QC has a forceful Scriptwriter retry that rewrites the full script specifically to improve the 90% story-coverage requirement.
 
+Implementation may use an AI coverage audit/rewrite pass. The audit is there to improve factual coverage, not to introduce additional editorial rules.
 
-## Topic Fetcher v2.1 correction — event clustering precision (2026-10-01)
+The existing downstream handoff fields required by Audio, Visuals, Renderer and Upload remain implementation compatibility, not additional Scriptwriter editorial requirements.
 
-CI exposed that character-level title similarity was still too aggressive for generic headlines. The selector now uses shared cricket entities and shared event groups first; character similarity is only a final fallback when enough meaningful tokens are shared. This prevents different stories with boilerplate wording from collapsing into one event.
+### Current safeguards
 
-The cricket relevance gate no longer treats generic words such as “coach” or “appointment” alone as cricket evidence. Strong cricket evidence or a recognised cricket publisher/source remains necessary.
-
-The downstream Topic contract is unchanged and no downstream factory function was modified.
-
-### Topic Fetcher import/test correction (2026-10-01)
-- The live-test failure after the v2.1 clustering change was traced to module initialization order, not the clustering algorithm: `CRICKET_KNOWN_ENTITIES` referenced `CRICKET_COMPETITIONS` before that set was defined.
-- The fix moves `CRICKET_KNOWN_ENTITIES` below `CRICKET_COMPETITIONS`. No dashboard, downstream handoff, fetch contract, or production-line code was changed.
-- Verification branch CI passed the full repository suite (`116 passed`) and the full compile step before this context update.
-### Topic Fetcher runtime cleanup (2026-10-01)
-- Removed the trend lookup from `more=True` fetches because the More batch already uses its own disjoint query set; this avoids one trend-service request plus all trend-derived article queries on the second batch.
-- Reduced trend-derived searches on the initial fetch from 10 to 5, while keeping broad base discovery intact.
-- Increased Google News worker concurrency to 12 so the remaining initial query set completes in fewer waves; More and keyword fetches normally complete in one wave.
-- Removed character-level `SequenceMatcher` clustering and added early rejection based on shared tokens/event groups, reducing expensive pairwise work while keeping entity/event clustering.
-- Limited full event clustering to the highest-ranked candidate window and uses the remaining candidates only against the already chosen topics, preventing quadratic work across the entire raw pool.
-- `_prepare` now drops repeated canonical article URLs before clustering, avoiding duplicate work created by the same article appearing in multiple searches.
-- Primary network timeout is now 8 seconds and the GDELT fallback uses the same bounded timeout; no downstream handoff or dashboard call was changed.
-- Added regression coverage proving More does not call the trend service and repeated article URLs are removed before selection.
-
-
-## Function 02 — editorial story coverage and structured research (2026-10-01)
-
-The regular Cricket Scriptwriter was corrected to stop treating every story as a single-event news update.
-
-- The existing LLM remains the only generation call; no second planner/reviewer API call was added, so latency and API usage do not increase.
-- The prompt now identifies the story's actual editorial promise and the important viewer questions before choosing the narration order.
-- Story structure is adaptive: profile/breakout, record/milestone, appointment/transfer, rule/policy, injury/availability and event/result stories are guided by their information shape rather than one universal event template.
-- A profile or explainer story must use the body to answer who/what/how/why/background questions when the source supports them, rather than spending the Short repeating the triggering event.
-- The writer is instructed to select the 4–7 most useful supported facts, prioritise essential information, and produce a complete Short rather than a compressed article dump.
-- Narration remains capped at 75 words and the existing estimated 29.2-second ceiling, with a new target of roughly 62–72 spoken words so scenes carry substantive information without exceeding 30 seconds.
-- Research extraction now preserves HTML table content. Trafilatura is asked to include tables, and the HTML fallback combines JSON-LD article text, paragraphs and table rows instead of returning JSON-LD articleBody early and silently discarding tables.
-- Primary cricket research capacity was increased from 8,000 to 9,000 characters without changing the research-source count or downstream handoff.
-- The final Scriptwriter JSON schema, scene fields, source_evidence, audio handoff and visual handoff contracts remain unchanged. app.py and Functions 03–07 were not modified.
-- Regression coverage now verifies structured table facts survive fallback extraction, Trafilatura receives include_tables=True, and the prompt enforces editorial-promise coverage plus the 62–72 word target under the 30-second ceiling.
-
-
-## Function 02 — validation alignment (2026-10-01)
-
-Scriptwriter validation was tightened to match the actual user/factory constraint rather than separate heuristic timing rules.
-
-- Removed the hard 3-second Scene 1 timing rejection. The user requires the whole Short to remain under 30 seconds; Scene 1 still has the existing 14-word maximum and a concise hook target in the prompt, but its estimated timing is not a separate failure condition.
-- Raised the Scriptwriter estimated narration ceiling from 29.2 seconds to 30.0 seconds so it matches the Audio stage's authoritative 30.0-second maximum. The 75-word ceiling remains unchanged.
-- Audio remains responsible for measured Edge-TTS duration and its existing one-step speed correction when total audio exceeds 30 seconds.
-- No downstream function, schema, scene count or handoff contract changed.
-- Regression coverage now proves a hook can exceed three estimated seconds when it remains within the existing word and total-duration constraints.
-
-
-## Scriptwriter and startup cleanup — 2026-10-01
-
-Function 02 was tightened around editorial completeness rather than extra validation gates.
-
-- The Scriptwriter now treats the selected headline as the editorial assignment. The prompt must identify and fulfil the headline's actual information promise before drafting.
-- Profile/explainer headlines are explicitly handled as profile/explainer stories: the writer should use supported identity, age, career, records, statistics, achievements and other relevant background facts when those details are part of the headline promise.
-- The current event is the entry point when appropriate, not the whole story. The body should explain the person, record, career, change or background that makes the story worth covering.
-- Research extraction now compares the available trafilatura and structured-HTML candidates and keeps the richer article instead of returning the first candidate that merely clears the minimum length. Structured headings and tables are included in the fallback extraction.
-- The normal Scriptwriter path remains one Groq 120B generation call. The existing 20B call is still recovery-only when the primary call fails or fails essential local checks. The generation request uses the previously proven low reasoning effort without adding another AI call. This request setting must not be changed casually because it is part of the known-working Groq production configuration.
-- Local validation no longer imposes a separate Scene 1 timing gate, estimated narration-time gate or adjacent-scene similarity gate. Audio remains the authoritative measured under-30-second gate. The writer prompt remains responsible for the editorial constraints, including a Scene 1 maximum of 14 words and a complete sub-30-second story.
-- The app now lazy-loads heavy factory-stage modules at their points of use. The homepage no longer imports the uploader, Trendflow/topic fetcher, Edge-TTS, visual retrieval stack or renderer before the user enters the corresponding stage.
-- No production stage contract or downstream handoff was changed.
+- Scriptwriter Live and Test both use the same Cricket Scriptwriter function.
+- Manual QC can force a complete rewrite without changing the selected story.
+- The final audio duration remains authoritative for the sub-30-second production constraint.
+- Do not reintroduce unrelated timing, headline, repetition, metadata-quality or retention heuristics unless the user explicitly asks for them.
+- Do not change Niche Sports, Top-5, OTD or other production lines while working on Cricket Topic Fetcher and Cricket Scriptwriter.
