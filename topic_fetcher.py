@@ -104,7 +104,12 @@ NON_CRICKET_TERMS = {
 INDIA_ASIA_TERMS = {
     "india", "indian", "bcci", "pakistan", "pakistani", "pcb", "sri lanka",
     "sri lankan", "bangladesh", "bangladeshi", "wpl", "ipl", "psl",
-    "mumbai indians", "rcb", "royal challengers",
+    "mumbai indians", "rcb", "royal challengers", "virat kohli", "rohit sharma",
+    "shubman gill", "jasprit bumrah", "hardik pandya", "ravindra jadeja",
+    "rishabh pant", "kl rahul", "kuldeep yadav", "mohammed siraj", "arshdeep singh",
+    "yashasvi jaiswal", "smriti mandhana", "babar azam", "shaheen afridi",
+    "mohammad rizwan", "wanindu hasaranga", "kusal mendis", "pathum nissanka",
+    "matheesha pathirana", "shreyas iyer", "axar patel",
 }
 EVENT_GROUPS = {
     "result": {"win", "wins", "won", "beat", "beaten", "defeat", "lost", "loss", "draw", "champion", "title", "medal", "upset"},
@@ -221,8 +226,7 @@ def _same_event(a: Topic, b: Topic) -> bool:
         return True
     if _named_phrases(a.title) & _named_phrases(b.title):
         return True
-    shared_non_group = shared - set().union(*EVENT_GROUPS.values())
-    return len(shared_non_group) >= 5 or len(entities) >= 2 and len(shared_non_group) >= 2
+    return len(entities) >= 2 and len(shared) >= 3
 
 def _profile_relevant(title: str, description: str, profile: str | None, source: str) -> bool:
     if profile == "niche_sports":
