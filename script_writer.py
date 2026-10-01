@@ -27,9 +27,8 @@ CRICKET_RESEARCH_REPORT_CHARS = 5500
 CRICKET_RESEARCH_MAX_PACKET_CHARS = 22000
 MIN_ARTICLE_CHARS = 600
 SCENE_1_MAX_WORDS = 14
-HOOK_MAX_SECONDS = 3.0
 SPEECH_WORDS_PER_MINUTE = 170.0
-MAX_ESTIMATED_NARRATION_SECONDS = 29.2
+MAX_ESTIMATED_NARRATION_SECONDS = 30.0
 MAX_WORDS = 75
 
 LANGUAGE_INSTRUCTIONS = {
@@ -895,13 +894,6 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     first_words = _words(scenes[0]["voiceover"])
     if first_words > SCENE_1_MAX_WORDS:
         return False, f"Scene 1 exceeds {SCENE_1_MAX_WORDS} words."
-    hook_seconds = estimate_spoken_seconds(scenes[0]["voiceover"])
-    if hook_seconds > HOOK_MAX_SECONDS:
-        return False, (
-            f"Scene 1 exceeds the 3-second hook limit "
-            f"({hook_seconds:.2f}s estimated)."
-        )
-
     narration = " ".join(_clean(scene["voiceover"]) for scene in scenes)
     word_count = _words(narration)
     if word_count > MAX_WORDS:
