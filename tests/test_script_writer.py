@@ -662,6 +662,7 @@ def test_writer_prompt_is_responsible_for_pacing():
     assert "Use 4 scenes by default" in writer.SYSTEM_PROMPT
     assert "60–75 spoken words" in writer.SYSTEM_PROMPT
     assert "under 30 seconds" in writer.SYSTEM_PROMPT
+    assert "never exceed 14 words" in writer.SYSTEM_PROMPT
     assert "MAX_WORDS" not in writer.validate_script.__code__.co_consts
 
 
