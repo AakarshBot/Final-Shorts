@@ -263,11 +263,11 @@ def _cricket_same_event(a: Topic, b: Topic) -> bool:
     entities = _known_entities(f"{a.title} {a.description}") & _known_entities(f"{b.title} {b.description}")
     named = _named_phrases(a.title) & _named_phrases(b.title)
 
-    if similarity >= 96 and len(shared_core) >= 2 and (groups or entities or named):
+    if similarity >= 94 and shared_core and ((groups and entities) or named):
         return True
-    if similarity >= 90 and len(shared_core) >= 2 and (groups or entities or named):
+    if similarity >= 86 and len(shared_core) >= 2 and (groups or entities or named):
         return True
-    if similarity >= 84 and shared_core and (groups or entities or named):
+    if similarity >= 80 and len(shared_core) >= 3 and groups and (entities or named):
         return True
     return False
 
