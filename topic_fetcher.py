@@ -1,7 +1,6 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
-from difflib import SequenceMatcher
 from email.utils import parsedate_to_datetime
 import html
 import math
@@ -15,11 +14,11 @@ import trendflow
 GOOGLE_NEWS_URL = "https://news.google.com/rss/search"
 GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 HEADERS = {"User-Agent": "Final-Shorts/1.0"}
-TIMEOUT = 12
+TIMEOUT = 8
 LOOKBACK_HOURS = 48
 MORE_LOOKBACK_HOURS = 72
-TREND_LIMIT = 20
-TREND_QUERY_LIMIT = 10
+TREND_LIMIT = 12
+TREND_QUERY_LIMIT = 5
 TARGET = 20
 MAX_QUERY_RESULTS = 100
 
@@ -266,25 +265,24 @@ def _known_entities(value: str) -> set[str]:
 
 def _same_event(a: Topic, b: Topic) -> bool:
     ta, tb = _tokens(a.title), _tokens(b.title)
-    title_a, title_b = _clean(a.title).casefold(), _clean(b.title).casefold()
-    evidence_a = f"{title_a} {_clean(a.description).casefold()}".strip()
-    evidence_b = f"{title_b} {_clean(b.description).casefold()}".strip()
+    shared = (ta & tb) - TITLE_NOISE
+    if not shared:
+        return False
+
     groups = _event_groups(a.title) & _event_groups(b.title)
+    if not groups and len(shared) < 4:
+        return False
+
+    evidence_a = f"{a.title} {a.description}"
+    evidence_b = f"{b.title} {b.description}"
     entities = _known_entities(evidence_a) & _known_entities(evidence_b)
     specific_entities = entities - CRICKET_TEAM_ENTITIES
-    shared = (ta & tb) - TITLE_NOISE
-    ratio = SequenceMatcher(None, title_a, title_b).ratio()
 
-    if groups:
-        if specific_entities and shared:
-            return True
-        if len(entities) >= 2 and len(shared) >= 2:
-            return True
-
-    if len(entities) >= 2 and len(shared) >= 3 and ratio >= 0.55:
+    if groups and specific_entities:
         return True
-
-    return len(shared) >= 4 and ratio >= 0.82
+    if groups and len(entities) >= 2 and len(shared) >= 2:
+        return True
+    return len(entities) >= 2 and len(shared) >= 3
 
 
 def _trend_value(value) -> float:
@@ -299,21 +297,17 @@ def _trend_value(value) -> float:
         return 0.0
 
 
-def _trend_signals(profile: str, more: bool = False) -> list[dict]:
+def _trend_signals(profile: str) -> list[dict]:
     try:
         client = trendflow.Client(language="en", timeout=10)
         result = client.trending_now(region="IN", window=4)
     except Exception:
         return []
 
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=1 if not more else 12)
     signals = []
     for item in getattr(result, "results", [])[:TREND_LIMIT]:
         title = _clean(getattr(item, "title", ""))
         if not title:
-            continue
-        started = _parse_date(getattr(item, "started_at", ""))
-        if started < cutoff and not getattr(item, "active", True):
             continue
         text = title.casefold()
         tokens = _tokens(title)
@@ -325,7 +319,7 @@ def _trend_signals(profile: str, more: bool = False) -> list[dict]:
         growth = _trend_value(getattr(item, "growth", 0))
         volume = _trend_value(getattr(item, "volume", 0))
         score = min(10.0, math.log1p(max(volume, 0)) * 1.2 + math.log1p(max(growth, 0)) * 1.3)
-        signals.append({"title": title, "tokens": tokens, "score": score, "started_at": started})
+        signals.append({"title": title, "tokens": tokens, "score": score})
     signals.sort(key=lambda item: item["score"], reverse=True)
     return signals[:TREND_QUERY_LIMIT]
 
@@ -400,7 +394,7 @@ def _fetch_gdelt(query: str) -> list[Topic]:
             "timespan": "3d",
         },
         headers=HEADERS,
-        timeout=TIMEOUT,
+        timeout=8,
     )
     response.raise_for_status()
     payload = response.json()
@@ -416,11 +410,11 @@ def _fetch_gdelt(query: str) -> list[Topic]:
 def _prepare(rows: list[Topic], seen_urls: set[str], profile: str | None = None, lookback_hours: int | None = None) -> list[Topic]:
     cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours or (MORE_LOOKBACK_HOURS if profile == "niche_sports" else LOOKBACK_HOURS))
     seen_urls = {_canonical_url(url) for url in seen_urls}
-    out, seen_titles = [], set()
+    out, seen_titles, seen_row_urls = [], set(), set()
     for topic in rows:
         title = _clean_title(topic.title, topic.source)
         url = _canonical_url(topic.url)
-        if not title or not url or url in seen_urls or topic.published_at < cutoff or _utility(title):
+        if not title or not url or url in seen_urls or url in seen_row_urls or topic.published_at < cutoff or _utility(title):
             continue
         if not _profile_relevant(title, topic.description, profile, topic.source):
             continue
@@ -429,6 +423,7 @@ def _prepare(rows: list[Topic], seen_urls: set[str], profile: str | None = None,
             continue
         out.append(Topic(title, _clean(topic.source), topic.published_at, url, _clean(topic.description), topic.score))
         seen_titles.add(title_key)
+        seen_row_urls.add(url)
     return out
 
 
@@ -446,9 +441,10 @@ def _select(rows: list[Topic], limit: int, seen_urls: set[str], existing: list[T
         score = _score(row, profile=profile, trend_bonus=_trend_bonus(row, signals or []))
         candidates.append(Topic(row.title, row.source, row.published_at, row.url, row.description, score))
     candidates.sort(key=lambda topic: topic.score, reverse=True)
+    cluster_candidates = candidates[:max(limit * 20, 200)]
 
     clusters: list[list[Topic]] = []
-    for topic in candidates:
+    for topic in cluster_candidates:
         for cluster in clusters:
             if _same_event(topic, cluster[0]):
                 cluster.append(topic)
@@ -484,16 +480,25 @@ def _select(rows: list[Topic], limit: int, seen_urls: set[str], existing: list[T
         add(representative)
 
     if len(chosen) < limit:
-        for cluster in clusters:
-            for topic in cluster[1:]:
-                if len(chosen) >= limit:
-                    break
-                if topic.url in {item.url for item in chosen}:
-                    continue
-                source = _source_key(topic.source)
-                if source and source_counts.get(source, 0) >= 2 and len(chosen) < max(1, limit // 2):
-                    continue
-                add(topic)
+        for topic in cluster_candidates:
+            if topic.url in {item.url for item in chosen}:
+                continue
+            if any(_same_event(topic, other) for other in chosen):
+                continue
+            source = _source_key(topic.source)
+            if source and source_counts.get(source, 0) >= 2 and len(chosen) < max(1, limit // 2):
+                continue
+            add(topic)
+            if len(chosen) >= limit:
+                break
+
+    if len(chosen) < limit:
+        for topic in candidates[len(cluster_candidates):]:
+            if topic.url in {item.url for item in chosen}:
+                continue
+            if any(_same_event(topic, other) for other in chosen):
+                continue
+            add(topic)
             if len(chosen) >= limit:
                 break
 
@@ -529,10 +534,8 @@ def fetch_topics(profile: str = "cricket_india_asia", more: bool = False, exclud
 
     existing = list(exclude_topics or [])
     seen_urls = {_canonical_url(topic.url) for topic in existing}
-    signals = _trend_signals(profile, more=more) if not keyword else []
-    queries = _keyword_queries(profile, keyword) if _clean(keyword or "") else list(BASE_QUERIES[profile])
-    if more and not keyword:
-        queries.extend(MORE_QUERIES[profile])
+    signals = _trend_signals(profile) if not keyword and not more else []
+    queries = _keyword_queries(profile, keyword) if _clean(keyword or "") else (MORE_QUERIES[profile] if more else list(BASE_QUERIES[profile]))
     for signal in signals:
         phrase = signal["title"].replace('"', " ")
         if profile == "niche_sports" and "cricket" in phrase.casefold():
@@ -541,7 +544,7 @@ def fetch_topics(profile: str = "cricket_india_asia", more: bool = False, exclud
     queries = list(dict.fromkeys(queries))
 
     rows: list[Topic] = []
-    with ThreadPoolExecutor(max_workers=min(10, len(queries) or 1)) as pool:
+    with ThreadPoolExecutor(max_workers=min(12, len(queries) or 1)) as pool:
         futures = {pool.submit(_fetch_google, query): query for query in queries}
         for future in as_completed(futures):
             try:
