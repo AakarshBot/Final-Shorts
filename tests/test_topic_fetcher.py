@@ -42,7 +42,7 @@ def test_utility_pages_are_removed():
         make_topic("Shubman Gill injury confirmed"),
     ]
     prepared = topic_fetcher._prepare(rows, set(), profile="cricket_india_asia")
-    assert [row.title for row in prepared] == [rows[-1].title]
+    assert [item.title for item in prepared] == [rows[-1].title]
 
 
 def test_same_event_is_selected_once():
@@ -58,6 +58,57 @@ def test_same_event_is_selected_once():
     assert sum("West Indies" in item.title for item in chosen) == 1
     assert any("MCC" in item.title for item in chosen)
     assert any("Boucher" in item.title for item in chosen)
+
+
+def test_fuzzy_paraphrases_of_the_same_story_are_collapsed():
+    first = make_topic(
+        "Shubman Gill ruled out of ODI after fresh injury setback",
+        source="SourceA",
+        url="https://example.com/a",
+    )
+    second = make_topic(
+        "Fresh injury blow leaves Shubman Gill out of the ODI",
+        source="SourceB",
+        url="https://example.com/b",
+    )
+    third = make_topic(
+        "Rohit Sharma reveals new training plan before India ODI",
+        source="SourceC",
+        url="https://example.com/c",
+    )
+    chosen = topic_fetcher._select(
+        [first, second, third],
+        3,
+        set(),
+        profile="cricket_india_asia",
+    )
+    assert sum("Gill" in item.title for item in chosen) == 1
+    assert len(chosen) == 2
+
+
+def test_same_player_different_events_are_not_collapsed():
+    rows = [
+        make_topic(
+            "Shubman Gill ruled out after injury",
+            url="https://example.com/injury",
+        ),
+        make_topic(
+            "Shubman Gill signs new franchise endorsement deal",
+            url="https://example.com/deal",
+        ),
+        make_topic(
+            "MCC announces major law change",
+            description="Cricket law change",
+            url="https://example.com/law",
+        ),
+    ]
+    chosen = topic_fetcher._select(
+        rows,
+        3,
+        set(),
+        profile="cricket_india_asia",
+    )
+    assert len(chosen) == 3
 
 
 def test_different_boilerplate_stories_are_not_collapsed():
@@ -89,8 +140,17 @@ def test_more_excludes_existing_urls_and_events():
 
 
 def test_twenty_results_remain_available_from_large_unique_pool(monkeypatch):
+    actions = [
+        "appoints", "signs", "returns", "breaks", "retires",
+        "debuts", "reveals", "suspends", "recalls", "releases",
+        "stuns", "qualifies",
+    ]
     rows = [
-        make_topic(f"Cricket event {index} appointment", source=f"source{index}.com", url=f"https://example.com/{index}")
+        make_topic(
+            f"Player{index} {actions[index % len(actions)]} Team{index} after Event{index}",
+            source=f"source{index}.com",
+            url=f"https://example.com/{index}",
+        )
         for index in range(120)
     ]
     monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda query: rows)
@@ -164,11 +224,17 @@ def test_invalid_dates_are_not_fresh():
 
 def test_gdelt_is_used_when_google_does_not_fill_pool(monkeypatch):
     monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda query: [])
-    fallback = [make_topic(f"GDELT cricket story {i} record", url=f"https://gdelt.example/{i}") for i in range(20)]
+    fallback = [
+        make_topic(f"GDELT cricket story {i} {['record','comeback','debuts','retirement'][i % 4]}",
+                   url=f"https://gdelt.example/{i}")
+        for i in range(20)
+    ]
     monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda query: fallback)
     result = topic_fetcher.fetch_topics(profile="cricket_global", limit=20)
     assert len(result) == 20
 
 
-def test_trendflow_is_not_required_for_topic_fetcher():
-    assert not hasattr(topic_fetcher, "trendflow")
+def test_niche_sports_path_remains_available():
+    rows = [make_topic("Tennis title upset", description="Tennis"), make_topic("Cricket record", description="Cricket")]
+    prepared = topic_fetcher._prepare(rows, set(), profile="niche_sports")
+    assert [row.title for row in prepared] == ["Tennis title upset"]
