@@ -385,7 +385,7 @@ def _article_body_from_html(html_text: str) -> str:
                 if row_text not in sections:
                     sections.append(row_text)
 
-    return "\\n".join(sections)
+    return "\n".join(sections)
 
 
 def _extract_article(url: str) -> tuple[str, str]:
