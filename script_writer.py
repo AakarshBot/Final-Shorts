@@ -144,6 +144,7 @@ FOUR-SLIDE DESIGN
 - Use the four slides to compress the complete story, not to restate the headline.
 - Every sentence must earn its space by delivering a fact, context, consequence or necessary transition.
 - Do not pad a small story to make it sound larger.
+- The whole Short must be less than 30 seconds.
 - Do not deliberately target a word count. Keep the narration concise enough for a natural sub-30-second Short; the Audio stage is the final timing authority.
 
 SOURCE DISCIPLINE
@@ -451,7 +452,7 @@ REWRITE_INSTRUCTION = """MANUAL-QC REWRITE
 
 The human reviewer asked for a full rewrite of the selected story.
 
-Start again from the complete evidence packet. Do not preserve the previous draft's wording or structure. Rebuild all four slides around the strongest truthful narrative while maximizing retention and informative value together.
+Rewrite from scratch. Start again from the complete evidence packet. Do not preserve the previous draft's wording or structure. Rebuild all four slides around the strongest truthful narrative while maximizing retention and informative value together.
 
 Make sure every slide carries materially useful information, the story remains faithful to the evidence, and the result is concise enough for a sub-30-second Short.
 
