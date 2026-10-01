@@ -456,9 +456,12 @@ def _request(model: str, prompt: str, story: str, schema: dict | None = None) ->
 
 SLIDE_ONE_REPAIR_PROMPT = """SLIDE 1 REPAIR
 
-The generated script failed one mechanical requirement: the first spoken slide must contain 13 words or fewer.
-Rewrite only the first spoken slide. Preserve its factual meaning, and do not change Slides 2–4 or any publish metadata.
-Count the rewritten words before returning it. Never return 14 or more words.
+You are repairing only the opening slide of a human-reviewed cricket Short.
+
+Use only facts supported by the supplied evidence packet.
+The first spoken slide must contain 13 words or fewer.
+Preserve the current slide's factual meaning while making it shorter and sharper.
+Do not add facts, claims or hype.
 Return only JSON matching the supplied repair schema.
 
 CURRENT SLIDE 1
@@ -618,9 +621,15 @@ def write_script(
                 try:
                     repaired = _request(
                         model,
-                        instruction
-                        + "\n\n"
-                        + SLIDE_ONE_REPAIR_PROMPT
+                        SLIDE_ONE_REPAIR_PROMPT
+                        .replace(
+                            "CURRENT SLIDE 1\n",
+                            LANGUAGE_INSTRUCTIONS.get(
+                                language_key,
+                                LANGUAGE_INSTRUCTIONS["english"],
+                            )
+                            + "\n\nCURRENT SLIDE 1\n",
+                        )
                         + _clean(first_voiceover),
                         source,
                         schema=SLIDE_ONE_SCHEMA,
