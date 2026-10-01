@@ -2010,7 +2010,6 @@ def _render_live_script():
             key="live-approve-script",
         ):
             try:
-                from script_writer import apply_script_edits
                 approved = apply_script_edits(
                     script,
                     edited_voiceovers,
@@ -2377,8 +2376,7 @@ def render_live_dashboard():
                     profile = "niche_sports"
                     with st.spinner("Finding the top 20 niche-sports stories…"):
                         from topic_fetcher import fetch_topics
-                        from topic_fetcher import fetch_topics
-                    st.session_state.live_topics = fetch_topics(
+                        st.session_state.live_topics = fetch_topics(
                             profile,
                             more=False,
                             exclude_topics=[],
@@ -2405,6 +2403,7 @@ def render_live_dashboard():
                         st.session_state.live_cricket_profile = profile
                         st.session_state.live_topics = []
                         with st.spinner("Finding the top 20 cricket stories…"):
+                            from topic_fetcher import fetch_topics
                             st.session_state.live_topics = fetch_topics(
                                 profile,
                                 more=False,
@@ -2426,6 +2425,7 @@ def render_live_dashboard():
             profile = st.session_state.live_topics_profile
             if profile:
                 with st.spinner("Searching for current sports stories…"):
+                    from topic_fetcher import fetch_topics
                     st.session_state.live_topics = fetch_topics(
                         profile,
                         more=False,
@@ -2495,7 +2495,7 @@ def render_live_dashboard():
                 ):
                     existing = list(st.session_state.live_topics)
                     from topic_fetcher import fetch_topics
-                new_topics = fetch_topics(
+                    new_topics = fetch_topics(
                         st.session_state.live_topics_profile,
                         more=more_clicked and not keyword_search,
                         exclude_topics=existing,
@@ -2658,6 +2658,7 @@ def render_topic_fetcher():
                 else "Fetching current sports stories…"
             ):
                 existing_topics = list(st.session_state.topics)
+                from topic_fetcher import fetch_topics
                 new_topics = fetch_topics(
                     profile,
                     more=more and not keyword_search,
@@ -2760,6 +2761,9 @@ def render_topic_fetcher():
                     if topic.url:
                         st.link_button("Source ↗",topic.url,width="stretch")
 def render_scriptwriter():
+    from niche_sports_script_writer import write_niche_sports_script
+    from script_writer import apply_script_edits, write_script
+
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first.")
         return
@@ -2781,8 +2785,6 @@ def render_scriptwriter():
     with top_right:
         if st.button("Generate script",type="primary",width="stretch"):
             with st.spinner("Writing the Short…"):
-                from niche_sports_script_writer import write_niche_sports_script
-                from script_writer import write_script
                 writer = (
                     write_niche_sports_script
                     if st.session_state.get("topic_desk_profile") == "niche_sports"
@@ -2854,6 +2856,8 @@ def render_scriptwriter():
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
 def render_visuals_crawler():
+    from visual_fetcher import crawl_visuals
+
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first, then select a story for Visuals.")
         return
@@ -2943,6 +2947,8 @@ def render_visuals_crawler():
 
 
 def _render_ranked_visual_search():
+    from visual_fetcher import ranked_visual_search
+
     st.subheader("Ranked Scene Search")
     st.caption("Runs the approved Scriptwriter visual searches together. The existing scrapers remain unchanged.")
 
@@ -3014,6 +3020,8 @@ def _render_ranked_visual_search():
 
 
 def _render_manual_crawler():
+    from visual_fetcher import manual_crawl_visuals
+
     st.subheader("Manual Scraper")
     st.caption("Manual query only. Searches current publisher pages and scrapes their images.")
     with st.form("manual_crawler_form"):
@@ -3073,6 +3081,8 @@ def _render_manual_crawler():
 
 
 def _render_manual_real_images():
+    from visual_search import search_images
+
     st.subheader("Real Image Search")
     st.caption("Manual query only. Searches all configured real-image sources in parallel.")
     with st.form("real_image_search_form"):
@@ -3120,6 +3130,8 @@ def _render_manual_real_images():
 
 
 def _render_manual_ai_images():
+    from visual_generator import generate_images
+
     st.subheader("AI Generation")
     st.caption("Manual query only. Each configured AI provider runs independently.")
     with st.form("ai_image_form"):
@@ -3192,6 +3204,8 @@ def render_visuals():
 
 
 def render_subtitles():
+    from subtitles import generate_subtitles
+
     if not st.session_state.approved_script or not st.session_state.approved_audio:
         st.info("Approve the Scriptwriter and Audio handoffs first.")
         return
@@ -3240,6 +3254,8 @@ def render_subtitles():
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
 def render_renderer_test():
+    from renderer import FINAL_STYLE_NAME, HEADLINE_TEXT, build_preview_bundle
+
     approved_script=st.session_state.get("approved_script")
     headline_text=(str(approved_script.get("headline") or "").strip() if isinstance(approved_script,dict) else "") or HEADLINE_TEXT
 
@@ -3271,8 +3287,10 @@ def render_renderer_test():
             if st.button("Build preview",type="primary",width="stretch"):
                 with st.spinner("Rendering preview…"):
                     try:
-                        from renderer import HEADLINE_TEXT, build_preview_bundle
-                st.session_state.renderer_previews=build_preview_bundle(headline_enabled=True,headline_text=headline_text.strip() or HEADLINE_TEXT)
+                        st.session_state.renderer_previews=build_preview_bundle(
+                            headline_enabled=True,
+                            headline_text=headline_text.strip() or HEADLINE_TEXT,
+                        )
                     except (RuntimeError,ValueError) as exc:
                         st.error(str(exc))
             if previews:
@@ -3433,6 +3451,7 @@ def render_upload_qc():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading video as {privacy}…"):
+            from uploader import upload_video
             st.session_state.upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -3447,6 +3466,8 @@ def render_upload_qc():
         st.rerun()
 
 def render_audio():
+    from audio import approve_audio, generate_audio
+
     script=st.session_state.approved_script
     if not script:
         st.info("Approve the Scriptwriter result first.")
@@ -3469,7 +3490,6 @@ def render_audio():
         if st.button("Generate audio",type="primary",width="stretch"):
             selected=dict(script); selected["language_used"]=language.casefold()
             with st.spinner("Generating voiceover…"):
-                from audio import generate_audio
                 try:
                     st.session_state.audio_data=generate_audio(selected)
                     st.session_state.approved_audio=None
@@ -3486,7 +3506,6 @@ def render_audio():
                     st.audio(scene["path"],format="audio/mp3")
                     st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
             if st.button("Approve audio",type="primary",width="stretch"):
-                from audio import approve_audio
                 try:
                     st.session_state.approved_audio=approve_audio(audio)
                     st.session_state.test_stage = "04 · Visuals"
