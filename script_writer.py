@@ -22,12 +22,20 @@ CRICKET_RESEARCH_MAX_ARTICLES = 3
 CRICKET_RESEARCH_CANDIDATE_LIMIT = 9
 CRICKET_RESEARCH_ARTICLE_CHARS = 4000
 MIN_ARTICLE_CHARS = 500
+MAX_SLIDE_ONE_WORDS = 13
 HOOK_MAX_SECONDS = 3.0
 
 LANGUAGE_INSTRUCTIONS = {
     "english": "Write all narration and publish metadata in punchy, natural spoken English.",
     "hindi": "Write all narration and publish metadata in natural spoken Hindi using Devanagari script.",
     "telugu": "Write all narration and publish metadata in natural spoken Telugu using Telugu script.",
+}
+
+SLIDE_ONE_SCHEMA = {
+    "type": "object",
+    "properties": {"voiceover": {"type": "string"}},
+    "required": ["voiceover"],
+    "additionalProperties": False,
 }
 
 SCHEMA = {
@@ -139,7 +147,7 @@ For a pure news announcement, look for the enduring sporting or human narrative 
 
 FOUR-SLIDE DESIGN
 - Exactly four spoken slides.
-- Slide 1: strongest factual entry point, with fewer than 14 words.
+- Slide 1: strongest factual entry point, with 13 words or fewer. Count the words before returning JSON; never return 14 or more words.
 - Slides 2–4: each must add meaningful new information.
 - Use the four slides to compress the complete story, not to restate the headline.
 - Every sentence must earn its space by delivering a fact, context, consequence or necessary transition.
@@ -446,6 +454,17 @@ def _request(model: str, prompt: str, story: str, schema: dict | None = None) ->
     return content if isinstance(content, dict) else json.loads(content)
 
 
+SLIDE_ONE_REPAIR_PROMPT = """SLIDE 1 REPAIR
+
+The generated script failed one mechanical requirement: the first spoken slide must contain 13 words or fewer.
+Rewrite only the first spoken slide. Preserve its factual meaning, and do not change Slides 2–4 or any publish metadata.
+Count the rewritten words before returning it. Never return 14 or more words.
+Return only JSON matching the supplied repair schema.
+
+CURRENT SLIDE 1
+"""
+
+
 REWRITE_INSTRUCTION = """MANUAL-QC REWRITE
 
 The human reviewer asked for a full rewrite of the selected story.
@@ -504,7 +523,7 @@ def validate_cricket_script(result: dict, source: str) -> tuple[bool, str]:
         return False, "Cricket Scriptwriter must return exactly 4 slides."
 
     first = scenes[0] if scenes else {}
-    if _words(first.get("voiceover")) >= 14:
+    if _words(first.get("voiceover")) > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
 
     headline_words = _words(result.get("headline"))
@@ -589,7 +608,40 @@ def write_script(
                     language_key,
                 )
 
-            errors.append(f"{model}: {reason}")
+            scenes = result.get("script") if isinstance(result, dict) else None
+            first_voiceover = (
+                scenes[0].get("voiceover")
+                if isinstance(scenes, list) and scenes and isinstance(scenes[0], dict)
+                else ""
+            )
+            if _words(first_voiceover) > MAX_SLIDE_ONE_WORDS:
+                try:
+                    repaired = _request(
+                        model,
+                        instruction
+                        + "\n\n"
+                        + SLIDE_ONE_REPAIR_PROMPT
+                        + _clean(first_voiceover),
+                        source,
+                        schema=SLIDE_ONE_SCHEMA,
+                    )
+                    repaired_voiceover = _clean(repaired.get("voiceover"))
+                    if repaired_voiceover:
+                        result["script"][0]["voiceover"] = repaired_voiceover
+                        valid, reason = validate_cricket_script(result, source)
+                        if valid:
+                            return _finish_result(
+                                result,
+                                story,
+                                source,
+                                model,
+                                language_key,
+                            )
+                    errors.append(f"{model}: Slide 1 repair failed: {reason}")
+                except Exception as exc:
+                    errors.append(f"{model}: Slide 1 repair failed: {type(exc).__name__}: {exc}")
+            else:
+                errors.append(f"{model}: {reason}")
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
 
