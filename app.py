@@ -2009,6 +2009,7 @@ def _render_live_script():
             width="stretch",
             key="live-approve-script",
         ):
+            from script_writer import apply_script_edits
             try:
                 approved = apply_script_edits(
                     script,
@@ -4088,6 +4089,7 @@ elif st.session_state.app_mode == "test":
                     st.session_state.test_top5_visual_handoff = None
 
                     with st.spinner("Scraping the five selected source URLs…"):
+                        from top5_visual_fetcher import crawl_top5_visuals
                         try:
                             st.session_state.test_top5_visual_result = crawl_top5_visuals(stories)
                         except Exception as exc:
