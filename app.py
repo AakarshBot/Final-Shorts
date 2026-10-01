@@ -9,17 +9,6 @@ import streamlit as st
 
 load_dotenv()
 
-from audio import approve_audio, generate_audio
-from script_writer import apply_script_edits, write_script
-from niche_sports_script_writer import write_niche_sports_script
-from topic_fetcher import fetch_topics
-from visual_fetcher import crawl_visuals, manual_crawl_visuals, ranked_visual_search
-from top5_visual_fetcher import crawl_top5_visuals
-from visual_search import search_images
-from visual_generator import generate_images
-from renderer import HEADLINE_TEXT, FINAL_STYLE_NAME, build_preview_bundle, render_production_video
-from subtitles import generate_subtitles
-from uploader import upload_video
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
@@ -1406,6 +1395,9 @@ def _live_generate_script():
         raise ValueError("No valid Live story is selected.")
 
     story = _live_story(topics[selected_index])
+    from niche_sports_script_writer import write_niche_sports_script
+    from script_writer import write_script
+
     writer = (
         write_niche_sports_script
         if st.session_state.get("live_topics_profile") == "niche_sports"
@@ -1441,6 +1433,8 @@ def _live_scrape_automatic_visuals():
     story["primary_entity"] = str(first_scene.get("primary_entity") or "").strip()
     story["specific_search_prompt"] = str(first_scene.get("specific_search_prompt") or "").strip()
     story["visual_intent"] = str(first_scene.get("visual_intent") or "").strip()
+    from visual_fetcher import crawl_visuals
+
     st.session_state.live_visual_result = crawl_visuals(story)
     return st.session_state.live_visual_result
 
@@ -1454,6 +1448,9 @@ def _live_generate_audio_and_subtitles():
     st.session_state.live_audio_data = None
     st.session_state.live_approved_audio = None
     st.session_state.live_subtitle_data = None
+
+    from audio import approve_audio, generate_audio
+    from subtitles import generate_subtitles
 
     audio = generate_audio(
         approved_script,
@@ -1727,6 +1724,7 @@ def _render_live_visuals(slide_count: int):
             else:
                 with st.spinner("Searching and scraping publisher pages…"):
                     try:
+                        from visual_fetcher import manual_crawl_visuals
                         st.session_state.live_manual_visual_result = manual_crawl_visuals(query)
                     except Exception as exc:
                         st.session_state.live_manual_visual_result = {
@@ -1766,6 +1764,7 @@ def _render_live_visuals(slide_count: int):
             else:
                 with st.spinner("Searching real-image sources…"):
                     try:
+                        from visual_search import search_images
                         st.session_state.live_real_image_result = search_images(query)
                     except Exception as exc:
                         st.session_state.live_real_image_result = {
@@ -1802,6 +1801,7 @@ def _render_live_visuals(slide_count: int):
             else:
                 with st.spinner("Generating images…"):
                     try:
+                        from visual_generator import generate_images
                         st.session_state.live_ai_image_result = generate_images(query)
                     except Exception as exc:
                         st.session_state.live_ai_image_result = {
@@ -1841,6 +1841,7 @@ def _render_live_visuals(slide_count: int):
                 if run:
                     with st.spinner("Running scene searches in parallel…"):
                         try:
+                            from visual_fetcher import ranked_visual_search
                             st.session_state.live_ranked_visual_result = ranked_visual_search(ranked_story)
                         except Exception as exc:
                             st.session_state.live_ranked_visual_result = {
@@ -1892,6 +1893,8 @@ def _render_live_visuals(slide_count: int):
                 output = Path("output/live") / f"{story_id}.mp4"
                 try:
                     with st.spinner("Rendering the final Short…"):
+                        from renderer import render_production_video
+
                         render_production_video(
                             st.session_state.live_approved_script,
                             st.session_state.live_approved_audio,
@@ -2006,6 +2009,7 @@ def _render_live_script():
             width="stretch",
             key="live-approve-script",
         ):
+            from script_writer import apply_script_edits
             try:
                 approved = apply_script_edits(
                     script,
@@ -2170,7 +2174,7 @@ def _render_live_upload():
     result = st.session_state.live_upload_result
     if result:
         st.success(
-            f"Upload successful · Video ID: \`{result.get('video_id')}\`"
+            f"Upload successful · Video ID: `{result.get('video_id')}`"
         )
         if result.get("url"):
             st.link_button("Open YouTube video", result["url"], width="stretch")
@@ -2205,6 +2209,7 @@ def _render_live_upload():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading video as {privacy}…"):
+            from uploader import upload_video
             st.session_state.live_upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -2371,6 +2376,7 @@ def render_live_dashboard():
                     st.session_state.live_topics = []
                     profile = "niche_sports"
                     with st.spinner("Finding the top 20 niche-sports stories…"):
+                        from topic_fetcher import fetch_topics
                         st.session_state.live_topics = fetch_topics(
                             profile,
                             more=False,
@@ -2398,6 +2404,7 @@ def render_live_dashboard():
                         st.session_state.live_cricket_profile = profile
                         st.session_state.live_topics = []
                         with st.spinner("Finding the top 20 cricket stories…"):
+                            from topic_fetcher import fetch_topics
                             st.session_state.live_topics = fetch_topics(
                                 profile,
                                 more=False,
@@ -2419,6 +2426,7 @@ def render_live_dashboard():
             profile = st.session_state.live_topics_profile
             if profile:
                 with st.spinner("Searching for current sports stories…"):
+                    from topic_fetcher import fetch_topics
                     st.session_state.live_topics = fetch_topics(
                         profile,
                         more=False,
@@ -2487,6 +2495,7 @@ def render_live_dashboard():
                     else "Searching for 20 additional unique stories…"
                 ):
                     existing = list(st.session_state.live_topics)
+                    from topic_fetcher import fetch_topics
                     new_topics = fetch_topics(
                         st.session_state.live_topics_profile,
                         more=more_clicked and not keyword_search,
@@ -2650,6 +2659,7 @@ def render_topic_fetcher():
                 else "Fetching current sports stories…"
             ):
                 existing_topics = list(st.session_state.topics)
+                from topic_fetcher import fetch_topics
                 new_topics = fetch_topics(
                     profile,
                     more=more and not keyword_search,
@@ -2752,6 +2762,9 @@ def render_topic_fetcher():
                     if topic.url:
                         st.link_button("Source ↗",topic.url,width="stretch")
 def render_scriptwriter():
+    from niche_sports_script_writer import write_niche_sports_script
+    from script_writer import apply_script_edits, write_script
+
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first.")
         return
@@ -2844,6 +2857,8 @@ def render_scriptwriter():
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
 def render_visuals_crawler():
+    from visual_fetcher import crawl_visuals
+
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first, then select a story for Visuals.")
         return
@@ -2933,6 +2948,8 @@ def render_visuals_crawler():
 
 
 def _render_ranked_visual_search():
+    from visual_fetcher import ranked_visual_search
+
     st.subheader("Ranked Scene Search")
     st.caption("Runs the approved Scriptwriter visual searches together. The existing scrapers remain unchanged.")
 
@@ -3004,6 +3021,8 @@ def _render_ranked_visual_search():
 
 
 def _render_manual_crawler():
+    from visual_fetcher import manual_crawl_visuals
+
     st.subheader("Manual Scraper")
     st.caption("Manual query only. Searches current publisher pages and scrapes their images.")
     with st.form("manual_crawler_form"):
@@ -3063,6 +3082,8 @@ def _render_manual_crawler():
 
 
 def _render_manual_real_images():
+    from visual_search import search_images
+
     st.subheader("Real Image Search")
     st.caption("Manual query only. Searches all configured real-image sources in parallel.")
     with st.form("real_image_search_form"):
@@ -3110,6 +3131,8 @@ def _render_manual_real_images():
 
 
 def _render_manual_ai_images():
+    from visual_generator import generate_images
+
     st.subheader("AI Generation")
     st.caption("Manual query only. Each configured AI provider runs independently.")
     with st.form("ai_image_form"):
@@ -3182,6 +3205,8 @@ def render_visuals():
 
 
 def render_subtitles():
+    from subtitles import generate_subtitles
+
     if not st.session_state.approved_script or not st.session_state.approved_audio:
         st.info("Approve the Scriptwriter and Audio handoffs first.")
         return
@@ -3194,6 +3219,7 @@ def render_subtitles():
     )
     if st.button("Generate subtitles",type="primary",width="stretch"):
         try:
+            from subtitles import generate_subtitles
             st.session_state.subtitle_data=generate_subtitles(st.session_state.approved_script,st.session_state.approved_audio)
             st.session_state.approved_subtitles=None
         except ValueError as exc:
@@ -3229,6 +3255,8 @@ def render_subtitles():
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
 def render_renderer_test():
+    from renderer import FINAL_STYLE_NAME, HEADLINE_TEXT, build_preview_bundle
+
     approved_script=st.session_state.get("approved_script")
     headline_text=(str(approved_script.get("headline") or "").strip() if isinstance(approved_script,dict) else "") or HEADLINE_TEXT
 
@@ -3260,7 +3288,10 @@ def render_renderer_test():
             if st.button("Build preview",type="primary",width="stretch"):
                 with st.spinner("Rendering preview…"):
                     try:
-                        st.session_state.renderer_previews=build_preview_bundle(headline_enabled=True,headline_text=headline_text.strip() or HEADLINE_TEXT)
+                        st.session_state.renderer_previews=build_preview_bundle(
+                            headline_enabled=True,
+                            headline_text=headline_text.strip() or HEADLINE_TEXT,
+                        )
                     except (RuntimeError,ValueError) as exc:
                         st.error(str(exc))
             if previews:
@@ -3421,6 +3452,7 @@ def render_upload_qc():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading video as {privacy}…"):
+            from uploader import upload_video
             st.session_state.upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -3435,6 +3467,8 @@ def render_upload_qc():
         st.rerun()
 
 def render_audio():
+    from audio import approve_audio, generate_audio
+
     script=st.session_state.approved_script
     if not script:
         st.info("Approve the Scriptwriter result first.")
@@ -3642,6 +3676,7 @@ elif st.session_state.app_mode == "test":
                     existing = list(topics) if more else []
                     exclude = existing
                     with st.spinner("Fetching current cricket stories…"):
+                        from topic_fetcher import fetch_topics
                         new_topics = fetch_topics(
                             "cricket_india_asia",
                             more=more,
@@ -4054,6 +4089,7 @@ elif st.session_state.app_mode == "test":
                     st.session_state.test_top5_visual_handoff = None
 
                     with st.spinner("Scraping the five selected source URLs…"):
+                        from top5_visual_fetcher import crawl_top5_visuals
                         try:
                             st.session_state.test_top5_visual_result = crawl_top5_visuals(stories)
                         except Exception as exc:
@@ -4140,6 +4176,7 @@ elif st.session_state.app_mode == "test":
                                 st.warning("Enter a query first.")
                             else:
                                 with st.spinner("Searching and scraping publisher pages…"):
+                                    from visual_fetcher import manual_crawl_visuals
                                     try:
                                         st.session_state.test_top5_manual_visual_result = manual_crawl_visuals(query)
                                     except Exception as exc:
@@ -4186,6 +4223,7 @@ elif st.session_state.app_mode == "test":
                                 st.warning("Enter a query first.")
                             else:
                                 with st.spinner("Searching real-image sources…"):
+                                    from visual_search import search_images
                                     try:
                                         st.session_state.test_top5_real_image_result = search_images(query)
                                     except Exception as exc:
@@ -4227,6 +4265,7 @@ elif st.session_state.app_mode == "test":
                                 st.warning("Enter a prompt first.")
                             else:
                                 with st.spinner("Generating opener image…"):
+                                    from visual_generator import generate_images
                                     try:
                                         st.session_state.test_top5_ai_image_result = generate_images(query)
                                     except Exception as exc:

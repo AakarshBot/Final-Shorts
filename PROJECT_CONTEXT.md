@@ -651,3 +651,17 @@ Scriptwriter validation was tightened to match the actual user/factory constrain
 - Audio remains responsible for measured Edge-TTS duration and its existing one-step speed correction when total audio exceeds 30 seconds.
 - No downstream function, schema, scene count or handoff contract changed.
 - Regression coverage now proves a hook can exceed three estimated seconds when it remains within the existing word and total-duration constraints.
+
+
+## Scriptwriter and startup cleanup — 2026-10-01
+
+Function 02 was tightened around editorial completeness rather than extra validation gates.
+
+- The Scriptwriter now treats the selected headline as the editorial assignment. The prompt must identify and fulfil the headline's actual information promise before drafting.
+- Profile/explainer headlines are explicitly handled as profile/explainer stories: the writer should use supported identity, age, career, records, statistics, achievements and other relevant background facts when those details are part of the headline promise.
+- The current event is the entry point when appropriate, not the whole story. The body should explain the person, record, career, change or background that makes the story worth covering.
+- Research extraction now compares the available trafilatura and structured-HTML candidates and keeps the richer article instead of returning the first candidate that merely clears the minimum length. Structured headings and tables are included in the fallback extraction.
+- The normal Scriptwriter path remains one Groq 120B generation call. The existing 20B call is still recovery-only when the primary call fails or fails essential local checks. The generation request uses medium reasoning without adding another AI call.
+- Local validation no longer imposes a separate Scene 1 timing gate, estimated narration-time gate or adjacent-scene similarity gate. Audio remains the authoritative measured under-30-second gate. The writer prompt is responsible for drafting a genuinely short hook and a complete sub-30-second story.
+- The app now lazy-loads heavy factory-stage modules at their points of use. The homepage no longer imports the uploader, Trendflow/topic fetcher, Edge-TTS, visual retrieval stack or renderer before the user enters the corresponding stage.
+- No production stage contract or downstream handoff was changed.
