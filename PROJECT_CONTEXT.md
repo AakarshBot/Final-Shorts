@@ -640,3 +640,14 @@ The regular Cricket Scriptwriter was corrected to stop treating every story as a
 - Primary cricket research capacity was increased from 8,000 to 9,000 characters without changing the research-source count or downstream handoff.
 - The final Scriptwriter JSON schema, scene fields, source_evidence, audio handoff and visual handoff contracts remain unchanged. app.py and Functions 03–07 were not modified.
 - Regression coverage now verifies structured table facts survive fallback extraction, Trafilatura receives include_tables=True, and the prompt enforces editorial-promise coverage plus the 62–72 word target under the 30-second ceiling.
+
+
+## Function 02 — validation alignment (2026-10-01)
+
+Scriptwriter validation was tightened to match the actual user/factory constraint rather than separate heuristic timing rules.
+
+- Removed the hard 3-second Scene 1 timing rejection. The user requires the whole Short to remain under 30 seconds; Scene 1 still has the existing 14-word maximum and a concise hook target in the prompt, but its estimated timing is not a separate failure condition.
+- Raised the Scriptwriter estimated narration ceiling from 29.2 seconds to 30.0 seconds so it matches the Audio stage's authoritative 30.0-second maximum. The 75-word ceiling remains unchanged.
+- Audio remains responsible for measured Edge-TTS duration and its existing one-step speed correction when total audio exceeds 30 seconds.
+- No downstream function, schema, scene count or handoff contract changed.
+- Regression coverage now proves a hook can exceed three estimated seconds when it remains within the existing word and total-duration constraints.
