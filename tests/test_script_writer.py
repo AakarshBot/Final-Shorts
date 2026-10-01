@@ -1,639 +1,111 @@
+import json
+
 import pytest
 
-from script_writer import (
-    SYSTEM_PROMPT,
-    _article_body_from_html,
-    _extract_article,
-    apply_script_edits,
-    write_script,
-)
+import script_writer
+from script_writer import SYSTEM_PROMPT, _article_body_from_html, _request, _request_coverage_audit, apply_script_edits, validate_script, write_script
 
 
-@pytest.fixture(autouse=True)
-def disable_live_cricket_research(monkeypatch):
-    monkeypatch.setattr(
-        "script_writer._cricket_research_candidates",
-        lambda *args, **kwargs: [],
-    )
-
-
-def valid_result(scene1="Gill faces a fresh injury scare before ODI."):
+def valid_result(scene1="Gill faces fresh injury scare."):
     return {
-        "headline": "Gill Injury Scare",
+        "headline": "Gill Injury Update",
         "titles": [
-            "Gill injury scare before ODI",
-            "India captain hit in nets",
-            "Gill fitness update",
+            "Gill injury update before ODI",
+            "What Gill's latest scan means",
+            "India captain fitness status explained",
         ],
-        "seo_description": "Shubman Gill faces an injury scare before India’s next ODI.",
+        "seo_description": "Shubman Gill's injury status, the latest assessment and what it means for India's ODI plans.",
         "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
-        "comment": "What do you make of Gill's injury scare before the ODI?",
+        "comment": "What should India do if Gill misses the ODI?",
         "script": [
             {
                 "voiceover": scene1,
                 "narrative_role": "hook",
                 "primary_entity": "Shubman Gill",
-                "visual_intent": "cricket action",
-                "specific_search_prompt": "Shubman Gill batting India",
+                "visual_intent": "Gill during India cricket action",
+                "specific_search_prompt": "Shubman Gill India cricket",
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "He was struck during net practice and briefly appeared in pain.",
+                "voiceover": "Gill was struck during training and returned after treatment.",
                 "narrative_role": "development",
                 "primary_entity": "Shubman Gill",
-                "visual_intent": "training incident",
-                "specific_search_prompt": "Shubman Gill cricket nets",
+                "visual_intent": "Gill at India training",
+                "specific_search_prompt": "Shubman Gill cricket training",
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "India are preparing for the West Indies ODI series.",
+                "voiceover": "The team is assessing him before the next ODI.",
                 "narrative_role": "context",
                 "primary_entity": "India cricket team",
-                "visual_intent": "team context",
-                "specific_search_prompt": "India cricket team training",
+                "visual_intent": "India team training",
+                "specific_search_prompt": "India cricket team training ODI",
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "His availability for the opening match is now the key question.",
+                "voiceover": "His availability will depend on the next medical assessment.",
                 "narrative_role": "consequence",
                 "primary_entity": "Shubman Gill",
-                "visual_intent": "player fitness",
-                "specific_search_prompt": "Shubman Gill fitness cricket",
+                "visual_intent": "Gill fitness assessment",
+                "specific_search_prompt": "Shubman Gill fitness India cricket",
                 "sport_or_topic_category": "Cricket",
             },
         ],
     }
 
 
-def test_writer_sends_title_and_description_as_story_evidence(monkeypatch):
-    captured = []
+def test_slide_one_is_strictly_less_than_14_words():
+    result = valid_result("Gill faces a fresh injury scare before India's ODI.")
+    assert len(result["script"][0]["voiceover"].split()) < 14
+    assert validate_script(result, "")[0]
 
-    def fake_request(model, prompt, story):
-        captured.append(story)
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    write_script(
-        {
-            "title": "Gill injury scare",
-            "description": "Shubman Gill was struck during training before the ODI.",
-        }
-    )
-
-    assert "Gill injury scare" in captured[0]
-    assert "Shubman Gill was struck during training before the ODI." in captured[0]
+    invalid = valid_result("Gill faces a fresh injury scare before India's next big ODI match.")
+    assert len(invalid["script"][0]["voiceover"].split()) == 14
+    assert validate_script(invalid, "")[0] is False
 
 
-def test_writer_retries_when_shorts_metadata_is_generic(monkeypatch):
-    calls = []
-
-    def fake_request(model, prompt, story):
-        calls.append(model)
-        result = valid_result()
-        if model == "openai/gpt-oss-120b":
-            result["titles"] = [
-                "Latest Sports Update",
-                "Big Update On Gill",
-                "What You Need To Know",
-            ]
-        return result
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    result = write_script(
-        {
-            "title": "Shubman Gill injury scare in nets",
-            "description": "Shubman Gill was struck during practice ahead of the ODI.",
-        }
-    )
-
-    assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-    assert result["provider_used"] == "openai/gpt-oss-20b"
-
-
-def test_writer_rejects_story_unrelated_title(monkeypatch):
-    def fake_request(model, prompt, story):
-        result = valid_result()
-        result["titles"][0] = "Premier League Transfer Sparks Surprise"
-        result["titles"][1] = "Champions League Shock Rocks Europe"
-        return result
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-
-    try:
-        write_script(
-            {
-                "title": "Shubman Gill injury scare",
-                "description": "Shubman Gill was hit in training before the ODI.",
-            }
-        )
-    except RuntimeError as exc:
-        assert "failed" in str(exc).lower()
-    else:
-        raise AssertionError("Unrelated title should not pass validation.")
-
-
-def test_writer_uses_one_primary_groq_call(monkeypatch):
-    calls = []
-
-    def fake_request(model, prompt, story):
-        calls.append(model)
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    result = write_script(
-        {
-            "title": "Shubman Gill injury scare in nets",
-            "description": "Shubman Gill was struck during practice ahead of India vs West Indies.",
-            "source": "Test",
-        }
-    )
-
-    assert calls == ["openai/gpt-oss-120b"]
-    assert result["delivery_profile"] == "HYPE COMMENTATOR"
-    assert result["source_title"] == "Shubman Gill injury scare in nets"
-    assert len(result["titles"]) == 3
-    assert 3 <= len(result["headline"].split()) <= 4
-    assert result["hashtags"]
-    assert result["comment"]
-    assert result["word_count"] == 39
-    assert len(result["script"]) == 4
-
-
-def test_writer_uses_20b_only_when_primary_fails(monkeypatch):
-    calls = []
-
-    def fake_request(model, prompt, story):
-        calls.append(model)
-        if model == "openai/gpt-oss-120b":
-            raise RuntimeError("primary unavailable")
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    result = write_script(
-        {
-            "title": "India cricket injury update",
-            "description": "A player faces an injury scare.",
-        }
-    )
-
-    assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-    assert result["provider_used"] == "openai/gpt-oss-20b"
-
-
-def test_writer_uses_20b_when_primary_output_fails_validation(monkeypatch):
-    calls = []
-
-    def fake_request(model, prompt, story):
-        calls.append(model)
-        if model == "openai/gpt-oss-120b":
-            return valid_result("Wait until the end because this changes everything.")
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    result = write_script(
-        {"title": "Gill injury scare", "description": "Shubman Gill was hit in training before the ODI."}
-    )
-
-    assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-    assert result["provider_used"] == "openai/gpt-oss-20b"
-
-
-def test_writer_fallback_receives_validation_failure(monkeypatch):
-    prompts = []
-
-    def fake_request(model, prompt, story):
-        prompts.append(prompt)
-        if model == "openai/gpt-oss-120b":
-            result = valid_result()
-            result["headline"] = "Gill Injury Scare Before ODI"
-            return result
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    result = write_script(
-        {"title": "Gill injury scare", "description": "Shubman Gill was hit in training before the ODI."}
-    )
-
-    assert result["provider_used"] == "openai/gpt-oss-20b"
-    assert "The headline must contain exactly 3 or 4 words." in prompts[1]
-    assert "fixing this exact failure" in prompts[1]
-
-
-def test_writer_rejects_missing_comment(monkeypatch):
-    def fake_request(model, prompt, story):
-        result = valid_result()
-        result.pop("comment")
-        return result
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-
-    try:
-        write_script(
-            {
-                "title": "Gill injury scare",
-                "description": "Shubman Gill was hit in training before the ODI.",
-            }
-        )
-    except RuntimeError as exc:
-        assert "failed" in str(exc).lower()
-    else:
-        raise AssertionError("Missing upload comment should not pass.")
-
-
-def test_writer_rejects_headline_with_wrong_word_count(monkeypatch):
-    def fake_request(model, prompt, story):
-        result = valid_result()
-        result["headline"] = "Gill Injury Scare Before ODI"
-        return result
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-
-    try:
-        write_script(
-            {
-                "title": "Gill injury scare",
-                "description": "Shubman Gill was hit in training before the ODI.",
-            }
-        )
-    except RuntimeError as exc:
-        assert "failed" in str(exc).lower()
-    else:
-        raise AssertionError("Invalid headline should not pass.")
-
-
-def test_approved_edits_can_bypass_validation_for_live_manual_qc():
-    original = valid_result()
-    approved = apply_script_edits(
-        original,
-        [
-            "This is deliberately a longer manual edit that exceeds the writer's normal limit.",
-            original["script"][1]["voiceover"],
-            original["script"][2]["voiceover"],
-            original["script"][3]["voiceover"],
-        ],
-        headline="",
-        validate=False,
-    )
-
-    assert approved["headline"] == ""
-    assert approved["approved_for_audio"] is True
-
-
-def test_approved_edits_preserve_titles_and_metadata_and_mark_audio_handoff():
-    original = valid_result()
-    edited = apply_script_edits(
-        original,
-        [
-            "Gill faces an injury scare before India’s ODI.",
-            original["script"][1]["voiceover"],
-            original["script"][2]["voiceover"],
-            original["script"][3]["voiceover"],
-        ],
-        headline="Gill Update Unfolds",
-    )
-
-    assert edited["titles"] == original["titles"]
-    assert edited["hashtags"] == original["hashtags"]
-    assert edited["headline"] == "Gill Update Unfolds"
-    assert edited["script"][0]["voiceover"].startswith("Gill faces")
-    assert edited["human_script_edited"] is True
-    assert edited["approved_for_audio"] is True
-
-
-def test_writer_does_not_apply_prompt_targets_as_hidden_validation(monkeypatch):
+def test_titles_description_and_hashtags_are_required_outputs():
     result = valid_result()
+    assert validate_script(result, "")[0]
 
-    monkeypatch.setattr("script_writer._request", lambda *args, **kwargs: result)
+    result["titles"] = []
+    assert validate_script(result, "")[0] is False
 
-    accepted = write_script(
-        {
-            "title": "Gill injury scare",
-            "description": "Shubman Gill was hit in training before the ODI.",
-        }
+    result = valid_result()
+    result["seo_description"] = ""
+    assert validate_script(result, "")[0] is False
+
+    result = valid_result()
+    result["hashtags"] = []
+    assert validate_script(result, "")[0] is False
+
+
+def test_no_extra_editorial_rules_are_applied():
+    result = valid_result(
+        "Gill was struck during training before the ODI."
     )
-
-    assert accepted["word_count"] == 39
-    assert accepted["script"][0]["voiceover"] == result["script"][0]["voiceover"]
-
-def test_writer_rejects_retention_bait(monkeypatch):
-    def fake_request(model, prompt, story):
-        return valid_result(
-            "Wait until the end because this injury update changes everything."
-        )
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-
-    try:
-        write_script(
-            {
-                "title": "India cricket injury update",
-                "description": "A player faces an injury scare.",
-            }
-        )
-    except RuntimeError as exc:
-        assert "failed" in str(exc).lower()
-    else:
-        raise AssertionError("Retention-bait draft should not pass.")
-
-
-def test_writer_rejects_other_retention_phrases(monkeypatch):
-    for phrase in ("Watch till the end for the full story.", "Don't skip this.", "Keep watching."):
-        def fake_request(model, prompt, story, phrase=phrase):
-            return valid_result(phrase)
-
-        monkeypatch.setattr("script_writer._request", fake_request)
-        try:
-            write_script(
-                {
-                    "title": "India cricket injury update",
-                    "description": "A player faces an injury scare.",
-                }
-            )
-        except RuntimeError as exc:
-            assert "failed" in str(exc).lower()
-        else:
-            raise AssertionError(f"Retention phrase passed: {phrase}")
-
-def test_writer_research_uses_full_article_before_generation(monkeypatch):
-    class FakeResponse:
-        url = "https://example.com/story"
-
-        def raise_for_status(self):
-            return None
-
-        text = "<html>full article page</html>"
-
-    captured = []
-
-    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
-    article = (
-        "Shubman Gill was struck during practice and returned after treatment. "
-        "India are assessing his availability for the ODI. "
-        "The team continued its session while medical staff monitored him closely. "
-        "The coaching staff later reviewed the incident and the next training plan. "
-        "His availability remains dependent on further assessment before the match. "
-    ) * 3
-    monkeypatch.setattr(
-        "script_writer.trafilatura.extract",
-        lambda *args, **kwargs: article,
-    )
-
-    def fake_request(model, prompt, story):
-        captured.append(story)
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    write_script(
-        {
-            "title": "Shubman Gill injury scare",
-            "description": "Gill was hit during training.",
-            "url": "https://example.com/story",
-        }
-    )
-
-    assert "[PRIMARY ARTICLE — https://example.com/story]" in captured[0]
-    assert "returned after treatment" in captured[0]
-
-
-def test_writer_research_uses_ddgs_extract_when_page_extractors_fail(monkeypatch):
-    class FakeResponse:
-        url = "https://example.com/story"
-        text = "<html><body>not enough article text</body></html>"
-
-        def raise_for_status(self):
-            return None
-
-    article = (
-        "Shubman Gill was hit in training before the ODI. "
-        "India are assessing his availability after the incident. "
-        "The coaching staff reviewed his condition before the next session. "
-    ) * 8
-
-    class FakeDDGS:
-        def __init__(self, *args, **kwargs):
-            pass
-
-        def extract(self, url, fmt):
-            assert url == "https://example.com/story"
-            assert fmt == "text_plain"
-            return {"url": url, "content": article}
-
-    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
-    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: "")
-    monkeypatch.setattr("script_writer.DDGS", FakeDDGS)
-
-    captured = []
-
-    def fake_request(model, prompt, story):
-        captured.append(story)
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    write_script(
-        {
-            "title": "Shubman Gill injury scare",
-            "description": "Gill was hit during training.",
-            "url": "https://example.com/story",
-        }
-    )
-
-    assert "[PRIMARY ARTICLE — https://example.com/story]" in captured[0]
-    assert "India are assessing his availability" in captured[0]
-
-
-def test_writer_research_reads_jsonld_article_body_when_trafilatura_is_thin(monkeypatch):
-    class FakeResponse:
-        url = "https://example.com/story"
-
-        def raise_for_status(self):
-            return None
-
-        text = """<html><head>
-        <script type="application/ld+json">
-        {"@type":"NewsArticle","articleBody":"Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. Shubman Gill was struck during practice and returned after treatment. India are assessing his availability for the ODI. The coaching staff reviewed the incident before the next training session. "}
-        </script>
-        </head><body><p>Thin page.</p></body></html>"""
-
-    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
-    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: "")
-
-    captured = []
-
-    def fake_request(model, prompt, story):
-        captured.append(story)
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    write_script(
-        {
-            "title": "Shubman Gill injury scare",
-            "description": "Gill was hit during training.",
-            "url": "https://example.com/story",
-        }
-    )
-
-    assert "[PRIMARY ARTICLE — https://example.com/story]" in captured[0]
-    assert "India are assessing his availability" in captured[0]
-
-
-def test_writer_research_uses_independent_report_for_cricket_context(monkeypatch):
-    calls = []
-
-    def fake_extract(url):
-        calls.append(url)
-        if url == "https://example.com/story":
-            return "", url
-        return (
-            (
-                "Independent report: Shubman Gill was hit in training before the ODI. "
-                "India are assessing his availability after the incident. "
-            ) * 6,
-            url,
-        )
-
-    monkeypatch.setattr("script_writer._extract_article", fake_extract)
-    monkeypatch.setattr(
-        "script_writer._cricket_research_candidates",
-        lambda title, url: [
-            {
-                "title": "Shubman Gill injury update before ODI",
-                "url": "https://other.com/gill-story",
-                "domain": "other.com",
-                "score": 8.0,
-            }
-        ],
-    )
-
-    captured = []
-
-    def fake_request(model, prompt, story):
-        captured.append(story)
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    write_script(
-        {
-            "title": "Shubman Gill injury scare",
-            "description": "Gill was hit during training.",
-            "url": "https://example.com/story",
-        }
-    )
-
-    assert calls == ["https://example.com/story", "https://other.com/gill-story"]
-    assert "[INDEPENDENT REPORT 1 — Shubman Gill injury update before ODI — https://other.com/gill-story]" in captured[0]
-    assert "Independent report: Shubman Gill was hit in training before the ODI." in captured[0]
-
-
-
-def test_writer_can_use_topic_evidence_when_article_research_fails(monkeypatch):
-    captured = []
-
-    def fake_request(model, prompt, story):
-        captured.append(story)
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    monkeypatch.setattr(
-        "script_writer._extract_article",
-        lambda url: ("", "https://example.com/story"),
-    )
-    monkeypatch.setattr(
-        "script_writer._fallback_article",
-        lambda title, url: ("", ""),
-    )
-
-    result = write_script(
-        {
-            "title": "Shubman Gill injury scare",
-            "description": "Gill was hit during training before the ODI.",
-            "url": "https://example.com/story",
-        }
-    )
-
-    assert result["provider_used"] == "openai/gpt-oss-120b"
-    assert "[SELECTED STORY]" in captured[0]
-    assert "Shubman Gill injury scare" in captured[0]
-    assert "Gill was hit during training before the ODI." in captured[0]
-
-
-def test_writer_research_keeps_primary_and_caps_independent_reports(monkeypatch):
-    primary = (
-        "Primary report: Shubman Gill was struck during practice and returned after treatment. "
-        "India are assessing his availability for the ODI. "
-    ) * 6
-    alternate = (
-        "Independent report: Gill continued training after the incident and the team reviewed his status. "
-        "His availability remains under assessment. "
-    ) * 6
-
-    def fake_extract(url):
-        if url == "https://example.com/story":
-            return primary, url
-        return alternate, url
-
-    monkeypatch.setattr("script_writer._extract_article", fake_extract)
-    monkeypatch.setattr(
-        "script_writer._cricket_research_candidates",
-        lambda title, url: [
-            {
-                "title": "Gill injury update before ODI",
-                "url": "https://other.com/gill-story",
-                "domain": "other.com",
-                "score": 7.5,
-            },
-            {
-                "title": "Gill training status ahead of India ODI",
-                "url": "https://third.com/gill-status",
-                "domain": "third.com",
-                "score": 7.0,
-            },
-            {
-                "title": "Gill training story from another outlet",
-                "url": "https://fourth.com/gill-status",
-                "domain": "fourth.com",
-                "score": 6.5,
-            },
-        ],
-    )
-
-    extracted_urls = []
-
-    def capture_extract(url):
-        extracted_urls.append(url)
-        return fake_extract(url)
-
-    monkeypatch.setattr("script_writer._extract_article", capture_extract)
-
-    captured = []
-
-    def fake_request(model, prompt, story):
-        captured.append(story)
-        return valid_result()
-
-    monkeypatch.setattr("script_writer._request", fake_request)
-    write_script(
-        {
-            "title": "Shubman Gill injury scare",
-            "description": "Gill was hit during training.",
-            "url": "https://example.com/story",
-        }
-    )
-
-    packet = captured[0]
-    assert "[PRIMARY ARTICLE — https://example.com/story]" in packet
-    assert "[INDEPENDENT REPORT 1 — Gill injury update before ODI — https://other.com/gill-story]" in packet
-    assert "[INDEPENDENT REPORT 2 — Gill training status ahead of India ODI — https://third.com/gill-status]" in packet
-    assert "https://fourth.com/gill-status" not in packet
-    assert extracted_urls == [
-        "https://example.com/story",
-        "https://other.com/gill-story",
-        "https://third.com/gill-status",
-    ]
-
-
-def test_writer_uses_low_reasoning_effort_for_groq(monkeypatch):
-    import script_writer
-
+    result["titles"] = ["A", "B", "C"]
+    result["seo_description"] = "Everything important from the source."
+    result["hashtags"] = ["#Cricket"]
+    valid, _ = validate_script(result, "")
+    assert valid
+
+
+def test_writer_produces_exactly_four_slides(monkeypatch):
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "[SELECTED STORY]\nGill injury story")
+    monkeypatch.setattr(script_writer, "_request_coverage_audit", lambda source, result: {
+        "coverage_pct": 0.96,
+        "complete": True,
+        "covered_facts": ["injury", "assessment"],
+        "missing_facts": [],
+    })
+    monkeypatch.setattr(script_writer, "_request", lambda *args, **kwargs: valid_result())
+    result = write_script({"title": "Gill injury story"}, language="english")
+    assert len(result["script"]) == 4
+    assert result["word_count"] > 0
+
+
+def test_writer_uses_low_reasoning_effort(monkeypatch):
     captured = {}
 
     def fake_post(*args, **kwargs):
@@ -644,118 +116,166 @@ def test_writer_uses_low_reasoning_effort_for_groq(monkeypatch):
                 return None
 
             def json(self):
-                return {"choices": [{"message": {"content": {}}}]}
+                return {"choices": [{"message": {"content": json.dumps(valid_result())}}]}
 
         return Response()
 
     monkeypatch.setattr(script_writer.requests, "post", fake_post)
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    script_writer._request("openai/gpt-oss-120b", "test prompt", "test story")
-
+    _request("openai/gpt-oss-120b", "test", "story")
     assert captured["payload"]["reasoning_effort"] == "low"
     assert captured["payload"]["include_reasoning"] is False
 
 
-def test_writer_prompt_is_responsible_for_pacing():
-    writer = __import__("script_writer")
-    assert writer.HOOK_MAX_SECONDS == 3.0
-    assert "Use 4 scenes by default" in writer.SYSTEM_PROMPT
-    assert "60–75 spoken words" in writer.SYSTEM_PROMPT
-    assert "under 30 seconds" in writer.SYSTEM_PROMPT
-    assert "never exceed 14 words" in writer.SYSTEM_PROMPT
-    assert "MAX_WORDS" not in writer.validate_script.__code__.co_consts
-
-
-def test_structured_html_fallback_keeps_article_table_facts():
-    html = """
-    <html><head>
-      <script type="application/ld+json">
-        {"@type":"NewsArticle","articleBody":"Auqib Nabi made his India ODI debut at 29."}
-      </script>
-    </head><body>
-      <p>Jammu and Kashmir pacer Auqib Nabi earned his India cap.</p>
-      <table>
-        <tr><th>Ranji Trophy 2025-26</th><th>60 wickets</th></tr>
-        <tr><td>First-class career</td><td>170 wickets</td></tr>
-        <tr><td>Best bowling</td><td>7/24</td></tr>
-      </table>
-    </body></html>
-    """
-    extracted = _article_body_from_html(html)
-
-    assert "Auqib Nabi made his India ODI debut at 29." in extracted
-    assert "Ranji Trophy 2025-26 | 60 wickets" in extracted
-    assert "First-class career | 170 wickets" in extracted
-    assert "Best bowling | 7/24" in extracted
-
-
-def test_article_extraction_prefers_the_richer_available_candidate(monkeypatch):
-    class FakeResponse:
-        url = "https://example.com/story"
-        text = """
-        <html><head>
-          <script type="application/ld+json">
-          {"@type":"NewsArticle","articleBody":"Auqib Nabi, 29, made his India ODI debut after taking 60 wickets in the Ranji Trophy."}
-          </script>
-        </head><body>
-          <h2>Career statistics</h2>
-          <table>
-            <tr><th>2025-26 Ranji Trophy</th><th>60 wickets</th></tr>
-            <tr><td>2024-25 Ranji Trophy</td><td>44 wickets</td></tr>
-            <tr><td>First-class career</td><td>170 wickets</td></tr>
-          </table>
-        </body></html>
-        """
-
-        def raise_for_status(self):
-            return None
-
-    thin = ("Auqib Nabi made his India ODI debut. " * 120)
-    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
-    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: thin)
-
-    extracted, resolved = __import__("script_writer")._extract_article("https://example.com/story")
-
-    assert resolved == "https://example.com/story"
-    assert extracted != thin
-    assert "Career statistics" in extracted
-    assert "60 wickets" in extracted
-    assert "44 wickets" in extracted
-    assert "170 wickets" in extracted
-
-def test_article_extraction_includes_tables_in_trafilatura(monkeypatch):
-    class FakeResponse:
-        url = "https://example.com/story"
-        text = "<html><body>full article</body></html>"
-
-        def raise_for_status(self):
-            return None
-
-    article = (
-        "Auqib Nabi made his India ODI debut after a strong Ranji Trophy season. "
-        "He took 60 wickets and led the tournament wicket charts. "
-    ) * 8
+def test_coverage_audit_payload_contains_source_and_script(monkeypatch):
     captured = {}
 
-    def fake_extract(*args, **kwargs):
-        captured.update(kwargs)
-        return article
+    def fake_post(*args, **kwargs):
+        captured["payload"] = kwargs["json"]
 
-    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
-    monkeypatch.setattr("script_writer.trafilatura.extract", fake_extract)
-    extracted, resolved = _extract_article("https://example.com/story")
+        class Response:
+            def raise_for_status(self):
+                return None
 
-    assert extracted
-    assert resolved == "https://example.com/story"
-    assert captured["include_tables"] is True
+            def json(self):
+                return {"choices": [{"message": {"content": json.dumps({
+                    "coverage_pct": 0.95,
+                    "complete": True,
+                    "covered_facts": ["fact one"],
+                    "missing_facts": [],
+                })}}]}
 
-def test_writer_prompt_prioritises_editorial_promise_and_full_story_coverage():
-    assert "The selected headline is the editorial assignment" in SYSTEM_PROMPT
-    assert "For profile or explainer headlines" in SYSTEM_PROMPT
-    assert "strongest supported background facts" in SYSTEM_PROMPT
-    assert "strongest proof or background" in SYSTEM_PROMPT
-    assert "60–75 spoken words" in SYSTEM_PROMPT
-    assert "under 30 seconds" in SYSTEM_PROMPT
-    assert "never exceed 14 words" in SYSTEM_PROMPT
-    assert "3-second" not in SYSTEM_PROMPT
-    assert "stats" in SYSTEM_PROMPT
+        return Response()
+
+    monkeypatch.setattr(script_writer.requests, "post", fake_post)
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    audit = _request_coverage_audit("FULL SOURCE STORY", valid_result())
+    assert audit["complete"] is True
+    text = captured["payload"]["messages"][1]["content"]
+    assert "FULL SOURCE STORY" in text
+    assert "Gill Injury Update" in text
+
+
+def test_incomplete_coverage_forces_a_rewrite(monkeypatch):
+    calls = []
+    audits = iter([
+        {"coverage_pct": 0.71, "complete": False, "covered_facts": ["debut"], "missing_facts": ["age", "Ranji wickets", "career background"]},
+        {"coverage_pct": 0.97, "complete": True, "covered_facts": ["age", "Ranji wickets", "career background"], "missing_facts": []},
+    ])
+
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "SOURCE WITH AGE RANJI WICKETS AND CAREER")
+    def fake_request(model, prompt, story):
+        calls.append(prompt)
+        result = valid_result()
+        if len(calls) == 1:
+            result["script"][0]["voiceover"] = "Gill makes his India debut."
+        return result
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    monkeypatch.setattr(script_writer, "_request_coverage_audit", lambda source, result: next(audits))
+    result = write_script({"title": "Auqib Nabi profile"}, forceful=False)
+
+    assert len(calls) == 2
+    assert "age" in calls[1]
+    assert "Ranji wickets" in calls[1]
+    assert result["coverage_audit"]["complete"] is True
+
+
+def test_forceful_manual_retry_contains_previous_draft_and_forceful_instruction(monkeypatch):
+    captured = []
+
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL SOURCE STORY")
+    monkeypatch.setattr(script_writer, "_request_coverage_audit", lambda source, result: {
+        "coverage_pct": 0.96,
+        "complete": True,
+        "covered_facts": [],
+        "missing_facts": [],
+    })
+
+    def fake_request(model, prompt, story):
+        captured.append(prompt)
+        return valid_result()
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    previous = valid_result()
+    write_script({"title": "Auqib Nabi profile"}, forceful=True, previous_script=previous)
+
+    assert "MANUAL-QC FORCEFUL RETRY" in captured[0]
+    assert "PREVIOUS DRAFT TO IMPROVE" in captured[0]
+    assert "90%" in captured[0]
+
+
+def test_research_collects_primary_and_related_current_reports(monkeypatch):
+    captured = []
+
+    primary = "Primary story facts: Auqib Nabi made his India ODI debut at 29 and had a strong domestic record. " * 12
+    related = "Related report facts: Auqib Nabi took 60 Ranji Trophy wickets and has 170 first-class wickets. " * 10
+
+    monkeypatch.setattr(
+        script_writer,
+        "_extract_article",
+        lambda url: (primary if url.endswith("/primary") else related, url),
+    )
+    monkeypatch.setattr(
+        script_writer,
+        "_related_article_urls",
+        lambda *args, **kwargs: [
+            ("Related Auqib Nabi stats", "https://example.com/related"),
+            ("Another Auqib Nabi report", "https://other.com/report"),
+        ],
+    )
+
+    packet = script_writer._research_story({
+        "title": "Auqib Nabi India debut profile",
+        "description": "Age, stats and career background",
+        "url": "https://example.com/primary",
+    })
+
+    assert "[PRIMARY ARTICLE — https://example.com/primary]" in packet
+    assert "[RELATED CURRENT REPORT 1 — Related Auqib Nabi stats — https://example.com/related]" in packet
+    assert "60 Ranji Trophy wickets" in packet
+
+
+def test_structured_html_keeps_tables():
+    html = """<html><head>
+    <script type="application/ld+json">{"articleBody":"Auqib Nabi made his India debut."}</script>
+    </head><body>
+    <h2>Career statistics</h2>
+    <table>
+      <tr><th>Ranji Trophy</th><th>60 wickets</th></tr>
+      <tr><td>First-class</td><td>170 wickets</td></tr>
+    </table>
+    </body></html>"""
+    text = _article_body_from_html(html)
+    assert "Career statistics" in text
+    assert "Ranji Trophy | 60 wickets" in text
+    assert "First-class | 170 wickets" in text
+
+
+def test_apply_edits_preserves_four_slides_and_checks_slide_one():
+    result = valid_result()
+    edited = apply_script_edits(
+        result,
+        [
+            "Gill returns after treatment.",
+            result["script"][1]["voiceover"],
+            result["script"][2]["voiceover"],
+            result["script"][3]["voiceover"],
+        ],
+    )
+    assert len(edited["script"]) == 4
+    assert edited["approved_for_audio"] is True
+
+    with pytest.raises(ValueError):
+        apply_script_edits(
+            result,
+            ["This slide has fourteen words and therefore must fail the rule today.", *[scene["voiceover"] for scene in result["script"][1:]]],
+        )
+
+
+def test_prompt_contains_only_the_requested_editorial_constraints():
+    assert "fewer than 14 words" in SYSTEM_PROMPT
+    assert "less than 30 seconds" in SYSTEM_PROMPT
+    assert "roughly 90%" in SYSTEM_PROMPT
+    assert "every slide must contain important information" in SYSTEM_PROMPT
+    assert "related current reporting" in SYSTEM_PROMPT
