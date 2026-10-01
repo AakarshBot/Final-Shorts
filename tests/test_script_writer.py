@@ -170,7 +170,8 @@ def test_writer_prompt_contains_retention_and_information_objectives():
     assert "RETENTION" in SYSTEM_PROMPT
     assert "INFORMATIVE" in SYSTEM_PROMPT
     assert "roughly 90%" in SYSTEM_PROMPT
-    assert "fewer than 14 words" in SYSTEM_PROMPT
+    assert "13 words or fewer" in SYSTEM_PROMPT
+    assert "never return 14 or more words" in SYSTEM_PROMPT
     assert "less than 30 seconds" in SYSTEM_PROMPT
     assert "rivalry" in SYSTEM_PROMPT
     assert "Do not deliberately target a word count" in SYSTEM_PROMPT
