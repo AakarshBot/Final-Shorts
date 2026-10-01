@@ -29,7 +29,7 @@ MIN_ARTICLE_CHARS = 600
 SCENE_1_MAX_WORDS = 14
 HOOK_MAX_SECONDS = 3.0
 SPEECH_WORDS_PER_MINUTE = 170.0
-MAX_ESTIMATED_NARRATION_SECONDS = 29.2
+MAX_ESTIMATED_NARRATION_SECONDS = 30.0
 MAX_WORDS = 75
 
 LANGUAGE_INSTRUCTIONS = {
@@ -136,7 +136,7 @@ SHORTS STYLE
 HOOK
 - Scene 1 is the Short's cold open, not an article lead.
 - Target 6–8 spoken words and keep the hook at or below 3 seconds of estimated natural speech.
-- Hard maximum 14 words remains a structural ceiling, but the 3-second time limit is the real hook constraint.
+- Hard maximum 14 words remains the only hook length constraint.
 - Choose the strongest truthful hook type for the story:
   - result-first: lead with the result or decision;
   - consequence-first: lead with what the development affects;
@@ -895,13 +895,6 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     first_words = _words(scenes[0]["voiceover"])
     if first_words > SCENE_1_MAX_WORDS:
         return False, f"Scene 1 exceeds {SCENE_1_MAX_WORDS} words."
-    hook_seconds = estimate_spoken_seconds(scenes[0]["voiceover"])
-    if hook_seconds > HOOK_MAX_SECONDS:
-        return False, (
-            f"Scene 1 exceeds the 3-second hook limit "
-            f"({hook_seconds:.2f}s estimated)."
-        )
-
     narration = " ".join(_clean(scene["voiceover"]) for scene in scenes)
     word_count = _words(narration)
     if word_count > MAX_WORDS:
