@@ -89,6 +89,28 @@ def test_more_excludes_existing_event():
     assert [x.title for x in chosen] == [rows[1].title]
 
 
+def test_more_fetch_skips_trend_lookup(monkeypatch):
+    captured = []
+
+    def fail_trends(*args, **kwargs):
+        raise AssertionError("More fetch must not call the trend service")
+
+    monkeypatch.setattr(topic_fetcher, "_trend_signals", fail_trends)
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda q: captured.append(q) or [])
+    monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda q: [])
+
+    topic_fetcher.fetch_topics(profile="cricket_india_asia", more=True, limit=20)
+
+    assert captured == topic_fetcher.MORE_QUERIES["cricket_india_asia"]
+
+
+def test_prepare_deduplicates_repeated_article_urls():
+    topic = make_topic("WPL retention list announced", url="https://example.com/story?utm_source=one")
+    duplicate = make_topic("WPL franchise retention list announced", url="https://example.com/story?utm_source=two")
+    prepared = topic_fetcher._prepare([topic, duplicate], set(), profile="cricket_india_asia")
+    assert len(prepared) == 1
+
+
 def test_trend_signal_becomes_search_query(monkeypatch):
     captured = []
 
