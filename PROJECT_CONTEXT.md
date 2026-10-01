@@ -560,63 +560,136 @@ output/
 
 ## Current baseline
 
-Treat the current `main` branch as the clean working baseline.
+Treat this section as the authoritative working contract for Cricket Topic Fetcher (Function 01) and Cricket Scriptwriter (Function 02). Older notes below or elsewhere that conflict with this section are superseded.
 
-Do not:
-- recreate deleted scaffolding,
-- introduce runtime patch layers,
-- add duplicate metadata systems,
-- create an unnecessary separate metadata stage,
-- add extra AI calls for metadata that Function 02 already generates,
-- add extra upload gates,
-- or modify approved function behavior without a concrete regression.
+### Scope
 
-The immediate next tasks are **Dashboard WIP work and implementation of Production Line 08 (Top 5 cricket stories of the day) and Production Line 09 (On This Day)**.
+The current work is limited to:
+- Cricket Topic Fetcher.
+- Cricket Scriptwriter.
+- The Test and Live handoffs/UI required to make those two functions work correctly.
 
-## Cricket Topic Fetcher + Scriptwriter baseline — 2026-10-01
+Do not modify Niche Sports, Top-5, OTD, Audio, Visuals, Subtitles, Renderer or YouTube Upload except where a direct handoff compatibility fix is required for the Cricket Topic Fetcher or Cricket Scriptwriter.
 
-### Cricket Topic Fetcher
+Do not add wrappers. Code may be deleted and rewritten from scratch when that is cleaner.
 
-Function 01 exists to produce a large, current, useful cricket story pool. The implementation is free to change as long as the factory requirements are preserved.
+### Function 01 — Cricket Topic Fetcher: authoritative requirements
+
+The Topic Fetcher is responsible for finding a large, current and useful pool of cricket stories.
 
 Requirements:
-- Current cricket news, not a narrow hard-coded list of players or one repeated event.
-- Cricket India / Asia and Cricket Global lanes remain available.
-- The initial fetch returns up to 20 strong, distinct stories.
-- The pool must be capable of finding 100+ unique relevant articles when the source cycle supports it.
-- “Find 20 more” appends another batch to the existing pool rather than shrinking or replacing it.
-- More results must exclude previously returned stories and repeated versions of the same event.
-- Keyword search remains available for player, team, event or keyword discovery.
-- The pool should favour real, distinct stories and sources rather than multiple headlines about one event.
-- The current Topic handoff remains the existing Topic object used by the dashboard. Its internal schema is an implementation detail, not a product constraint.
-- No new runtime dependency may make the existing Python 3.11 factory unable to run.
+- The pool must contain genuinely current cricket news, not repeated versions of the same story.
+- The Cricket India / Asia lane and Cricket Global lane remain available.
+- The initial fetch should return 20 strong, distinct cricket stories.
+- The factory must remain capable of finding 100+ unique relevant cricket articles when the news cycle supports that volume.
+- “Find 20 more” must add another batch to the existing pool. It must not shrink or replace the pool.
+- The next batch must exclude stories already returned and avoid multiple articles representing the same underlying event.
+- The pool must not become artificially small because deduplication or clustering is too aggressive.
+- Keyword search for a player, team, event or cricket topic remains available.
+- Discovery should favour real, substantive cricket stories. Do not fill the pool with utility pages, generic listings, empty “latest news” pages or other non-story material.
+- A relevant story must not be rejected merely because only one source currently reports it.
+- Source selection, APIs, search engines, ranking formulas, clustering algorithms and internal schemas are implementation details. Choose whatever logic best satisfies these requirements.
+- The Topic handoff into Scriptwriter may use any clean internal format needed. The handoff is not itself a product requirement; its only job is to provide the Scriptwriter with enough information to research the selected story.
+- No new required dependency may break the existing Python 3.11 local factory.
 
-The current implementation uses Google News plus GDELT and deliberately does not require Trendflow. Trend/trending services may be added later only when they remain optional and do not break the existing runtime.
+The fetcher should maximise useful story coverage and freshness. It must not be narrowed by a hard-coded list of approved players or entities that prevents genuinely current cricket stories from entering the pool.
 
-### Cricket Scriptwriter
+### Function 02 — Cricket Scriptwriter: authoritative requirements
 
-Function 02 is responsible for turning the full researched story into a four-slide Short.
+The Scriptwriter turns the selected cricket story into a complete four-slide YouTube Short.
 
-Only these editorial rules are authoritative:
-- Slide 1 must contain **fewer than 14 words**.
-- The finished Short must be **less than 30 seconds**. Audio may use the existing speed correction when a generated draft is slightly long.
-- The Scriptwriter must generate the titles, SEO description and hashtags.
-- Exactly four slides are produced.
-- Every slide must contain important information.
-- The four slides should cover roughly **90% of the materially important information in the entire story**, not merely the headline or the latest event.
-- The writer must not invent a story or pad/prolong the headline.
-- Research must use the full selected article plus other relevant current reporting where available. One source is acceptable; source count is not a requirement.
-- Related current/trending information should be incorporated when it is genuinely part of the same story.
-- Manual QC has a forceful Scriptwriter retry that rewrites the full script specifically to improve the 90% story-coverage requirement.
+Only these editorial rules are required:
 
-Implementation may use an AI coverage audit/rewrite pass. The audit is there to improve factual coverage, not to introduce additional editorial rules.
+1. **Slide 1 must contain fewer than 14 words.**
+   - This means 13 words maximum.
+   - Exactly 14 words is not valid.
+   - This is a word requirement, not a seconds requirement.
 
-The existing downstream handoff fields required by Audio, Visuals, Renderer and Upload remain implementation compatibility, not additional Scriptwriter editorial requirements.
+2. **The whole Short must be less than 30 seconds.**
+   - The existing Audio stage already has the ability to speed up a slightly long script.
+   - Do not deliberately pad narration.
+   - Do not create additional timing rules such as a separate 3-second hook gate.
 
-### Current safeguards
+3. **The Scriptwriter must produce the publish metadata.**
+   - Titles.
+   - SEO description.
+   - Hashtags.
+   - Do not create a separate metadata stage or another AI call solely to generate metadata.
 
-- Scriptwriter Live and Test both use the same Cricket Scriptwriter function.
-- Manual QC can force a complete rewrite without changing the selected story.
-- The final audio duration remains authoritative for the sub-30-second production constraint.
-- Do not reintroduce unrelated timing, headline, repetition, metadata-quality or retention heuristics unless the user explicitly asks for them.
-- Do not change Niche Sports, Top-5, OTD or other production lines while working on Cricket Topic Fetcher and Cricket Scriptwriter.
+4. **Exactly four slides.**
+   - The four slides are the complete story.
+   - Every slide must contain important information.
+   - No filler slide, generic introduction, headline restatement or retention-padding.
+
+5. **The four slides should cover roughly 90% of the materially important information in the entire story.**
+   - The target is the substance of the full story article/evidence, not merely the headline.
+   - Prioritise the facts a viewer needs to understand what happened and why it matters.
+   - Include important names, dates, statistics, records, career/background information, decisions, context and consequences whenever they are materially part of the story.
+   - For profile/explainer stories, do not spend the Short simply repeating the event that triggered the article. Cover the actual person/story promised by the headline.
+   - Every slide must contribute meaningful new information.
+
+6. **Do not invent or prolong the story.**
+   - Do not make a small headline sound like a larger story by adding unsupported drama.
+   - Do not invent facts, numbers, quotes, motives, consequences, records or background.
+   - Do not pad a short source just to fill four slides.
+
+7. **Research the whole story, not just the selected source.**
+   - Use the complete selected article whenever accessible.
+   - Look for related current reporting about the same story.
+   - Current/trending developments related to the same story may be incorporated when factually supported.
+   - One source is acceptable; source count is irrelevant.
+   - The objective is factual completeness, not having a minimum number of sources.
+
+8. **Coverage verification may use an AI/API review.**
+   - An additional coverage-audit/rewrite call is explicitly allowed when it materially improves the chance that the four slides cover roughly 90% of the story.
+   - The audit should compare the generated Short against the full evidence and identify materially important facts that were missed.
+   - When coverage is inadequate, the Scriptwriter should rewrite the four slides rather than merely append a sentence.
+   - This is a coverage mechanism, not permission to invent additional editorial rules.
+
+9. **Manual QC needs a forceful Scriptwriter retry.**
+   - Test and Live Scriptwriter QC must expose a retry action that forces a complete rewrite.
+   - The retry should instruct the writer to re-read the full evidence, identify what the prior script missed and rewrite the four slides from scratch to improve story coverage toward the 90% requirement.
+   - The retry must not simply tweak the previous wording.
+   - It must preserve the selected story and existing downstream handoff.
+
+### Scriptwriter handoff and validation
+
+The downstream visual/audio fields remain implementation compatibility requirements. They are not additional editorial rules.
+
+Do not add new local heuristics for:
+- target word counts,
+- estimated hook duration,
+- estimated total narration duration,
+- artificial scene-role patterns,
+- generic title-quality scoring,
+- repetition scoring,
+- retention scoring,
+- or other editorial rules not explicitly listed above.
+
+Generation should be driven by the requirements above and the full evidence. Local validation may enforce structural necessities and the explicit **Slide 1 <14 words** requirement, but must not replace good generation with an expanding list of heuristic gates.
+
+The existing Audio duration measurement remains the final production check for the sub-30-second requirement, including its current speed correction.
+
+### Test and Live parity
+
+The Cricket Topic Fetcher and Cricket Scriptwriter must behave consistently between Test and Live.
+
+Both paths must:
+- use the same Cricket Topic Fetcher logic;
+- use the same Cricket Scriptwriter logic;
+- receive the same research/evidence treatment;
+- preserve the same downstream handoff fields;
+- expose the forceful Manual-QC script retry.
+
+When changing either function, check both the unit tests and the actual Test/Live dashboard path before considering the change complete.
+
+### Engineering rules for this work
+
+- Do not assume a requirement that is not written above.
+- Do not silently convert a requirement into a different measurement. In particular, **“fewer than 14 words” means <14 words, not <=14 and not 14 seconds.**
+- Do not preserve old implementation choices merely because they existed.
+- Do not introduce wrappers.
+- Delete obsolete code rather than layering patches around it.
+- Keep API usage purposeful. An additional AI call is acceptable for the explicit coverage-audit purpose above; do not add calls for unrelated checks.
+- Protect the rest of the factory while changing only Cricket Topic Fetcher and Cricket Scriptwriter.
+
