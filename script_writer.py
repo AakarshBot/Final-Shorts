@@ -1,10 +1,4 @@
-"""Function 02: Cricket Scriptwriter.
-
-The writer researches the selected story, builds an AI coverage brief, then
-writes one four-slide Short. Manual QC can force a fresh rewrite using the
-same full evidence and coverage brief.
-"""
-
+"""Function 02: Cricket Scriptwriter."""
 import json
 import os
 import re
@@ -23,11 +17,10 @@ GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
 MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
 TIMEOUT = 30
 RESEARCH_TIMEOUT = 10
-MAX_SOURCE_CHARS = 18000
+MAX_SOURCE_CHARS = 24000
 CRICKET_RESEARCH_MAX_ARTICLES = 5
-CRICKET_RESEARCH_CANDIDATE_LIMIT = 10
+CRICKET_RESEARCH_CANDIDATE_LIMIT = 12
 CRICKET_RESEARCH_ARTICLE_CHARS = 4200
-CRICKET_RESEARCH_MAX_PACKET_CHARS = 24000
 MIN_ARTICLE_CHARS = 500
 HOOK_MAX_SECONDS = 3.0
 
@@ -47,6 +40,8 @@ SCHEMA = {
         "comment": {"type": "string"},
         "script": {
             "type": "array",
+            "minItems": 4,
+            "maxItems": 5,
             "items": {
                 "type": "object",
                 "properties": {
@@ -73,110 +68,78 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
-COVERAGE_SCHEMA = {
+COVERAGE_AUDIT_SCHEMA = {
     "type": "object",
     "properties": {
-        "story_core": {"type": "string"},
-        "must_cover_facts": {
-            "type": "array",
-            "items": {"type": "string"},
-            "minItems": 6,
-            "maxItems": 12,
-        },
-        "related_current_facts": {
-            "type": "array",
-            "items": {"type": "string"},
-            "minItems": 0,
-            "maxItems": 8,
-        },
-        "four_slide_plan": {
-            "type": "array",
-            "minItems": 4,
-            "maxItems": 4,
-            "items": {
-                "type": "object",
-                "properties": {
-                    "slide": {"type": "integer"},
-                    "facts": {
-                        "type": "array",
-                        "items": {"type": "string"},
-                        "minItems": 1,
-                        "maxItems": 6,
-                    },
-                },
-                "required": ["slide", "facts"],
-                "additionalProperties": False,
-            },
-        },
+        "coverage_pct": {"type": "number"},
+        "complete": {"type": "boolean"},
+        "covered_facts": {"type": "array", "items": {"type": "string"}, "minItems": 0, "maxItems": 12},
+        "missing_facts": {"type": "array", "items": {"type": "string"}, "minItems": 0, "maxItems": 12},
     },
-    "required": ["story_core", "must_cover_facts", "related_current_facts", "four_slide_plan"],
+    "required": ["coverage_pct", "complete", "covered_facts", "missing_facts"],
     "additionalProperties": False,
 }
 
 SYSTEM_PROMPT = """You are the senior human cricket editor for a human-reviewed YouTube Shorts channel.
 
-The selected headline is the assignment. Your job is to compress the important substance of the researched story into exactly four spoken slides.
+The selected headline is the assignment. The supplied evidence packet is the story.
 
 NON-NEGOTIABLE EDITORIAL RULES
+- Produce exactly four spoken slides.
 - Slide 1 must contain fewer than 14 words.
-- The finished Short must be designed for less than 30 seconds. A slightly long draft can be tightened by the existing Audio stage, but do not deliberately write long narration.
-- Every slide must contain important information. No filler slide, scene-padding, generic setup or repeated headline.
-- The four slides should cover roughly 90% of the materially important information in the researched story, prioritising facts a viewer actually needs rather than trying to repeat article prose.
-- Do not invent a story, facts, numbers, quotes, motives, causes, outcomes, records or context.
-- Do not merely prolong the headline. The article and related current evidence are the story.
-- Use the coverage brief as the factual checklist, then use the full evidence packet to recover any material fact the brief missed.
-- Related current reporting may add important facts that are not in the selected article. Use it when supported and clearly part of the same story.
-- A single source is acceptable. Source count is irrelevant; factual completeness is what matters.
-- Return complete natural spoken sentences. Do not clip sentences solely to hit a slide count.
+- The finished Short must be designed for less than 30 seconds. The existing Audio stage can speed up a slightly long draft, so do not pad or distort the story just to hit a timing target.
+- Every slide must contain important information.
+- Across the four slides, cover roughly 90% of the materially important information in the entire researched story.
+- Do not invent a story, prolong the headline, repeat the headline as narration, or add filler.
+- Use the entire evidence packet, including related current reporting, not just the first article.
+- A source count does not matter. One source is fine when it contains the necessary facts.
+- Related current facts are useful when they are genuinely part of the same story.
+- Do not invent missing information when research does not support it.
+- Write complete, natural spoken sentences.
 
-RESEARCH PRIORITY
-1. Cover the strongest current development.
-2. Cover the facts explicitly promised by the headline.
-3. Cover the important background, numbers, dates, records, career details or context that explain the development.
-4. Cover the latest related development or confirmed consequence when it materially belongs to the same story.
-5. When facts conflict, use the most clearly supported current fact and avoid inventing a resolution.
+FACT COVERAGE
+Read the complete evidence packet before drafting.
+Prioritise facts that explain:
+- what actually happened;
+- who is involved;
+- the important background;
+- relevant numbers, dates, records, statistics, career information or other concrete evidence;
+- what changed;
+- the latest confirmed status or consequence.
+Do not spend four slides rephrasing the selected headline.
 
 SLIDE DESIGN
-- Slide 1: the strongest factual entry point, fewer than 14 words.
-- Slides 2–4: continue the story with new, important information.
-- Across all four slides, use the coverage brief's must-cover facts and slide plan.
-- Do not sacrifice important facts merely to make the prose sound dramatic.
-- Do not manufacture a conclusion when the evidence does not support one.
+- Slide 1: strongest factual entry point, fewer than 14 words.
+- Slides 2–4: each must add meaningful new information.
+- Compress related facts into efficient sentences when that increases coverage without making the narration unnatural.
+- Do not force every possible detail into the Short; cover the material story, not article boilerplate.
 
 STYLE
-- Energetic sports-desk voice, but the facts provide the energy.
-- Write for the ear, not as an article being read aloud.
-- Specific names, teams, competitions, dates and numbers are preferred when supported.
-- No clickbait, retention bait, generic hype or audience commands.
+- Energetic cricket desk voice. Facts create the energy.
+- Write for the ear.
+- Prefer specific names, teams, competitions, dates and numbers when supported.
+- No generic hype, clickbait, retention bait or audience commands.
 
 PUBLISH METADATA
-- Generate the existing three title candidates, a story-specific description, relevant hashtags and the existing upload comment.
-- Metadata must be grounded in the researched story.
+Produce the existing three title candidates, a story-specific SEO description, relevant hashtags and the existing upload comment. Keep them grounded in the researched story.
 
 VISUAL HANDOFF
-Every slide must contain useful visual metadata matching the actual fact being narrated.
+Every slide needs useful visual metadata that matches the fact being narrated.
 
-FINAL SELF-CHECK
-Before returning JSON, silently confirm:
-- Slide 1 is fewer than 14 words.
-- There are exactly four slides.
-- Every slide contains important information.
-- The four slides collectively cover the coverage brief and roughly 90% of the material story information.
-- Nothing has been invented.
-- The narration is naturally concise enough for a sub-30-second Short.
 Return only JSON matching the supplied schema.
 """
 
-FORCEFUL_INSTRUCTION = """
-REWRITE MODE — COVERAGE FIRST
+FORCEFUL_INSTRUCTION = """MANUAL-QC FORCEFUL RETRY
 
-This is a forceful Manual-QC rewrite. Do not preserve the previous wording just because it already exists.
+Rewrite the entire four-slide script from scratch.
 
-Re-read the entire evidence packet and the coverage brief. Identify anything important that the prior draft left out, especially concrete facts, dates, statistics, records, career background, named people, decisions and current developments.
+The previous draft did not satisfy the required story coverage strongly enough. Re-read the entire evidence packet and the coverage audit. Make the missing facts explicit in the new narration wherever they are materially important.
 
-Rewrite all four slides from scratch so that the four slides cover roughly 90% of the materially important information in the story. Every slide must carry substantial information. Remove any sentence that only restates the headline or creates empty drama.
+The objective is not to make the script longer. The objective is to make the four slides cover roughly 90% of the materially important story information without inventing anything.
 
-Still obey the two runtime constraints: Slide 1 has fewer than 14 words, and the whole Short should be naturally concise enough to fit under 30 seconds with the existing Audio speed correction available.
+Every slide must carry substantive information. Remove any sentence that merely repeats the headline, adds atmosphere, or delays a factual point.
+
+Slide 1 must contain fewer than 14 words.
 """
 
 def _clean(value) -> str:
@@ -205,22 +168,14 @@ def _source_domain(url: str) -> str:
 
 
 def _limit_source_text(text: str, max_chars: int = MAX_SOURCE_CHARS) -> str:
-    clean = "\n".join(
-        _clean(line) for line in str(text or "").splitlines() if _clean(line)
-    )
+    clean = "\n".join(_clean(line) for line in str(text or "").splitlines() if _clean(line))
     if len(clean) <= max_chars:
         return clean
     head = int(max_chars * 0.55)
     middle = int(max_chars * 0.2)
     tail = max_chars - head - middle
-    middle_start = max(0, (len(clean) - middle) // 2)
-    return (
-        clean[:head].rstrip()
-        + "\n\n[ARTICLE MIDDLE]\n\n"
-        + clean[middle_start:middle_start + middle].strip()
-        + "\n\n[ARTICLE END]\n\n"
-        + clean[-tail:].lstrip()
-    )
+    start = max(0, (len(clean) - middle) // 2)
+    return clean[:head].rstrip() + "\n\n[ARTICLE MIDDLE]\n\n" + clean[start:start + middle].strip() + "\n\n[ARTICLE END]\n\n" + clean[-tail:].lstrip()
 
 
 def _article_body_from_html(html_text: str) -> str:
@@ -248,10 +203,10 @@ def _article_body_from_html(html_text: str) -> str:
                 stack.extend(item)
 
     for tag in ("h1", "h2", "h3", "p"):
-        for match in re.findall(rf"<{tag}\b[^>]*>(.*?)</{tag}>", raw, flags=re.IGNORECASE | re.DOTALL):
-            value = _clean(re.sub(r"<[^>]+>", " ", unescape(match)))
-            if value and value not in sections:
-                sections.append(value)
+        for value in re.findall(rf"<{tag}\b[^>]*>(.*?)</{tag}>", raw, flags=re.IGNORECASE | re.DOTALL):
+            cleaned = _clean(re.sub(r"<[^>]+>", " ", unescape(value)))
+            if cleaned and cleaned not in sections:
+                sections.append(cleaned)
 
     for table in re.findall(r"<table\b[^>]*>(.*?)</table>", raw, flags=re.IGNORECASE | re.DOTALL):
         for row in re.findall(r"<tr\b[^>]*>(.*?)</tr>", table, flags=re.IGNORECASE | re.DOTALL):
@@ -261,9 +216,9 @@ def _article_body_from_html(html_text: str) -> str:
             ]
             cells = [cell for cell in cells if cell]
             if cells:
-                value = " | ".join(cells)
-                if value not in sections:
-                    sections.append(value)
+                row_text = " | ".join(cells)
+                if row_text not in sections:
+                    sections.append(row_text)
 
     return "\n".join(sections)
 
@@ -272,7 +227,6 @@ def _extract_article(url: str) -> tuple[str, str]:
     target = _clean(url)
     if not target:
         return "", ""
-
     response = requests.get(
         target,
         headers={
@@ -286,7 +240,7 @@ def _extract_article(url: str) -> tuple[str, str]:
     response.raise_for_status()
     resolved_url = str(response.url or target)
 
-    trafilatura_text = _clean(
+    extracted = _clean(
         trafilatura.extract(
             response.text,
             url=resolved_url,
@@ -296,32 +250,25 @@ def _extract_article(url: str) -> tuple[str, str]:
             output_format="txt",
         )
     )
-    structured_text = _clean(_article_body_from_html(response.text))
-
-    if trafilatura_text and structured_text:
-        primary_normalised = _normalise(trafilatura_text)
-        extra = [
-            line for line in structured_text.splitlines()
-            if _clean(line) and _normalise(line) not in primary_normalised
-        ]
-        enriched = trafilatura_text
-        if extra:
-            enriched += "\n\n[STRUCTURED SOURCE FACTS]\n" + "\n".join(extra)
+    structured = _clean(_article_body_from_html(response.text))
+    if extracted and structured:
+        base = _normalise(extracted)
+        extra = [line for line in structured.splitlines() if _clean(line) and _normalise(line) not in base]
+        enriched = extracted + ("\n\n[STRUCTURED SOURCE FACTS]\n" + "\n".join(extra) if extra else "")
         if len(enriched) >= MIN_ARTICLE_CHARS:
             return enriched, resolved_url
 
-    for candidate in (trafilatura_text, structured_text):
+    for candidate in (extracted, structured):
         if len(candidate) >= MIN_ARTICLE_CHARS:
             return candidate, resolved_url
 
     try:
-        extracted = DDGS(timeout=5).extract(resolved_url, fmt="text_plain")
-        content = _clean(extracted.get("content") if isinstance(extracted, dict) else "")
+        fallback = DDGS(timeout=5).extract(resolved_url, fmt="text_plain")
+        content = _clean(fallback.get("content") if isinstance(fallback, dict) else "")
         if len(content) >= MIN_ARTICLE_CHARS:
-            return content, str(extracted.get("url") or resolved_url)
+            return content, str(fallback.get("url") or resolved_url)
     except Exception:
         pass
-
     return "", resolved_url
 
 
@@ -329,11 +276,14 @@ def _related_article_urls(title: str, description: str, original_url: str) -> li
     queries = [
         title,
         f"{title} latest",
-        f"{title} statistics career record background",
+        f"{title} background statistics career record",
         f"{title} reaction statement",
+        f"{title} latest cricket news",
     ]
+    original = _normalise(original_url.rstrip("/"))
+    seen = {original}
     candidates = []
-    seen_urls = {_source_domain(original_url) + _normalise(original_url)}
+
     for query in queries:
         try:
             results = DDGS(timeout=5).news(
@@ -345,36 +295,37 @@ def _related_article_urls(title: str, description: str, original_url: str) -> li
             ) or []
         except Exception:
             continue
+
         for result in results:
             url = _clean(result.get("url") or result.get("href"))
             result_title = _clean(result.get("title"))
             if not url or not result_title:
                 continue
             canonical = _normalise(url.rstrip("/"))
-            if canonical in seen_urls:
+            if canonical in seen:
                 continue
             domain = _source_domain(url)
             if not domain or any(blocked in domain for blocked in ("twitter.", "x.com", "facebook.", "instagram.", "youtube.", "google.")):
                 continue
-            score = 0
-            title_tokens = set(re.findall(r"\b[\w]+\b", _clean(title).casefold()))
+            query_tokens = set(re.findall(r"\b[\w]+\b", _clean(title).casefold()))
             result_tokens = set(re.findall(r"\b[\w]+\b", result_title.casefold()))
-            score += len(title_tokens & result_tokens)
+            score = len(query_tokens & result_tokens)
             if domain == _source_domain(original_url):
                 score += 0.25
             candidates.append((score, result_title, url))
-            seen_urls.add(canonical)
+            seen.add(canonical)
 
     candidates.sort(key=lambda item: item[0], reverse=True)
-    return [(title, url) for _, title, url in candidates[:CRICKET_RESEARCH_CANDIDATE_LIMIT]]
+    return [(result_title, url) for _, result_title, url in candidates[:CRICKET_RESEARCH_CANDIDATE_LIMIT]]
 
 
 def _research_story(story, profile: str | None = None) -> str:
     title = _story_value(story, "title")
     description = _story_value(story, "description")
     original_url = _story_value(story, "url")
-    sections = [f"[SELECTED STORY]\n{title}"] if title else []
-
+    sections = []
+    if title:
+        sections.append(f"[SELECTED STORY]\n{title}")
     if description:
         sections.append(f"[TOPIC FETCHER SUMMARY]\n{description}")
 
@@ -384,38 +335,34 @@ def _research_story(story, profile: str | None = None) -> str:
         except (requests.RequestException, OSError, ValueError):
             primary, resolved = "", original_url
         if primary:
-            sections.append(
-                f"[PRIMARY ARTICLE — {resolved or original_url}]\n"
-                + _limit_source_text(primary, 9000)
-            )
+            sections.append("[PRIMARY ARTICLE — " + (resolved or original_url) + "]\n" + _limit_source_text(primary, 9000))
 
-        for number, (candidate_title, candidate_url) in enumerate(
-            _related_article_urls(title, description, original_url)[:CRICKET_RESEARCH_MAX_ARTICLES],
-            1,
+        for number, (related_title, related_url) in enumerate(
+            _related_article_urls(title, description, original_url)[:CRICKET_RESEARCH_MAX_ARTICLES], 1
         ):
             try:
-                text, resolved_url = _extract_article(candidate_url)
+                article, resolved_url = _extract_article(related_url)
             except (requests.RequestException, OSError, ValueError):
                 continue
-            if text:
+            if article:
                 sections.append(
-                    f"[RELATED CURRENT REPORT {number} — {candidate_title} — {resolved_url or candidate_url}]\n"
-                    + _limit_source_text(text, CRICKET_RESEARCH_ARTICLE_CHARS)
+                    f"[RELATED CURRENT REPORT {number} — {related_title} — {resolved_url or related_url}]\n"
+                    + _limit_source_text(article, CRICKET_RESEARCH_ARTICLE_CHARS)
                 )
 
-    return _limit_source_text("\n\n".join(sections), CRICKET_RESEARCH_MAX_PACKET_CHARS)
+    return _limit_source_text("\n\n".join(sections), MAX_SOURCE_CHARS)
 
 
 def _source_text(story) -> str:
     if hasattr(story, "__dataclass_fields__"):
         story = {name: getattr(story, name) for name in story.__dataclass_fields__}
     story = dict(story or {})
-    values = []
+    parts = []
     for key in ("title", "research_evidence_text", "text", "summary", "description", "topic"):
         value = _clean(story.get(key))
-        if value and value not in values:
-            values.append(value)
-    return "\n\n".join(values)[:MAX_SOURCE_CHARS]
+        if value and value not in parts:
+            parts.append(value)
+    return "\n\n".join(parts)[:MAX_SOURCE_CHARS]
 
 
 def _request(model: str, prompt: str, story: str) -> dict:
@@ -433,11 +380,7 @@ def _request(model: str, prompt: str, story: str) -> dict:
             ],
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "sports_shorts_script",
-                    "strict": True,
-                    "schema": SCHEMA,
-                },
+                "json_schema": {"name": "sports_shorts_script", "strict": True, "schema": SCHEMA},
             },
             "include_reasoning": False,
             "reasoning_effort": "low",
@@ -451,7 +394,7 @@ def _request(model: str, prompt: str, story: str) -> dict:
     return content if isinstance(content, dict) else json.loads(content)
 
 
-def _request_coverage(model: str, source: str) -> dict:
+def _request_coverage_audit(source: str, result: dict) -> dict:
     key = _clean(os.getenv("GROQ_API_KEY"))
     if not key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
@@ -459,34 +402,33 @@ def _request_coverage(model: str, source: str) -> dict:
         GROQ_URL,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         json={
-            "model": model,
+            "model": "openai/gpt-oss-120b",
             "messages": [
                 {
                     "role": "system",
-                    "content": """You are the fact-coverage editor for a human sports newsroom.
+                    "content": """You are a strict fact-coverage editor.
 
-Read the ENTIRE supplied evidence packet. Do not write narration. Build a coverage brief for another editor.
+Compare the complete source evidence against the generated four-slide cricket Short.
 
-Identify the central story and the important facts a four-slide Short must cover. Select 6–12 must-cover facts that together represent roughly 90% of the materially important story information, collapsing repeated reporting into one fact. Include important numbers, dates, records, career details, named people, decisions, current developments and consequences when supported.
+Judge coverage by materially important story information, not by matching article wording. A four-slide Short covers the story adequately only when it captures roughly 90% of the important factual substance: the key development, people involved, important background, relevant statistics/numbers/dates/records, major context and confirmed current status.
 
-Also identify related current facts from the evidence that belong to the same story and map the important facts across exactly four slides.
+Do not require minor repetition, boilerplate, quotes that add no information, or every sentence from the article.
 
-Never invent facts. Do not optimise for drama. Optimise for factual completeness.""",
+Return a coverage percentage between 0 and 1, whether the draft is complete enough, the important facts covered, and the important facts still missing.""",
                 },
-                {"role": "user", "content": source},
+                {
+                    "role": "user",
+                    "content": "SOURCE EVIDENCE:\n" + source + "\n\nGENERATED SCRIPT:\n" + json.dumps(result, ensure_ascii=False),
+                },
             ],
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {
-                    "name": "sports_story_coverage",
-                    "strict": True,
-                    "schema": COVERAGE_SCHEMA,
-                },
+                "json_schema": {"name": "sports_script_coverage_audit", "strict": True, "schema": COVERAGE_AUDIT_SCHEMA},
             },
             "include_reasoning": False,
             "reasoning_effort": "low",
-            "temperature": 0.2,
-            "max_completion_tokens": 1200,
+            "temperature": 0.1,
+            "max_completion_tokens": 800,
         },
         timeout=TIMEOUT,
     )
@@ -498,116 +440,84 @@ Never invent facts. Do not optimise for drama. Optimise for factual completeness
 def validate_script(result: dict, source: str) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
-
     scenes = result.get("script")
-    if not isinstance(scenes, list):
+    if not isinstance(scenes, list) or not scenes:
         return False, "The provider did not return a script."
-
-    if not scenes:
-        return False, "The script is empty."
-
-    first_words = _words(scenes[0].get("voiceover"))
-    if first_words >= 14:
+    if _words(scenes[0].get("voiceover")) >= 14:
         return False, "Slide 1 must contain fewer than 14 words."
-
-    for index, scene in enumerate(scenes, 1):
-        if not isinstance(scene, dict):
-            return False, f"Slide {index} is malformed."
-        if not _clean(scene.get("voiceover")):
-            return False, f"Slide {index} is empty."
-        if not _clean(scene.get("primary_entity")):
-            return False, f"Slide {index} is missing its visual entity."
-        if not all(
-            _clean(scene.get(key))
-            for key in ("visual_intent", "specific_search_prompt", "sport_or_topic_category")
-        ):
-            return False, f"Slide {index} is missing visual metadata."
-
-    if not isinstance(result.get("titles"), list) or not all(_clean(x) for x in result["titles"]):
-        return False, "The Scriptwriter must produce title candidates."
+    for number, scene in enumerate(scenes, 1):
+        if not isinstance(scene, dict) or not _clean(scene.get("voiceover")):
+            return False, f"Slide {number} is empty or malformed."
+        if not all(_clean(scene.get(key)) for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category")):
+            return False, f"Slide {number} is missing visual metadata."
+    if not isinstance(result.get("titles"), list) or not all(_clean(item) for item in result["titles"]):
+        return False, "The Scriptwriter must produce titles."
     if not _clean(result.get("seo_description")):
         return False, "The Scriptwriter must produce a description."
-    if not isinstance(result.get("hashtags"), list) or not any(_clean(x) for x in result["hashtags"]):
+    if not isinstance(result.get("hashtags"), list) or not any(_clean(item) for item in result["hashtags"]):
         return False, "The Scriptwriter must produce hashtags."
-
     return True, ""
 
 
-def _fallback_coverage(source: str) -> dict:
-    sentences = [
-        _clean(part)
-        for part in re.split(r"(?<=[.!?])\s+|\n+", source)
-        if _words(part) >= 6
-    ]
-    facts = sentences[:8]
-    return {
-        "story_core": facts[0] if facts else "",
-        "must_cover_facts": facts,
-        "related_current_facts": [],
-        "four_slide_plan": [
-            {"slide": 1, "facts": facts[:2] or ["Identify the story."]},
-            {"slide": 2, "facts": facts[2:4] or facts[:1] or ["State the key facts."]},
-            {"slide": 3, "facts": facts[4:6] or facts[1:2] or ["Add the strongest context."]},
-            {"slide": 4, "facts": facts[6:8] or facts[2:3] or ["Close with the latest supported status."]},
-        ],
-    }
+def _finish_result(result: dict, story, source: str, model: str, audit: dict | None) -> dict:
+    result["provider_used"] = model
+    result["delivery_profile"] = "HYPE COMMENTATOR"
+    result["language_used"] = _clean(story.get("language") if isinstance(story, dict) else "") or "english"
+    result["word_count"] = _words(" ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or []))
+    result["source_title"] = _story_value(story, "title")
+    result["source_evidence"] = source
+    if audit is not None:
+        result["coverage_audit"] = audit
+    return result
 
 
-def write_script(story, language: str = "english", forceful: bool = False) -> dict:
-    """Research and write one complete four-slide Cricket Short."""
-    source = _research_story(story, profile="cricket")
-    if not source:
-        source = _source_text(story)
+def write_script(story, language: str = "english", forceful: bool = False, previous_script: dict | None = None) -> dict:
+    source = _research_story(story, profile="cricket") or _source_text(story)
     if not source:
         raise ValueError("The selected story contains no usable evidence.")
 
-    coverage = None
-    coverage_errors = []
-    for model in MODELS:
-        try:
-            coverage = _request_coverage(model, source)
-            break
-        except Exception as exc:
-            coverage_errors.append(f"{model}: {type(exc).__name__}: {exc}")
-
-    if not isinstance(coverage, dict):
-        coverage = _fallback_coverage(source)
-
-    instruction = (
+    language_key = str(language or "english").strip().lower()
+    base_instruction = (
         SYSTEM_PROMPT
-        + "\n\nCOVERAGE BRIEF:\n"
-        + json.dumps(coverage, ensure_ascii=False)
         + "\n\nLANGUAGE:\n"
-        + LANGUAGE_INSTRUCTIONS.get(
-            str(language or "english").strip().lower(),
-            LANGUAGE_INSTRUCTIONS["english"],
-        )
+        + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
     )
     if forceful:
-        instruction += FORCEFUL_INSTRUCTION
+        base_instruction += "\n" + FORCEFUL_INSTRUCTION
+        if previous_script:
+            base_instruction += "\nPREVIOUS DRAFT TO IMPROVE:\n" + json.dumps(previous_script, ensure_ascii=False)
 
     errors = []
     for model in MODELS:
         try:
-            result = _request(model, instruction, source)
+            result = _request(model, base_instruction, source)
             valid, reason = validate_script(result, source)
-            if valid:
-                result["provider_used"] = model
-                result["delivery_profile"] = "HYPE COMMENTATOR"
-                result["language_used"] = str(language or "english").strip().lower()
-                result["word_count"] = _words(
-                    " ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or [])
-                )
-                result["source_title"] = _story_value(story, "title")
-                result["source_evidence"] = source
-                result["coverage_brief"] = coverage
-                result["coverage_review_provider"] = (
-                    coverage.get("provider_used") if isinstance(coverage, dict) else None
-                )
-                if coverage_errors:
-                    result["coverage_research_warnings"] = coverage_errors
-                return result
-            errors.append(f"{model}: {reason}")
+            if not valid:
+                errors.append(f"{model}: {reason}")
+                continue
+
+            try:
+                audit = _request_coverage_audit(source, result)
+            except Exception as exc:
+                audit = None
+                errors.append(f"Coverage audit unavailable: {type(exc).__name__}: {exc}")
+
+            if isinstance(audit, dict) and (audit.get("complete") is False or float(audit.get("coverage_pct", 0)) < 0.9):
+                force = base_instruction + "\n\nCOVERAGE AUDIT FINDINGS:\n" + json.dumps(audit, ensure_ascii=False) + "\n" + FORCEFUL_INSTRUCTION
+                revised = _request(model, force, source)
+                valid, reason = validate_script(revised, source)
+                if not valid:
+                    errors.append(f"{model}: forceful rewrite failed: {reason}")
+                    continue
+                try:
+                    revised_audit = _request_coverage_audit(source, revised)
+                except Exception:
+                    revised_audit = audit
+                if isinstance(revised_audit, dict):
+                    audit = revised_audit
+                result = revised
+
+            return _finish_result(result, story, source, model, audit)
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
 
@@ -625,18 +535,14 @@ def apply_script_edits(
     scenes = result.get("script") or []
     if len(voiceovers) != len(scenes):
         raise ValueError("The number of edited slides does not match the generated script.")
-
     for scene, voiceover in zip(scenes, voiceovers):
         scene["voiceover"] = _clean(voiceover)
-
     if headline is not None:
         result["headline"] = _clean(headline)
-
     if validate:
         valid, reason = validate_script(result, _clean(result.get("source_evidence")))
         if not valid:
             raise ValueError(f"Edited script failed local validation: {reason}")
-
     result["human_script_edited"] = any(
         _clean(scene["voiceover"]) != _clean(original.get("voiceover"))
         for scene, original in zip(scenes, script.get("script", []))
