@@ -356,7 +356,8 @@ def _score_niche(topic: Topic) -> float:
     event_signal = min(2.4, len(_event_groups(topic.title)) * 0.6)
     meaningful = _tokens(topic.title) - CRICKET_TERMS - set().union(*EVENT_GROUPS.values())
     specificity = min(2.0, max(0, len(meaningful) - 1) * 0.4)
-    return freshness + event_signal + specificity
+    source_penalty = 1.0 if _source_key(topic.source) in PUBLISHER_PENALTIES else 0.0
+    return freshness + event_signal + specificity - source_penalty
 
 
 def _score_cricket(topic: Topic, profile: str) -> float:
