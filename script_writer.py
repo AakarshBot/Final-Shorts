@@ -85,7 +85,7 @@ SYSTEM_PROMPT = """You are the senior human sports editor for a human-reviewed Y
 Write one regular sports Short from the selected story. The selected headline is the editorial assignment, not just a topic label. The evidence packet contains the facts you are allowed to use.
 
 EDITORIAL PROMISE
-Read the headline first and identify what it promises the viewer will learn. A single headline can contain a news trigger plus several important questions or details. Fulfil the important parts that the evidence supports.
+Read the headline first and identify what it promises the viewer will learn. A single headline can contain a news trigger plus several important questions or details. Treat those headline clauses as the editorial promise and fulfil the important parts that the evidence supports.
 
 Do not confuse the event that made the story newsworthy with the whole story. A debut, appointment, result, announcement or selection can be the entry point while the real editorial subject is the person, record, career, change or background behind it.
 
@@ -357,7 +357,7 @@ def _extract_article(url: str) -> tuple[str, str]:
     response.raise_for_status()
 
     resolved_url = str(response.url or target)
-    candidates = [
+    primary_text = _clean(
         trafilatura.extract(
             response.text,
             url=resolved_url,
@@ -365,21 +365,26 @@ def _extract_article(url: str) -> tuple[str, str]:
             include_comments=False,
             include_tables=True,
             output_format="txt",
-        ),
-        _article_body_from_html(response.text),
-    ]
-    usable = sorted(
-        (
-            (_clean(candidate), resolved_url)
-            for candidate in candidates
-            if _clean(candidate)
-        ),
-        key=lambda item: len(item[0]),
-        reverse=True,
+        )
     )
-    for text, candidate_url in usable:
+    structured_text = _clean(_article_body_from_html(response.text))
+
+    if primary_text and structured_text:
+        primary_normalised = _normalise(primary_text)
+        unique_lines = [
+            line
+            for line in structured_text.splitlines()
+            if _clean(line) and _normalise(line) not in primary_normalised
+        ]
+        enriched = primary_text
+        if unique_lines:
+            enriched += "\n\n[STRUCTURED SOURCE FACTS]\n" + "\n".join(unique_lines)
+        if len(enriched) >= MIN_ARTICLE_CHARS:
+            return enriched, resolved_url
+
+    for text in (primary_text, structured_text):
         if len(text) >= MIN_ARTICLE_CHARS:
-            return text, candidate_url
+            return text, resolved_url
 
     try:
         extracted = DDGS(timeout=5).extract(
