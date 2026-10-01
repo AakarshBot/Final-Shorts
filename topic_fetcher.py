@@ -188,23 +188,41 @@ def _event_groups(title: str) -> set[str]:
     tokens = _tokens(title)
     return {group for group, terms in EVENT_GROUPS.items() if tokens & terms}
 
+TEAM_ENTITIES = {
+    "india", "pakistan", "sri lanka", "bangladesh", "australia", "england",
+    "south africa", "new zealand", "west indies", "afghanistan", "ireland",
+}
+
+
 def _known_entities(text: str) -> set[str]:
     value = _clean(text).casefold()
-    known = INDIA_ASIA_TERMS | CRICKET_COMPETITIONS
+    known = INDIA_ASIA_TERMS | CRICKET_COMPETITIONS | TEAM_ENTITIES
     return {entity for entity in known if len(entity) > 3 and entity in value}
+
+
+def _named_phrases(title: str) -> set[str]:
+    return {
+        _clean(match)
+        for match in re.findall(r"\b[A-Z][A-Za-z]+(?:\s+[A-Z][A-Za-z]+)+\b", title)
+        if len(_clean(match).split()) >= 2
+    }
+
 
 def _same_event(a: Topic, b: Topic) -> bool:
     shared = _tokens(a.title) & _tokens(b.title)
     if len(shared) < 2:
         return False
     groups = _event_groups(a.title) & _event_groups(b.title)
+    if not groups:
+        return False
     entities = _known_entities(f"{a.title} {a.description}") & _known_entities(f"{b.title} {b.description}")
-    specific_entities = entities - {"india", "indian", "pakistan", "pakistani", "sri lanka", "sri lankan", "bangladesh"}
-    if groups and specific_entities:
+    specific_entities = entities - TEAM_ENTITIES
+    if specific_entities:
         return True
-    if groups and len(shared) >= 3:
+    if _named_phrases(a.title) & _named_phrases(b.title):
         return True
-    return len(entities) >= 2 and len(shared) >= 3
+    shared_non_group = shared - set().union(*EVENT_GROUPS.values())
+    return len(shared_non_group) >= 5 or len(entities) >= 2 and len(shared_non_group) >= 2
 
 def _profile_relevant(title: str, description: str, profile: str | None, source: str) -> bool:
     if profile == "niche_sports":
