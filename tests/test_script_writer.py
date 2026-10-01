@@ -3,10 +3,20 @@ import json
 import pytest
 
 import script_writer
-from script_writer import SYSTEM_PROMPT, _article_body_from_html, _request, _request_coverage_audit, apply_script_edits, validate_cricket_script, validate_script, write_script
+from script_writer import (
+    CRICKET_SCHEMA,
+    LANGUAGE_INSTRUCTIONS,
+    SYSTEM_PROMPT,
+    _article_body_from_html,
+    _request,
+    apply_script_edits,
+    validate_cricket_script,
+    validate_script,
+    write_script,
+)
 
 
-def valid_result(scene1="Gill faces fresh injury scare."):
+def valid_result(scene1="Gill faces a fresh injury scare."):
     return {
         "headline": "Gill Injury Update",
         "titles": [
@@ -20,7 +30,7 @@ def valid_result(scene1="Gill faces fresh injury scare."):
         "script": [
             {
                 "voiceover": scene1,
-                "narrative_role": "hook",
+                "narrative_role": "opening",
                 "primary_entity": "Shubman Gill",
                 "visual_intent": "Gill during India cricket action",
                 "specific_search_prompt": "Shubman Gill India cricket",
@@ -57,14 +67,20 @@ def valid_result(scene1="Gill faces fresh injury scare."):
 def test_slide_one_is_strictly_less_than_14_words():
     result = valid_result("Gill faces a fresh injury scare before India's ODI.")
     assert len(result["script"][0]["voiceover"].split()) < 14
-    assert validate_script(result, "")[0]
+    assert validate_cricket_script(result, "")[0]
 
     invalid = valid_result("Gill faces a fresh injury scare before India's next ODI against West Indies today.")
     assert len(invalid["script"][0]["voiceover"].split()) == 14
     assert validate_cricket_script(invalid, "")[0] is False
 
 
-def test_titles_description_and_hashtags_are_required_outputs():
+def test_cricket_schema_requires_exactly_four_slides():
+    script_items = CRICKET_SCHEMA["properties"]["script"]
+    assert script_items["minItems"] == 4
+    assert script_items["maxItems"] == 4
+
+
+def test_titles_description_hashtags_and_comment_are_structural_outputs():
     result = valid_result()
     assert validate_cricket_script(result, "")[0]
 
@@ -79,11 +95,13 @@ def test_titles_description_and_hashtags_are_required_outputs():
     result["hashtags"] = []
     assert validate_cricket_script(result, "")[0] is False
 
+    result = valid_result()
+    result["comment"] = ""
+    assert validate_cricket_script(result, "")[0] is False
 
-def test_no_extra_editorial_rules_are_applied():
-    result = valid_result(
-        "Gill was struck during training before the ODI."
-    )
+
+def test_no_new_editorial_heuristics_are_applied():
+    result = valid_result("Gill was struck during training before the ODI.")
     result["titles"] = ["A", "B", "C"]
     result["seo_description"] = "Everything important from the source."
     result["hashtags"] = ["#Cricket"]
@@ -91,21 +109,75 @@ def test_no_extra_editorial_rules_are_applied():
     assert valid
 
 
-def test_writer_produces_exactly_four_slides(monkeypatch):
+def test_writer_uses_one_generation_call_when_valid(monkeypatch):
+    calls = []
     monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "[SELECTED STORY]\nGill injury story")
-    monkeypatch.setattr(script_writer, "_request_coverage_audit", lambda source, result: {
-        "coverage_pct": 0.96,
-        "complete": True,
-        "covered_facts": ["injury", "assessment"],
-        "missing_facts": [],
-    })
-    monkeypatch.setattr(script_writer, "_request", lambda *args, **kwargs: valid_result())
+
+    def fake_request(*args, **kwargs):
+        calls.append((args, kwargs))
+        return valid_result()
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
     result = write_script({"title": "Gill injury story"}, language="english")
+
+    assert len(calls) == 1
     assert len(result["script"]) == 4
     assert result["word_count"] > 0
 
 
-def test_writer_uses_low_reasoning_effort(monkeypatch):
+def test_writer_falls_back_to_second_model_only_after_primary_failure(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "STORY")
+
+    def fake_request(model, prompt, story, schema=None):
+        calls.append(model)
+        if len(calls) == 1:
+            raise RuntimeError("primary failed")
+        return valid_result()
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = write_script({"title": "Gill injury story"}, language="english")
+
+    assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    assert result["provider_used"] == "openai/gpt-oss-20b"
+
+
+def test_writer_prompt_contains_retention_and_information_objectives():
+    assert "RETENTION" in SYSTEM_PROMPT
+    assert "INFORMATIVE" in SYSTEM_PROMPT
+    assert "roughly 90%" in SYSTEM_PROMPT
+    assert "fewer than 14 words" in SYSTEM_PROMPT
+    assert "less than 30 seconds" in SYSTEM_PROMPT
+    assert "rivalry" in SYSTEM_PROMPT
+    assert "Do not deliberately target a word count" in SYSTEM_PROMPT
+    assert "3-second" not in SYSTEM_PROMPT.casefold()
+
+
+def test_forceful_retry_is_a_full_rewrite_not_a_coverage_patch(monkeypatch):
+    captured = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL SOURCE STORY")
+
+    def fake_request(model, prompt, story, schema=None):
+        captured.append(prompt)
+        return valid_result()
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+
+    previous = valid_result()
+    write_script(
+        {"title": "Auqib Nabi profile"},
+        forceful=True,
+        previous_script=previous,
+    )
+
+    assert len(captured) == 1
+    assert "MANUAL-QC REWRITE" in captured[0]
+    assert "rewrite from scratch" in captured[0].casefold()
+    assert "90%" in captured[0]
+    assert "PREVIOUS DRAFT" in captured[0]
+
+
+def test_request_uses_requested_schema_and_low_reasoning(monkeypatch):
     captured = {}
 
     def fake_post(*args, **kwargs):
@@ -122,92 +194,16 @@ def test_writer_uses_low_reasoning_effort(monkeypatch):
 
     monkeypatch.setattr(script_writer.requests, "post", fake_post)
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    _request("openai/gpt-oss-120b", "test", "story")
-    assert captured["payload"]["reasoning_effort"] == "low"
-    assert captured["payload"]["include_reasoning"] is False
+
+    _request("openai/gpt-oss-120b", "test", "story", schema=CRICKET_SCHEMA)
+
+    payload = captured["payload"]
+    assert payload["reasoning_effort"] == "low"
+    assert payload["include_reasoning"] is False
+    assert payload["response_format"]["json_schema"]["schema"] == CRICKET_SCHEMA
 
 
-def test_coverage_audit_payload_contains_source_and_script(monkeypatch):
-    captured = {}
-
-    def fake_post(*args, **kwargs):
-        captured["payload"] = kwargs["json"]
-
-        class Response:
-            def raise_for_status(self):
-                return None
-
-            def json(self):
-                return {"choices": [{"message": {"content": json.dumps({
-                    "coverage_pct": 0.95,
-                    "complete": True,
-                    "covered_facts": ["fact one"],
-                    "missing_facts": [],
-                })}}]}
-
-        return Response()
-
-    monkeypatch.setattr(script_writer.requests, "post", fake_post)
-    monkeypatch.setenv("GROQ_API_KEY", "test-key")
-    audit = _request_coverage_audit("FULL SOURCE STORY", valid_result())
-    assert audit["complete"] is True
-    text = captured["payload"]["messages"][1]["content"]
-    assert "FULL SOURCE STORY" in text
-    assert "Gill Injury Update" in text
-
-
-def test_incomplete_coverage_forces_a_rewrite(monkeypatch):
-    calls = []
-    audits = iter([
-        {"coverage_pct": 0.71, "complete": False, "covered_facts": ["debut"], "missing_facts": ["age", "Ranji wickets", "career background"]},
-        {"coverage_pct": 0.97, "complete": True, "covered_facts": ["age", "Ranji wickets", "career background"], "missing_facts": []},
-    ])
-
-    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "SOURCE WITH AGE RANJI WICKETS AND CAREER")
-    def fake_request(model, prompt, story):
-        calls.append(prompt)
-        result = valid_result()
-        if len(calls) == 1:
-            result["script"][0]["voiceover"] = "Gill makes his India debut."
-        return result
-
-    monkeypatch.setattr(script_writer, "_request", fake_request)
-    monkeypatch.setattr(script_writer, "_request_coverage_audit", lambda source, result: next(audits))
-    result = write_script({"title": "Auqib Nabi profile"}, forceful=False)
-
-    assert len(calls) == 2
-    assert "age" in calls[1]
-    assert "Ranji wickets" in calls[1]
-    assert result["coverage_audit"]["complete"] is True
-
-
-def test_forceful_manual_retry_contains_previous_draft_and_forceful_instruction(monkeypatch):
-    captured = []
-
-    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL SOURCE STORY")
-    monkeypatch.setattr(script_writer, "_request_coverage_audit", lambda source, result: {
-        "coverage_pct": 0.96,
-        "complete": True,
-        "covered_facts": [],
-        "missing_facts": [],
-    })
-
-    def fake_request(model, prompt, story):
-        captured.append(prompt)
-        return valid_result()
-
-    monkeypatch.setattr(script_writer, "_request", fake_request)
-    previous = valid_result()
-    write_script({"title": "Auqib Nabi profile"}, forceful=True, previous_script=previous)
-
-    assert "MANUAL-QC FORCEFUL RETRY" in captured[0]
-    assert "PREVIOUS DRAFT TO IMPROVE" in captured[0]
-    assert "90%" in captured[0]
-
-
-def test_research_collects_primary_and_related_current_reports(monkeypatch):
-    captured = []
-
+def test_research_keeps_primary_and_related_reporting(monkeypatch):
     primary = "Primary story facts: Auqib Nabi made his India ODI debut at 29 and had a strong domestic record. " * 12
     related = "Related report facts: Auqib Nabi took 60 Ranji Trophy wickets and has 170 first-class wickets. " * 10
 
@@ -221,7 +217,6 @@ def test_research_collects_primary_and_related_current_reports(monkeypatch):
         "_related_article_urls",
         lambda *args, **kwargs: [
             ("Related Auqib Nabi stats", "https://example.com/related"),
-            ("Another Auqib Nabi report", "https://other.com/report"),
         ],
     )
 
@@ -269,13 +264,14 @@ def test_apply_edits_preserves_four_slides_and_checks_slide_one():
     with pytest.raises(ValueError):
         apply_script_edits(
             result,
-            ["Gill faces a fresh injury scare before India's next ODI against West Indies today.", *[scene["voiceover"] for scene in result["script"][1:]]],
+            [
+                "Gill faces a fresh injury scare before India's next ODI against West Indies today.",
+                *[scene["voiceover"] for scene in result["script"][1:]],
+            ],
         )
 
 
-def test_prompt_contains_only_the_requested_editorial_constraints():
-    assert "fewer than 14 words" in SYSTEM_PROMPT
-    assert "less than 30 seconds" in SYSTEM_PROMPT
-    assert "roughly 90%" in SYSTEM_PROMPT
-    assert "Every slide must contain important information" in SYSTEM_PROMPT
-    assert "related current reporting" in SYSTEM_PROMPT
+def test_validate_script_remains_available_for_niche_compatibility():
+    result = valid_result()
+    valid, reason = validate_script(result, "")
+    assert valid, reason
