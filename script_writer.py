@@ -521,6 +521,9 @@ def write_script(story, language: str = "english", forceful: bool = False, previ
                     revised_audit = audit
                 if isinstance(revised_audit, dict):
                     audit = revised_audit
+                    if revised_audit.get("complete") is False or float(revised_audit.get("coverage_pct", 0)) < 0.9:
+                        errors.append(f"{model}: forceful rewrite still below 90% coverage.")
+                        continue
                 result = revised
 
             return _finish_result(result, story, source, model, audit, language_key)
