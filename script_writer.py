@@ -18,9 +18,9 @@ MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
 TIMEOUT = 30
 RESEARCH_TIMEOUT = 10
 MAX_SOURCE_CHARS = 24000
-CRICKET_RESEARCH_MAX_ARTICLES = 5
-CRICKET_RESEARCH_CANDIDATE_LIMIT = 12
-CRICKET_RESEARCH_ARTICLE_CHARS = 4200
+CRICKET_RESEARCH_MAX_ARTICLES = 3
+CRICKET_RESEARCH_CANDIDATE_LIMIT = 9
+CRICKET_RESEARCH_ARTICLE_CHARS = 4000
 MIN_ARTICLE_CHARS = 500
 HOOK_MAX_SECONDS = 3.0
 
@@ -329,10 +329,8 @@ def _extract_article(url: str) -> tuple[str, str]:
 def _related_article_urls(title: str, description: str, original_url: str) -> list[tuple[str, str]]:
     queries = [
         title,
-        f"{title} latest",
-        f"{title} background statistics career record",
-        f"{title} reaction statement",
-        f"{title} latest cricket news",
+        f"{title} background statistics career",
+        f"{title} latest reaction consequence",
     ]
     original = _normalise(original_url.rstrip("/"))
     seen = {original}
