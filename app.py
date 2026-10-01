@@ -2017,7 +2017,7 @@ def _render_live_script():
         is_cricket = st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
         if is_cricket:
             if st.button(
-                "Retry script — force 90% coverage",
+                "Rewrite script — improve retention + information",
                 width="stretch",
                 key="live-forceful-retry-script",
             ):
@@ -2854,7 +2854,7 @@ def render_scriptwriter():
             st.session_state.upload_qc=None
 
         if st.session_state.get("topic_desk_profile") in {"cricket_india_asia", "cricket_global"} and st.session_state.get("script_data"):
-            if st.button("Retry script — force 90% coverage", width="stretch", key="forceful-test-script-retry"):
+            if st.button("Rewrite script — improve retention + information", width="stretch", key="forceful-test-script-retry"):
                 with st.spinner("Rewriting the full story…"):
                     st.session_state.script_data=write_script(
                         {"title":topic.title,"description":topic.description,"url":topic.url,"source":topic.source},
