@@ -111,6 +111,11 @@ def test_prepare_deduplicates_repeated_article_urls():
     assert len(prepared) == 1
 
 
+def test_trendflow_is_optional(monkeypatch):
+    monkeypatch.setattr(topic_fetcher, "trendflow", None)
+    assert topic_fetcher._trend_signals("cricket_india_asia") == []
+
+
 def test_trend_signal_becomes_search_query(monkeypatch):
     captured = []
 
@@ -128,7 +133,7 @@ def test_trend_signal_becomes_search_query(monkeypatch):
             )
             return SimpleNamespace(results=[item])
 
-    monkeypatch.setattr(topic_fetcher.trendflow, "Client", FakeClient)
+    monkeypatch.setattr(topic_fetcher, "trendflow", SimpleNamespace(Client=FakeClient))
     monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda q: captured.append(q) or [])
     monkeypatch.setattr(topic_fetcher, "_fetch_gdelt", lambda q: [])
     topic_fetcher.fetch_topics(profile="cricket_india_asia", limit=20)
