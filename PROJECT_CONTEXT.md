@@ -592,7 +592,7 @@ The former hard profile filter was broadened. Cricket India/Asia now gives India
 
 The existing `fetch_topics(profile, more, exclude_topics, limit, keyword)` signature and `Topic(title, source, published_at, url, description, score)` handoff remain unchanged. No changes were made to app.py or Functions 02–07.
 
-A new `trendflow-py` dependency was added as the free real-time search-trend client. Trend discovery is non-authoritative: if the trend request fails or is rate-limited, the normal multi-query news discovery continues.
+Trendflow is treated as an optional search-trend signal only. The core discovery path must run without it; when Trendflow is unavailable, the normal multi-query Google News/GDELT discovery continues. The required factory dependencies therefore remain compatible with the existing Python 3.11 runtime.
 
 Regression coverage now includes:
 - MCC law changes, WPL retention/release news, Cricket South Africa pitch innovation and Mark Boucher/MI Emirates surviving cricket relevance filtering.
