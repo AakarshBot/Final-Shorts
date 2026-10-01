@@ -75,7 +75,7 @@ MORE_QUERIES = {
     ],
 }
 
-KEYWORD_QUERIES = {KEYWORD_QUERIES = [
+KEYWORD_QUERIES = [
     '"{keyword}" cricket when:3d',
     '"{keyword}" cricket (record OR milestone OR debut OR comeback OR injury OR appointment OR controversy) when:3d',
     '"{keyword}" cricket (reaction OR interview OR statement OR confirms OR reveals) when:3d',
