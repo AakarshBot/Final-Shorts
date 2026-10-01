@@ -272,14 +272,7 @@ def _cricket_same_event(a: Topic, b: Topic) -> bool:
     return False
 
 
-def _cricket_duplicate_similarity(a: Topic, b: Topic) -> float:
-    return max(
-        fuzz.token_set_ratio(a.title, b.title),
-        fuzz.token_sort_ratio(a.title, b.title),
-    )
-
-
-def _profile_relevantdef _profile_relevant(title: str, description: str, profile: str | None, source: str) -> bool:
+def _profile_relevant(title: str, description: str, profile: str | None, source: str) -> bool:
     if profile == "niche_sports":
         text = f"{title} {description}".casefold()
         return any(term in text for term in (
@@ -553,7 +546,7 @@ def _gdelt_query(profile: str, keyword: str | None = None) -> str:
     return '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
 
 
-def fetch_topicsdef fetch_topics(
+def fetch_topics(
     profile: str = "cricket_india_asia",
     more: bool = False,
     exclude_topics: list[Topic] | None = None,
