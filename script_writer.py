@@ -332,7 +332,7 @@ def _article_body_from_html(html_text: str) -> str:
     sections = []
 
     for match in re.finditer(
-        r"<script[^>]*type=[\"\']application/ld\\+json[\"\'][^>]*>(.*?)</script>",
+        r"<script[^>]*type=[\"\']application/ld\+json[\"\'][^>]*>(.*?)</script>",
         raw,
         flags=re.IGNORECASE | re.DOTALL,
     ):
@@ -357,7 +357,7 @@ def _article_body_from_html(html_text: str) -> str:
                 stack.extend(item)
 
     for paragraph in re.findall(
-        r"<p\\b[^>]*>(.*?)</p>",
+        r"<p\b[^>]*>(.*?)</p>",
         raw,
         flags=re.IGNORECASE | re.DOTALL,
     ):
@@ -366,15 +366,15 @@ def _article_body_from_html(html_text: str) -> str:
             sections.append(text)
 
     for table in re.findall(
-        r"<table\\b[^>]*>(.*?)</table>",
+        r"<table\b[^>]*>(.*?)</table>",
         raw,
         flags=re.IGNORECASE | re.DOTALL,
     ):
-        for row in re.findall(r"<tr\\b[^>]*>(.*?)</tr>", table, flags=re.IGNORECASE | re.DOTALL):
+        for row in re.findall(r"<tr\b[^>]*>(.*?)</tr>", table, flags=re.IGNORECASE | re.DOTALL):
             cells = [
                 _clean(unescape(re.sub(r"<[^>]+>", " ", cell)))
                 for cell in re.findall(
-                    r"<(?:th|td)\\b[^>]*>(.*?)</(?:th|td)>",
+                    r"<(?:th|td)\b[^>]*>(.*?)</(?:th|td)>",
                     row,
                     flags=re.IGNORECASE | re.DOTALL,
                 )
@@ -386,6 +386,7 @@ def _article_body_from_html(html_text: str) -> str:
                     sections.append(row_text)
 
     return "\\n".join(sections)
+
 
 def _extract_article(url: str) -> tuple[str, str]:
     target = _clean(url)
