@@ -666,7 +666,7 @@ def test_structured_html_fallback_keeps_article_table_facts():
     assert "Best bowling | 7/24" in extracted
 
 
-def test_article_extraction_includes_tables_in_trafilatura():
+def test_article_extraction_includes_tables_in_trafilatura(monkeypatch):
     class FakeResponse:
         url = "https://example.com/story"
         text = "<html><body>full article</body></html>"
@@ -684,22 +684,13 @@ def test_article_extraction_includes_tables_in_trafilatura():
         captured.update(kwargs)
         return article
 
-    monkeypatch_response = lambda *args, **kwargs: FakeResponse()
-    import script_writer
-    original_get = script_writer.requests.get
-    original_extract = script_writer.trafilatura.extract
-    try:
-        script_writer.requests.get = monkeypatch_response
-        script_writer.trafilatura.extract = fake_extract
-        extracted, resolved = _extract_article("https://example.com/story")
-    finally:
-        script_writer.requests.get = original_get
-        script_writer.trafilatura.extract = original_extract
+    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr("script_writer.trafilatura.extract", fake_extract)
+    extracted, resolved = _extract_article("https://example.com/story")
 
     assert extracted
     assert resolved == "https://example.com/story"
     assert captured["include_tables"] is True
-
 
 def test_writer_prompt_prioritises_editorial_promise_and_full_story_coverage():
     assert "actual editorial promise" in SYSTEM_PROMPT
