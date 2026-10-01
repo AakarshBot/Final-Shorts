@@ -592,7 +592,7 @@ The former hard profile filter was broadened. Cricket India/Asia now gives India
 
 The existing `fetch_topics(profile, more, exclude_topics, limit, keyword)` signature and `Topic(title, source, published_at, url, description, score)` handoff remain unchanged. No changes were made to app.py or Functions 02–07.
 
-A new `trendflow-py` dependency was added as the free real-time search-trend client. Trend discovery is non-authoritative: if the trend request fails or is rate-limited, the normal multi-query news discovery continues.
+Trendflow is treated as an optional search-trend signal only. The core discovery path must run without it; when Trendflow is unavailable, the normal multi-query Google News/GDELT discovery continues. The required factory dependencies therefore remain compatible with the existing Python 3.11 runtime.
 
 Regression coverage now includes:
 - MCC law changes, WPL retention/release news, Cricket South Africa pitch innovation and Mark Boucher/MI Emirates surviving cricket relevance filtering.
@@ -662,6 +662,6 @@ Function 02 was tightened around editorial completeness rather than extra valida
 - The current event is the entry point when appropriate, not the whole story. The body should explain the person, record, career, change or background that makes the story worth covering.
 - Research extraction now compares the available trafilatura and structured-HTML candidates and keeps the richer article instead of returning the first candidate that merely clears the minimum length. Structured headings and tables are included in the fallback extraction.
 - The normal Scriptwriter path remains one Groq 120B generation call. The existing 20B call is still recovery-only when the primary call fails or fails essential local checks. The generation request uses the previously proven low reasoning effort without adding another AI call. This request setting must not be changed casually because it is part of the known-working Groq production configuration.
-- Local validation no longer imposes a separate Scene 1 timing gate, estimated narration-time gate or adjacent-scene similarity gate. Audio remains the authoritative measured under-30-second gate. The writer prompt is responsible for drafting a genuinely short hook and a complete sub-30-second story.
+- Local validation no longer imposes a separate Scene 1 timing gate, estimated narration-time gate or adjacent-scene similarity gate. Audio remains the authoritative measured under-30-second gate. The writer prompt remains responsible for the editorial constraints, including a Scene 1 maximum of 14 words and a complete sub-30-second story.
 - The app now lazy-loads heavy factory-stage modules at their points of use. The homepage no longer imports the uploader, Trendflow/topic fetcher, Edge-TTS, visual retrieval stack or renderer before the user enters the corresponding stage.
 - No production stage contract or downstream handoff was changed.

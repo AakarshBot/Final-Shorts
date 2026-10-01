@@ -9,7 +9,10 @@ import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
 
 import requests
-import trendflow
+try:
+    import trendflow
+except ImportError:  # Optional: the core discovery path does not require Trendflow.
+    trendflow = None
 
 GOOGLE_NEWS_URL = "https://news.google.com/rss/search"
 GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
@@ -298,6 +301,8 @@ def _trend_value(value) -> float:
 
 
 def _trend_signals(profile: str) -> list[dict]:
+    if trendflow is None:
+        return []
     try:
         client = trendflow.Client(language="en", timeout=10)
         result = client.trending_now(region="IN", window=4)

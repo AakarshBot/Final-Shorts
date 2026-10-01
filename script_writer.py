@@ -117,7 +117,7 @@ VOICE AND STYLE
 
 STORY DESIGN
 - Use 4 scenes by default. Use 5 only when a distinct supported fact materially improves completeness.
-- Scene 1 is a cold-open hook: one sharp, factual sentence that grabs immediately. Keep it very short and naturally well below 14 seconds. Do not use a generic introduction and do not dump the whole story into the hook.
+- Scene 1 is a cold-open hook: one sharp, factual sentence that grabs immediately. Keep it very short, preferably 6–8 spoken words, and never exceed 14 words. Do not use a generic introduction and do not dump the whole story into the hook.
 - The remaining scenes must build the actual story, not repeat the trigger. Each scene should add a new fact or materially deepen the explanation.
 - The final scene should close the central question with the latest supported status, consequence, significance or next step.
 - For profile/explainer stories, a useful pattern is: hook → who the subject is → strongest evidence of the rise/background → current development or consequence.

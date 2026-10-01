@@ -11,4 +11,3 @@ google-api-python-client>=2,<3
 google-auth>=2,<3
 streamlit-cropper>=0.3.1,<0.4
 trafilatura>=2.2,<3
-trendflow-py>=0.3,<0.4
