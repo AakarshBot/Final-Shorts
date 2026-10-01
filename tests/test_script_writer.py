@@ -5,6 +5,7 @@ import pytest
 import script_writer
 from script_writer import (
     CRICKET_SCHEMA,
+    SLIDE_ONE_SCHEMA,
     LANGUAGE_INSTRUCTIONS,
     SYSTEM_PROMPT,
     _article_body_from_html,
@@ -123,6 +124,29 @@ def test_writer_uses_one_generation_call_when_valid(monkeypatch):
     assert len(calls) == 1
     assert len(result["script"]) == 4
     assert result["word_count"] > 0
+
+
+def test_writer_repairs_an_overlong_slide_one_without_falling_back_models(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "STORY")
+
+    def fake_request(model, prompt, story, schema=None):
+        calls.append((model, schema, prompt))
+        if schema is CRICKET_SCHEMA:
+            return valid_result(
+                "Gill faces a fresh injury scare before India's next ODI against West Indies today."
+            )
+        assert schema is SLIDE_ONE_SCHEMA
+        return {"voiceover": "Gill faces an injury scare before India's ODI."}
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+
+    result = write_script({"title": "Gill injury story"}, language="english")
+
+    assert [call[0] for call in calls] == ["openai/gpt-oss-120b", "openai/gpt-oss-120b"]
+    assert calls[1][1] is SLIDE_ONE_SCHEMA
+    assert len(result["script"]) == 4
+    assert len(result["script"][0]["voiceover"].split()) < 14
 
 
 def test_writer_falls_back_to_second_model_only_after_primary_failure(monkeypatch):
