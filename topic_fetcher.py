@@ -284,12 +284,11 @@ def _profile_relevant(title: str, description: str, profile: str | None, source:
     if profile not in {"cricket_india_asia", "cricket_global"}:
         return False
     text = f"{title} {description}".casefold()
-    if any(term in _tokens(title) for term in NON_CRICKET_TERMS):
+    if any(term in text for term in NON_CRICKET_TERMS):
         return False
-    strong = any(term in text for term in (CRICKET_TERMS | CRICKET_COMPETITIONS | INDIA_ASIA_TERMS))
-    if strong:
+    if any(term in text for term in (CRICKET_TERMS | CRICKET_COMPETITIONS | INDIA_ASIA_TERMS)):
         return True
-    return any(token in _source_key(source) for token in ("cric", "espn", "icc", "wisden", "bcci", "pcb", "cricket"))
+    return True
 
 def _parse_date(value) -> datetime:
     if isinstance(value, datetime):
