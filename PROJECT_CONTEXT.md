@@ -615,3 +615,12 @@ The downstream Topic contract is unchanged and no downstream factory function wa
 - The live-test failure after the v2.1 clustering change was traced to module initialization order, not the clustering algorithm: `CRICKET_KNOWN_ENTITIES` referenced `CRICKET_COMPETITIONS` before that set was defined.
 - The fix moves `CRICKET_KNOWN_ENTITIES` below `CRICKET_COMPETITIONS`. No dashboard, downstream handoff, fetch contract, or production-line code was changed.
 - Verification branch CI passed the full repository suite (`116 passed`) and the full compile step before this context update.
+### Topic Fetcher runtime cleanup (2026-10-01)
+- Removed the trend lookup from `more=True` fetches because the More batch already uses its own disjoint query set; this avoids one trend-service request plus all trend-derived article queries on the second batch.
+- Reduced trend-derived searches on the initial fetch from 10 to 5, while keeping broad base discovery intact.
+- Increased Google News worker concurrency to 12 so the remaining initial query set completes in fewer waves; More and keyword fetches normally complete in one wave.
+- Removed character-level `SequenceMatcher` clustering and added early rejection based on shared tokens/event groups, reducing expensive pairwise work while keeping entity/event clustering.
+- Limited full event clustering to the highest-ranked candidate window and uses the remaining candidates only against the already chosen topics, preventing quadratic work across the entire raw pool.
+- `_prepare` now drops repeated canonical article URLs before clustering, avoiding duplicate work created by the same article appearing in multiple searches.
+- Primary network timeout is now 8 seconds and the GDELT fallback uses the same bounded timeout; no downstream handoff or dashboard call was changed.
+- Added regression coverage proving More does not call the trend service and repeated article URLs are removed before selection.
