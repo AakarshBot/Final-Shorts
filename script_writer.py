@@ -26,9 +26,7 @@ CRICKET_RESEARCH_PRIMARY_CHARS = 9000
 CRICKET_RESEARCH_REPORT_CHARS = 5500
 CRICKET_RESEARCH_MAX_PACKET_CHARS = 22000
 MIN_ARTICLE_CHARS = 600
-SCENE_1_MAX_WORDS = 14  # Kept for the niche and Top-5 imports.
 HOOK_MAX_SECONDS = 3.0
-MAX_WORDS = 75
 
 LANGUAGE_INSTRUCTIONS = {
     "english": "Write all narration and publish metadata in punchy, natural spoken English.",
@@ -854,8 +852,6 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
         return False, "The middle needs a development or context scene."
 
     narration = " ".join(_clean(scene["voiceover"]) for scene in scenes)
-    if _words(narration) > MAX_WORDS:
-        return False, "The narration is likely longer than 30 seconds."
     if _copied(source, narration):
         return False, "The narration is too close to source wording."
 
