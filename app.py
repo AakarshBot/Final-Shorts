@@ -1962,12 +1962,9 @@ def _render_live_script():
                 width="stretch",
                 key="live-retry-script",
             ):
-                selected_index = st.session_state.get("live_selected_topic")
                 try:
                     with st.spinner("Rewriting the full story…"):
                         _live_generate_script(forceful=True)
-                    _live_reset_downstream()
-                    st.session_state.live_selected_topic = selected_index
                     st.session_state.live_stage = "02 · Script"
                     st.session_state.live_script_error = ""
                 except Exception as exc:
