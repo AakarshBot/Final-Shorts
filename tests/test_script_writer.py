@@ -631,6 +631,31 @@ def test_writer_research_keeps_primary_and_caps_independent_reports(monkeypatch)
     ]
 
 
+def test_writer_uses_low_reasoning_effort_for_groq():
+    import script_writer
+
+    captured = {}
+
+    def fake_post(*args, **kwargs):
+        captured["payload"] = kwargs["json"]
+
+        class Response:
+            def raise_for_status(self):
+                return None
+
+            def json(self):
+                return {"choices": [{"message": {"content": {}}}]}
+
+        return Response()
+
+    script_writer.requests.post = fake_post
+    script_writer.os.environ["GROQ_API_KEY"] = "test-key"
+    script_writer._request("openai/gpt-oss-120b", "test prompt", "test story")
+
+    assert captured["payload"]["reasoning_effort"] == "low"
+    assert captured["payload"]["include_reasoning"] is False
+
+
 def test_writer_prompt_is_responsible_for_pacing():
     writer = __import__("script_writer")
     assert writer.HOOK_MAX_SECONDS == 3.0
