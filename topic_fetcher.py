@@ -241,7 +241,7 @@ def _profile_relevant(title: str, description: str, profile: str | None, source:
     text = f"{title} {description}".casefold()
     if any(term in _tokens(title) for term in NON_CRICKET_TERMS):
         return False
-    strong = any(term in text for term in CRICKET_TERMS) or any(term in text for term in CRICKET_COMPETITIONS)
+    strong = any(term in text for term in (CRICKET_TERMS | CRICKET_COMPETITIONS | INDIA_ASIA_TERMS))
     if strong:
         return True
     return any(token in _source_key(source) for token in ("cric", "espn", "icc", "wisden", "bcci", "pcb", "cricket"))
