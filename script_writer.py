@@ -460,7 +460,7 @@ Use this only to identify what the human rejected or what can be improved. It is
 """
 
 
-GENERIC_OPENERS =GENERIC_OPENERS = (
+GENERIC_OPENERS = (
     "welcome to",
     "hey everyone",
     "hey guys",
