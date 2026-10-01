@@ -691,7 +691,8 @@ def test_article_extraction_prefers_the_richer_available_candidate(monkeypatch):
     extracted, resolved = __import__("script_writer")._extract_article("https://example.com/story")
 
     assert resolved == "https://example.com/story"
-    assert len(extracted) > len(thin)
+    assert extracted != thin
+    assert "Career statistics" in extracted
     assert "60 wickets" in extracted
     assert "44 wickets" in extracted
     assert "170 wickets" in extracted
