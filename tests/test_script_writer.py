@@ -300,26 +300,21 @@ def test_approved_edits_preserve_titles_and_metadata_and_mark_audio_handoff():
     assert edited["approved_for_audio"] is True
 
 
-def test_writer_rejects_hook_over_three_seconds(monkeypatch):
-    def fake_request(model, prompt, story):
-        return valid_result(
-            "Gill faces a fresh injury scare before India starts the ODI this week."
-        )
+def test_writer_allows_hook_above_three_seconds_when_within_word_limit(monkeypatch):
+    result = valid_result(
+        "Gill faces a fresh injury scare before India starts the ODI this week."
+    )
 
-    monkeypatch.setattr("script_writer._request", fake_request)
+    monkeypatch.setattr("script_writer._request", lambda *args, **kwargs: result)
 
-    try:
-        write_script(
-            {
-                "title": "Gill injury scare",
-                "description": "Shubman Gill was hit in training before the ODI.",
-            }
-        )
-    except RuntimeError as exc:
-        assert "3-second hook limit" in str(exc)
-    else:
-        raise AssertionError("A hook above three seconds should not pass validation.")
+    accepted = write_script(
+        {
+            "title": "Gill injury scare",
+            "description": "Shubman Gill was hit in training before the ODI.",
+        }
+    )
 
+    assert accepted["script"][0]["voiceover"] == result["script"][0]["voiceover"]
 
 def test_writer_rejects_retention_bait(monkeypatch):
     def fake_request(model, prompt, story):
@@ -640,6 +635,7 @@ def test_writer_research_keeps_primary_and_caps_independent_reports(monkeypatch)
 def test_writer_keeps_existing_retention_limits():
     assert SCENE_1_MAX_WORDS == 14
     assert MAX_WORDS == 75
+    assert __import__("script_writer").MAX_ESTIMATED_NARRATION_SECONDS == 30.0
     assert "Use 4 narration scenes by default" in __import__("script_writer").SYSTEM_PROMPT
 
 
@@ -699,3 +695,4 @@ def test_writer_prompt_prioritises_editorial_promise_and_full_story_coverage():
     assert "complete Short, not a compressed article dump" in SYSTEM_PROMPT
     assert "62–72 spoken words" in SYSTEM_PROMPT
     assert "under 30 seconds" in SYSTEM_PROMPT
+    assert "3-second time limit" not in SYSTEM_PROMPT
