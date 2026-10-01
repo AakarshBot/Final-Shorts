@@ -1725,7 +1725,7 @@ def _render_live_visuals(slide_count: int):
                 with st.spinner("Searching and scraping publisher pages…"):
                     try:
                         from visual_fetcher import manual_crawl_visuals
-                    st.session_state.live_manual_visual_result = manual_crawl_visuals(query)
+                        st.session_state.live_manual_visual_result = manual_crawl_visuals(query)
                     except Exception as exc:
                         st.session_state.live_manual_visual_result = {
                             "error": f"{type(exc).__name__}: {exc}"
