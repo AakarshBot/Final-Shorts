@@ -889,7 +889,7 @@ def _request(model: str, prompt: str, story: str) -> dict:
                 },
             },
             "include_reasoning": False,
-            "reasoning_effort": "medium",
+            "reasoning_effort": "low",
             "temperature": 0.5,
             "max_completion_tokens": 900,
         },
