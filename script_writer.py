@@ -68,78 +68,131 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
-COVERAGE_AUDIT_SCHEMA = {
+CRICKET_SCHEMA = {
     "type": "object",
     "properties": {
-        "coverage_pct": {"type": "number"},
-        "complete": {"type": "boolean"},
-        "covered_facts": {"type": "array", "items": {"type": "string"}, "minItems": 0, "maxItems": 12},
-        "missing_facts": {"type": "array", "items": {"type": "string"}, "minItems": 0, "maxItems": 12},
+        "headline": {"type": "string"},
+        "titles": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
+        "seo_description": {"type": "string"},
+        "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "comment": {"type": "string"},
+        "script": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 4,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "voiceover": {"type": "string"},
+                    "narrative_role": {"type": "string"},
+                    "primary_entity": {"type": "string"},
+                    "visual_intent": {"type": "string"},
+                    "specific_search_prompt": {"type": "string"},
+                    "sport_or_topic_category": {"type": "string"},
+                },
+                "required": [
+                    "voiceover",
+                    "narrative_role",
+                    "primary_entity",
+                    "visual_intent",
+                    "specific_search_prompt",
+                    "sport_or_topic_category",
+                ],
+                "additionalProperties": False,
+            },
+        },
     },
-    "required": ["coverage_pct", "complete", "covered_facts", "missing_facts"],
+    "required": ["headline", "titles", "seo_description", "hashtags", "comment", "script"],
     "additionalProperties": False,
 }
 
-SYSTEM_PROMPT = """You are the senior human cricket editor for a human-reviewed YouTube Shorts channel.
+SYSTEM_PROMPT = """You are the senior cricket editor for a human-reviewed YouTube Shorts channel.
 
-The selected headline is the assignment. The supplied evidence packet is the story.
+INPUT
+The selected headline identifies the story. The evidence packet contains the available reporting, including the selected article and relevant current reporting when research was successful.
 
-NON-NEGOTIABLE EDITORIAL RULES
-- Produce exactly four spoken slides.
-- Slide 1 must contain fewer than 14 words.
-- The finished Short must be designed for less than 30 seconds. The existing Audio stage can speed up a slightly long draft, so do not pad or distort the story just to hit a timing target.
-- Every slide must contain important information.
-- Across the four slides, cover roughly 90% of the materially important information in the entire researched story.
-- Do not invent a story, prolong the headline, repeat the headline as narration, or add filler.
-- Use the entire evidence packet, including related current reporting, not just the first article.
-- A source count does not matter. One source is fine when it contains the necessary facts.
-- Related current facts are useful when they are genuinely part of the same story.
-- Do not invent missing information when research does not support it.
-- Write complete, natural spoken sentences.
+PRIMARY OBJECTIVE
+Create a four-slide Short that maximizes these two outcomes at the same time:
 
-FACT COVERAGE
-Read the complete evidence packet before drafting.
-Prioritise facts that explain:
-- what actually happened;
-- who is involved;
-- the important background;
-- relevant numbers, dates, records, statistics, career information or other concrete evidence;
-- what changed;
-- the latest confirmed status or consequence.
-Do not spend four slides rephrasing the selected headline.
+1. RETENTION
+Keep the viewer moving from slide to slide because each sentence creates a useful reason to hear the next sentence.
+- Start with the strongest truthful factual entry point immediately.
+- Prefer a real tension, contrast, consequence, rivalry, debate, comeback, record, unusual development, human stake or unanswered factual point when the evidence supports it.
+- Build forward momentum: each slide should naturally lead into the next piece of information.
+- Reward attention with information; never use empty suspense.
+- Write for the ear: clean spoken rhythm, concrete verbs, active voice and economical wording.
 
-SLIDE DESIGN
-- Slide 1: strongest factual entry point, fewer than 14 words.
+2. INFORMATIVE
+Preserve roughly 90% of the materially important information in the researched story.
+- Cover the central development and who/what is involved.
+- Preserve material background and context needed to understand the story.
+- Preserve important dates, statistics, records, numbers, career facts, decisions and consequences when supported.
+- For a profile or explainer, cover the actual person/story promised by the headline rather than repeatedly describing the trigger event.
+- Compress information; do not replace important facts with generic excitement.
+- Ignore article boilerplate, repetition and low-value wording.
+
+RETENTION + INFORMATION BALANCE
+The goal is not to choose between entertainment and information.
+Make the factual information itself create the momentum.
+When several facts are available, sequence them so the first fact opens the story, the next fact sharpens or changes what the viewer understands, the next adds the most useful context, and the final fact closes the story with its latest confirmed status or consequence.
+For a pure news announcement, look for the enduring sporting or human narrative contained in the evidence when one exists. Do not invent a narrative that the source does not support.
+
+FOUR-SLIDE DESIGN
+- Exactly four spoken slides.
+- Slide 1: strongest factual entry point, with fewer than 14 words.
 - Slides 2–4: each must add meaningful new information.
-- Compress related facts into efficient sentences when that increases coverage without making the narration unnatural.
-- Do not force every possible detail into the Short; cover the material story, not article boilerplate.
+- Use the four slides to compress the complete story, not to restate the headline.
+- Every sentence must earn its space by delivering a fact, context, consequence or necessary transition.
+- Do not pad a small story to make it sound larger.
+- Do not deliberately target a word count. Keep the narration concise enough for a natural sub-30-second Short; the Audio stage is the final timing authority.
 
-STYLE
-- Energetic cricket desk voice. Facts create the energy.
-- Write for the ear.
-- Prefer specific names, teams, competitions, dates and numbers when supported.
-- No generic hype, clickbait, retention bait or audience commands.
+SOURCE DISCIPLINE
+- Read the complete evidence packet before writing.
+- Use only facts supported by the evidence.
+- Never invent quotes, motives, predictions, statistics, records, injuries, consequences or background.
+- Distinguish confirmed facts from reported claims, expectations and opinions.
+- Related current reporting can strengthen context, but only when it is genuinely about the same story.
+- One strong source is sufficient when it contains the necessary information.
+
+EDITORIAL VOICE
+Sound like a sharp cricket desk editor, not an article being read aloud.
+Energy should come from the facts and their sequence, not from generic hype.
+Do not use viewer-directed bait such as "wait until the end", "stay tuned", "don't scroll" or "you won't believe".
+Do not begin with a generic introduction.
+Do not manufacture outrage, rivalry or suspense.
+
+INTERNAL SELF-QC BEFORE RETURNING JSON
+Silently draft the story, then inspect it before returning the answer:
+- Can a viewer understand what happened without seeing the article?
+- Does Slide 1 immediately provide a strong, specific reason to listen?
+- Does every slide add new information?
+- Are the four slides carrying the materially important facts rather than filler?
+- Is roughly 90% of the important story substance represented?
+- Did any sentence repeat the headline or another slide without adding information?
+- Is every factual claim supported by the evidence?
+- Does the final slide close the story with the latest confirmed status or consequence when one exists?
+Revise the draft internally until it is the strongest compact version you can make.
 
 PUBLISH METADATA
-Produce the existing three title candidates, a story-specific SEO description, relevant hashtags and the existing upload comment. Keep them grounded in the researched story.
+Return:
+- one factual 3–4 word opening headline;
+- exactly three concise title candidates;
+- one concise story-specific SEO description;
+- relevant hashtags;
+- one story-specific public-upload comment.
 
 VISUAL HANDOFF
-Every slide needs useful visual metadata that matches the fact being narrated.
+Each slide must include accurate visual metadata for the narrated fact:
+- primary_entity;
+- visual_intent;
+- specific_search_prompt;
+- sport_or_topic_category.
+Do not invent a visual moment that the evidence does not support.
+
+LANGUAGE
+Write the narration and publish metadata in the requested language.
 
 Return only JSON matching the supplied schema.
-"""
-
-FORCEFUL_INSTRUCTION = """MANUAL-QC FORCEFUL RETRY
-
-Rewrite the entire four-slide script from scratch.
-
-The previous draft did not satisfy the required story coverage strongly enough. Re-read the entire evidence packet and the coverage audit. Make the missing facts explicit in the new narration wherever they are materially important.
-
-The objective is not to make the script longer. The objective is to make the four slides cover roughly 90% of the materially important story information without inventing anything.
-
-Every slide must carry substantive information. Remove any sentence that merely repeats the headline, adds atmosphere, or delays a factual point.
-
-Slide 1 must contain fewer than 14 words.
 """
 
 def _clean(value) -> str:
@@ -365,7 +418,7 @@ def _source_text(story) -> str:
     return "\n\n".join(parts)[:MAX_SOURCE_CHARS]
 
 
-def _request(model: str, prompt: str, story: str) -> dict:
+def _request(model: str, prompt: str, story: str, schema: dict | None = None) -> dict:
     key = _clean(os.getenv("GROQ_API_KEY"))
     if not key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
@@ -380,7 +433,7 @@ def _request(model: str, prompt: str, story: str) -> dict:
             ],
             "response_format": {
                 "type": "json_schema",
-                "json_schema": {"name": "sports_shorts_script", "strict": True, "schema": SCHEMA},
+                "json_schema": {"name": "sports_shorts_script", "strict": True, "schema": schema or SCHEMA},
             },
             "include_reasoning": False,
             "reasoning_effort": "low",
@@ -394,50 +447,20 @@ def _request(model: str, prompt: str, story: str) -> dict:
     return content if isinstance(content, dict) else json.loads(content)
 
 
-def _request_coverage_audit(source: str, result: dict) -> dict:
-    key = _clean(os.getenv("GROQ_API_KEY"))
-    if not key:
-        raise RuntimeError("GROQ_API_KEY is not configured.")
-    response = requests.post(
-        GROQ_URL,
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={
-            "model": "openai/gpt-oss-120b",
-            "messages": [
-                {
-                    "role": "system",
-                    "content": """You are a strict fact-coverage editor.
+REWRITE_INSTRUCTION = """MANUAL-QC REWRITE
 
-Compare the complete source evidence against the generated four-slide cricket Short.
+The human reviewer asked for a full rewrite of the selected story.
 
-Judge coverage by materially important story information, not by matching article wording. A four-slide Short covers the story adequately only when it captures roughly 90% of the important factual substance: the key development, people involved, important background, relevant statistics/numbers/dates/records, major context and confirmed current status.
+Start again from the complete evidence packet. Do not preserve the previous draft's wording or structure. Rebuild all four slides around the strongest truthful narrative while maximizing retention and informative value together.
 
-Do not require minor repetition, boilerplate, quotes that add no information, or every sentence from the article.
+Make sure every slide carries materially useful information, the story remains faithful to the evidence, and the result is concise enough for a sub-30-second Short.
 
-Return a coverage percentage between 0 and 1, whether the draft is complete enough, the important facts covered, and the important facts still missing.""",
-                },
-                {
-                    "role": "user",
-                    "content": "SOURCE EVIDENCE:\n" + source + "\n\nGENERATED SCRIPT:\n" + json.dumps(result, ensure_ascii=False),
-                },
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {"name": "sports_script_coverage_audit", "strict": True, "schema": COVERAGE_AUDIT_SCHEMA},
-            },
-            "include_reasoning": False,
-            "reasoning_effort": "low",
-            "temperature": 0.1,
-            "max_completion_tokens": 800,
-        },
-        timeout=TIMEOUT,
-    )
-    response.raise_for_status()
-    content = response.json()["choices"][0]["message"]["content"]
-    return content if isinstance(content, dict) else json.loads(content)
+PREVIOUS DRAFT
+Use this only to identify what the human rejected or what can be improved. It is not the source of truth.
+"""
 
 
-GENERIC_OPENERS = (
+GENERIC_OPENERS =GENERIC_OPENERS = (
     "welcome to",
     "hey everyone",
     "hey guys",
@@ -476,11 +499,33 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
 def validate_cricket_script(result: dict, source: str) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
+
     scenes = result.get("script")
     if not isinstance(scenes, list) or len(scenes) != 4:
         return False, "Cricket Scriptwriter must return exactly 4 slides."
-    if _words(scenes[0].get("voiceover")) >= 14:
+
+    first = scenes[0] if scenes else {}
+    if _words(first.get("voiceover")) >= 14:
         return False, "Slide 1 must contain fewer than 14 words."
+
+    headline_words = _words(result.get("headline"))
+    if headline_words < 3 or headline_words > 4:
+        return False, "The opening headline must contain 3 or 4 words."
+
+    titles = result.get("titles")
+    if not isinstance(titles, list) or len(titles) != 3 or not all(_clean(item) for item in titles):
+        return False, "The Scriptwriter must produce exactly 3 titles."
+
+    if not _clean(result.get("seo_description")):
+        return False, "The Scriptwriter must produce a description."
+
+    hashtags = result.get("hashtags")
+    if not isinstance(hashtags, list) or not hashtags or not all(_clean(item) for item in hashtags):
+        return False, "The Scriptwriter must produce hashtags."
+
+    if not _clean(result.get("comment")):
+        return False, "The Scriptwriter must produce the upload comment."
+
     for number, scene in enumerate(scenes, 1):
         if not isinstance(scene, dict) or not _clean(scene.get("voiceover")):
             return False, f"Slide {number} is empty or malformed."
@@ -489,83 +534,63 @@ def validate_cricket_script(result: dict, source: str) -> tuple[bool, str]:
             for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category")
         ):
             return False, f"Slide {number} is missing visual metadata."
-    if not isinstance(result.get("titles"), list) or not any(_clean(item) for item in result["titles"]):
-        return False, "The Scriptwriter must produce titles."
-    if not _clean(result.get("seo_description")):
-        return False, "The Scriptwriter must produce a description."
-    if not isinstance(result.get("hashtags"), list) or not any(_clean(item) for item in result["hashtags"]):
-        return False, "The Scriptwriter must produce hashtags."
+
     return True, ""
 
 
-def _finish_result(result: dict, story, source: str, model: str, audit: dict | None, language_key: str) -> dict:
+def _finish_result(result: dict, story, source: str, model: str, language_key: str) -> dict:
     result["provider_used"] = model
-    result["delivery_profile"] = "HYPE COMMENTATOR"
     result["language_used"] = language_key
-    result["word_count"] = _words(" ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or []))
+    result["word_count"] = _words(
+        " ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or [])
+    )
     result["source_title"] = _story_value(story, "title")
     result["source_evidence"] = source
-    if audit is not None:
-        result["coverage_audit"] = audit
     return result
 
 
-def write_script(story, language: str = "english", forceful: bool = False, previous_script: dict | None = None) -> dict:
+def write_script(
+    story,
+    language: str = "english",
+    forceful: bool = False,
+    previous_script: dict | None = None,
+) -> dict:
     source = _research_story(story, profile="cricket") or _source_text(story)
     if not source:
         raise ValueError("The selected story contains no usable evidence.")
 
     language_key = str(language or "english").strip().lower()
-    base_instruction = (
+    instruction = (
         SYSTEM_PROMPT
-        + "\n\nLANGUAGE:\n"
+        + "\nLANGUAGE:\n"
         + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
     )
+
     if forceful:
-        base_instruction += "\n" + FORCEFUL_INSTRUCTION
+        instruction += "\n\n" + REWRITE_INSTRUCTION
         if previous_script:
-            base_instruction += "\nPREVIOUS DRAFT TO IMPROVE:\n" + json.dumps(previous_script, ensure_ascii=False)
+            instruction += "\n" + json.dumps(previous_script, ensure_ascii=False)
 
     errors = []
     for model in MODELS:
         try:
-            result = _request(model, base_instruction, source)
+            result = _request(
+                model,
+                instruction,
+                source,
+                schema=CRICKET_SCHEMA,
+            )
             valid, reason = validate_cricket_script(result, source)
-            if not valid:
-                errors.append(f"{model}: {reason}")
-                continue
-            if len(result.get("script") or []) != 4:
-                errors.append(f"{model}: Cricket Scriptwriter must return exactly 4 slides.")
-                continue
+            if valid:
+                return _finish_result(
+                    result,
+                    story,
+                    source,
+                    model,
+                    language_key,
+                )
 
-            try:
-                audit = _request_coverage_audit(source, result)
-            except Exception as exc:
-                audit = None
-                errors.append(f"Coverage audit unavailable: {type(exc).__name__}: {exc}")
-
-            if isinstance(audit, dict) and (audit.get("complete") is False or float(audit.get("coverage_pct", 0)) < 0.9):
-                force = base_instruction + "\n\nCOVERAGE AUDIT FINDINGS:\n" + json.dumps(audit, ensure_ascii=False) + "\n" + FORCEFUL_INSTRUCTION
-                revised = _request(model, force, source)
-                valid, reason = validate_cricket_script(revised, source)
-                if not valid:
-                    errors.append(f"{model}: forceful rewrite failed: {reason}")
-                    continue
-                if len(revised.get("script") or []) != 4:
-                    errors.append(f"{model}: forceful rewrite returned more than 4 slides.")
-                    continue
-                try:
-                    revised_audit = _request_coverage_audit(source, revised)
-                except Exception:
-                    revised_audit = audit
-                if isinstance(revised_audit, dict):
-                    audit = revised_audit
-                    if revised_audit.get("complete") is False or float(revised_audit.get("coverage_pct", 0)) < 0.9:
-                        errors.append(f"{model}: forceful rewrite still below 90% coverage.")
-                        continue
-                result = revised
-
-            return _finish_result(result, story, source, model, audit, language_key)
+            errors.append(f"{model}: {reason}")
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
 
