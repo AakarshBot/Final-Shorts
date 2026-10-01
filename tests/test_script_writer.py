@@ -1,6 +1,14 @@
 import pytest
 
-from script_writer import MAX_WORDS, SCENE_1_MAX_WORDS, apply_script_edits, write_script
+from script_writer import (
+    MAX_WORDS,
+    SCENE_1_MAX_WORDS,
+    SYSTEM_PROMPT,
+    _article_body_from_html,
+    _extract_article,
+    apply_script_edits,
+    write_script,
+)
 
 
 @pytest.fixture(autouse=True)
@@ -633,3 +641,61 @@ def test_writer_keeps_existing_retention_limits():
     assert SCENE_1_MAX_WORDS == 14
     assert MAX_WORDS == 75
     assert "Use 4 narration scenes by default" in __import__("script_writer").SYSTEM_PROMPT
+
+
+def test_structured_html_fallback_keeps_article_table_facts():
+    html = """
+    <html><head>
+      <script type="application/ld+json">
+        {"@type":"NewsArticle","articleBody":"Auqib Nabi made his India ODI debut at 29."}
+      </script>
+    </head><body>
+      <p>Jammu and Kashmir pacer Auqib Nabi earned his India cap.</p>
+      <table>
+        <tr><th>Ranji Trophy 2025-26</th><th>60 wickets</th></tr>
+        <tr><td>First-class career</td><td>170 wickets</td></tr>
+        <tr><td>Best bowling</td><td>7/24</td></tr>
+      </table>
+    </body></html>
+    """
+    extracted = _article_body_from_html(html)
+
+    assert "Auqib Nabi made his India ODI debut at 29." in extracted
+    assert "Ranji Trophy 2025-26 | 60 wickets" in extracted
+    assert "First-class career | 170 wickets" in extracted
+    assert "Best bowling | 7/24" in extracted
+
+
+def test_article_extraction_includes_tables_in_trafilatura(monkeypatch):
+    class FakeResponse:
+        url = "https://example.com/story"
+        text = "<html><body>full article</body></html>"
+
+        def raise_for_status(self):
+            return None
+
+    article = (
+        "Auqib Nabi made his India ODI debut after a strong Ranji Trophy season. "
+        "He took 60 wickets and led the tournament wicket charts. "
+    ) * 8
+    captured = {}
+
+    def fake_extract(*args, **kwargs):
+        captured.update(kwargs)
+        return article
+
+    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr("script_writer.trafilatura.extract", fake_extract)
+    extracted, resolved = _extract_article("https://example.com/story")
+
+    assert extracted
+    assert resolved == "https://example.com/story"
+    assert captured["include_tables"] is True
+
+def test_writer_prompt_prioritises_editorial_promise_and_full_story_coverage():
+    assert "actual editorial promise" in SYSTEM_PROMPT
+    assert "4–7 most useful supported facts" in SYSTEM_PROMPT
+    assert "profile/breakout" in SYSTEM_PROMPT
+    assert "complete Short, not a compressed article dump" in SYSTEM_PROMPT
+    assert "62–72 spoken words" in SYSTEM_PROMPT
+    assert "under 30 seconds" in SYSTEM_PROMPT
