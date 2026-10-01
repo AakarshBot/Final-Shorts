@@ -2,7 +2,6 @@ import pytest
 
 from script_writer import (
     MAX_WORDS,
-    SCENE_1_MAX_WORDS,
     SYSTEM_PROMPT,
     _article_body_from_html,
     _extract_article,
@@ -206,7 +205,9 @@ def test_writer_fallback_receives_validation_failure(monkeypatch):
     def fake_request(model, prompt, story):
         prompts.append(prompt)
         if model == "openai/gpt-oss-120b":
-            return valid_result("Shubman Gill faces a fresh injury scare before India starts its first ODI campaign this week.")
+            result = valid_result()
+            result["headline"] = "Gill Injury Scare Before ODI"
+            return result
         return valid_result()
 
     monkeypatch.setattr("script_writer._request", fake_request)
@@ -215,7 +216,7 @@ def test_writer_fallback_receives_validation_failure(monkeypatch):
     )
 
     assert result["provider_used"] == "openai/gpt-oss-20b"
-    assert "Scene 1 exceeds 14 words." in prompts[1]
+    assert "The headline must contain exactly 3 or 4 words." in prompts[1]
     assert "fixing this exact failure" in prompts[1]
 
 
@@ -300,10 +301,8 @@ def test_approved_edits_preserve_titles_and_metadata_and_mark_audio_handoff():
     assert edited["approved_for_audio"] is True
 
 
-def test_writer_allows_hook_above_three_seconds_when_within_word_limit(monkeypatch):
-    result = valid_result(
-        "Gill faces a fresh injury scare before India starts the ODI this week."
-    )
+def test_writer_does_not_apply_prompt_targets_as_hidden_validation(monkeypatch):
+    result = valid_result()
 
     monkeypatch.setattr("script_writer._request", lambda *args, **kwargs: result)
 
@@ -314,6 +313,7 @@ def test_writer_allows_hook_above_three_seconds_when_within_word_limit(monkeypat
         }
     )
 
+    assert accepted["word_count"] == 39
     assert accepted["script"][0]["voiceover"] == result["script"][0]["voiceover"]
 
 def test_writer_rejects_retention_bait(monkeypatch):
@@ -632,11 +632,11 @@ def test_writer_research_keeps_primary_and_caps_independent_reports(monkeypatch)
     ]
 
 
-def test_writer_keeps_existing_retention_limits():
-    assert SCENE_1_MAX_WORDS == 14
+def test_writer_keeps_only_essential_local_limits():
     assert MAX_WORDS == 75
-    assert __import__("script_writer").MAX_ESTIMATED_NARRATION_SECONDS == 30.0
-    assert "Use 4 narration scenes by default" in __import__("script_writer").SYSTEM_PROMPT
+    writer = __import__("script_writer")
+    assert writer.HOOK_MAX_SECONDS == 3.0
+    assert "Use 4 scenes by default" in writer.SYSTEM_PROMPT
 
 
 def test_structured_html_fallback_keeps_article_table_facts():
@@ -661,6 +661,39 @@ def test_structured_html_fallback_keeps_article_table_facts():
     assert "First-class career | 170 wickets" in extracted
     assert "Best bowling | 7/24" in extracted
 
+
+def test_article_extraction_prefers_the_richer_available_candidate(monkeypatch):
+    class FakeResponse:
+        url = "https://example.com/story"
+        text = """
+        <html><head>
+          <script type="application/ld+json">
+          {"@type":"NewsArticle","articleBody":"Auqib Nabi, 29, made his India ODI debut after taking 60 wickets in the Ranji Trophy."}
+          </script>
+        </head><body>
+          <h2>Career statistics</h2>
+          <table>
+            <tr><th>2025-26 Ranji Trophy</th><th>60 wickets</th></tr>
+            <tr><td>2024-25 Ranji Trophy</td><td>44 wickets</td></tr>
+            <tr><td>First-class career</td><td>170 wickets</td></tr>
+          </table>
+        </body></html>
+        """
+
+        def raise_for_status(self):
+            return None
+
+    thin = ("Auqib Nabi made his India ODI debut. " * 120)
+    monkeypatch.setattr("script_writer.requests.get", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr("script_writer.trafilatura.extract", lambda *args, **kwargs: thin)
+
+    extracted, resolved = __import__("script_writer")._extract_article("https://example.com/story")
+
+    assert resolved == "https://example.com/story"
+    assert len(extracted) > len(thin)
+    assert "60 wickets" in extracted
+    assert "44 wickets" in extracted
+    assert "170 wickets" in extracted
 
 def test_article_extraction_includes_tables_in_trafilatura(monkeypatch):
     class FakeResponse:
@@ -689,10 +722,12 @@ def test_article_extraction_includes_tables_in_trafilatura(monkeypatch):
     assert captured["include_tables"] is True
 
 def test_writer_prompt_prioritises_editorial_promise_and_full_story_coverage():
-    assert "actual editorial promise" in SYSTEM_PROMPT
-    assert "4–7 most useful supported facts" in SYSTEM_PROMPT
-    assert "profile/breakout" in SYSTEM_PROMPT
-    assert "complete Short, not a compressed article dump" in SYSTEM_PROMPT
-    assert "62–72 spoken words" in SYSTEM_PROMPT
+    assert "The selected headline is the editorial assignment" in SYSTEM_PROMPT
+    assert "For profile or explainer headlines" in SYSTEM_PROMPT
+    assert "strongest supported background facts" in SYSTEM_PROMPT
+    assert "strongest proof or background" in SYSTEM_PROMPT
+    assert "60–75 spoken words" in SYSTEM_PROMPT
     assert "under 30 seconds" in SYSTEM_PROMPT
-    assert "3-second time limit" not in SYSTEM_PROMPT
+    assert "below 14 seconds" in SYSTEM_PROMPT
+    assert "3-second" not in SYSTEM_PROMPT
+    assert "stats" in SYSTEM_PROMPT
