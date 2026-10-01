@@ -437,20 +437,59 @@ Return a coverage percentage between 0 and 1, whether the draft is complete enou
     return content if isinstance(content, dict) else json.loads(content)
 
 
+GENERIC_OPENERS = (
+    "welcome to",
+    "hey everyone",
+    "hey guys",
+    "in this video",
+    "today we are going to",
+    "let's talk about",
+    "here is the latest",
+)
+RETENTION_BAIT = (
+    "wait until the end",
+    "wait till the end",
+    "watch till the end",
+    "keep watching",
+    "stay tuned",
+    "don't skip",
+    "don't scroll",
+    "find out later",
+)
+
+
 def validate_script(result: dict, source: str) -> tuple[bool, str]:
+    # Compatibility validator retained for the separately implemented Niche writer.
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
     scenes = result.get("script")
     if not isinstance(scenes, list) or not scenes:
         return False, "The provider did not return a script."
+    first = _clean(scenes[0].get("voiceover")).casefold()
+    if any(first.startswith(opener) for opener in GENERIC_OPENERS):
+        return False, "Scene 1 starts with a generic opener."
+    if any(phrase in " ".join(_clean(scene.get("voiceover")).casefold() for scene in scenes) for phrase in RETENTION_BAIT):
+        return False, "The narration contains retention bait."
+    return True, ""
+
+
+def validate_cricket_script(result: dict, source: str) -> tuple[bool, str]:
+    if not isinstance(result, dict):
+        return False, "The provider returned no script object."
+    scenes = result.get("script")
+    if not isinstance(scenes, list) or len(scenes) != 4:
+        return False, "Cricket Scriptwriter must return exactly 4 slides."
     if _words(scenes[0].get("voiceover")) >= 14:
         return False, "Slide 1 must contain fewer than 14 words."
     for number, scene in enumerate(scenes, 1):
         if not isinstance(scene, dict) or not _clean(scene.get("voiceover")):
             return False, f"Slide {number} is empty or malformed."
-        if not all(_clean(scene.get(key)) for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category")):
+        if not all(
+            _clean(scene.get(key))
+            for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category")
+        ):
             return False, f"Slide {number} is missing visual metadata."
-    if not isinstance(result.get("titles"), list) or not all(_clean(item) for item in result["titles"]):
+    if not isinstance(result.get("titles"), list) or not any(_clean(item) for item in result["titles"]):
         return False, "The Scriptwriter must produce titles."
     if not _clean(result.get("seo_description")):
         return False, "The Scriptwriter must produce a description."
@@ -491,7 +530,7 @@ def write_script(story, language: str = "english", forceful: bool = False, previ
     for model in MODELS:
         try:
             result = _request(model, base_instruction, source)
-            valid, reason = validate_script(result, source)
+            valid, reason = validate_cricket_script(result, source)
             if not valid:
                 errors.append(f"{model}: {reason}")
                 continue
@@ -508,7 +547,7 @@ def write_script(story, language: str = "english", forceful: bool = False, previ
             if isinstance(audit, dict) and (audit.get("complete") is False or float(audit.get("coverage_pct", 0)) < 0.9):
                 force = base_instruction + "\n\nCOVERAGE AUDIT FINDINGS:\n" + json.dumps(audit, ensure_ascii=False) + "\n" + FORCEFUL_INSTRUCTION
                 revised = _request(model, force, source)
-                valid, reason = validate_script(revised, source)
+                valid, reason = validate_cricket_script(revised, source)
                 if not valid:
                     errors.append(f"{model}: forceful rewrite failed: {reason}")
                     continue
@@ -549,7 +588,7 @@ def apply_script_edits(
     if headline is not None:
         result["headline"] = _clean(headline)
     if validate:
-        valid, reason = validate_script(result, _clean(result.get("source_evidence")))
+        valid, reason = validate_cricket_script(result, _clean(result.get("source_evidence")))
         if not valid:
             raise ValueError(f"Edited script failed local validation: {reason}")
     result["human_script_edited"] = any(
