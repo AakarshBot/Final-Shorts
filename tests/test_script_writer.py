@@ -756,6 +756,6 @@ def test_writer_prompt_prioritises_editorial_promise_and_full_story_coverage():
     assert "strongest proof or background" in SYSTEM_PROMPT
     assert "60–75 spoken words" in SYSTEM_PROMPT
     assert "under 30 seconds" in SYSTEM_PROMPT
-    assert "below 14 seconds" in SYSTEM_PROMPT
+    assert "never exceed 14 words" in SYSTEM_PROMPT
     assert "3-second" not in SYSTEM_PROMPT
     assert "stats" in SYSTEM_PROMPT
