@@ -338,7 +338,7 @@ def _prepare(
             continue
         if not _profile_relevant(title, row.description, profile, row.source):
             continue
-        title_key = " ".join(sorted(_tokens(title)))
+        title_key = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
         if not title_key or title_key in seen_titles:
             continue
         prepared.append(Topic(title, _clean(row.source), row.published_at, url, _clean(row.description), row.score))
