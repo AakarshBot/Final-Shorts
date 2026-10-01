@@ -1,7 +1,6 @@
 import pytest
 
 from script_writer import (
-    MAX_WORDS,
     SYSTEM_PROMPT,
     _article_body_from_html,
     _extract_article,
@@ -632,11 +631,13 @@ def test_writer_research_keeps_primary_and_caps_independent_reports(monkeypatch)
     ]
 
 
-def test_writer_keeps_only_essential_local_limits():
-    assert MAX_WORDS == 75
+def test_writer_prompt_is_responsible_for_pacing():
     writer = __import__("script_writer")
     assert writer.HOOK_MAX_SECONDS == 3.0
     assert "Use 4 scenes by default" in writer.SYSTEM_PROMPT
+    assert "60–75 spoken words" in writer.SYSTEM_PROMPT
+    assert "under 30 seconds" in writer.SYSTEM_PROMPT
+    assert "MAX_WORDS" not in writer.validate_script.__code__.co_consts
 
 
 def test_structured_html_fallback_keeps_article_table_facts():
