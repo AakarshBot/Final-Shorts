@@ -624,3 +624,19 @@ The downstream Topic contract is unchanged and no downstream factory function wa
 - `_prepare` now drops repeated canonical article URLs before clustering, avoiding duplicate work created by the same article appearing in multiple searches.
 - Primary network timeout is now 8 seconds and the GDELT fallback uses the same bounded timeout; no downstream handoff or dashboard call was changed.
 - Added regression coverage proving More does not call the trend service and repeated article URLs are removed before selection.
+
+
+## Function 02 — editorial story coverage and structured research (2026-10-01)
+
+The regular Cricket Scriptwriter was corrected to stop treating every story as a single-event news update.
+
+- The existing LLM remains the only generation call; no second planner/reviewer API call was added, so latency and API usage do not increase.
+- The prompt now identifies the story's actual editorial promise and the important viewer questions before choosing the narration order.
+- Story structure is adaptive: profile/breakout, record/milestone, appointment/transfer, rule/policy, injury/availability and event/result stories are guided by their information shape rather than one universal event template.
+- A profile or explainer story must use the body to answer who/what/how/why/background questions when the source supports them, rather than spending the Short repeating the triggering event.
+- The writer is instructed to select the 4–7 most useful supported facts, prioritise essential information, and produce a complete Short rather than a compressed article dump.
+- Narration remains capped at 75 words and the existing estimated 29.2-second ceiling, with a new target of roughly 62–72 spoken words so scenes carry substantive information without exceeding 30 seconds.
+- Research extraction now preserves HTML table content. Trafilatura is asked to include tables, and the HTML fallback combines JSON-LD article text, paragraphs and table rows instead of returning JSON-LD articleBody early and silently discarding tables.
+- Primary cricket research capacity was increased from 8,000 to 9,000 characters without changing the research-source count or downstream handoff.
+- The final Scriptwriter JSON schema, scene fields, source_evidence, audio handoff and visual handoff contracts remain unchanged. app.py and Functions 03–07 were not modified.
+- Regression coverage now verifies structured table facts survive fallback extraction, Trafilatura receives include_tables=True, and the prompt enforces editorial-promise coverage plus the 62–72 word target under the 30-second ceiling.
