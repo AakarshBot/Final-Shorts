@@ -459,10 +459,10 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     return True, ""
 
 
-def _finish_result(result: dict, story, source: str, model: str, audit: dict | None) -> dict:
+def _finish_result(result: dict, story, source: str, model: str, audit: dict | None, language_key: str) -> dict:
     result["provider_used"] = model
     result["delivery_profile"] = "HYPE COMMENTATOR"
-    result["language_used"] = _clean(story.get("language") if isinstance(story, dict) else "") or "english"
+    result["language_used"] = language_key
     result["word_count"] = _words(" ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or []))
     result["source_title"] = _story_value(story, "title")
     result["source_evidence"] = source
@@ -495,6 +495,9 @@ def write_script(story, language: str = "english", forceful: bool = False, previ
             if not valid:
                 errors.append(f"{model}: {reason}")
                 continue
+            if len(result.get("script") or []) != 4:
+                errors.append(f"{model}: Cricket Scriptwriter must return exactly 4 slides.")
+                continue
 
             try:
                 audit = _request_coverage_audit(source, result)
@@ -509,6 +512,9 @@ def write_script(story, language: str = "english", forceful: bool = False, previ
                 if not valid:
                     errors.append(f"{model}: forceful rewrite failed: {reason}")
                     continue
+                if len(revised.get("script") or []) != 4:
+                    errors.append(f"{model}: forceful rewrite returned more than 4 slides.")
+                    continue
                 try:
                     revised_audit = _request_coverage_audit(source, revised)
                 except Exception:
@@ -517,7 +523,7 @@ def write_script(story, language: str = "english", forceful: bool = False, previ
                     audit = revised_audit
                 result = revised
 
-            return _finish_result(result, story, source, model, audit)
+            return _finish_result(result, story, source, model, audit, language_key)
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
 
