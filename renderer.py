@@ -62,7 +62,7 @@ TOP5_HEADLINE_MAX_SIZE = 84
 TOP5_HEADLINE_MIN_SIZE = 42
 TOP5_HEADLINE_MAX_LINES = 2
 TOP5_HEADLINE_LINE_GAP = 6
-TOP5_BODY_MAX_WIDTH = WIDTH - (TOP5_MARGIN_X * 2) - 40
+TOP5_BODY_MAX_WIDTH = WIDTH - TOP5_MARGIN_X - TOP5_SAFE_RIGHT
 TOP5_BODY_MAX_SIZE = 42
 TOP5_BODY_MIN_SIZE = 25
 TOP5_BODY_MAX_LINES = 8
@@ -338,12 +338,12 @@ def _top5_full_frame_image(value: bytes | bytearray | Image.Image) -> Image.Imag
 
 def _draw_top5_image_fade(
     base: Image.Image,
-    panel_top: int,
+    fade_end: int,
     panel_bottom: int,
 ) -> Image.Image:
     canvas = _top5_full_frame_image(base).convert("RGBA")
-    fade_top = max(0, panel_top - TOP5_IMAGE_FADE_HEIGHT)
-    fade_height = max(1, panel_top - fade_top)
+    fade_top = max(0, fade_end - TOP5_IMAGE_FADE_HEIGHT)
+    fade_height = max(1, fade_end - fade_top)
 
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay, "RGBA")
@@ -393,7 +393,7 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
 
     canvas = _draw_top5_image_fade(
         base,
-        panel_top,
+        content_top,
         panel_bottom,
     )
     draw = ImageDraw.Draw(canvas, "RGBA")
