@@ -400,9 +400,8 @@ def _prepare(
     rows: list[Topic],
     seen_urls: set[str],
     profile: str | None = None,
-    lookback_hours: int | None = None,
 ) -> list[Topic]:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours or LOOKBACK_HOURS)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     seen = {_canonical_url(url) for url in seen_urls}
     prepared = []
     seen_row_urls = set()
