@@ -257,25 +257,23 @@ Top-5 Visuals:
 - Existing 9:16 crop workflow remains in place.
 
 Top-5 visual treatment:
-- The approved visual reference is the existing Cricket Stats Card language: a full 1080 × 1920 frame with the image remaining the hero and a light information treatment below/over it.
-- The selected Top-5 visual is a manually cropped 9:16 image. The renderer does not crop it again; the existing Top-5 crop workflow remains responsible for framing.
-- The lower information panel is content-sized. It grows only as much as the headline and two factual body sentences require, so short copy does not leave a huge empty card while longer copy gets enough room.
-- The two-sentence story body is dynamically fitted: width, wrapping, font size and vertical spacing respond to the actual copy.
-- Important headline/body content is kept inside a conservative Shorts-safe content column, with reserved space on the right and bottom because YouTube's visual guides show that the like/comment/description UI can cover those regions and that the exact safe area varies by device. citeturn912592search0turn912592search2
-- The image remains full-frame 9:16 and transitions into the light information area with a smooth transparent-to-opaque white fade whose endpoint aligns with the headline.
-- Slide 1 is the package opener: image + package headline only. It has no body, progress indicator, fact kicker or fake platform UI.
-- Slides 2–6 show the spoken story headline followed by the Scriptwriter's two concise factual silent sentences.
-- Test Visuals is a standalone visual sandbox: search Commons, choose an image, use the existing 9:16 crop/reposition workflow, edit headline/body and render one slide without Scriptwriter or Audio approval.
-- Image-pool, selected-image and rendered-slide previews use the same normal 300 × 533 preview size.
-- There are no YouTube-like heart, comment, share or tap animations in the factory.
-- Approved Top-5 visual handoffs carry the selected image, headline and silent body into the production renderer.
+- The previous white-panel and image-to-white fade treatment has been removed.
+- The selected Top-5 visual is a manually cropped 9:16 image. The renderer preserves that crop and does not recrop it.
+- The image remains full-bleed across the entire 1080 × 1920 frame.
+- Headline/body typography is placed from the bottom safe boundary upward, so short copy naturally occupies less vertical space while longer copy grows upward.
+- Story slides use the Scriptwriter's two factual silent sentences, dynamically wrapped and fitted within the same safe content column.
+- Instead of a visible card or full-width strip, the renderer creates a soft localized readability haze around the actual text block. The haze adapts to the local image luminance and uses the minimum treatment needed for text contrast.
+- No hard horizontal gradient edge, rounded card, fake platform UI, progress indicator or fact kicker is used.
+- The Test Visuals page continues to expose the existing image selection and 9:16 crop/reposition workflow, followed by a rendered 1080 × 1920 preview.
+- Rendered Test previews are shown larger so the full composition can be inspected before any Live migration.
 
 Top-5 Visual status:
 - **Pending user approval.**
-- Test card preview implemented.
-- Production renderer support implemented.
+- The previous card/white-panel visual implementation has been deleted; this localized editorial treatment is the current Test candidate.
+- Production renderer support remains implemented.
 - The dedicated Top-5 Live production line itself is still WIP; the existing Live shell has not yet been migrated through the full Top-5 Topic → Script → Audio → Visual flow.
 - Do not alter the approved Cricket Visual Fetcher or its existing QC behaviour.
+
 
 ## Future hardening — mobile-complete dashboard and fully online factory
 
