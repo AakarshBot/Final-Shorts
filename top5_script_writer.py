@@ -155,10 +155,13 @@ EDITORIAL STANDARD
 - Do not use phrases such as "changing the conversation", "everyone is talking",
   "the cricket world is buzzing", "sending shockwaves", "game changer",
   "what you need to know", "here's what happened", or similar synthetic framing.
-- Slide 1 must be grounded in at least one concrete detail from the selected stories and
-  should name a person, team, event, record, result or other story-specific detail.
-- Do not use a generic roundup headline. Do not invent a common theme just to make the
-  opener sound clever.
+- Slide 1 must be an original, impactful package headline built by the scriptwriter
+  from the strongest concrete development in the five selected stories. It should name
+  a person, team, event, record, result or other story-specific detail.
+- Write Slide 1 yourself; do not copy, lightly rewrite, or concatenate a source headline.
+  The opener should lead with the actual news, not announce that this is a Top-5 package.
+- Do not use a generic roundup headline such as "Top 5 Cricket Stories" or "Cricket News
+  Today". Do not invent a common theme just to make the opener sound clever.
 
 SLIDE STRUCTURE
 - Return exactly six slides.
