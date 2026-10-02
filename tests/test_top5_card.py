@@ -20,7 +20,17 @@ def test_top5_preview_is_vertical_and_uses_full_width_image():
 
     assert image.size == (1080, 1920)
     assert image.getpixel((60, 400)) == (12, 34, 56)
-    assert image.getpixel((60, 1000)) == (246, 247, 249)
+
+    font, lines = renderer._fit_top5_headline("India name a major change today")
+    headline_box = font.getbbox("Ag")
+    headline_height = (headline_box[3] - headline_box[1]) * len(lines)
+    panel_top, _, content_top = renderer._top5_panel_geometry(
+        headline_height,
+        0,
+        False,
+    )
+    assert content_top > panel_top
+    assert image.getpixel((60, content_top)) == (249, 250, 252)
 
 
 def test_top5_preview_handles_long_story_headline():
@@ -152,3 +162,43 @@ def test_top5_opener_has_no_body_copy():
     )
     assert len(lines) <= 2
     assert renderer._fit_top5_body("", "english") == (None, [])
+
+
+def test_top5_panel_shrinks_for_shorter_copy():
+    headline_font, headline_lines = renderer._fit_top5_headline(
+        "India confirm the latest squad change",
+    )
+    short_body_font, short_body = renderer._fit_top5_body(
+        "The board confirmed the move. The decision changes the lineup.",
+        "english",
+    )
+    long_body_font, long_body = renderer._fit_top5_body(
+        "The board confirmed the move after reviewing the latest result and the selection options. "
+        "The decision changes the lineup ahead of the next series and follows the latest update from officials.",
+        "english",
+    )
+
+    headline_height, short_height = renderer._top5_text_metrics(
+        headline_font,
+        headline_lines,
+        short_body_font,
+        short_body,
+    )
+    _, long_height = renderer._top5_text_metrics(
+        headline_font,
+        headline_lines,
+        long_body_font,
+        long_body,
+    )
+    short_top, short_bottom, _ = renderer._top5_panel_geometry(
+        headline_height,
+        short_height,
+        True,
+    )
+    long_top, long_bottom, _ = renderer._top5_panel_geometry(
+        headline_height,
+        long_height,
+        True,
+    )
+
+    assert (short_bottom - short_top) <= (long_bottom - long_top)
