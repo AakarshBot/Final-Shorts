@@ -555,6 +555,21 @@ def _select(
         if source:
             source_counts[source] = source_counts.get(source, 0) + 1
 
+    group_keys = {
+        _entity_group_key(row)
+        for row in event_representatives
+    } if cricket else set()
+
+    for row in candidates:
+        if not any(same_event(row, old) for old in blocked + event_representatives):
+            event_representatives.append(row)
+            if cricket:
+                group_keys.add(_entity_group_key(row))
+                if len(group_keys) >= limit:
+                    break
+            elif len(event_representatives) >= limit:
+                break
+
     if not cricket:
         return event_representatives[:limit]
 
