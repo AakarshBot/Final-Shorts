@@ -326,9 +326,6 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   border-color:var(--line-strong);
   box-shadow:var(--shadow);
 }
-.st-key-topic-tile-{
-  width:100%;
-}
 [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"]{
   background:var(--surface-raised);
   border:1px solid var(--line);
@@ -2862,12 +2859,11 @@ def render_topic_fetcher():
                             horizontal_alignment="distribute",
                             gap="small",
                         ):
-                            with st.container():
-                                st.markdown(
-                                    f'<div class="topic-title">{member.title}</div>'
-                                    f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b}</div>',
-                                    unsafe_allow_html=True,
-                                )
+                            st.markdown(
+                                f'<div class="topic-title">{member.title}</div>'
+                                f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b}</div>',
+                                unsafe_allow_html=True,
+                            )
                             if st.button(
                                 "Selected" if is_selected else "Choose",
                                 key=f"topic-select-{index}-{headline_index}",
