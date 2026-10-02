@@ -1349,8 +1349,10 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
                 bytes(source_bytes),
             )
             st.session_state[approved_key] = False
+            st.rerun()
         except (StatsCardError, OSError, RuntimeError) as exc:
             st.session_state[state_key] = {"error": str(exc)}
+            st.rerun()
 
 
 
