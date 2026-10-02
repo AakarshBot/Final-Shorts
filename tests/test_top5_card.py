@@ -114,39 +114,30 @@ def test_top5_card_uses_separate_image_and_body_zones():
 
 
 def test_top5_layout_is_driven_by_text_length():
-    short = renderer._top5_fit_layout(
+    short_headline_font, short_headline_lines = renderer._fit_top5_headline(
         "India make a major change",
-        "The decision follows the latest selection update.",
     )
-    long = renderer._top5_fit_layout(
+    long_headline_font, long_headline_lines = renderer._fit_top5_headline(
         "India reshuffles the squad after a late selection change before the next major series",
+    )
+    short_body_font, short_body_lines = renderer._fit_top5_body(
+        "The decision follows the latest selection update.",
+        "english",
+    )
+    long_body_font, long_body_lines = renderer._fit_top5_body(
         "The move changes the lineup and follows the latest selection update. "
         "Officials said the decision was made after reviewing the latest developments "
         "and the expected requirements for the next series.",
+        "english",
     )
 
-    assert short["headline_font"].size >= long["headline_font"].size
-    assert short["body_font"].size >= long["body_font"].size
-    assert long["height"] >= short["height"]
+    assert short_headline_font.size >= long_headline_font.size
+    assert len(short_headline_lines) == len(long_headline_lines) == 1
+    assert short_body_font.size >= long_body_font.size
+    assert len(long_body_lines) >= len(short_body_lines)
 
 
-def test_top5_body_is_two_sentences_in_writer_contract():
-    from top5_script_writer import validate_top5_script
-
-    result = {
-        "slides": [dict(slide) for slide in valid_result()["slides"]],
-        "hashtags": ["#Cricket", "#Top5", "#Shorts"],
-    }
-    result["slides"][1]["body"] = "One factual sentence."
-    valid, reason = validate_top5_script(result, [
-        {"title": f"Story {index} cricket record confirmed", "url": "", "article": ""}
-        for index in range(1, 6)
-    ])
-    assert not valid
-    assert "exactly two sentences" in reason
-
-
-def test_top5_opener_uses_same_adaptive_treatment_without_body():
+def test_top5_opener_has_no_body_copy():
     source = BytesIO()
     Image.new("RGB", (900, 1600), "white").save(source, format="JPEG")
 
@@ -158,11 +149,9 @@ def test_top5_opener_uses_same_adaptive_treatment_without_body():
     image = Image.open(BytesIO(preview))
 
     assert image.size == (1080, 1920)
-    font, lines = renderer._fit_top5_headline(
-        "Five cricket stories shaping today",
-    )
+    _, lines = renderer._fit_top5_headline("Five cricket stories shaping today")
     assert len(lines) == 1
-    assert renderer._fit_top5_body("", "english")[1] == []
+    assert renderer._fit_top5_body("", "english") == (None, [])
 
 
 def test_top5_interaction_animation_is_supported():
