@@ -89,7 +89,7 @@ def test_slide_one_rejects_unprecedented_hype_filler():
 def test_slide_one_accepts_smart_package_roundup_headline():
     result = valid_result()
     result["slides"][0]["headline"] = (
-        "Gill returns, India reshuffle and three more cricket headlines today"
+        "Story 1 returns, record confirmed and three more cricket headlines today"
     )
     valid, reason = validate_top5_script(result, stories())
     assert valid, reason
