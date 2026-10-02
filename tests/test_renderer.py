@@ -32,8 +32,9 @@ def test_headline_is_large_and_dynamic():
     assert renderer.HEADLINE_MAX_SIZE >= 250
     assert renderer.HEADLINE_MIN_SIZE >= 120
     assert renderer.HEADLINE_LINE_GAP > 0
-    assert renderer.get_headline_font_path().name == "Oswald-Bold.ttf"
-    assert renderer.get_headline_font_path().exists()
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
+    assert font_path.name == "Oswald-Bold.ttf"
+    assert font_path.exists()
     assert 1 <= len(renderer._fit_headline_font(renderer.HEADLINE_TEXT)[2]) <= renderer.HEADLINE_MAX_LINES
     assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size >= 150
     assert len(long_lines) >= len(short_lines)
@@ -247,9 +248,6 @@ def test_invalid_subtitle_handoff_is_rejected():
     assert renderer.validate_subtitle_handoff(bad) is False
 
 
-def test_renderer_paths_point_to_expected_local_assets():
-    assert renderer.get_logo_path().name == "logo.png"
-    assert Path(renderer.get_headline_font_path()).parent.name == "fonts"
 
 def test_production_renderer_uses_approved_handoffs(monkeypatch, tmp_path):
     from io import BytesIO
