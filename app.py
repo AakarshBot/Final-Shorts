@@ -4862,7 +4862,7 @@ elif st.session_state.app_mode == "test":
                     render = st.button(
                         "Render slide preview",
                         type="primary",
-                        width="stretch",
+                        width="content",
                         key="test-top5-standalone-render",
                     )
 
