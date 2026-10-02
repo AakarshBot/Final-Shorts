@@ -322,3 +322,47 @@ def test_niche_sports_path_remains_available():
     rows = [make_topic("Tennis title upset", description="Tennis"), make_topic("Cricket record", description="Cricket")]
     prepared = topic_fetcher._prepare(rows, set(), profile="niche_sports")
     assert [row.title for row in prepared] == ["Tennis title upset"]
+
+
+def test_top5_fetcher_uses_smaller_query_plan(monkeypatch):
+    queries = []
+    rows = [
+        make_topic(
+            f"Player{index} wins Event{index} cricket headline",
+            source=f"source{index}.com",
+            url=f"https://example.com/top5/{index}",
+            description="Cricket news",
+        )
+        for index in range(25)
+    ]
+    monkeypatch.setattr(
+        topic_fetcher,
+        "_fetch_google",
+        lambda query: queries.append(query) or rows,
+    )
+    result = topic_fetcher.fetch_top5_topics(limit=20)
+    assert len(queries) == 6
+    assert len(result) == 20
+
+
+def test_top5_fetcher_more_excludes_existing(monkeypatch):
+    existing = [
+        make_topic("Player0 wins Event0 cricket headline", url="https://example.com/top5/0")
+    ]
+    rows = [
+        make_topic(
+            f"Fresh player {index} wins new cricket event {index}",
+            source=f"fresh{index}.com",
+            url=f"https://example.com/top5/fresh/{index}",
+            description="Cricket news",
+        )
+        for index in range(20)
+    ]
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda query: rows)
+    result = topic_fetcher.fetch_top5_topics(
+        more=True,
+        exclude_topics=existing,
+        limit=20,
+    )
+    assert result
+    assert all(item.url != existing[0].url for item in result)
