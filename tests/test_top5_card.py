@@ -7,7 +7,7 @@ import renderer
 
 def test_top5_preview_is_vertical_and_uses_full_width_image():
     source = BytesIO()
-    Image.new("RGB", (1600, 900), (12, 34, 56)).save(source, format="JPEG")
+    Image.new("RGB", (1600, 900), (12, 34, 56)).save(source, format="PNG")
 
     preview = renderer.build_top5_card_preview(
         source.getvalue(),
