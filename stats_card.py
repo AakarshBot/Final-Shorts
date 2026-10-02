@@ -145,10 +145,8 @@ def _parse_query(query: str) -> StatsIntent:
     lower = clean.casefold()
 
     h2h = re.match(
-        r"^(.+?)\s+(?:vs\.?|v\.?|versus)\s+(.+?)(?:\s+"
-        r"(?:odi|one[- ]day|t20i?|twenty[- ]20|twenty20|test|ipl|"
-        r"women|woman|female|womens))+\s+"
-        r"(?:h2h|head[- ]to[- ]head)(?:\s+stats?)?\s*$",
+        r"^(.+?)\\s+(?:vs\\.?|v\\.?|versus)\\s+(.+?)\\s+"
+        r"(?:h2h|head[- ]to[- ]head)(?:\\s+stats?)?\\s*$",
         clean,
         flags=re.IGNORECASE,
     )
@@ -166,14 +164,25 @@ def _parse_query(query: str) -> StatsIntent:
         )
 
     last_n = re.search(
-        r"^(.+?)['’]?s?\s+(?:last|latest)\s+(\d{1,2})\s+"
-        r"(?:completed\s+)?innings?(?:\s+scores?)?(?:\s+stats?)?\s*$",
+        r"^(.+?)(?:['’]s)?\\s+(?:last|latest)\\s+(\\d{1,2})\\s+"
+        r"(?:completed\\s+)?innings?(?:\\s+scores?)?(?:\\s+stats?)?\\s*$",
         clean,
         flags=re.IGNORECASE,
     )
     if last_n:
         count = max(1, min(20, int(last_n.group(2))))
         player = _strip_format_words(last_n.group(1).rstrip("'"))
+        if not player:
+            raise StatsCardError("Last-innings queries need a player name.")
+        return StatsIntent(
+            kind="last_n",
+            format_name=format_name,
+            gender=gender,
+            player=player,
+            count=count,
+        )
+
+    player = _strip_format_words(last_n.group(1).rstrip("'"))
         if not player:
             raise StatsCardError("Last-innings queries need a player name.")
         return StatsIntent(
