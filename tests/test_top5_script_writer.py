@@ -86,6 +86,15 @@ def test_slide_one_rejects_unprecedented_hype_filler():
     assert "filler language" in reason
 
 
+def test_slide_one_accepts_smart_package_roundup_headline():
+    result = valid_result()
+    result["slides"][0]["headline"] = (
+        "Gill returns, India reshuffle and three more cricket headlines today"
+    )
+    valid, reason = validate_top5_script(result, stories())
+    assert valid, reason
+
+
 def test_slide_one_has_fourteen_word_cap():
     result = valid_result()
     result["slides"][0]["headline"] = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
