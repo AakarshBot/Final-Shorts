@@ -266,7 +266,7 @@ def _related_article_urls(title: str, original_url: str) -> list[tuple[str, str]
     return [(item[1], item[2]) for item in scored[:MAX_RELATED_ARTICLES]]
 
 
-def _research_story(story, profile: str | None = None) -> str:
+def _research_story(story) -> str:
     title = _story_value(story, "title")
     description = _story_value(story, "description")
     original_url = _story_value(story, "url")
@@ -417,7 +417,7 @@ def _finish_result(result: dict, story, source: str, model: str, language_key: s
 
 
 def write_script(story, language: str = "english") -> dict:
-    source = _research_story(story, profile="cricket") or _source_text(story)
+    source = _research_story(story) or _source_text(story)
     if not source:
         raise ValueError("The selected story contains no usable evidence.")
 
