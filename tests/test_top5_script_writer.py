@@ -124,6 +124,14 @@ def test_story_headline_has_no_unrequested_word_minimum():
     assert valid, reason
 
 
+def test_story_body_requires_two_sentences():
+    result = valid_result()
+    result["slides"][1]["body"] = "Only one sentence."
+    valid, reason = validate_top5_script(result, stories())
+    assert not valid
+    assert "exactly two sentences" in reason
+
+
 def test_story_headline_rejects_hype_filler():
     result = valid_result()
     result["slides"][1]["headline"] = (
