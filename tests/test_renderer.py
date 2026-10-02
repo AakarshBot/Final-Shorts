@@ -314,3 +314,113 @@ def test_production_renderer_uses_approved_handoffs(monkeypatch, tmp_path):
 def test_production_visuals_are_normalised_to_vertical_frame():
     image = renderer._fit_visual_to_frame(Image.new("RGB", (1600, 900), "white"))
     assert image.size == (renderer.WIDTH, renderer.HEIGHT)
+
+
+def test_production_renderer_uses_stats_card_image_height_for_subtitles(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+
+    visual_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual_buffer, format="PNG")
+
+    script = {
+        "approved_for_audio": True,
+        "script": [{"voiceover": "A factual opening sentence."}],
+        "headline": "Gill Injury Scare",
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
+    }
+    visuals = [{
+        "bytes": visual_buffer.getvalue(),
+        "result_key": "stats-card",
+        "card_layout": {
+            "width": 1080,
+            "height": 1920,
+            "image_width": 1080,
+            "image_height": 860,
+            "panel_height": 1060,
+        },
+    }]
+
+    seen = []
+
+    def fake_frame(*args):
+        seen.append(args)
+        return args[0]
+
+    def fake_preview(frames, path):
+        next(iter(frames))
+        path.write_bytes(b"silent")
+        return path
+
+    def fake_mux(silent_video, audio_scenes, output):
+        output.write_bytes(b"final")
+        return output
+
+    monkeypatch.setattr(renderer, "render_frame", fake_frame)
+    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
+    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
+
+    output = tmp_path / "final.mp4"
+    renderer.render_production_video(
+        script,
+        audio,
+        renderer.PREVIEW_SUBTITLE_DATA,
+        visuals,
+        output,
+        headline_text="Gill Injury Scare",
+        source_label="Test Sports Desk",
+    )
+
+    assert seen
+    assert seen[0][0].size == (1080, 1920)
+    assert seen[0][6] == 764
+
+
+def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+
+    visual_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual_buffer, format="PNG")
+
+    script = {
+        "approved_for_audio": True,
+        "script": [{"voiceover": "A factual opening sentence."}],
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
+    }
+    seen = []
+
+    def fake_frame(*args):
+        seen.append(args)
+        return args[0]
+
+    def fake_preview(frames, path):
+        next(iter(frames))
+        path.write_bytes(b"silent")
+        return path
+
+    def fake_mux(silent_video, audio_scenes, output):
+        output.write_bytes(b"final")
+        return output
+
+    monkeypatch.setattr(renderer, "render_frame", fake_frame)
+    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
+    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
+
+    output = tmp_path / "normal.mp4"
+    renderer.render_production_video(
+        script,
+        audio,
+        renderer.PREVIEW_SUBTITLE_DATA,
+        [{"bytes": visual_buffer.getvalue(), "result_key": "real"}],
+        output,
+    )
+
+    assert seen
+    assert seen[0][6] is None

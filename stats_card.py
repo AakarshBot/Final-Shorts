@@ -671,37 +671,18 @@ def _draw_attribution(draw: ImageDraw.ImageDraw) -> None:
     draw.text((MARGIN, HEIGHT - 44), text, font=font, fill=MUTED)
 
 
-def _draw_image_header(base: Image.Image, source_image: bytes | bytearray | Image.Image, title: str) -> None:
-    image = _fit_cover(
-        _asset_image(source_image),
-        (WIDTH, IMAGE_HEIGHT),
-    )
+def _draw_image_header(base: Image.Image, source_image: bytes | bytearray | Image.Image) -> None:
+    image = _fit_cover(_asset_image(source_image), (WIDTH, IMAGE_HEIGHT))
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
-    overlay_draw.rectangle((0, IMAGE_HEIGHT - 280, WIDTH, IMAGE_HEIGHT), fill=(0, 0, 0, 145))
-    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=0.2))
+    overlay_draw.rectangle(
+        (0, IMAGE_HEIGHT - 230, WIDTH, IMAGE_HEIGHT),
+        fill=(0, 0, 0, 125),
+    )
     image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
     base.paste(image, (0, 0))
     draw = ImageDraw.Draw(base)
-    kicker_font = _font(24)
-    draw.text((MARGIN, 34), "STATS CARD", font=kicker_font, fill=WHITE)
-    title_font, lines = _fit_text(
-        draw,
-        title,
-        WIDTH - (MARGIN * 2),
-        76,
-        min_size=46,
-        max_lines=2,
-    )
-    _draw_centered_lines(
-        draw,
-        lines,
-        title_font,
-        WIDTH // 2,
-        IMAGE_HEIGHT - 220,
-        WHITE,
-        gap=4,
-    )
+    draw.text((MARGIN, 34), "STATS CARD", font=_font(24), fill=WHITE)
 
 
 def _asset_image(value: bytes | bytearray | Image.Image) -> Image.Image:
@@ -718,7 +699,7 @@ def _asset_image(value: bytes | bytearray | Image.Image) -> Image.Image:
 
 def _career_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     base = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
-    _draw_image_header(base, source_image, stats["player"])
+    _draw_image_header(base, source_image)
     context = [
         f"{stats['format']} · {stats['team'] or 'Team not recorded'} · CAREER",
         f"{stats['matches']} matches · {stats['innings']} batting innings",
@@ -743,7 +724,7 @@ def _career_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
 
 def _h2h_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     base = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
-    _draw_image_header(base, source_image, f"{stats['team1']} vs {stats['team2']}")
+    _draw_image_header(base, source_image)
     context = [
         f"{stats['format']} · HEAD-TO-HEAD · {stats['matches']} matches",
         f"Date range: {_date_label(stats['first_date'])} – {_date_label(stats['latest_date'])}",
@@ -766,61 +747,102 @@ def _h2h_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
 
 def _last_n_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     base = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
-    _draw_image_header(base, source_image, stats["player"])
-    count_text = f"{stats['count_available']} completed batting innings shown"
-    if stats["count_available"] < stats["count_requested"]:
-        count_text += f" · only {stats['count_available']} available in the dataset"
+    _draw_image_header(base, source_image)
+    draw = ImageDraw.Draw(base)
+
+    count_available = int(stats["count_available"])
+    count_requested = int(stats["count_requested"])
     context = [
-        f"{stats['format']} · LAST {stats['count_requested']} COMPLETED INNINGS",
-        count_text,
+        f"{count_available} completed innings shown"
+        + (
+            f" · {count_requested - count_available} fewer than requested"
+            if count_available < count_requested
+            else ""
+        ),
         f"Stats through {_date_label(stats['last_date'])}",
     ]
     y = _draw_header(
         base,
-        f"{stats['player']} · last {stats['count_requested']} innings",
+        f"{stats['player']} · last {count_requested} innings",
         context,
     )
-    draw = ImageDraw.Draw(base)
-    table_top = y + 10
-    row_h = 63
-    x_date = MARGIN
-    x_opp = MARGIN + 220
-    x_score = WIDTH - MARGIN - 120
-    header_font = _font(22)
-    body_font = _font(31)
-    draw.text((x_date, table_top), "DATE", font=header_font, fill=MUTED)
-    draw.text((x_opp, table_top), "OPPONENT", font=header_font, fill=MUTED)
-    draw.text((x_score, table_top), "SCORE", font=header_font, fill=MUTED)
-    y = table_top + 38
-    for row in stats["innings"]:
-        draw.line((MARGIN, y - 7, WIDTH - MARGIN, y - 7), fill=LINE, width=2)
-        draw.text((x_date, y), _date_label(row["date"]), font=body_font, fill=INK)
-        opponent = row["opponent"] or "—"
-        draw.text((x_opp, y), opponent[:22], font=body_font, fill=INK)
-        score_box = draw.textbbox((0, 0), row["score"], font=body_font)
-        draw.text(
-            (x_score + 120 - (score_box[2] - score_box[0]), y),
-            row["score"],
-            font=body_font,
-            fill=INK,
-        )
-        y += row_h
-    y += 8
+
+    # Put the compact summary before the table so 20 innings still fit cleanly.
     metrics = [
         ("Runs", f"{stats['runs']:,}"),
         ("Average", f"{stats['average']:.2f}" if stats["average"] is not None else "—"),
         ("100s", str(stats["hundreds"])),
         ("50s", str(stats["fifties"])),
     ]
-    _draw_metric_tiles(draw, metrics, y, columns=4, tile_height=118)
-    note = (
-        "Completed batting innings only. DNB innings are not listed; not-out scores use *."
+    metrics_bottom = _draw_metric_tiles(
+        draw,
+        metrics,
+        y + 10,
+        columns=4,
+        tile_height=104,
     )
-    note_font = _font(20, bold=False)
-    draw.text((MARGIN, HEIGHT - 72), note, font=note_font, fill=MUTED)
+
+    table_top = metrics_bottom + 28
+    table_header_font = _font(19)
+    draw.text((MARGIN, table_top), "RECENT INNINGS", font=table_header_font, fill=BRAND_BLUE)
+    header_y = table_top + 30
+    small_font = _font(17, bold=False)
+    draw.text((MARGIN, header_y), "DATE · OPPONENT", font=small_font, fill=MUTED)
+    score_header = "SCORE"
+    score_box = draw.textbbox((0, 0), score_header, font=small_font)
+    draw.text(
+        (WIDTH - MARGIN - (score_box[2] - score_box[0]), header_y),
+        score_header,
+        font=small_font,
+        fill=MUTED,
+    )
+
+    gap = 18
+    column_width = (WIDTH - (MARGIN * 2) - gap) // 2
+    rows_per_column = max(1, (len(stats["innings"]) + 1) // 2)
+    row_height = 55
+    body_font = _font(25)
+    score_font = _font(30)
+    table_rows_top = header_y + 26
+
+    for column in range(2):
+        column_rows = stats["innings"][
+            column * rows_per_column:(column + 1) * rows_per_column
+        ]
+        x = MARGIN + column * (column_width + gap)
+        for row_index, row in enumerate(column_rows):
+            row_y = table_rows_top + row_index * (row_height + 8)
+            draw.rounded_rectangle(
+                (x, row_y, x + column_width, row_y + row_height),
+                radius=12,
+                fill=(255, 255, 255),
+                outline=LINE,
+                width=1,
+            )
+            score = str(row.get("score") or "—")
+            score_box = draw.textbbox((0, 0), score, font=score_font)
+            score_width = score_box[2] - score_box[0]
+            draw.text(
+                (x + column_width - score_width - 16, row_y + 10),
+                score,
+                font=score_font,
+                fill=INK,
+            )
+            opponent = str(row.get("opponent") or "—")
+            left_width = column_width - score_width - 42
+            left_text = f"{_date_label(row.get('date'))} · {opponent}"
+            left_font = body_font
+            while left_font.size > 17:
+                box = draw.textbbox((0, 0), left_text, font=left_font)
+                if box[2] - box[0] <= left_width:
+                    break
+                left_font = _font(left_font.size - 1)
+            draw.text((x + 14, row_y + 13), left_text, font=left_font, fill=INK)
+
+    note = "Completed batting innings only · * = not out"
+    draw.text((MARGIN, HEIGHT - 76), note, font=_font(18, bold=False), fill=MUTED)
     _draw_attribution(draw)
     return base
-
 
 def _stats_for_intent(intent: StatsIntent) -> dict[str, Any]:
     if intent.kind == "h2h":
@@ -871,6 +893,13 @@ def build_stats_card(
         "source": SOURCE_NAME,
         "query": _normalise(query),
         "stats": stats,
+        "layout": {
+            "width": WIDTH,
+            "height": HEIGHT,
+            "image_width": WIDTH,
+            "image_height": IMAGE_HEIGHT,
+            "panel_height": HEIGHT - IMAGE_HEIGHT,
+        },
         "intent": {
             "kind": intent.kind,
             "format": intent.format_name,

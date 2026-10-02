@@ -567,6 +567,7 @@ def _draw_subtitles(
     base: Image.Image,
     subtitle_data: dict,
     t: float,
+    y_position: int | None = None,
 ) -> None:
     cue = _cue_at_time(subtitle_data, t)
     if cue is None:
@@ -599,7 +600,7 @@ def _draw_subtitles(
         )
         line_start = line_end
     total_height = sum(line_heights) + SUBTITLE_LINE_GAP * max(0, len(lines) - 1)
-    y = SUBTITLE_Y - total_height // 2
+    y = (int(y_position) if y_position is not None else SUBTITLE_Y) - total_height // 2
 
     word_index = 0
     for row, line in enumerate(lines):
@@ -642,6 +643,7 @@ def render_frame(
     headline_text: str = HEADLINE_TEXT,
     headline_enabled: bool = True,
     source_label: str | None = None,
+    subtitle_y: int | None = None,
 ) -> Image.Image:
     if not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
@@ -658,7 +660,7 @@ def render_frame(
             t,
             str(subtitle_data.get("language") or "english"),
         )
-    _draw_subtitles(frame, subtitle_data, t)
+    _draw_subtitles(frame, subtitle_data, t, subtitle_y)
 
     _paste_logo(frame)
     if source_label is None:
@@ -921,9 +923,13 @@ def render_production_video(
     for index, visual in enumerate(visuals, 1):
         if not isinstance(visual, dict):
             raise ValueError(f"Visual {index} is malformed.")
-        prepared_visuals.append(
-            _fit_visual_to_frame(visual.get("bytes"))
-        )
+        result_key = str(visual.get("result_key") or "").strip().casefold()
+        layout = visual.get("card_layout") if isinstance(visual.get("card_layout"), dict) else {}
+        prepared_visuals.append({
+            "image": _fit_visual_to_frame(visual.get("bytes")),
+            "is_stats_card": result_key == "stats-card",
+            "image_height": int(layout.get("image_height") or 0),
+        })
 
     durations = []
     for index, scene in enumerate(audio_scenes, 1):
@@ -952,13 +958,19 @@ def render_production_video(
             ):
                 elapsed += durations[scene_index]
                 scene_index += 1
+            visual = prepared_visuals[scene_index]
+            subtitle_y = None
+            if visual["is_stats_card"]:
+                image_height = visual["image_height"] or 860
+                subtitle_y = max(64, image_height - 96)
             yield render_frame(
-                prepared_visuals[scene_index],
+                visual["image"],
                 t,
                 subtitle_data,
                 headline_text or HEADLINE_TEXT,
                 headline_enabled,
                 source_label,
+                subtitle_y,
             )
 
     try:

@@ -251,3 +251,67 @@ def test_query_parses_tigzig_columns_and_data(monkeypatch):
         {"name": "MS Dhoni", "runs": 4632},
         {"name": "Virat Kohli", "runs": 14797},
     ]
+
+
+def test_stats_card_result_exposes_player_image_layout(monkeypatch, tmp_path):
+    def fake_query(sql):
+        if "FROM people" in sql:
+            return [{
+                "identifier": "abc123",
+                "name": "MS Dhoni",
+                "unique_name": "MS Dhoni",
+            }]
+        return [{
+            "match_id": "1",
+            "start_date": "2020-01-01",
+            "innings": 1,
+            "batting_team": "India",
+            "bowling_team": "Australia",
+            "striker": "MS Dhoni",
+            "runs": 50,
+            "balls_faced": 60,
+            "dismissed": 1,
+        }]
+
+    monkeypatch.setattr(stats_card, "_query", fake_query)
+    result = stats_card.build_stats_card("MS Dhoni ODI stats", _image_bytes(), output_dir=tmp_path)
+
+    assert result["layout"]["width"] == 1080
+    assert result["layout"]["height"] == 1920
+    assert result["layout"]["image_width"] == 1080
+    assert result["layout"]["image_height"] == 860
+    assert result["layout"]["panel_height"] == 1060
+
+
+def test_last_n_card_renders_twenty_innings_without_error(monkeypatch, tmp_path):
+    def fake_query(sql):
+        if "FROM people" in sql:
+            return [{
+                "identifier": "abc123",
+                "name": "Virat Kohli",
+                "unique_name": "Virat Kohli",
+            }]
+        return [
+            {
+                "match_id": str(index),
+                "start_date": f"2026-01-{index:02d}",
+                "innings": 1,
+                "batting_team": "India",
+                "bowling_team": "Australia",
+                "striker": "Virat Kohli",
+                "runs": index * 4,
+                "balls_faced": 20 + index,
+                "dismissed": 1,
+            }
+            for index in range(1, 21)
+        ]
+
+    monkeypatch.setattr(stats_card, "_query", fake_query)
+    result = stats_card.build_stats_card(
+        "Virat Kohli last 20 innings scores",
+        _image_bytes(),
+        output_dir=tmp_path,
+    )
+
+    with Image.open(BytesIO(result["bytes"])) as card:
+        assert card.size == (1080, 1920)
