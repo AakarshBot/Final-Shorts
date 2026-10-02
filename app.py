@@ -1388,7 +1388,7 @@ def _live_start_story(index: int):
     }
 
 
-def _live_generate_script(forceful: bool = False):
+def _live_generate_script():
     selected_index = st.session_state.get("live_selected_topic")
     topics = st.session_state.get("live_topics") or []
     if selected_index is None or not 0 <= selected_index < len(topics):
@@ -1403,18 +1403,10 @@ def _live_generate_script(forceful: bool = False):
         if st.session_state.get("live_topics_profile") == "niche_sports"
         else write_script
     )
-    if writer is write_script:
-        script = writer(
-            story,
-            language=st.session_state.get("live_script_language", "english"),
-            forceful=forceful,
-            previous_script=st.session_state.get("live_script_data") if forceful else None,
-        )
-    else:
-        script = writer(
-            story,
-            language=st.session_state.get("live_script_language", "english"),
-        )
+    script = writer(
+        story,
+        language=st.session_state.get("live_script_language", "english"),
+    )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
     st.session_state.live_upload_titles = list(script.get("titles") or [])
@@ -1957,14 +1949,14 @@ def _render_live_script():
                 + st.session_state.live_script_error
             )
             if st.button(
-                "Retry Scriptwriter — force full-story coverage",
+                "Retry Scriptwriter",
                 type="primary",
                 width="stretch",
                 key="live-retry-script",
             ):
                 try:
                     with st.spinner("Rewriting the full story…"):
-                        _live_generate_script(forceful=True)
+                        _live_generate_script()
                     st.session_state.live_stage = "02 · Script"
                     st.session_state.live_script_error = ""
                 except Exception as exc:
@@ -2012,42 +2004,6 @@ def _render_live_script():
                 key=f"live-script-scene-{story_id}-{index}",
             )
         )
-
-    if not st.session_state.live_approved_script:
-        is_cricket = st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
-        if is_cricket:
-            if st.button(
-                "Rewrite script — improve retention + information",
-                width="stretch",
-                key="live-forceful-retry-script",
-            ):
-                selected_index = st.session_state.get("live_selected_topic")
-                try:
-                    with st.spinner("Rewriting the full story…"):
-                        _live_generate_script(forceful=True)
-                    st.session_state.live_approved_script = None
-                    st.session_state.live_script_error = ""
-                    st.session_state.live_audio_data = None
-                    st.session_state.live_approved_audio = None
-                    st.session_state.live_subtitle_data = None
-                    st.session_state.live_handoff_error = ""
-                    st.session_state.live_visual_result = None
-                    st.session_state.live_manual_visual_result = None
-                    st.session_state.live_real_image_result = None
-                    st.session_state.live_ai_image_result = None
-                    st.session_state.live_ranked_visual_result = None
-                    st.session_state.live_visual_crops = {}
-                    st.session_state.live_visual_deleted = set()
-                    st.session_state.live_visual_assignments = {}
-                    st.session_state.live_visuals_approved = False
-                    st.session_state.live_rendered_video_path = None
-                    st.session_state.live_render_error = ""
-                    st.session_state.live_upload_qc_approved = False
-                    st.session_state.live_upload_result = None
-                    st.session_state.live_upload_qc = None
-                except Exception as exc:
-                    st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
-                st.rerun()
 
         if st.button(
             "Approve script and hand to Audio",
@@ -2852,26 +2808,6 @@ def render_scriptwriter():
             st.session_state.upload_qc_approved=False
             st.session_state.upload_result=None
             st.session_state.upload_qc=None
-
-        if st.session_state.get("topic_desk_profile") in {"cricket_india_asia", "cricket_global"} and st.session_state.get("script_data"):
-            if st.button("Rewrite script — improve retention + information", width="stretch", key="forceful-test-script-retry"):
-                with st.spinner("Rewriting the full story…"):
-                    st.session_state.script_data=write_script(
-                        {"title":topic.title,"description":topic.description,"url":topic.url,"source":topic.source},
-                        language=language.casefold(),
-                        forceful=True,
-                        previous_script=st.session_state.script_data,
-                    )
-                st.session_state.approved_script=None
-                st.session_state.audio_data=None
-                st.session_state.approved_audio=None
-                st.session_state.subtitle_data=None
-                st.session_state.approved_subtitles=None
-                st.session_state.renderer_previews=None
-                st.session_state.rendered_video_path=None
-                st.session_state.upload_qc_approved=False
-                st.session_state.upload_result=None
-                st.session_state.upload_qc=None
 
     script=st.session_state.script_data
     if not script:
