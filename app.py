@@ -1064,6 +1064,7 @@ def _stats_card_crop_dialog(image_bytes: bytes, live: bool):
     from streamlit_cropper import st_cropper
 
     target_ratio = WIDTH / IMAGE_HEIGHT
+    crop_aspect_ratio = (WIDTH, IMAGE_HEIGHT)
     canvas_width = max(image.width, int(round(image.height * target_ratio)))
     canvas_height = max(image.height, int(round(canvas_width / target_ratio)))
     background = ImageOps.fit(
@@ -1080,7 +1081,7 @@ def _stats_card_crop_dialog(image_bytes: bytes, live: bool):
     cropped = st_cropper(
         canvas,
         realtime_update=True,
-        aspect_ratio=target_ratio,
+        aspect_ratio=crop_aspect_ratio,
         return_type="image",
         key=cropper_key,
         stroke_width=2,
