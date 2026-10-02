@@ -525,8 +525,6 @@ def _select(
 
     return chosen[:limit]
 
-
-
 def fetch_topics(
     profile: str = "cricket_india_asia",
     more: bool = False,
@@ -543,11 +541,9 @@ def fetch_topics(
 
     if keyword:
         clean_keyword = _clean(keyword).replace('"', " ")
-        queries = (
-            []
-            if not clean_keyword
-            else [query.format(keyword=clean_keyword) for query in KEYWORD_QUERIES]
-        )
+        queries = [] if not clean_keyword else [
+            query.format(keyword=clean_keyword) for query in KEYWORD_QUERIES
+        ]
     elif profile == "niche_sports":
         queries = [
             '(tennis OR badminton OR squash OR "table tennis") when:3d',
@@ -572,18 +568,21 @@ def fetch_topics(
 
     if len(chosen) < limit and profile != "niche_sports":
         try:
+            if keyword:
+                gdelt_query = f'"{_clean(keyword)}" cricket'
+            elif profile == "cricket_global":
+                gdelt_query = (
+                    '(cricket record milestone rivalry controversy comeback upset '
+                    'breakout women domestic associate board)'
+                )
+            else:
+                gdelt_query = (
+                    '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone '
+                    'rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
+                )
+
             fallback_rows = _prepare(
-                _fetch_gdelt(
-                    (
-                        f'"{_clean(keyword)}" cricket'
-                        if keyword
-                        else (
-                            '(cricket record milestone rivalry controversy comeback upset breakout women domestic associate board)'
-                            if profile == "cricket_global"
-                            else '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
-                        )
-                    )
-                ),
+                _fetch_gdelt(gdelt_query),
                 seen_urls | {_canonical_url(topic.url) for topic in chosen},
                 profile=profile,
             )
