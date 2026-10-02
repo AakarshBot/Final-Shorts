@@ -359,7 +359,7 @@ def test_top5_fetcher_more_excludes_existing(monkeypatch):
         )
         for index in range(20)
     ]
-    monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda query: rows)
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda query, timeout: rows)
     result = topic_fetcher.fetch_top5_topics(
         more=True,
         exclude_topics=existing,
