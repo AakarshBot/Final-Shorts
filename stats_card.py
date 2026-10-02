@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 import requests
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 
 
 API_URL = "https://db-mcp.tigzig.com/v1/query/duckdb"
