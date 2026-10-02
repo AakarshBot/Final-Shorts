@@ -315,3 +315,240 @@ def test_last_n_card_renders_twenty_innings_without_error(monkeypatch, tmp_path)
 
     with Image.open(BytesIO(result["bytes"])) as card:
         assert card.size == (1080, 1920)
+
+
+
+def _registry_fixture(*people_rows):
+    people = {}
+    aliases = {}
+    for identifier, name, unique_name, *variants in people_rows:
+        values = {value for value in (name, unique_name, *variants) if value}
+        people[identifier] = {
+            "identifier": identifier,
+            "name": name,
+            "unique_name": unique_name,
+            "aliases": set(values),
+        }
+        for value in values:
+            aliases.setdefault(stats_card._name_key(value), set()).add(identifier)
+    return people, aliases
+
+
+def test_cricsheet_registry_loads_canonical_names_and_variants(monkeypatch):
+    responses = iter(
+        [
+            type(
+                "Response",
+                (),
+                {
+                    "text": (
+                        "identifier,name,unique_name,key_cricinfo\n"
+                        "vk1,V Kohli,V Kohli,253802\n"
+                        "rs1,RG Sharma,RG Sharma,34102\n"
+                    ),
+                    "raise_for_status": lambda self: None,
+                },
+            )(),
+            type(
+                "Response",
+                (),
+                {
+                    "text": (
+                        "identifier,name\n"
+                        "vk1,Virat Kohli\n"
+                        "vk1,V. Kohli\n"
+                        "rs1,Rohit Sharma\n"
+                    ),
+                    "raise_for_status": lambda self: None,
+                },
+            )(),
+        ]
+    )
+    monkeypatch.setattr(stats_card.requests, "get", lambda *args, **kwargs: next(responses))
+    stats_card._cricsheet_registry.cache_clear()
+
+    people, aliases = stats_card._cricsheet_registry(123456)
+
+    assert people["vk1"]["unique_name"] == "V Kohli"
+    assert aliases[stats_card._name_key("Virat Kohli")] == {"vk1"}
+    assert aliases[stats_card._name_key("V. Kohli")] == {"vk1"}
+    assert aliases[stats_card._name_key("Rohit Sharma")] == {"rs1"}
+
+
+def test_resolve_full_player_name_to_canonical_match_name(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("vk1", "V Kohli", "V Kohli", "Virat Kohli", "V. Kohli"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+
+    player = stats_card._resolve_player(stats_card._parse_query("Virat Kohli ODI stats"))
+
+    assert player["identifier"] == "vk1"
+    assert player["name"] == "V Kohli"
+    assert player["unique_name"] == "V Kohli"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "v. kohli",
+        "V KOHLI",
+        "Virat Kohli",
+    ],
+)
+def test_resolve_name_normalization_variants(monkeypatch, query):
+    people, aliases = _registry_fixture(
+        ("vk1", "V Kohli", "V Kohli", "Virat Kohli", "V. Kohli"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+
+    player = stats_card._resolve_player(stats_card._parse_query(query))
+
+    assert player["identifier"] == "vk1"
+
+
+def test_resolve_published_name_change_alias(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("p1", "S Example", "S Example", "Sam Oldsurname", "Sam Newsurname"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+
+    player = stats_card._resolve_player(
+        stats_card._parse_query("Sam Newsurname ODI stats")
+    )
+
+    assert player["identifier"] == "p1"
+    assert player["unique_name"] == "S Example"
+
+
+def test_resolve_unique_surname_without_guessing(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("vk1", "V Kohli", "V Kohli", "Virat Kohli"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+
+    player = stats_card._resolve_player(
+        stats_card._parse_query("Kohli ODI stats")
+    )
+
+    assert player["identifier"] == "vk1"
+
+
+def test_duplicate_name_uses_requested_format_to_disambiguate(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("p1", "A Smith", "AB Smith"),
+        ("p2", "A Smith", "AC Smith"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+
+    def fake_query(sql):
+        if "FROM ball_by_ball_odi_men" in sql:
+            return [{"striker": "AB Smith"}]
+        raise AssertionError(f"Unexpected SQL: {sql}")
+
+    monkeypatch.setattr(stats_card, "_query", fake_query)
+
+    player = stats_card._resolve_player(
+        stats_card._parse_query("A Smith ODI stats")
+    )
+
+    assert player["identifier"] == "p1"
+    assert player["unique_name"] == "AB Smith"
+
+
+def test_duplicate_name_remains_ambiguous_when_format_cannot_disambiguate(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("p1", "A Smith", "AB Smith"),
+        ("p2", "A Smith", "AC Smith"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+    monkeypatch.setattr(stats_card, "_query", lambda sql: [])
+
+    with pytest.raises(stats_card.StatsCardError, match="ambiguous"):
+        stats_card._resolve_player(
+            stats_card._parse_query("A Smith ODI stats")
+        )
+
+
+def test_high_confidence_typo_is_resolved(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("vk1", "V Kohli", "V Kohli", "Virat Kohli"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+
+    player = stats_card._resolve_player(
+        stats_card._parse_query("Virat Kholi ODI stats")
+    )
+
+    assert player["identifier"] == "vk1"
+
+
+def test_close_fuzzy_matches_are_not_auto_selected(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("p1", "John Smith", "John Smith"),
+        ("p2", "John Smyth", "John Smyth"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+
+    with pytest.raises(stats_card.StatsCardError, match="Could not find player"):
+        stats_card._resolve_player(
+            stats_card._parse_query("John Smit ODI stats")
+        )
+
+
+def test_registry_outage_falls_back_to_tigzig_people(monkeypatch):
+    def fail_registry(_):
+        raise stats_card.requests.Timeout("registry unavailable")
+
+    def fake_query(sql):
+        assert "FROM people" in sql
+        return [{
+            "identifier": "vk1",
+            "name": "V Kohli",
+            "unique_name": "V Kohli",
+        }]
+
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", fail_registry)
+    monkeypatch.setattr(stats_card, "_query", fake_query)
+
+    player = stats_card._resolve_player(
+        stats_card._parse_query("Virat Kohli ODI stats")
+    )
+
+    assert player["identifier"] == "vk1"
+    assert player["unique_name"] == "V Kohli"
+
+
+def test_player_rows_uses_canonical_unique_name(monkeypatch):
+    captured = []
+
+    def fake_query(sql):
+        captured.append(sql)
+        return []
+
+    monkeypatch.setattr(stats_card, "_query", fake_query)
+
+    stats_card._player_rows(
+        stats_card._parse_query("V Kohli ODI stats"),
+        {
+            "identifier": "vk1",
+            "name": "V Kohli",
+            "unique_name": "V Kohli",
+        },
+    )
+
+    assert "lower(b.striker) = lower('V Kohli')" in captured[0]
+    assert "IN (" not in captured[0]
+
+
+def test_resolved_player_with_no_format_data_reports_data_gap(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("vk1", "V Kohli", "V Kohli", "Virat Kohli"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+    monkeypatch.setattr(stats_card, "_query", lambda sql: [])
+
+    with pytest.raises(stats_card.StatsCardError, match="No ODI batting data"):
+        stats_card._stats_for_intent(
+            stats_card._parse_query("Virat Kohli ODI stats")
+        )
