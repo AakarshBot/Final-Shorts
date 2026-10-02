@@ -322,7 +322,7 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
             (x - box[0], y - box[1]),
             line,
             font=headline_font,
-            fill=(*INK, 255) if "INK" in globals() else (14, 16, 20, 255),
+            fill=(14, 16, 20, 255),
         )
 
     if body:
@@ -348,7 +348,7 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
                         ),
                         line,
                         font=body_font,
-                        fill=(*MUTED, 255) if "MUTED" in globals() else (86, 91, 100, 255),
+                        fill=(86, 91, 100, 255),
                     )
                     cursor_y += line_height + TOP5_BODY_LINE_GAP
                 if paragraph_index < len(paragraphs) - 1:
