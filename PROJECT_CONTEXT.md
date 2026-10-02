@@ -69,38 +69,43 @@ Status: **Approved.**
 
 ## Scriptwriter — Function 02
 
-Primary writer:
-- Groq `openai/gpt-oss-120b`.
-- Recovery is Groq `openai/gpt-oss-20b` only when the primary call fails or its output fails local validation.
-- One Scriptwriter generation call produces the complete script package.
-- If the primary generation fails local validation, the existing 20B fallback receives the exact validation failure as recovery guidance; the factory still makes at most two model calls.
+Cricket writer:
+- Rewritten from scratch as a single direct function.
+- Research first uses the selected article and searches for up to two related current reports when available, so the LLM receives enough factual material to compress the story.
+- One model call generates the complete four-slide package.
+- If the generated package breaks a hard generation rule, the invalid draft is never shown in Manual QC; one hidden rewrite is made with the exact failure.
+- The first call uses Groq `openai/gpt-oss-120b`.
+- The hidden rewrite/fallback uses Groq `openai/gpt-oss-20b`.
+- The writer makes at most two model calls for one generation attempt.
+- The LLM is explicitly instructed before generation that Slide 1 must contain 13 words or fewer and the full narration must be 32 seconds or less at roughly 150 words per minute.
+- A script at 32 seconds or less is accepted for the downstream Audio speed correction; a script estimated above 32 seconds is hidden and rewritten before Manual QC.
+- The main subject name is a required structured field and must appear in spoken narration; a player must not be described only by age, role or pronoun when the exact name is available.
 
 Narration:
 - Sports only.
 - Regular Shorts only; no Top-5 or Deep-Dive architecture.
-- One persona: **HYPE COMMENTATOR**.
-- Exactly 4 or 5 scenes.
-- Scene 1 targets 10–12 words, hard maximum 14.
-- Target roughly 22–27 seconds; never exceed 30 seconds.
-- Complete, information-dense story using only supplied evidence.
-- No invented facts, quotes, motives, numbers, predictions, filler, CTA, generic setup or retention bait.
+- One persona: HYPE COMMENTATOR.
+- Exactly 4 scenes.
+- Compress all material factual information from the research packet into the four scenes, removing only repetition, boilerplate and low-value wording.
+- No invented facts, quotes, motives, numbers, predictions, filler, CTA or viewer-directed retention bait.
 - Every scene carries `primary_entity`, `visual_intent`, `specific_search_prompt`, and `sport_or_topic_category`.
 
 Generated publish metadata:
-- `headline`: exactly **3 or 4 words**.
-- `titles`: exactly **3** title candidates.
-- `seo_description`: concise description.
+- `headline`: exactly 3 or 4 words.
+- `titles`: exactly 3 title candidates.
+- `seo_description`: concise story-specific description.
 - `hashtags`: 3–5 relevant hashtags.
-- `comment`: one concise discussion-oriented public-upload comment grounded in the supplied story.
+- `comment`: one concise discussion-oriented public-upload comment.
 
 Human Scriptwriter QC:
-- The heading is displayed in an editable box with the narration.
-- Narration scenes are independently editable.
-- Leaving the heading unchanged submits the generated heading as-is.
+- Manual QC receives only a script that has passed the writer's hidden generation/rewrite checks.
+- The heading remains editable with the narration.
+- Narration scenes remain independently editable.
 - Approval stores the complete package in the approved Scriptwriter handoff.
+- There is no manual AI rewrite button; regeneration belongs inside the Scriptwriter function before QC.
 - Titles, description, hashtags and comment are preserved for the later Upload QC stage.
 
-Status: **Approved.**
+Status: **Approved after simplification/regression fix.**
 
 ## Audio — Function 03
 
