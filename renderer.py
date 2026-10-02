@@ -457,7 +457,7 @@ def _top5_sentences(text: str) -> list[str]:
     return sentences[:2]
 
 
-def _fit_top5_headline(text: str, story_number: int = 0):
+def _fit_top5_headline(text: str):
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     clean = " ".join(str(text or "").split())
     if not clean:
@@ -551,7 +551,7 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
 
     language = str(card.get("language") or "english")
     story_number = int(card.get("story_number") or 0)
-    headline_font, headline_lines = _fit_top5_headline(headline, story_number)
+    headline_font, headline_lines = _fit_top5_headline(headline)
 
     canvas = Image.new("RGBA", (WIDTH, HEIGHT), (*TOP5_PANEL_BACKGROUND, 255))
     image = _fit_top5_image(base)
