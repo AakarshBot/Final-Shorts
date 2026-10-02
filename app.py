@@ -257,6 +257,18 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   border-color:var(--line-strong);
   box-shadow:var(--shadow-hover);
 }
+.st-key-landing-test,.st-key-landing-live{
+  position:relative;
+  overflow:hidden;
+}
+.st-key-landing-test::before,.st-key-landing-live::before{
+  content:"";
+  position:absolute;
+  inset:0 0 auto 0;
+  height:3px;
+  background:var(--accent);
+}
+.st-key-landing-live::before{background:var(--primary);}
 .workspace-index{font-size:.61rem;font-weight:820;color:var(--accent);letter-spacing:.09em;}
 .workspace-name{font-size:3rem;font-weight:860;letter-spacing:-.06em;line-height:.9;margin:.5rem 0 .45rem;color:var(--ink);}
 .workspace-desc{font-size:.81rem;color:var(--muted);line-height:1.35;max-width:420px;}
@@ -314,6 +326,63 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   border-color:var(--line-strong);
   box-shadow:var(--shadow);
 }
+.st-key-topic-tile-{
+  width:100%;
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"]{
+  background:var(--surface-raised);
+  border:1px solid var(--line);
+  border-radius:14px;
+  margin-bottom:9px;
+  box-shadow:0 1px 2px rgba(21,23,19,.025);
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"]:hover{
+  border-color:var(--line-strong);
+  box-shadow:var(--shadow);
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stExpander"]{
+  border:0;
+  border-radius:14px;
+  background:transparent;
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stExpander"] summary{
+  min-height:62px;
+  padding:.85rem 1rem;
+  font-size:.84rem;
+  line-height:1.25;
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stExpander"] summary:hover{
+  background:var(--surface-soft);
+}
+.topic-tile-meta{
+  display:flex;
+  justify-content:space-between;
+  gap:10px;
+  padding:0 0 8px;
+  border-bottom:1px solid var(--line);
+  font-size:.59rem;
+  font-weight:750;
+  color:var(--subtle);
+  letter-spacing:.045em;
+  text-transform:uppercase;
+}
+.topic-tile-meta .topic-rank{font-size:inherit;}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stHorizontalBlock"]{
+  padding:9px 0;
+  border-bottom:1px solid var(--line);
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stHorizontalBlock"]:last-child{
+  border-bottom:0;
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] .topic-title{
+  min-height:0;
+  margin:0 0 4px;
+}
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stButton"]>button{
+  min-height:38px!important;
+  padding:.35rem .72rem!important;
+}
+
 .topic-card-state,.topic-top{display:flex;align-items:center;justify-content:space-between;min-height:14px;}
 .topic-state-label{font-size:.6rem;font-weight:820;letter-spacing:.04em;color:var(--accent);}
 .topic-rank{font-size:.6rem;font-weight:820;letter-spacing:.09em;color:var(--accent);}
@@ -421,6 +490,23 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
 .pipeline-wrap{
   margin:16px 0 18px;
   padding:12px 12px 10px;
+
+.pipeline-wrap{
+  position:relative;
+}
+.pipeline-step{
+  transition:border-color .12s ease,background .12s ease,box-shadow .12s ease,transform .12s ease;
+}
+.pipeline-step:hover{
+  border-color:var(--line-strong);
+  transform:translateY(-1px);
+}
+.pipeline-step.current{
+  box-shadow:0 0 0 2px var(--accent-soft);
+}
+.pipeline-step.complete{
+  box-shadow:inset 3px 0 0 var(--success);
+}
   background:var(--surface-raised);
   border:1px solid var(--line);
   border-radius:14px;
@@ -512,6 +598,13 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
     padding:11px 12px;
   }
   .topic-title{font-size:.92rem;-webkit-line-clamp:3;}
+  [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stExpander"] summary{
+    min-height:56px;
+    padding:.75rem .82rem;
+  }
+  [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stButton"]>button{
+    min-height:42px!important;
+  }
   .selected-story-title{font-size:.98rem;}
   .pipeline-wrap{padding:10px 10px 9px;}
   .pipeline-meta{align-items:flex-start;}
@@ -2735,81 +2828,87 @@ def render_topic_fetcher():
             row,
             enumerate(topics[start:start + 3], start=start),
         ):
-            members = tile.group_members or (tile,)
-            members = tuple(sorted(members, key=lambda item: item.score, reverse=True))
+            members = tuple(sorted(
+                tile.group_members or (tile,),
+                key=lambda item: item.score,
+                reverse=True,
+            ))
+            tile_title = (
+                tile.group_key.split(":", 1)[1].title()
+                if tile.group_key.startswith("player:")
+                else tile.title
+            )
+            headline_label = "headline" if len(members) == 1 else "headlines"
+
             with col:
-                with st.container(key=f"topic-card-{index}"):
-                    selected_label = (
-                        '<span class="topic-state-label selected">Selected</span>'
-                        if (
-                            st.session_state.selected_topic == index
-                            and any(
-                                topic.url == st.session_state.topics[index].url
-                                for topic in members
-                            )
-                        )
-                        else ""
-                    )
-                    tile_label = f'<span class="topic-rank">TILE {index + 1:02d}</span>'
-                    if tile.group_key.startswith("player:"):
-                        group_name = tile.group_key.split(":", 1)[1].title()
-                        tile_label += f'<span class="topic-meta">{group_name}</span>'
+                with st.expander(
+                    f"**{tile_title}** · {len(members)} {headline_label}",
+                    expanded=False,
+                    key=f"topic-tile-{index}",
+                ):
                     st.markdown(
-                        f'<div class="topic-card-state">{tile_label}{selected_label}</div>',
+                        f'<div class="topic-tile-meta"><span class="topic-rank">TILE {index + 1:02d}</span>'
+                        f'<span>{len(members)} {headline_label}</span></div>',
                         unsafe_allow_html=True,
                     )
-
                     for headline_index, member in enumerate(members):
                         is_selected = (
                             st.session_state.selected_topic == index
                             and st.session_state.topics[index].url == member.url
                         )
-                        st.markdown(
-                            f'<div class="topic-title">{member.title}</div>'
-                            f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b}</div>',
-                            unsafe_allow_html=True,
-                        )
-                        label = "Selected" if is_selected else "Select"
-                        if st.button(
-                            label,
-                            key=f"topic-select-{index}-{headline_index}",
-                            width="stretch",
+                        with st.container(
+                            horizontal=True,
+                            vertical_alignment="center",
+                            horizontal_alignment="distribute",
+                            gap="small",
                         ):
-                            st.session_state.topics[index] = replace(
-                                member,
-                                group_key=tile.group_key,
-                                group_members=members,
-                            )
-                            st.session_state.selected_topic = index
-                            st.session_state.test_stage = "02 · Scriptwriter"
-                            st.session_state.test_pipeline_notice = {
-                                "confirmed": "Story confirmed",
-                                "next": "Moving to Script.",
-                            }
-                            st.session_state.script_data = None
-                            st.session_state.approved_script = None
-                            st.session_state.audio_data = None
-                            st.session_state.approved_audio = None
-                            st.session_state.subtitle_data = None
-                            st.session_state.approved_subtitles = None
-                            st.session_state.renderer_previews = None
-                            st.session_state.rendered_video_path = None
-                            st.session_state.upload_qc_approved = False
-                            st.session_state.upload_result = None
-                            st.session_state.upload_qc = None
-                            st.session_state.upload_title_options = []
-                            st.session_state.upload_title_choice = 0
-                            st.session_state.upload_description = ""
-                            st.session_state.upload_hashtags = ""
-                            st.session_state.upload_comment = ""
-                            st.session_state.manual_visual_result = None
-                            st.session_state.real_image_result = None
-                            st.session_state.ai_image_result = None
-                            st.session_state.ranked_visual_result = None
-                            st.session_state.visual_result = None
-                            st.session_state.visual_loaded_story = None
-                            st.session_state.visual_crops = {}
-                            st.rerun()
+                            with st.container():
+                                st.markdown(
+                                    f'<div class="topic-title">{member.title}</div>'
+                                    f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b}</div>',
+                                    unsafe_allow_html=True,
+                                )
+                            if st.button(
+                                "Selected" if is_selected else "Choose",
+                                key=f"topic-select-{index}-{headline_index}",
+                                width="content",
+                                type="primary" if is_selected else "secondary",
+                            ):
+                                st.session_state.topics[index] = replace(
+                                    member,
+                                    group_key=tile.group_key,
+                                    group_members=members,
+                                )
+                                st.session_state.selected_topic = index
+                                st.session_state.test_stage = "02 · Scriptwriter"
+                                st.session_state.test_pipeline_notice = {
+                                    "confirmed": "Story confirmed",
+                                    "next": "Moving to Script.",
+                                }
+                                st.session_state.script_data = None
+                                st.session_state.approved_script = None
+                                st.session_state.audio_data = None
+                                st.session_state.approved_audio = None
+                                st.session_state.subtitle_data = None
+                                st.session_state.approved_subtitles = None
+                                st.session_state.renderer_previews = None
+                                st.session_state.rendered_video_path = None
+                                st.session_state.upload_qc_approved = False
+                                st.session_state.upload_result = None
+                                st.session_state.upload_qc = None
+                                st.session_state.upload_title_options = []
+                                st.session_state.upload_title_choice = 0
+                                st.session_state.upload_description = ""
+                                st.session_state.upload_hashtags = ""
+                                st.session_state.upload_comment = ""
+                                st.session_state.manual_visual_result = None
+                                st.session_state.real_image_result = None
+                                st.session_state.ai_image_result = None
+                                st.session_state.ranked_visual_result = None
+                                st.session_state.visual_result = None
+                                st.session_state.visual_loaded_story = None
+                                st.session_state.visual_crops = {}
+                                st.rerun()
 
     if st.session_state.selected_topic is not None:
         index = st.session_state.selected_topic
