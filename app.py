@@ -4887,7 +4887,6 @@ elif st.session_state.app_mode == "test":
                         body,
                         story_number=story_number,
                         total_stories=5,
-                        source_label="Commons",
                         interaction_animation=interaction_animation,
                     )
                     st.session_state.test_top5_standalone_preview = preview
