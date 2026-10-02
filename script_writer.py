@@ -340,16 +340,43 @@ def _estimated_seconds(result: dict) -> float:
     return _words(narration) / WORDS_PER_SECOND
 
 
+GENERIC_OPENERS = (
+    "welcome to",
+    "hey everyone",
+    "hey guys",
+    "in this video",
+    "today we are going to",
+    "let's talk about",
+    "here is the latest",
+)
+
+RETENTION_BAIT = (
+    "wait until the end",
+    "wait till the end",
+    "watch till the end",
+    "keep watching",
+    "stay tuned",
+    "don't skip",
+    "don't scroll",
+    "find out later",
+)
+
+
 def validate_script(result: dict, source: str) -> tuple[bool, str]:
-    """Minimal shared validator used by the separately implemented Niche Sports writer."""
+    """Shared basic validator used by the separately implemented Niche Sports writer."""
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
     scenes = result.get("script")
     if not isinstance(scenes, list) or not scenes:
         return False, "The provider did not return a script."
-    for scene in scenes:
-        if not isinstance(scene, dict) or not _clean(scene.get("voiceover")):
-            return False, "The provider returned an empty scene."
+    first = _clean(scenes[0].get("voiceover")).casefold()
+    if any(first.startswith(opener) for opener in GENERIC_OPENERS):
+        return False, "Scene 1 starts with a generic opener."
+    if any(
+        phrase in " ".join(_clean(scene.get("voiceover")).casefold() for scene in scenes)
+        for phrase in RETENTION_BAIT
+    ):
+        return False, "The narration contains retention bait."
     return True, ""
 
 
