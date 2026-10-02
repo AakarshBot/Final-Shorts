@@ -2005,37 +2005,37 @@ def _render_live_script():
             )
         )
 
-        if st.button(
-            "Approve script and hand to Audio",
-            type="primary",
-            width="stretch",
-            key="live-approve-script",
-        ):
-            from script_writer import apply_script_edits
-            try:
-                approved = apply_script_edits(
-                    script,
-                    edited_voiceovers,
-                    headline=edited_headline if st.session_state.live_headline_enabled else "",
-                    validate=True,
-                )
-                approved["headline"] = (
-                    str(edited_headline or "").strip()
-                    if st.session_state.live_headline_enabled
-                    else ""
-                )
-            except ValueError as exc:
-                st.session_state.live_script_error = str(exc)
-                st.rerun()
-            st.session_state.live_approved_script = approved
-            st.session_state.live_script_error = ""
-            st.session_state.live_handoff_error = ""
-            st.session_state.live_stage = "03 · Audio + Subs"
-            st.session_state.live_pipeline_notice = {
-                "confirmed": "Script QC confirmed",
-                "next": "Moving to Audio + Subtitles.",
-            }
+    if st.button(
+        "Approve script and hand to Audio",
+        type="primary",
+        width="stretch",
+        key="live-approve-script",
+    ):
+        from script_writer import apply_script_edits
+        try:
+            approved = apply_script_edits(
+                script,
+                edited_voiceovers,
+                headline=edited_headline if st.session_state.live_headline_enabled else "",
+                validate=True,
+            )
+            approved["headline"] = (
+                str(edited_headline or "").strip()
+                if st.session_state.live_headline_enabled
+                else ""
+            )
+        except ValueError as exc:
+            st.session_state.live_script_error = str(exc)
             st.rerun()
+        st.session_state.live_approved_script = approved
+        st.session_state.live_script_error = ""
+        st.session_state.live_handoff_error = ""
+        st.session_state.live_stage = "03 · Audio + Subs"
+        st.session_state.live_pipeline_notice = {
+            "confirmed": "Script QC confirmed",
+            "next": "Moving to Audio + Subtitles.",
+        }
+        st.rerun()
 
     if st.session_state.live_approved_script:
         st.success("Script approved. Audio and subtitle handoffs are ready.")
