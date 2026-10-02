@@ -1,11 +1,11 @@
 """Cricket Topic Fetcher.
 
-The fetcher builds a large current pool, removes duplicate articles and repeats,
-and returns distinct cricket events. The downstream Topic contract is stable.
+The fetcher builds a large current pool, removes duplicate events, and fills the
+requested number of story/entity groups without changing the Topic handoff.
 """
 
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 import html
@@ -169,6 +169,8 @@ class Topic:
     url: str
     description: str = ""
     score: float = 0.0
+    group_key: str = ""
+    group_members: tuple["Topic", ...] = ()
 
 def _clean(value) -> str:
     return re.sub(r"\s+", " ", html.unescape(str(value or ""))).strip()
@@ -271,6 +273,50 @@ def _cricket_same_event(a: Topic, b: Topic) -> bool:
     if similarity >= 97 and len(shared_core) >= 3:
         return True
     return False
+
+
+NON_PLAYER_ENTITIES = (
+    TEAM_ENTITIES
+    | CRICKET_COMPETITIONS
+    | {"bcci", "pcb", "icc", "mcc", "mumbai indians", "rcb", "royal challengers"}
+)
+KNOWN_PLAYER_NAMES = {
+    term
+    for term in INDIA_ASIA_TERMS
+    if term not in NON_PLAYER_ENTITIES
+}
+KNOWN_PLAYER_ALIASES = KNOWN_PLAYER_NAMES | {
+    term.split()[-1]
+    for term in KNOWN_PLAYER_NAMES
+    if len(term.split()) > 1
+}
+
+
+def _player_entity(title: str) -> str:
+    text = _clean(title).casefold()
+    known = [
+        name
+        for name in KNOWN_PLAYER_ALIASES
+        if re.search(rf"\b{re.escape(name)}\b", text)
+    ]
+    if known:
+        return max(known, key=lambda name: (len(name), -text.index(name)))
+
+    for phrase in sorted(
+        _named_phrases(title),
+        key=lambda value: (-len(value), title.index(value)),
+    ):
+        candidate = _clean(phrase).casefold()
+        if candidate and not any(
+            entity in candidate for entity in NON_PLAYER_ENTITIES
+        ):
+            return candidate
+    return ""
+
+
+def _entity_group_key(topic: Topic) -> str:
+    player = _player_entity(topic.title)
+    return f"player:{player}" if player else f"story:{_canonical_url(topic.url)}
 
 
 def _profile_relevant(title: str, description: str, profile: str | None) -> bool:
@@ -448,20 +494,24 @@ def _select(
         return []
 
     profile = profile or "cricket_india_asia"
-    blocked = list(existing or [])
-    seen = {_canonical_url(url) for url in seen_urls}
     cricket = profile != "niche_sports"
     same_event = _cricket_same_event if cricket else _same_event_general
+    blocked = [
+        member
+        for topic in (existing or [])
+        for member in (topic.group_members or (topic,))
+    ]
+    seen = {_canonical_url(url) for url in seen_urls}
+    blocked_groups = {
+        _entity_group_key(topic)
+        for topic in blocked
+    } if cricket else set()
 
     ranked = sorted(
         (
-            Topic(
-                r.title,
-                r.source,
-                r.published_at,
-                r.url,
-                r.description,
-                _score_niche(r) if profile == "niche_sports" else _score_cricket(r, profile),
+            replace(
+                r,
+                score=_score_niche(r) if profile == "niche_sports" else _score_cricket(r, profile),
             )
             for r in rows
         ),
@@ -473,6 +523,7 @@ def _select(
         for row in ranked
         if _canonical_url(row.url) not in seen
         and not any(same_event(row, old) for old in blocked)
+        and (not cricket or _entity_group_key(row) not in blocked_groups)
     ]
 
     cluster_window = candidates[: min(len(candidates), max(350, limit * 18))]
@@ -485,13 +536,9 @@ def _select(
         else:
             clusters.append([row])
 
-    chosen: list[Topic] = []
+    event_representatives: list[Topic] = []
     source_counts: dict[str, int] = {}
-
     for cluster in clusters:
-        if len(chosen) >= limit:
-            break
-
         ordered = sorted(cluster, key=lambda row: row.score, reverse=True)
         candidate = next(
             (
@@ -501,28 +548,37 @@ def _select(
             ),
             ordered[0],
         )
-
-        if any(same_event(candidate, old) for old in blocked + chosen):
+        if any(same_event(candidate, old) for old in blocked + event_representatives):
             continue
-
-        chosen.append(candidate)
+        event_representatives.append(candidate)
         source = _source_key(candidate.source)
         if source:
             source_counts[source] = source_counts.get(source, 0) + 1
 
-    if len(chosen) < limit:
-        chosen_urls = {_canonical_url(item.url) for item in chosen}
-        for row in candidates:
-            if len(chosen) >= limit:
-                break
-            if _canonical_url(row.url) in chosen_urls:
-                continue
-            if any(same_event(row, old) for old in blocked + chosen):
-                continue
-            chosen.append(row)
-            chosen_urls.add(_canonical_url(row.url))
+    if not cricket:
+        return event_representatives[:limit]
 
-    return chosen[:limit]
+    groups: dict[str, list[Topic]] = {}
+    for row in event_representatives:
+        groups.setdefault(_entity_group_key(row), []).append(row)
+
+    ordered_groups = sorted(
+        groups.items(),
+        key=lambda item: max(row.score for row in item[1]),
+        reverse=True,
+    )
+    chosen: list[Topic] = []
+    for group_key, members in ordered_groups[:limit]:
+        ordered_members = tuple(sorted(members, key=lambda row: row.score, reverse=True))
+        chosen.append(
+            replace(
+                ordered_members[0],
+                group_key=group_key,
+                group_members=ordered_members,
+            )
+        )
+
+    return chosen
 
 def fetch_topics(
     profile: str = "cricket_india_asia",
@@ -536,7 +592,11 @@ def fetch_topics(
     if limit <= 0:
         return []
     existing = list(exclude_topics or [])
-    seen_urls = {_canonical_url(topic.url) for topic in existing}
+    seen_urls = {
+        _canonical_url(member.url)
+        for topic in existing
+        for member in (topic.group_members or (topic,))
+    }
 
     if keyword:
         clean_keyword = _clean(keyword).replace('"', " ")
