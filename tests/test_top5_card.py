@@ -11,7 +11,7 @@ def test_top5_card_preview_is_vertical_and_contains_card():
     preview = renderer.build_top5_card_preview(
         source.getvalue(),
         "India name a major change today",
-        "The decision follows a recent development. More detail is included here for the visual-only summary.",
+        "The decision follows a recent development. The board confirmed the change after reviewing the latest result.",
         story_number=1,
         source_label="Test Sports Desk",
     )
@@ -87,6 +87,32 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
     assert seen and seen[0]["story_number"] == 2
 
 
+def test_top5_headline_is_one_line():
+    font, lines = renderer._fit_top5_headline(
+        "India reshuffles the squad after the latest selection change"
+    )
+    assert len(lines) == 1
+    assert font.size < renderer.TOP5_HEADLINE_MAX_SIZE
+
+
+def test_top5_card_uses_separate_image_and_body_zones():
+    source = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(source, format="PNG")
+
+    preview = renderer.build_top5_card_preview(
+        source.getvalue(),
+        "India confirm the latest squad change",
+        "The board confirmed the move after reviewing the latest result. "
+        "The decision changes the lineup ahead of the upcoming series.",
+        story_number=2,
+    )
+    image = Image.open(BytesIO(preview)).convert("RGB")
+
+    assert image.getpixel((20, 500)) == (255, 255, 255)
+    bottom = image.getpixel((20, 1500))
+    assert bottom[0] < 80 and bottom[1] < 80 and bottom[2] < 80
+
+
 def test_top5_layout_is_driven_by_text_length():
     short = renderer._top5_fit_layout(
         "India make a major change",
@@ -104,6 +130,22 @@ def test_top5_layout_is_driven_by_text_length():
     assert long["height"] >= short["height"]
 
 
+def test_top5_body_is_two_sentences_in_writer_contract():
+    from top5_script_writer import validate_top5_script
+
+    result = {
+        "slides": [dict(slide) for slide in valid_result()["slides"]],
+        "hashtags": ["#Cricket", "#Top5", "#Shorts"],
+    }
+    result["slides"][1]["body"] = "One factual sentence."
+    valid, reason = validate_top5_script(result, [
+        {"title": f"Story {index} cricket record confirmed", "url": "", "article": ""}
+        for index in range(1, 6)
+    ])
+    assert not valid
+    assert "exactly two sentences" in reason
+
+
 def test_top5_opener_uses_same_adaptive_treatment_without_body():
     source = BytesIO()
     Image.new("RGB", (900, 1600), "white").save(source, format="JPEG")
@@ -116,13 +158,28 @@ def test_top5_opener_uses_same_adaptive_treatment_without_body():
     image = Image.open(BytesIO(preview))
 
     assert image.size == (1080, 1920)
-    assert renderer._top5_fit_layout(
+    font, lines = renderer._fit_top5_headline(
         "Five cricket stories shaping today",
-        "",
-    )["body_font"] is None
+    )
+    assert len(lines) == 1
+    assert renderer._fit_top5_body("", "english")[1] == []
 
 
-def test_top5_scrim_is_gradient_not_opaque_panel():
+def test_top5_interaction_animation_is_supported():
+    source = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(source, format="PNG")
+    preview = renderer.build_top5_card_preview(
+        source.getvalue(),
+        "A major cricket development",
+        "The board confirmed the move after reviewing the latest result. "
+        "The decision changes the lineup for the next series.",
+        story_number=2,
+        interaction_animation="heart",
+    )
+    assert Image.open(BytesIO(preview)).size == (1080, 1920)
+
+
+def test_top5_bottom_panel_is_opaque_card_zone():
     source = BytesIO()
     Image.new("RGB", (1080, 1920), "white").save(source, format="PNG")
 
@@ -134,9 +191,10 @@ def test_top5_scrim_is_gradient_not_opaque_panel():
     )
     image = Image.open(BytesIO(preview)).convert("RGB")
 
-    top_pixel = image.getpixel((20, 700))
-    lower_pixel = image.getpixel((20, 1650))
+    top_pixel = image.getpixel((20, 500))
+    lower_pixel = image.getpixel((20, 1500))
 
     assert top_pixel == (255, 255, 255)
-    assert lower_pixel[0] < 255
-    assert lower_pixel[0] > 40
+    assert lower_pixel[0] < 80
+    assert lower_pixel[1] < 80
+    assert lower_pixel[2] < 80
