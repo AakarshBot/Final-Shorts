@@ -668,13 +668,11 @@ def _draw_top5_card(
     total_stories = max(1, int(card.get("total_stories") or 5))
 
     layout = _top5_fit_layout(headline, body, language)
-    content_bottom = TOP5_TEXT_BOTTOM
+    content_bottom = 1725 if story_number == 0 else TOP5_TEXT_BOTTOM
     content_top = content_bottom - layout["height"]
-    if story_number == 0:
-        content_top += 70
 
     scrim_top = max(0, content_top - TOP5_SCRIM_PADDING)
-    max_alpha = min(205, 150 + int(layout["height"] * 0.07))
+    max_alpha = min(195, 135 + int(layout["height"] * 0.07))
     scrim = _top5_scrim(
         max(1, HEIGHT - scrim_top),
         max_alpha,
