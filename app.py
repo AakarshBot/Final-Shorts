@@ -2459,7 +2459,7 @@ def render_live_dashboard():
     _render_pipeline_notice("live_pipeline_notice")
 
     if st.session_state.live_stage == "01 · Story":
-        st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one to start production</div></div>', unsafe_allow_html=True)
+        st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one headline to start production</div></div>', unsafe_allow_html=True)
         topics = st.session_state.live_topics
         cricket_profile = st.session_state.live_topics_profile in {"cricket_india_asia", "cricket_global"}
 
@@ -2484,21 +2484,43 @@ def render_live_dashboard():
 
         for start in range(0, len(topics), 2):
             row = st.columns(2, gap="medium")
-            for col, (index, topic) in zip(
+            for col, (index, tile) in zip(
                 row,
                 enumerate(topics[start:start + 2], start=start),
             ):
+                members = tile.group_members or (tile,)
+                members = tuple(sorted(members, key=lambda item: item.score, reverse=True))
                 with col:
                     with st.container(key=f"live-topic-{index}"):
+                        tile_label = f'<span class="topic-rank">TILE {index + 1:02d}</span>'
+                        if tile.group_key.startswith("player:"):
+                            tile_label += f'<span class="topic-meta">{tile.group_key.split(":", 1)[1].title()}</span>'
                         st.markdown(
-                            f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
-                            f'<div class="topic-title">{topic.title}</div>'
-                            f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',
+                            f'<div class="topic-top">{tile_label}</div>',
                             unsafe_allow_html=True,
                         )
-                        if st.button("Select story →", width="stretch", key=f"live-select-story-{index}"):
-                            _live_start_story(index)
-                            st.rerun()
+                        for headline_index, member in enumerate(members):
+                            st.markdown(
+                                f'<div class="topic-title">{member.title}</div>'
+                                f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b · %H:%M UTC}</div>',
+                                unsafe_allow_html=True,
+                            )
+                            is_selected = (
+                                st.session_state.live_selected_topic == index
+                                and st.session_state.live_topics[index].url == member.url
+                            )
+                            if st.button(
+                                "Selected" if is_selected else "Select story →",
+                                width="stretch",
+                                key=f"live-select-story-{index}-{headline_index}",
+                            ):
+                                st.session_state.live_topics[index] = replace(
+                                    member,
+                                    group_key=tile.group_key,
+                                    group_members=members,
+                                )
+                                _live_start_story(index)
+                                st.rerun()
 
         more_clicked = st.button("Find 20 more unique stories", width="stretch", key="live-find-more")
         if keyword_search or more_clicked:
