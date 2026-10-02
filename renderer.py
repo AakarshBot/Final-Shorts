@@ -1291,7 +1291,7 @@ def render_production_video(
                 headline_enabled,
                 source_label,
                 subtitle_y,
-                visual.get("top5_card") if visual.get("is_top5_card") else None,
+                top5_card=visual.get("top5_card") if visual.get("is_top5_card") else None,
             )
 
     try:
