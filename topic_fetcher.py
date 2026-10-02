@@ -526,19 +526,6 @@ def _select(
     return chosen[:limit]
 
 
-def _keyword_queries(keyword: str) -> list[str]:
-    clean = _clean(keyword).replace('"', " ")
-    if not clean:
-        return []
-    return [query.format(keyword=clean) for query in KEYWORD_QUERIES]
-
-def _gdelt_query(profile: str, keyword: str | None = None) -> str:
-    if keyword:
-        return f'"{_clean(keyword)}" cricket'
-    if profile == "cricket_global":
-        return '(cricket record milestone rivalry controversy comeback upset breakout women domestic associate board)'
-    return '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
-
 
 def fetch_topics(
     profile: str = "cricket_india_asia",
@@ -555,7 +542,12 @@ def fetch_topics(
     seen_urls = {_canonical_url(topic.url) for topic in existing}
 
     if keyword:
-        queries = _keyword_queries(keyword)
+        clean_keyword = _clean(keyword).replace('"', " ")
+        queries = (
+            []
+            if not clean_keyword
+            else [query.format(keyword=clean_keyword) for query in KEYWORD_QUERIES]
+        )
     elif profile == "niche_sports":
         queries = [
             '(tennis OR badminton OR squash OR "table tennis") when:3d',
@@ -581,7 +573,17 @@ def fetch_topics(
     if len(chosen) < limit and profile != "niche_sports":
         try:
             fallback_rows = _prepare(
-                _fetch_gdelt(_gdelt_query(profile, keyword)),
+                _fetch_gdelt(
+                    (
+                        f'"{_clean(keyword)}" cricket'
+                        if keyword
+                        else (
+                            '(cricket record milestone rivalry controversy comeback upset breakout women domestic associate board)'
+                            if profile == "cricket_global"
+                            else '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
+                        )
+                    )
+                ),
                 seen_urls | {_canonical_url(topic.url) for topic in chosen},
                 profile=profile,
             )
