@@ -316,7 +316,7 @@ def _player_entity(title: str) -> str:
 
 def _entity_group_key(topic: Topic) -> str:
     player = _player_entity(topic.title)
-    return f"player:{player}" if player else f"story:{_canonical_url(topic.url)}
+    return f"player:{player}" if player else f"story:{_canonical_url(topic.url)}"
 
 
 def _profile_relevant(title: str, description: str, profile: str | None) -> bool:
