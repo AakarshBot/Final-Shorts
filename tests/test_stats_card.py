@@ -218,3 +218,15 @@ def test_stats_api_timeout_is_reported_cleanly(monkeypatch):
     monkeypatch.setattr(stats_card.requests, "post", fail)
     with pytest.raises(stats_card.StatsCardError, match="could not be reached"):
         stats_card._query("SELECT 1")
+
+def test_stats_card_preview_uses_card_frame_without_query(monkeypatch):
+    def fail(*args, **kwargs):
+        raise AssertionError("Stats Card preview must not query the database.")
+
+    monkeypatch.setattr(stats_card.requests, "post", fail)
+    preview = stats_card.build_stats_card_preview(_image_bytes())
+
+    with Image.open(BytesIO(preview)) as image:
+        assert image.size == (1080, 1920)
+        assert image.getpixel((0, 100)) == (40, 50, 60)
+        assert image.getpixel((0, 1000)) == (246, 247, 249)
