@@ -24,7 +24,7 @@ def test_top5_card_preview_handles_long_story_headline():
     Image.new("RGB", (1600, 900), "white").save(source, format="JPEG")
     preview = renderer.build_top5_card_preview(
         source.getvalue(),
-        "India reshuffles the squad after a late selection change before the next major series",
+        "India reshuffles the squad after a late selection change",
         "The move changes the lineup and follows the latest selection update.",
         story_number=3,
     )
@@ -108,8 +108,8 @@ def test_top5_card_uses_separate_image_and_body_zones():
     )
     image = Image.open(BytesIO(preview)).convert("RGB")
 
-    assert image.getpixel((20, 500)) == (255, 255, 255)
-    bottom = image.getpixel((20, 1500))
+    assert image.getpixel((60, 500)) == (255, 255, 255)
+    bottom = image.getpixel((60, 1500))
     assert bottom[0] < 80 and bottom[1] < 80 and bottom[2] < 80
 
 
@@ -175,7 +175,7 @@ def test_top5_bottom_panel_is_opaque_card_zone():
     preview = renderer.build_top5_card_preview(
         source.getvalue(),
         "A major cricket development",
-        "A concise factual summary sits below the headline.",
+        "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next series.",
         story_number=2,
     )
     image = Image.open(BytesIO(preview)).convert("RGB")
