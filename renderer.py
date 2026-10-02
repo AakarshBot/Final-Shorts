@@ -50,25 +50,25 @@ WHITE = (249, 250, 252)
 DARK = (5, 7, 10)
 
 
-TOP5_IMAGE_HEIGHT = 860
-TOP5_PANEL_TOP = TOP5_IMAGE_HEIGHT
-TOP5_PANEL_WHITE = (249, 250, 252)
-TOP5_MARGIN_X = 64
-TOP5_SAFE_RIGHT = 250
-TOP5_SAFE_BOTTOM = 430
-TOP5_HEADLINE_MAX_WIDTH = WIDTH - TOP5_MARGIN_X - TOP5_SAFE_RIGHT
-TOP5_HEADLINE_MAX_SIZE = 84
-TOP5_HEADLINE_MIN_SIZE = 42
+TOP5_TEXT_MARGIN_X = 72
+TOP5_TEXT_SAFE_RIGHT = 250
+TOP5_TEXT_SAFE_BOTTOM = 400
+TOP5_TEXT_MAX_WIDTH = WIDTH - TOP5_TEXT_MARGIN_X - TOP5_TEXT_SAFE_RIGHT
+TOP5_HEADLINE_MAX_SIZE = 104
+TOP5_HEADLINE_MIN_SIZE = 54
 TOP5_HEADLINE_MAX_LINES = 2
-TOP5_HEADLINE_LINE_GAP = 6
-TOP5_BODY_MAX_WIDTH = WIDTH - TOP5_MARGIN_X - TOP5_SAFE_RIGHT
+TOP5_HEADLINE_LINE_GAP = 8
 TOP5_BODY_MAX_SIZE = 42
 TOP5_BODY_MIN_SIZE = 25
 TOP5_BODY_MAX_LINES = 8
 TOP5_BODY_LINE_GAP = 12
-TOP5_HEADLINE_BODY_GAP = 42
-TOP5_PANEL_BOTTOM_GAP = 56
-TOP5_IMAGE_FADE_HEIGHT = 230
+TOP5_HEADLINE_BODY_GAP = 28
+TOP5_TEXT_MAX_HEIGHT = 540
+TOP5_HAZE_PAD_X = 150
+TOP5_HAZE_PAD_Y = 110
+TOP5_HAZE_BLUR = 85
+TOP5_HAZE_MAX_ALPHA = 188
+TOP5_LIGHT_TEXT_THRESHOLD = 146
 TOP5_SOURCE_COLOR = (86, 91, 100)
 
 PREVIEW_SUBTITLE_DATA = {
@@ -427,6 +427,8 @@ def _top5_wrap_words(draw, text: str, font, max_width: int):
     for word in words:
         box = draw.textbbox((0, 0), word, font=font)
         width = box[2] - box[0]
+        if width > max_width:
+            raise ValueError("Top-5 text contains a word that is too wide to fit.")
         candidate = current_width + width + (10 if current else 0)
         if current and candidate > max_width:
             lines.append(current)
@@ -473,7 +475,7 @@ def _fit_top5_headline(text: str):
             probe,
             clean,
             font,
-            TOP5_HEADLINE_MAX_WIDTH,
+            TOP5_TEXT_MAX_WIDTH,
         )
         if len(lines) <= TOP5_HEADLINE_MAX_LINES:
             return font, lines
@@ -494,25 +496,24 @@ def _fit_top5_body(
         return None, []
 
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    available_height = max_height or (
-        HEIGHT - TOP5_SAFE_BOTTOM - TOP5_HEADLINE_BODY_GAP - 120
-    )
+    available_height = max_height or TOP5_TEXT_MAX_HEIGHT
 
     for size in range(TOP5_BODY_MAX_SIZE, TOP5_BODY_MIN_SIZE - 1, -1):
         font = _top5_body_font(size, language)
         paragraphs = [
-            _top5_wrap_words(probe, sentence, font, TOP5_BODY_MAX_WIDTH)
+            _top5_wrap_words(probe, sentence, font, TOP5_TEXT_MAX_WIDTH)
             for sentence in sentences
         ]
         total_lines = sum(len(lines) for lines in paragraphs)
         if total_lines > TOP5_BODY_MAX_LINES:
             continue
+
         line_box = probe.textbbox((0, 0), "Ag", font=font)
         line_height = line_box[3] - line_box[1]
         total_height = (
             line_height * total_lines
-            + TOP5_BODY_LINE_GAP * max(0, total_lines - len(paragraphs))
-            + 24 * max(0, len(paragraphs) - 1)
+            + TOP5_BODY_LINE_GAP * max(0, total_lines - 1)
+            + 20 * max(0, len(paragraphs) - 1)
         )
         if total_height <= available_height:
             return font, paragraphs
@@ -543,12 +544,12 @@ def _top5_text_metrics(
     body_height = (
         body_line_height * len(body_lines)
         + TOP5_BODY_LINE_GAP * max(0, len(body_lines) - 1)
-        + 24 * max(0, len(body_paragraphs) - 1)
+        + 20 * max(0, len(body_paragraphs) - 1)
     )
     return headline_height, body_height
 
 
-def _top5_panel_geometry(
+def _top5_text_geometry(
     headline_height: int,
     body_height: int,
     has_body: bool,
@@ -556,16 +557,9 @@ def _top5_panel_geometry(
     content_height = headline_height + (
         TOP5_HEADLINE_BODY_GAP + body_height if has_body else 0
     )
-    panel_top = max(
-        720,
-        HEIGHT - TOP5_SAFE_BOTTOM - TOP5_PANEL_BOTTOM_GAP - content_height - 120,
-    )
-    panel_bottom = min(
-        HEIGHT - TOP5_SAFE_BOTTOM,
-        panel_top + content_height + 120,
-    )
-    content_top = panel_top + 56
-    return panel_top, panel_bottom, content_top
+    content_bottom = HEIGHT - TOP5_TEXT_SAFE_BOTTOM - 26
+    content_top = content_bottom - content_height
+    return content_top, content_bottom, content_height
 
 
 def _top5_full_frame_image(value: bytes | bytearray | Image.Image) -> Image.Image:
@@ -582,36 +576,71 @@ def _top5_full_frame_image(value: bytes | bytearray | Image.Image) -> Image.Imag
 
     if image.size == (WIDTH, HEIGHT):
         return image
-    return image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+
+    source_width, source_height = image.size
+    if source_height <= 0 or source_width <= 0:
+        raise ValueError("A Top-5 visual has invalid dimensions.")
+
+    source_ratio = source_width / source_height
+    target_ratio = WIDTH / HEIGHT
+    if abs(source_ratio - target_ratio) <= 0.01:
+        return image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+
+    return _fit_visual_to_frame(image)
 
 
-def _draw_top5_image_fade(
+def _top5_text_area_luminance(
+    image: Image.Image,
+    content_top: int,
+    content_bottom: int,
+) -> float:
+    left = max(0, TOP5_TEXT_MARGIN_X - 36)
+    right = min(WIDTH, WIDTH - TOP5_TEXT_SAFE_RIGHT + 36)
+    top = max(0, content_top - 60)
+    bottom = min(HEIGHT, content_bottom + 60)
+    if right <= left or bottom <= top:
+        return 128.0
+
+    from PIL import ImageStat
+
+    sample = image.crop((left, top, right, bottom)).convert("L")
+    return float(ImageStat.Stat(sample).mean[0])
+
+
+def _draw_top5_haze(
     base: Image.Image,
-    fade_end: int,
-    panel_bottom: int,
-) -> Image.Image:
+    content_top: int,
+    content_bottom: int,
+) -> tuple[Image.Image, tuple[int, int, int, int]]:
     canvas = _top5_full_frame_image(base).convert("RGBA")
-    fade_top = max(0, fade_end - TOP5_IMAGE_FADE_HEIGHT)
-    fade_height = max(1, fade_end - fade_top)
-
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay, "RGBA")
-
-    for index in range(fade_height):
-        progress = index / max(1, fade_height - 1)
-        eased = progress * progress * (3 - 2 * progress)
-        alpha = int(255 * eased)
-        draw.line(
-            (0, fade_top + index, WIDTH, fade_top + index),
-            fill=(*TOP5_PANEL_WHITE, alpha),
-        )
-
-    draw.rectangle(
-        (0, fade_end, WIDTH, panel_bottom),
-        fill=(*TOP5_PANEL_WHITE, 255),
+    luma = _top5_text_area_luminance(
+        canvas.convert("RGB"),
+        content_top,
+        content_bottom,
     )
+
+    if luma >= TOP5_LIGHT_TEXT_THRESHOLD:
+        haze_color = (255, 255, 255)
+        text_color = (12, 14, 18, 255)
+    else:
+        haze_color = (0, 0, 0)
+        text_color = (249, 250, 252, 255)
+
+    mask = Image.new("L", canvas.size, 0)
+    mask_draw = ImageDraw.Draw(mask)
+    bbox = (
+        max(-120, TOP5_TEXT_MARGIN_X - TOP5_HAZE_PAD_X),
+        max(0, content_top - TOP5_HAZE_PAD_Y),
+        min(WIDTH + 120, WIDTH - TOP5_TEXT_SAFE_RIGHT + TOP5_HAZE_PAD_X),
+        min(HEIGHT, content_bottom + TOP5_HAZE_PAD_Y),
+    )
+    mask_draw.ellipse(bbox, fill=TOP5_HAZE_MAX_ALPHA)
+    mask = mask.filter(ImageFilter.GaussianBlur(TOP5_HAZE_BLUR))
+
+    overlay = Image.new("RGBA", canvas.size, (*haze_color, 0))
+    overlay.putalpha(mask)
     canvas.alpha_composite(overlay)
-    return canvas
+    return canvas, text_color
 
 
 def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
@@ -626,7 +655,11 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
     body_font = None
     body_paragraphs = []
     if body:
-        body_font, body_paragraphs = _fit_top5_body(body, language)
+        body_font, body_paragraphs = _fit_top5_body(
+            body,
+            language,
+            max_height=TOP5_TEXT_MAX_HEIGHT - 170,
+        )
 
     headline_height, body_height = _top5_text_metrics(
         headline_font,
@@ -634,16 +667,16 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
         body_font,
         body_paragraphs,
     )
-    panel_top, panel_bottom, content_top = _top5_panel_geometry(
+    content_top, content_bottom, _ = _top5_text_geometry(
         headline_height,
         body_height,
         bool(body_paragraphs),
     )
 
-    canvas = _draw_top5_image_fade(
+    canvas, text_color = _draw_top5_haze(
         base,
         content_top,
-        panel_bottom,
+        content_bottom,
     )
     draw = ImageDraw.Draw(canvas, "RGBA")
 
@@ -651,15 +684,14 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
     for row, line_words in enumerate(headline_lines):
         line = " ".join(line_words)
         box = draw.textbbox((0, 0), line, font=headline_font)
-        x = TOP5_MARGIN_X
         y = headline_y + row * (
             (box[3] - box[1]) + TOP5_HEADLINE_LINE_GAP
         )
         draw.text(
-            (x - box[0], y - box[1]),
+            (TOP5_TEXT_MARGIN_X - box[0], y - box[1]),
             line,
             font=headline_font,
-            fill=(14, 16, 20, 255),
+            fill=text_color,
         )
 
     if body_paragraphs and body_font:
@@ -673,16 +705,16 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
                 box = draw.textbbox((0, 0), line, font=body_font)
                 draw.text(
                     (
-                        TOP5_MARGIN_X + 8 - box[0],
+                        TOP5_TEXT_MARGIN_X - box[0],
                         body_y - box[1],
                     ),
                     line,
                     font=body_font,
-                    fill=(86, 91, 100, 255),
+                    fill=text_color,
                 )
                 body_y += line_height + TOP5_BODY_LINE_GAP
             if paragraph_index < len(body_paragraphs) - 1:
-                body_y += 24
+                body_y += 20
 
     return canvas
 
@@ -694,7 +726,7 @@ def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
     box = draw.textbbox((0, 0), label, font=font)
     draw.text(
         (
-            WIDTH - TOP5_MARGIN_X - (box[2] - box[0]),
+            WIDTH - TOP5_TEXT_MARGIN_X - (box[2] - box[0]),
             HEIGHT - 48,
         ),
         label,
@@ -711,8 +743,8 @@ def build_top5_card_preview(
     total_stories: int = 5,
     source_label: str | None = None,
 ) -> bytes:
-    "Render one static Top-5 slide using the full manually-cropped 9:16 image and a content-sized light panel."
-    frame = _draw_top5_card(_fit_visual_to_frame(source_image), {
+    "Render one static Top-5 slide with the full manually-cropped 9:16 image and an adaptive local readability treatment."
+    frame = _draw_top5_card(_top5_full_frame_image(source_image), {
         "headline": headline,
         "body": body if story_number else "",
         "story_number": story_number,
