@@ -49,6 +49,24 @@ BRAND_BLUE = (35, 105, 255)
 WHITE = (249, 250, 252)
 DARK = (5, 7, 10)
 
+
+TOP5_CARD_X = 40
+TOP5_CARD_TOP = 930
+TOP5_CARD_BOTTOM = 1810
+TOP5_CARD_OPENER_TOP = 1160
+TOP5_CARD_RADIUS = 30
+TOP5_CARD_PADDING_X = 58
+TOP5_CARD_META_SIZE = 25
+TOP5_CARD_HEADLINE_MAX_SIZE = 86
+TOP5_CARD_HEADLINE_MIN_SIZE = 52
+TOP5_CARD_HEADLINE_MAX_LINES = 4
+TOP5_CARD_HEADLINE_WORD_SPACING = 14
+TOP5_CARD_BODY_MAX_SIZE = 31
+TOP5_CARD_BODY_MIN_SIZE = 23
+TOP5_CARD_BODY_MAX_LINES = 6
+TOP5_CARD_BODY_LINE_GAP = 8
+TOP5_CARD_DIVIDER_GAP = 26
+
 # Function 05 should hand this exact shape to Function 06.
 PREVIEW_SUBTITLE_DATA = {
     "schema": "final-shorts.subtitles.v1",
@@ -353,6 +371,315 @@ def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
     )
 
 
+
+def _top5_body_font(size: int, language: str = "english"):
+    root = Path(__file__).resolve().parent / "fonts"
+    language = str(language or "english").casefold()
+    candidates = []
+    if language == "hindi":
+        candidates.extend([
+            root / "NotoSansDevanagariUI-Regular.ttf",
+            root / "NotoSansDevanagari-Regular.ttf",
+        ])
+    elif language == "telugu":
+        candidates.extend([
+            root / "NotoSansTelugu-Regular.ttf",
+        ])
+    candidates.extend([
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("C:/Windows/Fonts/segoeui.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
+    ])
+    for path in candidates:
+        if path.exists():
+            try:
+                return ImageFont.truetype(str(path), size)
+            except OSError:
+                continue
+    return ImageFont.load_default()
+
+
+def _top5_headline_font(size: int):
+    root = Path(__file__).resolve().parent / "fonts"
+    candidates = (
+        root / "Oswald-Bold.ttf",
+        Path("C:/Windows/Fonts/arialbd.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"),
+    )
+    for path in candidates:
+        if path.exists():
+            try:
+                return ImageFont.truetype(str(path), size)
+            except OSError:
+                continue
+    return ImageFont.load_default()
+
+
+def _top5_wrap_words(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font,
+    max_width: int,
+    word_spacing: int = 0,
+    max_lines: int | None = None,
+) -> list[list[str]]:
+    words = " ".join(str(text or "").split()).split()
+    if not words:
+        return []
+
+    lines: list[list[str]] = []
+    current: list[str] = []
+    current_width = 0
+
+    for word in words:
+        box = draw.textbbox((0, 0), word, font=font)
+        word_width = box[2] - box[0]
+        candidate_width = (
+            current_width
+            + word_width
+            + (word_spacing if current else 0)
+        )
+        if current and candidate_width > max_width:
+            lines.append(current)
+            current = [word]
+            current_width = word_width
+        else:
+            current.append(word)
+            current_width = candidate_width
+
+    if current:
+        lines.append(current)
+
+    if max_lines is not None and len(lines) > max_lines:
+        return []
+    return lines
+
+
+def _fit_top5_headline(text: str):
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    clean = " ".join(str(text or "").split())
+    for size in range(TOP5_CARD_HEADLINE_MAX_SIZE, TOP5_CARD_HEADLINE_MIN_SIZE - 1, -1):
+        font = _top5_headline_font(size)
+        lines = _top5_wrap_words(
+            probe,
+            clean,
+            font,
+            WIDTH - (TOP5_CARD_X * 2) - (TOP5_CARD_PADDING_X * 2),
+            TOP5_CARD_HEADLINE_WORD_SPACING,
+            TOP5_CARD_HEADLINE_MAX_LINES,
+        )
+        if lines:
+            return font, lines
+    raise ValueError("Top-5 headline is too long to fit on the visual card.")
+
+
+def _fit_top5_body(text: str, language: str):
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    clean = " ".join(str(text or "").split())
+    for size in range(TOP5_CARD_BODY_MAX_SIZE, TOP5_CARD_BODY_MIN_SIZE - 1, -1):
+        font = _top5_body_font(size, language)
+        lines = _top5_wrap_words(
+            probe,
+            clean,
+            font,
+            WIDTH - (TOP5_CARD_X * 2) - (TOP5_CARD_PADDING_X * 2),
+            10,
+            TOP5_CARD_BODY_MAX_LINES,
+        )
+        if lines:
+            return font, lines
+    raise ValueError("Top-5 body copy is too long to fit on the visual card.")
+
+
+def _top5_active_word_index(subtitle_data: dict, t: float) -> int | None:
+    index = 0
+    for cue in subtitle_data.get("cues") or []:
+        for word in cue.get("words") or []:
+            try:
+                start = float(word["start"])
+                end = float(word["end"])
+            except (KeyError, TypeError, ValueError):
+                index += 1
+                continue
+            if start <= t < end:
+                return index
+            index += 1
+    return None
+
+
+def _draw_top5_card(
+    base: Image.Image,
+    card: dict,
+    t: float,
+    subtitle_data: dict,
+) -> None:
+    headline = " ".join(str(card.get("headline") or "").split())
+    body = " ".join(str(card.get("body") or "").split())
+    if not headline:
+        raise ValueError("Top-5 card requires a headline.")
+
+    language = str(subtitle_data.get("language") or "english")
+    story_number = int(card.get("story_number") or 0)
+    total_stories = max(1, int(card.get("total_stories") or 5))
+
+    card_top = TOP5_CARD_OPENER_TOP if story_number == 0 else TOP5_CARD_TOP
+    card_bottom = TOP5_CARD_BOTTOM
+    card_width = WIDTH - (TOP5_CARD_X * 2)
+
+    headline_font, headline_lines = _fit_top5_headline(headline)
+    body_font = None
+    body_lines: list[list[str]] = []
+    if body:
+        body_font, body_lines = _fit_top5_body(body, language)
+
+    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    shadow = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    shadow_draw = ImageDraw.Draw(shadow)
+    shadow_draw.rounded_rectangle(
+        (
+            TOP5_CARD_X,
+            card_top + 10,
+            TOP5_CARD_X + card_width,
+            card_bottom + 10,
+        ),
+        radius=TOP5_CARD_RADIUS,
+        fill=(0, 0, 0, 90),
+    )
+    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=16))
+    layer.alpha_composite(shadow)
+
+    draw = ImageDraw.Draw(layer)
+    draw.rounded_rectangle(
+        (
+            TOP5_CARD_X,
+            card_top,
+            TOP5_CARD_X + card_width,
+            card_bottom,
+        ),
+        radius=TOP5_CARD_RADIUS,
+        fill=(9, 12, 18, 248),
+    )
+
+    content_left = TOP5_CARD_X + TOP5_CARD_PADDING_X
+    content_right = TOP5_CARD_X + card_width - TOP5_CARD_PADDING_X
+    y = card_top + 42
+
+    accent_h = 7
+    accent_w = 112
+    draw.rectangle(
+        (content_left, y, content_left + int(accent_w * 0.58), y + accent_h),
+        fill=BRAND_BLUE,
+    )
+    draw.rectangle(
+        (
+            content_left + int(accent_w * 0.58),
+            y,
+            content_left + accent_w,
+            y + accent_h,
+        ),
+        fill=ACCENT,
+    )
+    y += 28
+
+    meta = (
+        f"STORY {story_number:02d} / {total_stories}"
+        if story_number
+        else "TOP-5 CRICKET · FIVE STORIES"
+    )
+    meta_font = _top5_headline_font(TOP5_CARD_META_SIZE)
+    draw.text((content_left, y), meta, font=meta_font, fill=(164, 174, 190))
+    y += 44
+
+    active_index = _top5_active_word_index(subtitle_data, t)
+    global_index = 0
+    line_heights = []
+    for _line in headline_lines:
+        box = draw.textbbox((0, 0), "Ag", font=headline_font)
+        line_heights.append(box[3] - box[1])
+
+    for row, line in enumerate(headline_lines):
+        cursor_x = content_left
+        row_height = line_heights[row]
+        for word in line:
+            box = draw.textbbox((0, 0), word, font=headline_font)
+            word_width = box[2] - box[0]
+            fill = ACCENT if global_index == active_index else WHITE
+            draw.text(
+                (cursor_x - box[0], y - box[1]),
+                word,
+                font=headline_font,
+                fill=fill,
+            )
+            cursor_x += word_width + TOP5_CARD_HEADLINE_WORD_SPACING
+            global_index += 1
+        y += row_height + 6
+
+    divider_y = y + TOP5_CARD_DIVIDER_GAP
+    draw.line(
+        (content_left, divider_y, content_right, divider_y),
+        fill=(54, 61, 72),
+        width=2,
+    )
+
+    if body_lines and body_font:
+        body_y = divider_y + 24
+        for line in body_lines:
+            text_line = " ".join(line)
+            draw.text(
+                (content_left, body_y),
+                text_line,
+                font=body_font,
+                fill=(219, 224, 232),
+            )
+            box = draw.textbbox((0, 0), text_line, font=body_font)
+            body_y += (box[3] - box[1]) + TOP5_CARD_BODY_LINE_GAP
+
+    progress = min(1.0, max(0.0, t / 0.45))
+    eased = 1 - (1 - progress) ** 3
+    offset = int(42 * (1 - eased))
+
+    alpha = int(255 * min(1.0, max(0.0, t / 0.25)))
+    if alpha < 255:
+        alpha_layer = layer.getchannel("A").point(lambda value: value * alpha // 255)
+        layer.putalpha(alpha_layer)
+
+    moved = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    moved.alpha_composite(layer, (0, offset))
+    base.paste(moved, (0, 0), moved)
+
+
+def build_top5_card_preview(
+    source_image: bytes | bytearray | Image.Image,
+    headline: str,
+    body: str = "",
+    story_number: int = 0,
+    total_stories: int = 5,
+    source_label: str | None = None,
+) -> bytes:
+    """Render the selected Top-5 visual as the final 9:16 card treatment."""
+    base = _fit_visual_to_frame(source_image)
+    preview_subtitles = {
+        "schema": "final-shorts.subtitles.v1",
+        "language": "english",
+        "cues": [],
+    }
+    _draw_top5_card(
+        base,
+        {
+            "headline": headline,
+            "body": body,
+            "story_number": story_number,
+            "total_stories": total_stories,
+        },
+        1.0,
+        preview_subtitles,
+    )
+    _paste_logo(base)
+    _paste_source(base, source_label)
+    buffer = BytesIO()
+    base.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
 def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
     primary_font, clean, lines = _fit_headline_font(text, language)
     fonts = _headline_font_stack(primary_font.size, language)
@@ -644,6 +971,7 @@ def render_frame(
     headline_enabled: bool = True,
     source_label: str | None = None,
     subtitle_y: int | None = None,
+    top5_card: dict | None = None,
 ) -> Image.Image:
     if not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
@@ -653,17 +981,20 @@ def render_frame(
         Image.Resampling.LANCZOS,
     )
 
-    if headline_enabled and t < HEADLINE_SECONDS:
-        _draw_headline(
-            frame,
-            headline_text,
-            t,
-            str(subtitle_data.get("language") or "english"),
-        )
-    if subtitle_y is None:
-        _draw_subtitles(frame, subtitle_data, t)
+    if top5_card is not None:
+        _draw_top5_card(frame, top5_card, t, subtitle_data)
     else:
-        _draw_subtitles(frame, subtitle_data, t, subtitle_y)
+        if headline_enabled and t < HEADLINE_SECONDS:
+            _draw_headline(
+                frame,
+                headline_text,
+                t,
+                str(subtitle_data.get("language") or "english"),
+            )
+        if subtitle_y is None:
+            _draw_subtitles(frame, subtitle_data, t)
+        else:
+            _draw_subtitles(frame, subtitle_data, t, subtitle_y)
 
     _paste_logo(frame)
     if source_label is None:
@@ -928,9 +1259,14 @@ def render_production_video(
             raise ValueError(f"Visual {index} is malformed.")
         result_key = str(visual.get("result_key") or "").strip().casefold()
         layout = visual.get("card_layout") if isinstance(visual.get("card_layout"), dict) else {}
+        top5_card = visual.get("top5_card")
+        if top5_card is not None and not isinstance(top5_card, dict):
+            raise ValueError(f"Visual {index} has malformed Top-5 card data.")
         prepared_visuals.append({
             "image": _fit_visual_to_frame(visual.get("bytes")),
             "is_stats_card": result_key == "stats-card",
+            "is_top5_card": isinstance(top5_card, dict),
+            "top5_card": top5_card,
             "image_height": int(layout.get("image_height") or 0),
         })
 
@@ -974,6 +1310,7 @@ def render_production_video(
                 headline_enabled,
                 source_label,
                 subtitle_y,
+                visual.get("top5_card") if visual.get("is_top5_card") else None,
             )
 
     try:
