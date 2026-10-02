@@ -209,3 +209,12 @@ def test_no_data_fails_instead_of_guessing(monkeypatch):
     monkeypatch.setattr(stats_card, "_query", lambda sql: [])
     with pytest.raises(stats_card.StatsCardError, match="Could not find player"):
         stats_card.build_stats_card("MS Dhoni ODI stats", _image_bytes())
+
+
+def test_stats_api_timeout_is_reported_cleanly(monkeypatch):
+    def fail(*args, **kwargs):
+        raise stats_card.requests.Timeout("timed out")
+
+    monkeypatch.setattr(stats_card.requests, "post", fail)
+    with pytest.raises(stats_card.StatsCardError, match="could not be reached"):
+        stats_card._query("SELECT 1")
