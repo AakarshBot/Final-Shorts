@@ -34,7 +34,7 @@ CRICKET_SCHEMA = {
     "properties": {
         "subject_name": {"type": "string"},
         "headline": {"type": "string"},
-        "titles": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
+        "titles": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 5},
         "seo_description": {"type": "string"},
         "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 5},
         "comment": {"type": "string"},
@@ -119,9 +119,21 @@ STYLE
 
 METADATA
 - `headline`: exactly 3 or 4 words.
-- `titles`: exactly 3 concise title candidates.
+- `titles`: exactly 5 concise, clearly different YouTube Shorts title candidates.
+  1. SEO / Search: put the exact main subject or event keyword near the beginning and make the story immediately understandable.
+  2. Curiosity / Baity: create a strong information gap from a confirmed fact without misleading, exaggerating or hiding what the Short is about.
+  3. Trend / Format: use a current-feeling Shorts/news title pattern and natural audience language, but never invent or imply a real trend that the research does not support.
+  4. Consequence / Why it matters: foreground the concrete impact on the player, team, match, series, tournament or status.
+  5. Fan / Emotion: use a vivid, player- or team-centered angle that feels natural to cricket viewers while staying factual.
+- Every title must be accurate, concise, distinct from the other four, and under YouTube's 100-character title limit.
+- Put the most important words first; avoid generic filler such as "latest update", "breaking news", "big update" or "sports update".
+- Do not use fake urgency, unsupported superlatives, misleading open loops, excessive ALL CAPS, or excessive emoji. Do not add #Shorts unless it genuinely fits the title.
 - `seo_description`: concise and story-specific.
-- `hashtags`: 3–5 relevant hashtags.
+- `hashtags`: generate 4–5 tightly relevant hashtags.
+  - Include the main player/person/team or event when suitable.
+  - Include the specific competition, tournament, match, series or development when available.
+  - Include a relevant cricket category hashtag when useful.
+  - Avoid generic growth tags such as #viral, #fyp or #trending unless directly relevant to the story.
 - `comment`: one concise discussion-oriented comment grounded in the story.
 
 VISUAL HANDOFF
@@ -369,15 +381,29 @@ def validate_cricket_script(result: dict) -> tuple[bool, str]:
         return False, "The opening headline must contain 3 or 4 words."
 
     titles = result.get("titles")
-    if not isinstance(titles, list) or len(titles) != 3 or not all(_clean(item) for item in titles):
-        return False, "The Scriptwriter must produce exactly 3 titles."
+    if not isinstance(titles, list) or len(titles) != 5 or not all(_clean(item) for item in titles):
+        return False, "The Cricket Scriptwriter must produce exactly 5 titles."
+
+    cleaned_titles = [_clean(item) for item in titles]
+    if any(len(title) > 100 for title in cleaned_titles):
+        return False, "Each YouTube title must be 100 characters or fewer."
+
+    normalised_titles = [_normalise(title) for title in cleaned_titles]
+    if len(set(normalised_titles)) != len(normalised_titles):
+        return False, "The five YouTube titles must be distinct."
+
+    subject_normalised = _normalise(subject)
+    if subject_normalised and subject_normalised not in normalised_titles[0]:
+        return False, "The SEO title must contain the main subject name."
 
     if not _clean(result.get("seo_description")):
         return False, "The Scriptwriter must produce a description."
 
     hashtags = result.get("hashtags")
-    if not isinstance(hashtags, list) or not 3 <= len(hashtags) <= 5 or not all(_clean(item).startswith("#") for item in hashtags):
-        return False, "The Scriptwriter must produce 3–5 hashtags."
+    if not isinstance(hashtags, list) or not 4 <= len(hashtags) <= 5 or not all(
+        re.fullmatch(r"#[\w]+", _clean(item), flags=re.UNICODE) for item in hashtags
+    ):
+        return False, "The Cricket Scriptwriter must produce 4–5 valid hashtags."
 
     if not _clean(result.get("comment")):
         return False, "The Scriptwriter must produce the upload comment."
