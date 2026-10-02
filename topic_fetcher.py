@@ -273,7 +273,7 @@ def _cricket_same_event(a: Topic, b: Topic) -> bool:
     return False
 
 
-def _profile_relevant(title: str, description: str, profile: str | None, source: str) -> bool:
+def _profile_relevant(title: str, description: str, profile: str | None) -> bool:
     if profile == "niche_sports":
         text = f"{title} {description}".casefold()
         return any(term in text for term in (
@@ -284,11 +284,7 @@ def _profile_relevant(title: str, description: str, profile: str | None, source:
     if profile not in {"cricket_india_asia", "cricket_global"}:
         return False
     text = f"{title} {description}".casefold()
-    if any(term in text for term in NON_CRICKET_TERMS):
-        return False
-    if any(term in text for term in (CRICKET_TERMS | CRICKET_COMPETITIONS | INDIA_ASIA_TERMS)):
-        return True
-    return True
+    return not any(term in text for term in NON_CRICKET_TERMS)
 
 def _parse_date(value) -> datetime:
     if isinstance(value, datetime):
@@ -400,19 +396,12 @@ def _score_cricket(topic: Topic, profile: str) -> float:
     return freshness + specificity + narrative + consequence + undercovered + unusual + local - generic - source_penalty
 
 
-def _score(topic: Topic, profile: str | None = None) -> float:
-    if profile == "niche_sports":
-        return _score_niche(topic)
-    return _score_cricket(topic, profile or "cricket_india_asia")
-
-
 def _prepare(
     rows: list[Topic],
     seen_urls: set[str],
     profile: str | None = None,
-    lookback_hours: int | None = None,
 ) -> list[Topic]:
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=lookback_hours or LOOKBACK_HOURS)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=LOOKBACK_HOURS)
     seen = {_canonical_url(url) for url in seen_urls}
     prepared = []
     seen_row_urls = set()
@@ -424,15 +413,11 @@ def _prepare(
             continue
         if row.published_at < cutoff or _utility(title):
             continue
-        if not _profile_relevant(title, row.description, profile, row.source):
+        if not _profile_relevant(title, row.description, profile):
             continue
 
-        if profile == "niche_sports":
-            title_key = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
-            if not title_key:
-                continue
-        else:
-            title_key = ""
+        if profile == "niche_sports" and not re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip():
+            continue
 
         prepared.append(
             Topic(title, _clean(row.source), row.published_at, url, _clean(row.description), row.score)
@@ -470,7 +455,14 @@ def _select(
 
     ranked = sorted(
         (
-            Topic(r.title, r.source, r.published_at, r.url, r.description, _score(r, profile))
+            Topic(
+                r.title,
+                r.source,
+                r.published_at,
+                r.url,
+                r.description,
+                _score_niche(r) if profile == "niche_sports" else _score_cricket(r, profile),
+            )
             for r in rows
         ),
         key=lambda r: r.score,
@@ -532,21 +524,6 @@ def _select(
 
     return chosen[:limit]
 
-
-def _keyword_queries(keyword: str) -> list[str]:
-    clean = _clean(keyword).replace('"', " ")
-    if not clean:
-        return []
-    return [query.format(keyword=clean) for query in KEYWORD_QUERIES]
-
-def _gdelt_query(profile: str, keyword: str | None = None) -> str:
-    if keyword:
-        return f'"{_clean(keyword)}" cricket'
-    if profile == "cricket_global":
-        return '(cricket record milestone rivalry controversy comeback upset breakout women domestic associate board)'
-    return '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
-
-
 def fetch_topics(
     profile: str = "cricket_india_asia",
     more: bool = False,
@@ -562,7 +539,10 @@ def fetch_topics(
     seen_urls = {_canonical_url(topic.url) for topic in existing}
 
     if keyword:
-        queries = _keyword_queries(keyword)
+        clean_keyword = _clean(keyword).replace('"', " ")
+        queries = [] if not clean_keyword else [
+            query.format(keyword=clean_keyword) for query in KEYWORD_QUERIES
+        ]
     elif profile == "niche_sports":
         queries = [
             '(tennis OR badminton OR squash OR "table tennis") when:3d',
@@ -587,8 +567,21 @@ def fetch_topics(
 
     if len(chosen) < limit and profile != "niche_sports":
         try:
+            if keyword:
+                gdelt_query = f'"{_clean(keyword)}" cricket'
+            elif profile == "cricket_global":
+                gdelt_query = (
+                    '(cricket record milestone rivalry controversy comeback upset '
+                    'breakout women domestic associate board)'
+                )
+            else:
+                gdelt_query = (
+                    '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone '
+                    'rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
+                )
+
             fallback_rows = _prepare(
-                _fetch_gdelt(_gdelt_query(profile, keyword)),
+                _fetch_gdelt(gdelt_query),
                 seen_urls | {_canonical_url(topic.url) for topic in chosen},
                 profile=profile,
             )

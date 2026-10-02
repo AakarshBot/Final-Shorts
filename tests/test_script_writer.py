@@ -77,7 +77,7 @@ def test_validator_rejects_slide_one_over_13_words():
         "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
     )
     assert script_writer._words(result["script"][0]["voiceover"]) == 14
-    valid, reason = script_writer.validate_cricket_script(result, "source")
+    valid, reason = script_writer.validate_cricket_script(result)
     assert not valid
     assert "Slide 1" in reason
 
@@ -85,7 +85,7 @@ def test_validator_rejects_slide_one_over_13_words():
 def test_validator_rejects_over_32_seconds():
     result = valid_result()
     result["script"][1]["voiceover"] = " ".join(["important"] * 75)
-    valid, reason = script_writer.validate_cricket_script(result, "source")
+    valid, reason = script_writer.validate_cricket_script(result)
     assert not valid
     assert "32 seconds" in reason
 
@@ -96,13 +96,13 @@ def test_validator_requires_subject_name_in_narration():
         scene["voiceover"] = scene["voiceover"].replace("Shubman Gill", "the 35-year-old").replace(
             "Gill", "the player"
         )
-    valid, reason = script_writer.validate_cricket_script(result, "source")
+    valid, reason = script_writer.validate_cricket_script(result)
     assert not valid
     assert "subject" in reason.casefold()
 
 
 def test_valid_script_passes():
-    valid, reason = script_writer.validate_cricket_script(valid_result(), "source")
+    valid, reason = script_writer.validate_cricket_script(valid_result())
     assert valid, reason
 
 
