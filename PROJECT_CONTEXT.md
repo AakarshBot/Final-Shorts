@@ -257,7 +257,7 @@ Top-5 Visuals:
 - Existing 9:16 crop workflow remains in place.
 
 Top-5 visual treatment:
-- Each final slide uses the selected image as the full-frame visual with an adaptive editorial scrim/gradient behind the text instead of a fixed opaque card.
+- Top-5 story cards use a two-zone card treatment: the selected image occupies the upper portion, a single-line headline hugs the image's lower edge, and the lower portion carries the silent body.
 - Slides 2–6 show the spoken headline plus the Scriptwriter’s silent factual story body.
 - Slide 1 is a distinct package-opener composition: it shows only the Top-5 package headline and does not use the story-summary layout.
 - Test Visuals is a standalone visual sandbox: it can search Commons, manually crop an image, enter a headline/body, and render one slide without Scriptwriter or Audio approval.
@@ -494,7 +494,7 @@ Top-5 Test Stage 2 — Scriptwriter:
 - Output contains exactly **six slides**.
 - Slide 1 contains one package headline, spoken as written, with a maximum of 14 words.
 - Slides 2–6 each contain exactly one spoken headline that must communicate the complete important development of that selected story, rather than simply rephrasing its source headline.
-- Slides 2–6 spoken headlines target 24–32 words, have a hard maximum of 36 words and are locally estimated to remain below 15 seconds.
+- Slides 2–6 spoken headlines remain governed by the existing below-15-second speech estimate; no additional numeric word target is imposed.
 - Slides 2–6 also contain separate visual-only body copy. The body is exactly two concise factual sentences that add useful detail/context from the same story rather than restating the spoken headline.
 - Every slide also returns visual handoff metadata: primary entity, visual intent, specific search prompt and sport/topic category.
 - The writer does not generate the old Scriptwriter title candidates, SEO description or upload comment. It generates 3–5 relevant hashtags.
