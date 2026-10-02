@@ -188,14 +188,20 @@ def test_more_excludes_existing_urls_and_events():
 
 
 def test_entity_grouping_still_fills_twenty_tiles():
-    gill_events = ["injury", "contract", "retirement", "debut", "comeback"]
+    gill_titles = [
+        "Shubman Gill ruled out with knee injury after training",
+        "Shubman Gill signs lucrative franchise endorsement contract",
+        "Shubman Gill announces retirement from international cricket",
+        "Shubman Gill makes India debut in new format",
+        "Shubman Gill returns to captain Gujarat side",
+    ]
     rows = [
         make_topic(
-            f"Shubman Gill {event} development",
+            title,
             source=f"gill{index}.com",
             url=f"https://example.com/gill/{index}",
         )
-        for index, event in enumerate(gill_events)
+        for index, title in enumerate(gill_titles)
     ]
     rows.extend(
         make_topic(
