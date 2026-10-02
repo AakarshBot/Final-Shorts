@@ -593,6 +593,7 @@ Active responsibilities:
 - A tile is an entity-based grouping for diversity, not a selectable item.
 - For Cricket, if multiple qualifying headlines contain the same player name in the title, they share one tile. Country names, teams, competitions and known organisations are not treated as player entities.
 - A tile can contain multiple different headlines/events. Each headline remains individually selectable in the Dashboard.
+- A keyword search does not replace the existing 20 tiles; all returned keyword headlines are shown together under one additional Keyword tile, with each headline individually selectable.
 - A solo headline with no detected player entity remains its own tile.
 - The 20-tile limit is applied after the existing event clustering/selection logic, so multiple distinct stories about the same player can occupy one tile without being discarded as the same story.
 - The returned Topic object remains the existing downstream handoff contract. It carries lightweight tile metadata and the tile's retained headline members; selecting an individual headline makes that exact Topic the active handoff to Scriptwriter.
@@ -606,7 +607,7 @@ Cleanup baseline:
 - Behaviour-bearing research, scoring, clustering, filtering and provider adapters remain because they are actively used.
 - The repository does not currently contain a production Python file that is safe to delete based on active imports/callers/tests.
 
-Status: **Approved / cleaned / entity tiles implemented.**
+Status: **Approved / cleaned / entity tiles implemented / keyword tile implemented.**
 
 
 ### Function 02 — Cricket Scriptwriter
