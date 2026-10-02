@@ -187,6 +187,35 @@ def test_more_excludes_existing_urls_and_events():
     assert [item.title for item in chosen] == [rows[1].title]
 
 
+def test_entity_grouping_still_fills_twenty_tiles():
+    rows = [
+        make_topic(
+            f"Shubman Gill record event {index}",
+            source=f"gill{index}.com",
+            url=f"https://example.com/gill/{index}",
+        )
+        for index in range(5)
+    ]
+    rows.extend(
+        make_topic(
+            f"Player{index} signs Team{index} after Event{index}",
+            source=f"source{index}.com",
+            url=f"https://example.com/unique/{index}",
+        )
+        for index in range(25)
+    )
+    chosen = topic_fetcher._select(
+        rows,
+        20,
+        set(),
+        profile="cricket_india_asia",
+    )
+    assert len(chosen) == 20
+    assert sum(item.group_key == "player:shubman gill" for item in chosen) == 1
+    gill = next(item for item in chosen if item.group_key == "player:shubman gill")
+    assert len(gill.group_members) == 5
+
+
 def test_twenty_results_remain_available_from_large_unique_pool(monkeypatch):
     actions = [
         "appoints", "signs", "returns", "breaks", "retires",
