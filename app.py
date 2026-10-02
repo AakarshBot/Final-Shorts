@@ -1,6 +1,7 @@
 import hashlib
 import json
 from io import BytesIO
+from dataclasses import replace
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -2640,8 +2641,13 @@ def render_topic_fetcher():
         with b:
             more = st.button("Find 20 more", width="stretch")
         with cnt:
+            topics = st.session_state.topics
+            headline_count = sum(
+                len(topic.group_members) if topic.group_members else 1
+                for topic in topics
+            )
             st.markdown(
-                f'<div style="text-align:right;padding:.65rem .15rem;"><span class="badge">{len(st.session_state.topics)} stories</span></div>',
+                f'<div style="text-align:right;padding:.65rem .15rem;"><span class="badge">{len(topics)} tiles · {headline_count} headlines</span></div>',
                 unsafe_allow_html=True,
             )
 
@@ -2693,7 +2699,7 @@ def render_topic_fetcher():
             st.session_state.visual_result = None
             st.session_state.visual_loaded_story = None
 
-    topics=st.session_state.topics
+    topics = st.session_state.topics
     if not topics:
         st.markdown(
             '<div class="empty-state"><div class="empty-state-title">No stories loaded</div><div class="empty-state-copy">Fetch the current story pool to start.</div></div>',
@@ -2703,78 +2709,103 @@ def render_topic_fetcher():
 
     for start in range(0, len(topics), 3):
         row = st.columns(3, gap="small")
-        for col, (index, topic) in zip(
+        for col, (index, tile) in zip(
             row,
             enumerate(topics[start:start + 3], start=start),
         ):
+            members = tile.group_members or (tile,)
+            members = tuple(sorted(members, key=lambda item: item.score, reverse=True))
             with col:
-                source = topic.source or "Sports desk"
-                published = topic.published_at.strftime("%d %b")
-                selected = index == st.session_state.selected_topic
                 with st.container(key=f"topic-card-{index}"):
                     selected_label = (
                         '<span class="topic-state-label selected">Selected</span>'
-                        if selected
+                        if (
+                            st.session_state.selected_topic == index
+                            and any(
+                                topic.url == st.session_state.topics[index].url
+                                for topic in members
+                            )
+                        )
                         else ""
                     )
+                    tile_label = f'<span class="topic-rank">TILE {index + 1:02d}</span>'
+                    if tile.group_key.startswith("player:"):
+                        group_name = tile.group_key.split(":", 1)[1].title()
+                        tile_label += f'<span class="topic-meta">{group_name}</span>'
                     st.markdown(
-                        f'<div class="topic-card-state">'
-                        f'<span class="topic-rank">STORY {index + 1:02d}</span>'
-                        f'{selected_label}'
-                        f'</div>'
-                        f'<div class="topic-title">{topic.title}</div>'
-                        f'<div class="topic-meta">{source} · {published}</div>',
+                        f'<div class="topic-card-state">{tile_label}{selected_label}</div>',
                         unsafe_allow_html=True,
                     )
-                    label = "Selected" if selected else "Select"
-                    if st.button(label, key=f"topic-select-{index}", width="stretch"):
-                        st.session_state.selected_topic = index
-                        st.session_state.test_stage = "02 · Scriptwriter"
-                        st.session_state.test_pipeline_notice = {
-                            "confirmed": "Story confirmed",
-                            "next": "Moving to Script.",
-                        }
-                        st.session_state.script_data = None
-                        st.session_state.approved_script = None
-                        st.session_state.audio_data = None
-                        st.session_state.approved_audio = None
-                        st.session_state.subtitle_data = None
-                        st.session_state.approved_subtitles = None
-                        st.session_state.renderer_previews = None
-                        st.session_state.rendered_video_path = None
-                        st.session_state.upload_qc_approved = False
-                        st.session_state.upload_result = None
-                        st.session_state.upload_qc = None
-                        st.session_state.upload_title_options = []
-                        st.session_state.upload_title_choice = 0
-                        st.session_state.upload_description = ""
-                        st.session_state.upload_hashtags = ""
-                        st.session_state.upload_comment = ""
-                        st.session_state.manual_visual_result = None
-                        st.session_state.real_image_result = None
-                        st.session_state.ai_image_result = None
-                        st.session_state.ranked_visual_result = None
-                        st.session_state.visual_result = None
-                        st.session_state.visual_loaded_story = None
-                        st.session_state.visual_crops = {}
-                        st.rerun()
+
+                    for headline_index, member in enumerate(members):
+                        is_selected = (
+                            st.session_state.selected_topic == index
+                            and st.session_state.topics[index].url == member.url
+                        )
+                        st.markdown(
+                            f'<div class="topic-title">{member.title}</div>'
+                            f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        label = "Selected" if is_selected else "Select"
+                        if st.button(
+                            label,
+                            key=f"topic-select-{index}-{headline_index}",
+                            width="stretch",
+                        ):
+                            st.session_state.topics[index] = replace(
+                                member,
+                                group_key=tile.group_key,
+                                group_members=members,
+                            )
+                            st.session_state.selected_topic = index
+                            st.session_state.test_stage = "02 · Scriptwriter"
+                            st.session_state.test_pipeline_notice = {
+                                "confirmed": "Story confirmed",
+                                "next": "Moving to Script.",
+                            }
+                            st.session_state.script_data = None
+                            st.session_state.approved_script = None
+                            st.session_state.audio_data = None
+                            st.session_state.approved_audio = None
+                            st.session_state.subtitle_data = None
+                            st.session_state.approved_subtitles = None
+                            st.session_state.renderer_previews = None
+                            st.session_state.rendered_video_path = None
+                            st.session_state.upload_qc_approved = False
+                            st.session_state.upload_result = None
+                            st.session_state.upload_qc = None
+                            st.session_state.upload_title_options = []
+                            st.session_state.upload_title_choice = 0
+                            st.session_state.upload_description = ""
+                            st.session_state.upload_hashtags = ""
+                            st.session_state.upload_comment = ""
+                            st.session_state.manual_visual_result = None
+                            st.session_state.real_image_result = None
+                            st.session_state.ai_image_result = None
+                            st.session_state.ranked_visual_result = None
+                            st.session_state.visual_result = None
+                            st.session_state.visual_loaded_story = None
+                            st.session_state.visual_crops = {}
+                            st.rerun()
 
     if st.session_state.selected_topic is not None:
-        index=st.session_state.selected_topic
-        if index < len(topics):
-            topic=topics[index]
+        index = st.session_state.selected_topic
+        if 0 <= index < len(topics):
+            topic = topics[index]
             with st.container(key="selected-story-card"):
-                left,right=st.columns([1.7,.45],gap="medium")
+                left, right = st.columns([1.7, .45], gap="medium")
                 with left:
-                    st.markdown('<div class="eyebrow">SELECTED</div>',unsafe_allow_html=True)
-                    st.markdown(f'<div class="selected-story-title">{topic.title}</div>',unsafe_allow_html=True)
-                    st.markdown(f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b}</div>',unsafe_allow_html=True)
+                    st.markdown('<div class="eyebrow">SELECTED</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="selected-story-title">{topic.title}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b}</div>', unsafe_allow_html=True)
                     if topic.description:
                         with st.expander("Story details", expanded=False):
                             st.write(topic.description)
                 with right:
                     if topic.url:
-                        st.link_button("Source ↗",topic.url,width="stretch")
+                        st.link_button("Source ↗", topic.url, width="stretch")
+
 def render_scriptwriter():
     from niche_sports_script_writer import write_niche_sports_script
     from script_writer import apply_script_edits, write_script
