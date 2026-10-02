@@ -229,28 +229,19 @@ def _query(sql: str) -> list[dict[str, Any]]:
                 return []
             if isinstance(rows[0], dict):
                 return [dict(item) for item in rows]
-            if isinstance(columns, list) and all(isinstance(row, (list, tuple)) for row in rows):
-                return [
-                    dict(zip(columns, row))
-                    for row in rows
-                ]
-            if key in {"data", "results"} and isinstance(rows[0], list):
-                nested = rows[0]
-                if isinstance(payload.get("result"), dict):
-                    payload = payload["result"]
-                    continue
-            break
+            if isinstance(columns, list) and all(
+                isinstance(row, (list, tuple)) for row in rows
+            ):
+                return [dict(zip(columns, row)) for row in rows]
 
         nested = payload.get("result")
         if isinstance(nested, dict):
             payload = nested
             continue
-
         raise StatsCardError("Stats database returned an unexpected response.")
 
     if not isinstance(payload, list):
         raise StatsCardError("Stats database returned an unexpected response.")
-
     if not payload:
         return []
     if isinstance(payload[0], dict):
