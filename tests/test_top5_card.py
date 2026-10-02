@@ -95,7 +95,6 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
 def test_top5_headline_can_use_two_lines_and_shrinks_when_needed():
     short_font, short_lines = renderer._fit_top5_headline(
         "India make a major change",
-        story_number=0,
     )
     long_font, long_lines = renderer._fit_top5_headline(
         "India reshuffles the squad after a late selection change before the next series",
@@ -151,7 +150,6 @@ def test_top5_opener_has_no_body_copy():
     assert image.size == (1080, 1920)
     _, lines = renderer._fit_top5_headline(
         "Five cricket stories shaping today",
-        story_number=0,
     )
     assert len(lines) <= 2
     assert renderer._fit_top5_body("", "english") == (None, [])
