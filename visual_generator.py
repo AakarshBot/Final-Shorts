@@ -10,6 +10,7 @@ import base64
 import hashlib
 import io
 import os
+import secrets
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
@@ -44,14 +45,14 @@ def _valid_image(data: bytes) -> bool:
         return False
 
 
-def _huggingface(query: str) -> dict[str, Any] | None:
+def _huggingface(query: str, seed: int) -> dict[str, Any] | None:
     token = str(os.getenv("HF_TOKEN") or "").strip()
     if not token:
         return None
     from huggingface_hub import InferenceClient
 
     model = os.getenv("HF_IMAGE_MODEL", "black-forest-labs/FLUX.1-schnell")
-    image = InferenceClient(api_key=token, provider="auto").text_to_image(query, model=model)
+    image = InferenceClient(api_key=token, provider="auto").text_to_image(query, model=model, seed=seed)
     data = _image_bytes(image)
     if not data or not _valid_image(data):
         return None
@@ -63,7 +64,7 @@ def _huggingface(query: str) -> dict[str, Any] | None:
     }
 
 
-def _cloudflare(query: str) -> dict[str, Any] | None:
+def _cloudflare(query: str, seed: int) -> dict[str, Any] | None:
     account_id = str(os.getenv("CLOUDFLARE_ACCOUNT_ID") or "").strip()
     token = str(os.getenv("CLOUDFLARE_API_TOKEN") or "").strip()
     if not account_id or not token:
@@ -75,7 +76,7 @@ def _cloudflare(query: str) -> dict[str, Any] | None:
     )
     response = requests.post(
         f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}",
-        json={"prompt": query},
+        json={"prompt": query, "seed": seed},
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         timeout=TIMEOUT,
     )
@@ -106,6 +107,8 @@ def generate_images(query: str) -> dict[str, Any]:
     if not q:
         return {"query": "", "assets": [], "providers": {}, "errors": {}}
 
+    generation_seed = secrets.randbelow(2_147_483_647)
+
     configured = []
     for name, provider in PROVIDERS:
         if name == "Hugging Face" and os.getenv("HF_TOKEN"):
@@ -116,7 +119,7 @@ def generate_images(query: str) -> dict[str, Any]:
     def run(item):
         name, provider = item
         try:
-            return name, provider(q), ""
+            return name, provider(q, generation_seed), ""
         except Exception as exc:
             return name, None, f"{type(exc).__name__}: {exc}"
 
