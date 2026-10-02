@@ -116,7 +116,7 @@ def test_top5_headline_layout_is_dynamic():
         "India make a major change",
     )
     long_font, long_lines = renderer._fit_top5_headline(
-        "India reshuffles the squad after a late selection change before the next series",
+        "India reshuffles squad after a late selection change",
     )
 
     assert short_font.size >= long_font.size
