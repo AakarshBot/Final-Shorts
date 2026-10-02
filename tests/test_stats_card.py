@@ -230,3 +230,24 @@ def test_stats_card_preview_uses_card_frame_without_query(monkeypatch):
         assert image.size == (1080, 1920)
         assert image.getpixel((0, 100)) == (40, 50, 60)
         assert image.getpixel((0, 1000)) == (246, 247, 249)
+
+def test_query_parses_tigzig_columns_and_data(monkeypatch):
+    class FakeResponse:
+        status_code = 200
+        text = ""
+
+        def json(self):
+            return {
+                "columns": ["name", "runs"],
+                "data": [
+                    ["MS Dhoni", 4632],
+                    ["Virat Kohli", 14797],
+                ],
+                "truncated": False,
+            }
+
+    monkeypatch.setattr(stats_card.requests, "post", lambda *args, **kwargs: FakeResponse())
+    assert stats_card._query("SELECT name, runs FROM players") == [
+        {"name": "MS Dhoni", "runs": 4632},
+        {"name": "Virat Kohli", "runs": 14797},
+    ]
