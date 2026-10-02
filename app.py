@@ -709,6 +709,10 @@ if "stats_card_result" not in st.session_state:
     st.session_state.stats_card_result = None
 if "stats_card_image_selection" not in st.session_state:
     st.session_state.stats_card_image_selection = None
+if "stats_card_image_crop" not in st.session_state:
+    st.session_state.stats_card_image_crop = None
+if "stats_card_approved" not in st.session_state:
+    st.session_state.stats_card_approved = False
 
 if "live_production_line" not in st.session_state:
     st.session_state.live_production_line = None
@@ -752,6 +756,10 @@ if "live_stats_card_result" not in st.session_state:
     st.session_state.live_stats_card_result = None
 if "live_stats_card_image_selection" not in st.session_state:
     st.session_state.live_stats_card_image_selection = None
+if "live_stats_card_image_crop" not in st.session_state:
+    st.session_state.live_stats_card_image_crop = None
+if "live_stats_card_approved" not in st.session_state:
+    st.session_state.live_stats_card_approved = False
 if "live_ranked_visual_result" not in st.session_state:
     st.session_state.live_ranked_visual_result = None
 if "live_script_language" not in st.session_state:
@@ -1034,37 +1042,98 @@ def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, st
     return entries
 
 
+@st.dialog("Crop image for Stats Card", width="large")
+def _stats_card_crop_dialog(image_bytes: bytes, live: bool):
+    from stats_card import IMAGE_HEIGHT, WIDTH
+
+    image = _asset_to_image(image_bytes)
+    if image is None:
+        st.error("This visual could not be opened for cropping.")
+        return
+
+    st.markdown('<div class="crop-dialog-kicker">STATS CARD CROP</div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="crop-dialog-title">Set the image framing for the card</div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        f"Crop to the card image area. The frame keeps the exact {WIDTH} × {IMAGE_HEIGHT}px ratio. "
+        "Drag the frame to reposition it or resize the corners."
+    )
+
+    from streamlit_cropper import st_cropper
+
+    target_ratio = WIDTH / IMAGE_HEIGHT
+    canvas_width = max(image.width, int(round(image.height * target_ratio)))
+    canvas_height = max(image.height, int(round(canvas_width / target_ratio)))
+    background = ImageOps.fit(
+        image.convert("RGB"),
+        (canvas_width, canvas_height),
+        method=Image.Resampling.LANCZOS,
+    ).filter(ImageFilter.GaussianBlur(radius=max(18, canvas_width // 55)))
+    canvas = background.copy()
+    offset_x = (canvas_width - image.width) // 2
+    offset_y = (canvas_height - image.height) // 2
+    canvas.paste(image.convert("RGB"), (offset_x, offset_y))
+
+    cropper_key = "live-stats-card-cropper" if live else "test-stats-card-cropper"
+    cropped = st_cropper(
+        canvas,
+        realtime_update=True,
+        aspect_ratio=target_ratio,
+        return_type="image",
+        key=cropper_key,
+        stroke_width=2,
+        box_color="#4F46E5",
+    )
+
+    left, right = st.columns([1.2, .8], gap="large")
+    with left:
+        st.markdown('<div class="crop-dialog-kicker">PREVIEW</div>', unsafe_allow_html=True)
+        st.image(cropped, width="stretch")
+    with right:
+        st.markdown('<div class="crop-dialog-kicker">SOURCE IMAGE</div>', unsafe_allow_html=True)
+        st.caption(f"{image.width} × {image.height}px")
+        st.markdown(
+            '<div class="crop-dialog-kicker" style="margin-top:1rem;">CARD IMAGE</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(f"{WIDTH} × {IMAGE_HEIGHT}px")
+        st.caption("This crop affects the Stats Card only; the normal visual crop is unchanged.")
+        if st.button(
+            "Apply crop for card",
+            type="primary",
+            width="stretch",
+            key=f"{cropper_key}-apply",
+        ):
+            buffer = BytesIO()
+            cropped.convert("RGB").resize(
+                (WIDTH, IMAGE_HEIGHT),
+                Image.Resampling.LANCZOS,
+            ).save(buffer, format="JPEG", quality=94, optimize=True)
+            crop_key = "live_stats_card_image_crop" if live else "stats_card_image_crop"
+            result_key = "live_stats_card_result" if live else "stats_card_result"
+            approved_key = "live_stats_card_approved" if live else "stats_card_approved"
+            st.session_state[crop_key] = buffer.getvalue()
+            st.session_state[result_key] = None
+            st.session_state[approved_key] = False
+            st.rerun()
+
+
 def _render_stats_card(live: bool = False, slide_count: int = 0):
     from stats_card import StatsCardError, build_stats_card, build_stats_card_preview
 
     state_key = "live_stats_card_result" if live else "stats_card_result"
-    selection_key = (
-        "live_stats_card_image_selection"
-        if live
-        else "stats_card_image_selection"
-    )
+    selection_key = "live_stats_card_image_selection" if live else "stats_card_image_selection"
+    crop_key = "live_stats_card_image_crop" if live else "stats_card_image_crop"
+    approved_key = "live_stats_card_approved" if live else "stats_card_approved"
     build_key = "live-stats-card-build" if live else "test-stats-card-build"
 
     st.subheader("Stats Card")
     st.caption(
-        "Enter the stat you want. The numbers come from TigZig / Cricsheet; "
-        "the factory does not generate or guess statistics with AI."
+        "Choose the image from the existing Manual QC pool, crop it for this card, "
+        "then build and approve the completed card."
     )
-
-    with st.form(f"{build_key}-query-form"):
-        query = st.text_input(
-            "Manual query",
-            placeholder=(
-                "e.g. MS Dhoni ODI stats · India vs Pakistan H2H stats · "
-                "Virat Kohli's last 10 innings scores"
-            ),
-            key=f"{build_key}-query",
-        )
-        build = st.form_submit_button(
-            "Build Stats Card",
-            type="primary",
-            width="stretch",
-        )
 
     entries = _stats_card_pool_entries(live)
     if not entries:
@@ -1082,8 +1151,8 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
     )
 
     current_selection = st.session_state.get(selection_key)
-    for start in range(0, len(entries), 3):
-        row = entries[start:start + 3]
+    for start_index in range(0, len(entries), 3):
+        row = entries[start_index:start_index + 3]
         cols = st.columns(len(row), gap="medium")
         for col, (asset_key, index, asset, image_bytes, source_name) in zip(cols, row):
             with col:
@@ -1103,15 +1172,9 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
                     if preview is not None:
                         preview.thumbnail((420, 420), Image.Resampling.LANCZOS)
                         st.image(preview, width="stretch")
-                    st.markdown(
-                        f'<div class="visual-source">{source}</div>',
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
                     if label:
-                        st.markdown(
-                            f'<div class="visual-detail">{label}</div>',
-                            unsafe_allow_html=True,
-                        )
+                        st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
                     selected = (
                         isinstance(current_selection, dict)
                         and current_selection.get("asset_key") == asset_key
@@ -1128,83 +1191,101 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
                             "label": label,
                             "bytes": image_bytes,
                         }
+                        st.session_state[crop_key] = None
                         st.session_state[state_key] = None
+                        st.session_state[approved_key] = False
                         st.rerun()
 
     selected = st.session_state.get(selection_key)
     if not isinstance(selected, dict):
         return
 
+    source_bytes = st.session_state.get(crop_key) or selected.get("bytes")
+    if not isinstance(source_bytes, (bytes, bytearray)):
+        st.error("The selected image is missing.")
+        return
+
     st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">CARD PREVIEW</div>'
-        '<div class="section-title">Selected image + empty stats panel</div></div>'
-        '<div class="section-count">1080 × 1920 · image area 1080 × 860</div></div>',
+        '<div class="section-head"><div><div class="eyebrow">CARD IMAGE</div>'
+        '<div class="section-title">Crop the selected image for this card</div></div>'
+        '<div class="section-count">1080 × 860 image area</div></div>',
         unsafe_allow_html=True,
     )
-    preview_bytes = build_stats_card_preview(selected["bytes"])
-    st.image(preview_bytes, width=360)
-    selected_image = _asset_to_image(selected.get("bytes"))
-    if selected_image is not None:
-        st.caption(
-            f'Manual QC selection · source image {selected_image.width} × {selected_image.height}px · '
-            'card image area 1080 × 860px'
+    crop_cols = st.columns([1, .42], gap="small")
+    with crop_cols[0]:
+        st.image(source_bytes, width=360)
+    with crop_cols[1]:
+        if st.button(
+            "Crop for card",
+            type="primary",
+            width="stretch",
+            key=f"{build_key}-crop",
+        ):
+            _stats_card_crop_dialog(bytes(source_bytes), live)
+        if st.session_state.get(crop_key):
+            st.markdown(
+                '<span class="visual-crop-label">CARD CROP APPLIED</span>',
+                unsafe_allow_html=True,
+            )
+            if st.button(
+                "Reset card crop",
+                width="stretch",
+                key=f"{build_key}-reset-crop",
+            ):
+                st.session_state[crop_key] = None
+                st.session_state[state_key] = None
+                st.session_state[approved_key] = False
+                st.rerun()
+
+    result = st.session_state.get(state_key)
+    if isinstance(result, dict) and result:
+        if result.get("error"):
+            st.error(result["error"])
+            return
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">MANUAL QC</div>'
+            '<div class="section-title">Review the completed Stats Card</div></div>'
+            '<div class="section-count">approve this exact card</div></div>',
+            unsafe_allow_html=True,
         )
-    st.caption(f'{selected.get("source") or "Existing visual"} · {selected.get("label") or ""}')
+        st.image(result["bytes"], width=360)
+        st.caption(
+            f'{result.get("label") or "Stats Card"} · '
+            f'{result.get("source") or "Cricket data"}'
+        )
+        stats = result.get("stats") or {}
+        if result.get("query"):
+            st.code(result["query"])
+        if stats.get("last_date"):
+            st.caption(f"Data through {stats['last_date']}")
+        elif stats.get("latest_date"):
+            st.caption(f"Latest meeting: {stats['latest_date']}")
 
-    if build:
-        query = query.strip()
-        if not query:
-            st.warning("Enter a stats query first.")
+        if not st.session_state.get(approved_key):
+            if st.button(
+                "Approve Stats Card",
+                type="primary",
+                width="stretch",
+                key=f"{build_key}-approve",
+            ):
+                st.session_state[approved_key] = True
+                st.rerun()
         else:
-            with st.spinner("Building the stats card from the cricket database…"):
-                try:
-                    st.session_state[state_key] = build_stats_card(
-                        query,
-                        selected["bytes"],
-                    )
-                except (StatsCardError, OSError, RuntimeError) as exc:
-                    st.session_state[state_key] = {
-                        "error": str(exc)
-                    }
+            st.success("Stats Card approved.")
 
-    result = st.session_state.get(state_key) or {}
-    if result.get("error"):
-        st.error(result["error"])
-        return
-    if not result:
-        return
+        if not live or not st.session_state.get(approved_key):
+            return
 
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">OUTPUT</div>'
-        '<div class="section-title">9:16 Stats Card</div></div>'
-        '<div class="section-count">1080 × 1920 PNG</div></div>',
-        unsafe_allow_html=True,
-    )
-    st.image(result["bytes"], width=360)
-    stats = result.get("stats") or {}
-    st.caption(
-        f'{result.get("label") or "Stats Card"} · '
-        f'{result.get("source") or "Cricket data"}'
-    )
-    if result.get("query"):
-        st.code(result["query"])
-    if stats.get("last_date"):
-        st.caption(f"Data through {stats['last_date']}")
-    elif stats.get("latest_date"):
-        st.caption(f"Latest meeting: {stats['latest_date']}")
-
-    st.download_button(
-        "Save Stats Card PNG",
-        data=result["bytes"],
-        file_name="stats-card.png",
-        mime="image/png",
-        width="stretch",
-        key=f"{build_key}-download",
-    )
-
-    if live:
         if slide_count <= 0:
             return
+        st.download_button(
+            "Save Stats Card PNG",
+            data=result["bytes"],
+            file_name="stats-card.png",
+            mime="image/png",
+            width="stretch",
+            key=f"{build_key}-download",
+        )
         slide = st.selectbox(
             "Use Stats Card for slide",
             list(range(1, slide_count + 1)),
@@ -1228,6 +1309,50 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
             }
             st.session_state.live_visuals_approved = False
             st.rerun()
+        return
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">CARD PREVIEW</div>'
+        '<div class="section-title">Selected image + empty stats panel</div></div>'
+        '<div class="section-count">1080 × 1920</div></div>',
+        unsafe_allow_html=True,
+    )
+    st.image(build_stats_card_preview(bytes(source_bytes)), width=360)
+
+    with st.form(f"{build_key}-query-form"):
+        query = st.text_input(
+            "Manual query",
+            placeholder=(
+                "e.g. MS Dhoni ODI stats · India vs Pakistan H2H stats · "
+                "Virat Kohli's last 10 innings scores"
+            ),
+            key=f"{build_key}-query",
+        )
+        build = st.form_submit_button(
+            "Build Stats Card",
+            type="primary",
+            width="stretch",
+        )
+
+    if not build:
+        return
+
+    query = query.strip()
+    if not query:
+        st.warning("Enter a stats query first.")
+        return
+
+    with st.spinner("Building the stats card from the cricket database…"):
+        try:
+            st.session_state[state_key] = build_stats_card(
+                query,
+                bytes(source_bytes),
+            )
+            st.session_state[approved_key] = False
+        except (StatsCardError, OSError, RuntimeError) as exc:
+            st.session_state[state_key] = {"error": str(exc)}
+
+
 
 
 def _top5_visual_asset_key(result_key: str, index: int, asset: dict) -> str:
@@ -1691,6 +1816,8 @@ def _live_reset_downstream():
         "live_ranked_visual_result": None,
         "live_stats_card_result": None,
         "live_stats_card_image_selection": None,
+        "live_stats_card_image_crop": None,
+        "live_stats_card_approved": False,
         "live_visual_crops": {},
         "live_visual_deleted": set(),
         "live_visual_assignments": {},
@@ -3013,6 +3140,7 @@ def render_topic_fetcher():
             "upload_qc": None, "manual_visual_result": None, "real_image_result": None,
             "ai_image_result": None, "ranked_visual_result": None, "visual_crops": {},
             "stats_card_result": None, "stats_card_image_selection": None,
+             "stats_card_image_crop": None, "stats_card_approved": False,
         }.items():
             st.session_state[key] = value
     st.session_state.topic_desk_profile = profiles[desk]
