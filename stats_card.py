@@ -376,7 +376,14 @@ def _fallback_people_candidates(intent: StatsIntent) -> list[dict[str, Any]]:
         f"lower(unique_name) = lower('{needle}')",
     ]
 
-    if len(tokens) >= 2:
+    if len(tokens) == 1:
+        conditions.extend(
+            [
+                f"lower(name) LIKE lower('%{needle}%')",
+                f"lower(unique_name) LIKE lower('%{needle}%')",
+            ]
+        )
+    elif len(tokens) >= 2:
         initial = _sql_text(tokens[0][0])
         surname = _sql_text(tokens[-1])
         conditions.extend(
@@ -463,7 +470,7 @@ def _fuzzy_registry_candidates(intent: StatsIntent) -> list[dict[str, Any]]:
         list(aliases),
         scorer=fuzz.WRatio,
         limit=8,
-        score_cutoff=96,
+        score_cutoff=90,
     )
     if not matches:
         return []
@@ -561,17 +568,6 @@ def _resolve_player(intent: StatsIntent) -> dict[str, Any]:
         "identifier": _normalise(candidate.get("identifier") or ""),
         "name": display_name,
         "unique_name": unique_name,
-        "database_names": sorted(
-            {
-                unique_name,
-                *{
-                    _normalise(alias)
-                    for alias in (candidate.get("aliases") or ())
-                    if _normalise(alias)
-                },
-            }
-            - {""}
-        ),
     }
 
 def _innings_limit(format_name: str) -> int:
@@ -585,19 +581,10 @@ def _player_rows(intent: StatsIntent, player: dict[str, Any]) -> list[dict[str, 
             "That format/gender combination is not available in the stats database."
         )
 
-    player_names = list(
-        dict.fromkeys(
-            _normalise(name)
-            for name in (player.get("database_names") or [player.get("unique_name")])
-            if _normalise(name)
-        )
-    )
-    if not player_names:
+    unique_name = _normalise(player.get("unique_name") or "")
+    if not unique_name:
         raise StatsCardError("The matched player has no usable database name.")
 
-    name_literals = ", ".join(
-        f"lower('{_sql_text(name)}')" for name in player_names
-    )
     innings_limit = _innings_limit(intent.format_name)
     sql = (
         "SELECT b.match_id, b.start_date, b.innings, b.batting_team, b.bowling_team, "
@@ -605,7 +592,7 @@ def _player_rows(intent: StatsIntent, player: dict[str, Any]) -> list[dict[str, 
         "COUNT(*) FILTER (WHERE b.wides IS NULL) AS balls_faced, "
         "MAX(CASE WHEN lower(b.player_dismissed) = lower(b.striker) THEN 1 ELSE 0 END) AS dismissed "
         f"FROM {table} b "
-        f"WHERE lower(b.striker) IN ({name_literals}) "
+        f"WHERE lower(b.striker) = lower('{_sql_text(unique_name)}') "
         f"AND b.innings <= {innings_limit} "
         "GROUP BY b.match_id, b.start_date, b.innings, b.batting_team, "
         "b.bowling_team, b.striker "
