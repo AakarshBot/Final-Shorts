@@ -606,7 +606,7 @@ Cleanup baseline:
 - Behaviour-bearing research, scoring, clustering, filtering and provider adapters remain because they are actively used.
 - The repository does not currently contain a production Python file that is safe to delete based on active imports/callers/tests.
 
-Status: **Approved / cleaned / entity-tile update in progress.**
+Status: **Approved / cleaned / entity tiles implemented.**
 
 
 ### Function 02 — Cricket Scriptwriter
