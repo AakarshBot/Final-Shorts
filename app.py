@@ -4698,6 +4698,14 @@ elif st.session_state.app_mode == "test":
             ) or "Slide 1 · Package opener"
             st.session_state.test_top5_visual_slide_type = slide_type
 
+            if not str(st.session_state.get("test_top5_standalone_headline") or "").strip():
+                st.session_state.test_top5_standalone_headline = "India confirm the latest squad change"
+            if not str(st.session_state.get("test_top5_standalone_body") or "").strip():
+                st.session_state.test_top5_standalone_body = (
+                    "The board confirmed the change after reviewing the latest selection update. "
+                    "The decision affects the lineup ahead of the next series."
+                )
+
             headline = st.text_area(
                 "Headline",
                 value=st.session_state.get("test_top5_standalone_headline", ""),
