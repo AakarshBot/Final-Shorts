@@ -181,17 +181,6 @@ def _parse_query(query: str) -> StatsIntent:
             count=count,
         )
 
-    player = _strip_format_words(last_n.group(1).rstrip("'"))
-        if not player:
-            raise StatsCardError("Last-innings queries need a player name.")
-        return StatsIntent(
-            kind="last_n",
-            format_name=format_name,
-            gender=gender,
-            player=player,
-            count=count,
-        )
-
     player = _strip_format_words(clean)
     if player.casefold().endswith("'s"):
         player = player[:-2].rstrip()
