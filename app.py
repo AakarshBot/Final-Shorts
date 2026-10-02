@@ -1630,15 +1630,27 @@ def _render_live_visual_board(slide_count: int):
         unsafe_allow_html=True,
     )
 
+    script = st.session_state.get("live_approved_script") or {}
+    scenes = script.get("script") if isinstance(script, dict) else []
+    scenes = scenes if isinstance(scenes, list) else []
+
     cols = st.columns(slide_count, gap="small")
     for slide in range(1, slide_count + 1):
         with cols[slide - 1]:
             assignment = st.session_state.live_visual_assignments.get(slide)
+            scene = scenes[slide - 1] if slide <= len(scenes) and isinstance(scenes[slide - 1], dict) else {}
+            voiceover = str(scene.get("voiceover") or "").strip()
             with st.container(key=f"live-slide-{slide}"):
                 st.markdown(
                     f'<div class="eyebrow">SLIDE {slide}</div>',
                     unsafe_allow_html=True,
                 )
+                if voiceover:
+                    st.markdown(
+                        '<div class="mini-label" style="margin-top:.45rem;">SCRIPT</div>',
+                        unsafe_allow_html=True,
+                    )
+                    st.text(voiceover)
                 preview = (
                     _live_fit_preview(assignment["bytes"], 300, 533)
                     if assignment
