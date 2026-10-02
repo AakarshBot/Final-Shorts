@@ -239,6 +239,39 @@ Important:
 - Do not add new factory logic while doing dashboard UI work unless required to support an existing completed handoff.
 - Preserve the already-approved function contracts.
 
+### Top-5 production line
+
+Top-5 Scriptwriter:
+- Generates exactly six slides from five selected cricket stories.
+- Slide 1 is an original, story-specific package headline written by the scriptwriter; it must not be a generic “Top 5 Cricket Stories” style roundup label.
+- Slides 2–6 use the five selected story headlines as spoken narration.
+- Slides 2–6 also carry separate visual-only body copy, plus visual metadata/search prompts.
+- Existing length and validation rules remain unchanged.
+
+Top-5 Visuals:
+- Uses a dedicated Top-5 visual fetcher; the completed Cricket visual fetcher remains locked and untouchable.
+- Scrapes each of the five selected story URLs independently and builds a small 4–6 image pool per story.
+- If a story has fewer than four usable images, related current publisher URLs are searched until the pool is filled or no suitable fallback remains.
+- Human selection remains authoritative: one final visual is chosen for each of the five story slides, plus one separate Slide 1 opener visual.
+- Existing Manual Scraper, Manual Real Image Search/Commons and Manual AI Generation options remain available.
+- Existing 9:16 crop workflow remains in place.
+
+Top-5 visual card design:
+- Each final slide uses the selected image as the full-frame visual with a floating near-opaque dark editorial card over the lower portion.
+- The card shows the spoken headline at the top and the Scriptwriter’s silent factual story body below it.
+- Slide 1 uses the same visual language but a shorter opener card because its body is intentionally empty.
+- Card previews are shown directly on the Top-5 Visuals Manual QC board after an image is attached, so the reviewer sees the actual 9:16 treatment rather than only the raw crop.
+- Approved Top-5 visual handoffs now carry the card payload into the production renderer.
+- Top-5 card headline font: bundled **Oswald Bold**, retained for its condensed, high-impact display role and because it is already the renderer’s established, tested headline font. Body copy uses a regular sans-serif fallback for readability.
+- The card is intentionally a separate visual treatment from the Cricket Stats Card; Stats Card Manual QC selection/crop interaction is the reference pattern, not its visual styling.
+
+Top-5 Visual status:
+- **Pending user approval.**
+- Test card preview implemented.
+- Production renderer support implemented.
+- The dedicated Top-5 Live production line itself is still WIP; the existing Live shell has not yet been migrated through the full Top-5 Topic → Script → Audio → Visual flow.
+- Do not alter the approved Cricket Visual Fetcher or its existing QC behaviour.
+
 ## Future hardening — mobile-complete dashboard and fully online factory
 
 This work is intentionally **deferred**. The current approved factory contracts remain the baseline; do not reopen completed Functions 01–07 unless a concrete regression or a required migration point is identified.
