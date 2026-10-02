@@ -268,7 +268,7 @@ Top-5 visual treatment:
 - Top-5 render preview is currently static. No YouTube-like hearts, comments, shares, taps, interaction animations, progress sliders, or other fake platform UI are part of the factory.
 - The existing 9:16 crop workflow remains in place.
 - Approved Top-5 visual handoffs carry the selected image, headline and silent body into the production renderer.
-- The design is informed by current Shorts constraints: YouTube provides visual guides because platform controls can overlap the content area, so important editorial content stays clear of those regions. citeturn891457search0turn891457search2
+- The design is informed by current Shorts constraints: YouTube provides visual guides because platform controls can overlap the content area, so important editorial content stays clear of those regions.
 
 Top-5 Visual status:
 - **Pending user approval.**
