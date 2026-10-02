@@ -119,7 +119,7 @@ def test_story_headline_is_rejected_only_when_over_fifteen_seconds():
 def test_story_headline_has_no_unrequested_word_minimum():
     result = valid_result()
     result["slides"][1]["headline"] = "Story 1 confirmed record"
-    result["slides"][1]["body"] = "Board published result"
+    result["slides"][1]["body"] = "Board published result. The change affects the next series."
     valid, reason = validate_top5_script(result, stories())
     assert valid, reason
 
