@@ -45,6 +45,7 @@ def test_parse_format_and_gender_variants():
 
 
 def test_build_career_card_uses_only_returned_data(monkeypatch, tmp_path):
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: ({}, {}))
     calls = []
 
     def fake_query(sql):
@@ -113,6 +114,7 @@ def test_build_career_card_uses_only_returned_data(monkeypatch, tmp_path):
 
 
 def test_last_n_returns_latest_completed_innings(monkeypatch):
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: ({}, {}))
     def fake_query(sql):
         if "FROM people" in sql:
             return [{
@@ -206,6 +208,7 @@ def test_h2h_counts_wins_and_other(monkeypatch):
 
 
 def test_no_data_fails_instead_of_guessing(monkeypatch):
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: ({}, {}))
     monkeypatch.setattr(stats_card, "_query", lambda sql: [])
     with pytest.raises(stats_card.StatsCardError, match="Could not find player"):
         stats_card.build_stats_card("MS Dhoni ODI stats", _image_bytes())
@@ -254,6 +257,7 @@ def test_query_parses_tigzig_columns_and_data(monkeypatch):
 
 
 def test_stats_card_result_exposes_player_image_layout(monkeypatch, tmp_path):
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: ({}, {}))
     def fake_query(sql):
         if "FROM people" in sql:
             return [{
@@ -284,6 +288,7 @@ def test_stats_card_result_exposes_player_image_layout(monkeypatch, tmp_path):
 
 
 def test_last_n_card_renders_twenty_innings_without_error(monkeypatch, tmp_path):
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: ({}, {}))
     def fake_query(sql):
         if "FROM people" in sql:
             return [{
@@ -492,7 +497,7 @@ def test_close_fuzzy_matches_are_not_auto_selected(monkeypatch):
 
     with pytest.raises(stats_card.StatsCardError, match="Could not find player"):
         stats_card._resolve_player(
-            stats_card._parse_query("John Smit ODI stats")
+            stats_card._parse_query("John Smth ODI stats")
         )
 
 
