@@ -491,34 +491,17 @@ def _fit_top5_body(text: str, language: str):
     raise ValueError("Top-5 body copy is too long to fit on the visual card.")
 
 
-def _top5_active_word_index(subtitle_data: dict, t: float) -> int | None:
-    index = 0
-    for cue in subtitle_data.get("cues") or []:
-        for word in cue.get("words") or []:
-            try:
-                start = float(word["start"])
-                end = float(word["end"])
-            except (KeyError, TypeError, ValueError):
-                index += 1
-                continue
-            if start <= t < end:
-                return index
-            index += 1
-    return None
-
-
 def _draw_top5_card(
     base: Image.Image,
     card: dict,
     t: float,
-    subtitle_data: dict,
 ) -> None:
     headline = " ".join(str(card.get("headline") or "").split())
     body = " ".join(str(card.get("body") or "").split())
     if not headline:
         raise ValueError("Top-5 card requires a headline.")
 
-    language = str(subtitle_data.get("language") or "english")
+    language = str(card.get("language") or "english")
     story_number = int(card.get("story_number") or 0)
     total_stories = max(1, int(card.get("total_stories") or 5))
 
@@ -590,7 +573,6 @@ def _draw_top5_card(
     draw.text((content_left, y), meta, font=meta_font, fill=(164, 174, 190))
     y += 44
 
-    active_index = _top5_active_word_index(subtitle_data, t)
     global_index = 0
     line_heights = []
     for _line in headline_lines:
@@ -603,7 +585,7 @@ def _draw_top5_card(
         for word in line:
             box = draw.textbbox((0, 0), word, font=headline_font)
             word_width = box[2] - box[0]
-            fill = ACCENT if global_index == active_index else WHITE
+            fill = WHITE
             draw.text(
                 (cursor_x - box[0], y - box[1]),
                 word,
@@ -672,7 +654,6 @@ def build_top5_card_preview(
             "total_stories": total_stories,
         },
         1.0,
-        preview_subtitles,
     )
     _paste_logo(base)
     _paste_source(base, source_label)
@@ -982,7 +963,7 @@ def render_frame(
     )
 
     if top5_card is not None:
-        _draw_top5_card(frame, top5_card, t, subtitle_data)
+        _draw_top5_card(frame, top5_card, t)
     else:
         if headline_enabled and t < HEADLINE_SECONDS:
             _draw_headline(
