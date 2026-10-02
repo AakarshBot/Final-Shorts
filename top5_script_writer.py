@@ -149,15 +149,17 @@ EDITORIAL STANDARD
 - Do not use phrases such as "changing the conversation", "everyone is talking",
   "the cricket world is buzzing", "sending shockwaves", "game changer",
   "what you need to know", "here's what happened", or similar synthetic framing.
-- Slide 1 is the package opener for the Top-5 Short. It should clearly communicate that
-  this is today's five-story cricket news/headline roundup while incorporating a few
-  concrete names, teams, events, results or other headline details from the selected stories.
-- Make Slide 1 feel like a smart human-written front-page/scoreboard headline: concise,
-  informative and varied. It may reference two or three of the selected stories in one line,
-  but must not invent a shared theme or imply facts that are not supported.
-- Do not simply output "Top 5 Cricket Stories", "Cricket News Today" or another bare roundup label.
-  The package meaning must come through from the wording itself.
-- Write Slide 1 yourself rather than copying one source headline verbatim.
+- Slide 1 is the package opener for the Top-5 Short. It should smartly communicate
+  “today's top five cricket news/headlines” while incorporating concrete details from a few
+  of the five selected stories.
+- Make Slide 1 feel like a smart human-written front-page or scoreboard headline: concise,
+  informative and varied. It can weave together two or three notable names, teams, events,
+  results or headline developments from the selected stories.
+- The wording may use a natural roundup frame such as “Gill returns, India reshuffle and
+  three more cricket headlines today”, but it should never be a bare label such as
+  “Top 5 Cricket Stories” or “Cricket News Today”.
+- Write Slide 1 yourself rather than copying any source headline verbatim. Do not invent
+  a common theme or connect unrelated stories as though they are one event.
 
 SLIDE STRUCTURE
 - Return exactly six slides.
