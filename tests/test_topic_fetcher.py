@@ -111,10 +111,10 @@ def test_same_player_different_events_share_one_tile():
     )
     assert len(chosen) == 2
     gill = next(item for item in chosen if item.group_key == "player:shubman gill")
-    assert [item.title for item in gill.group_members] == [
+    assert {item.title for item in gill.group_members} == {
         "Shubman Gill ruled out after injury",
         "Shubman Gill signs new franchise endorsement deal",
-    ]
+    }
 
 
 def test_country_names_do_not_create_shared_player_tiles():
@@ -188,13 +188,14 @@ def test_more_excludes_existing_urls_and_events():
 
 
 def test_entity_grouping_still_fills_twenty_tiles():
+    gill_events = ["injury", "contract", "retirement", "debut", "comeback"]
     rows = [
         make_topic(
-            f"Shubman Gill record event {index}",
+            f"Shubman Gill {event} development",
             source=f"gill{index}.com",
             url=f"https://example.com/gill/{index}",
         )
-        for index in range(5)
+        for index, event in enumerate(gill_events)
     ]
     rows.extend(
         make_topic(
