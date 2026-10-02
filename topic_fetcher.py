@@ -75,6 +75,25 @@ MORE_QUERIES = {
     ],
 }
 
+
+TOP5_QUERIES = [
+    '(India OR Pakistan OR "Sri Lanka" OR Bangladesh) cricket when:3d',
+    'cricket (record OR milestone OR first OR fastest OR historic OR upset OR breakout) when:3d',
+    'cricket (injury OR comeback OR retirement OR debut OR dropped OR recalled) when:3d',
+    'cricket (controversy OR ban OR suspension OR statement OR reaction OR feud OR clash) when:3d',
+    'cricket (women OR WPL OR domestic OR Ranji OR U19 OR associate) when:3d',
+    'cricket (BCCI OR PCB OR ICC OR board OR IPL OR PSL OR WPL) (decision OR rule OR signing OR retention OR appointment) when:3d',
+]
+
+TOP5_MORE_QUERIES = [
+    'cricket (Nepal OR Oman OR UAE OR Scotland OR Zimbabwe OR Namibia OR Uganda OR USA) when:3d',
+    'cricket (youngest OR oldest OR first-ever OR unbeaten OR milestone OR record) when:3d',
+    'cricket (comeback OR breakthrough OR breakout OR uncapped OR teenager OR youngster) when:3d',
+    'cricket (retirement OR farewell OR legacy OR career OR landmark) when:3d',
+    'cricket (law OR technology OR pitch OR venue OR board decision) when:3d',
+    'cricket (transfer OR release OR auction OR signing OR retention OR franchise) when:3d',
+]
+
 KEYWORD_QUERIES = [
     '"{keyword}" cricket when:3d',
     '"{keyword}" cricket (record OR milestone OR debut OR comeback OR injury OR appointment OR controversy) when:3d',
@@ -594,6 +613,43 @@ def _select(
         )
 
     return chosen
+
+
+def fetch_top5_topics(
+    more: bool = False,
+    exclude_topics: list[Topic] | None = None,
+    limit: int = TARGET,
+) -> list[Topic]:
+    """Build the Top-5 story pool with a smaller Google query plan."""
+    if limit <= 0:
+        return []
+
+    existing = list(exclude_topics or [])
+    seen_urls = {
+        _canonical_url(member.url)
+        for topic in existing
+        for member in (topic.group_members or (topic,))
+    }
+    queries = TOP5_MORE_QUERIES if more else TOP5_QUERIES
+
+    rows = []
+    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
+        futures = [pool.submit(_fetch_google, query) for query in queries]
+        for future in as_completed(futures):
+            try:
+                rows.extend(future.result())
+            except (requests.RequestException, ET.ParseError, ValueError):
+                continue
+
+    prepared = _prepare(rows, seen_urls, profile="cricket_india_asia")
+    return _select(
+        prepared,
+        limit,
+        seen_urls,
+        existing=existing if more else [],
+        profile="cricket_india_asia",
+    )[:limit]
+
 
 def fetch_topics(
     profile: str = "cricket_india_asia",
