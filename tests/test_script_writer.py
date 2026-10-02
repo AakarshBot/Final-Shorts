@@ -102,7 +102,7 @@ def test_validator_requires_subject_name_in_narration():
 
 
 def test_valid_script_passes():
-    valid, reason = script_writer.validate_cricket_script(valid_result(), "source")
+    valid, reason = script_writer.validate_cricket_script(valid_result())
     assert valid, reason
 
 
