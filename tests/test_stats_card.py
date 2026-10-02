@@ -392,7 +392,7 @@ def test_resolve_full_player_name_to_canonical_match_name(monkeypatch):
     player = stats_card._resolve_player(stats_card._parse_query("Virat Kohli ODI stats"))
 
     assert player["identifier"] == "vk1"
-    assert player["name"] == "V Kohli"
+    assert player["name"] == "Virat Kohli"
     assert player["unique_name"] == "V Kohli"
 
 
