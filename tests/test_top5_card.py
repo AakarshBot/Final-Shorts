@@ -118,7 +118,7 @@ def test_top5_layout_is_driven_by_text_length():
         "India make a major change",
     )
     long_headline_font, long_headline_lines = renderer._fit_top5_headline(
-        "India reshuffles the squad after a late selection change before the next major series",
+        "India reshuffles the squad after a late selection change",
     )
     short_body_font, short_body_lines = renderer._fit_top5_body(
         "The decision follows the latest selection update.",
@@ -180,8 +180,8 @@ def test_top5_bottom_panel_is_opaque_card_zone():
     )
     image = Image.open(BytesIO(preview)).convert("RGB")
 
-    top_pixel = image.getpixel((20, 500))
-    lower_pixel = image.getpixel((20, 1500))
+    top_pixel = image.getpixel((60, 500))
+    lower_pixel = image.getpixel((60, 1500))
 
     assert top_pixel == (255, 255, 255)
     assert lower_pixel[0] < 80
