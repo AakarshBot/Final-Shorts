@@ -495,7 +495,7 @@ Top-5 Test Stage 2 — Scriptwriter:
 - Slide 1 contains one package headline, spoken as written, with a maximum of 14 words.
 - Slides 2–6 each contain exactly one spoken headline that must communicate the complete important development of that selected story, rather than simply rephrasing its source headline.
 - Slides 2–6 spoken headlines target 24–32 words, have a hard maximum of 36 words and are locally estimated to remain below 15 seconds.
-- Slides 2–6 also contain separate visual-only body copy. The body adds useful factual detail/context from the same story rather than restating the spoken headline, and is kept compact for later 9:16 card treatment.
+- Slides 2–6 also contain separate visual-only body copy. The body is exactly two concise factual sentences that add useful detail/context from the same story rather than restating the spoken headline.
 - Every slide also returns visual handoff metadata: primary entity, visual intent, specific search prompt and sport/topic category.
 - The writer does not generate the old Scriptwriter title candidates, SEO description or upload comment. It generates 3–5 relevant hashtags.
 - Slide 1 is not allowed to manufacture a generic or unsupported “AI roundup” theme such as changing the conversation, everyone is talking, sending shockwaves, game changer, or similar language.
@@ -510,6 +510,11 @@ Top-5 Test Stage 3 — Audio:
 
 Top-5 Test Stage 4 — Visuals:
 - **Implemented, pending manual approval.**
+- Test Visuals is a standalone one-slide sandbox and does not require Scriptwriter or Audio approval.
+- The renderer card uses a top image zone with a single-line headline hugging the image's bottom edge and a lower information zone for the silent body.
+- Slides 2–6 use the two-sentence visual body; Slide 1 remains a package opener with no body.
+- The lower zone stays intentionally sparse and uses at most one small icon-only UI-inspired motion element; no slider, fact kicker or extra progress text is used.
+- The Test sandbox can preview Heart, Comment, Share and Tap motion variants.
 - Implemented as a separate `top5_visual_fetcher.py`; the approved regular `visual_fetcher.py` is untouched.
 - The five approved story URLs are scraped concurrently, one story at a time, with a 4–6 image review pool targeted per story.
 - The original source URL is always scraped first. A related publisher URL is searched only when that story remains under four usable images.
