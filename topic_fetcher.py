@@ -273,7 +273,7 @@ def _cricket_same_event(a: Topic, b: Topic) -> bool:
     return False
 
 
-def _profile_relevant(title: str, description: str, profile: str | None, source: str) -> bool:
+def _profile_relevant(title: str, description: str, profile: str | None) -> bool:
     if profile == "niche_sports":
         text = f"{title} {description}".casefold()
         return any(term in text for term in (
@@ -284,11 +284,7 @@ def _profile_relevant(title: str, description: str, profile: str | None, source:
     if profile not in {"cricket_india_asia", "cricket_global"}:
         return False
     text = f"{title} {description}".casefold()
-    if any(term in text for term in NON_CRICKET_TERMS):
-        return False
-    if any(term in text for term in (CRICKET_TERMS | CRICKET_COMPETITIONS | INDIA_ASIA_TERMS)):
-        return True
-    return True
+    return not any(term in text for term in NON_CRICKET_TERMS)
 
 def _parse_date(value) -> datetime:
     if isinstance(value, datetime):
@@ -424,15 +420,11 @@ def _prepare(
             continue
         if row.published_at < cutoff or _utility(title):
             continue
-        if not _profile_relevant(title, row.description, profile, row.source):
+        if not _profile_relevant(title, row.description, profile):
             continue
 
-        if profile == "niche_sports":
-            title_key = re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip()
-            if not title_key:
-                continue
-        else:
-            title_key = ""
+        if profile == "niche_sports" and not re.sub(r"[^a-z0-9]+", " ", title.casefold()).strip():
+            continue
 
         prepared.append(
             Topic(title, _clean(row.source), row.published_at, url, _clean(row.description), row.score)
