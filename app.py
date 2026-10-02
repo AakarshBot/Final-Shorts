@@ -4753,7 +4753,7 @@ elif st.session_state.app_mode == "test":
                                 _render_top5_asset_pool(
                                     assets,
                                     f"story-{story_index}",
-                                    [story_index + 1],
+                                    list(range(1, 7)),
                                 )
                             else:
                                 st.warning(
@@ -4851,7 +4851,7 @@ elif st.session_state.app_mode == "test":
                                 st.warning("No usable images were returned.")
 
                     with st.expander("Option 4 · AI Generation", expanded=False):
-                        st.caption("Use this manual AI option to create the Slide 1 opener image.")
+                        st.caption("Generate an image you can use on Slide 1 or attach to any Top-5 slide.")
                         with st.form("test-top5-ai-image-form"):
                             query = st.text_input(
                                 "Manual prompt",
