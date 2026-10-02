@@ -33,6 +33,7 @@ SLIDE_1_MAX_WORDS = 14
 SPEECH_WORDS_PER_MINUTE = 150.0
 MIN_HASHTAGS = 3
 MAX_HASHTAGS = 5
+BODY_SENTENCE_COUNT = 2
 
 AI_EDITORIAL_PATTERNS = (
     r"\bchanging the conversation\b",
@@ -170,8 +171,9 @@ SLIDE STRUCTURE
 - Each story headline must remain under 15 seconds of estimated natural speech.
 - Do not merely repeat the source title. Add the key development, context or consequence
   that makes the story understandable on its own.
-- The body is visual-only supporting copy. Add useful factual detail or context from the same
-  story that is not already fully stated in the headline. Do not pad it with filler.
+- The body is visual-only supporting copy. Write exactly two concise factual sentences.
+  Together they should add useful detail or context from the same story that is not already
+  fully stated in the headline. Do not pad them with filler.
 - For every slide, provide a concrete visual entity, visual intent and a specific search prompt.
   Slide 1 should describe a factual cricket-package visual, not an invented mood or theme.
 - Generate 3–5 relevant hashtags. No spaces inside hashtags.
@@ -389,6 +391,13 @@ def _references_any_selected_story(headline: str, stories: list[dict]) -> bool:
     return bool(headline_words & selected_keywords)
 
 
+def _sentence_count(text: str) -> int:
+    clean = _clean(text)
+    if not clean:
+        return 0
+    return len(re.findall(r"[^.!?]+[.!?](?=\s|$)", clean))
+
+
 def _story_references_headline(headline: str, story: dict) -> bool:
     headline_words = set(_normalise(headline).split())
     title_words = _title_keywords(_story_value(story, "title"))
@@ -447,6 +456,8 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
             body = _clean(slide.get("body"))
             if not body:
                 return False, f"Slide {expected_number} is missing body copy."
+            if _sentence_count(body) != BODY_SENTENCE_COUNT:
+                return False, f"Slide {expected_number} body must contain exactly two sentences."
 
     hashtags = result.get("hashtags")
     if (
