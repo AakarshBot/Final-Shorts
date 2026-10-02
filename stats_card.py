@@ -505,6 +505,14 @@ def _resolve_player(intent: StatsIntent) -> dict[str, Any]:
                 for identifier in aliases.get(key, set())
             }
 
+        if not identifiers and len(query_key.split()) == 1:
+            identifiers = {
+                identifier
+                for key, key_identifiers in aliases.items()
+                if query_key in key.split()
+                for identifier in key_identifiers
+            }
+
         for identifier in sorted(identifiers):
             candidate = _candidate_from_registry(people, identifier)
             if candidate:
