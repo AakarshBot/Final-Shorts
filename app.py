@@ -2583,7 +2583,9 @@ def render_live_dashboard():
                 with col:
                     with st.container(key=f"live-topic-{index}"):
                         tile_label = f'<span class="topic-rank">TILE {index + 1:02d}</span>'
-                        if tile.group_key.startswith("player:"):
+                        if tile.group_key.startswith("keyword:"):
+                            tile_label += f'<span class="topic-meta">Keyword: {tile.group_key.split(":", 1)[1]}</span>'
+                        elif tile.group_key.startswith("player:"):
                             tile_label += f'<span class="topic-meta">{tile.group_key.split(":", 1)[1].title()}</span>'
                         st.markdown(
                             f'<div class="topic-top">{tile_label}</div>',
@@ -2630,7 +2632,21 @@ def render_live_dashboard():
                         limit=20,
                         keyword=keyword if keyword_search else None,
                     )
-                    st.session_state.live_topics = existing + new_topics
+                    if keyword_search:
+                        keyword_members = tuple(
+                            member
+                            for topic in new_topics
+                            for member in (topic.group_members or (topic,))
+                        )
+                        if keyword_members:
+                            keyword_tile = replace(
+                                keyword_members[0],
+                                group_key=f"keyword:{keyword}",
+                                group_members=keyword_members,
+                            )
+                            st.session_state.live_topics = existing + [keyword_tile]
+                    else:
+                        st.session_state.live_topics = existing + new_topics
                 st.rerun()
         return
 
@@ -2799,7 +2815,25 @@ def render_topic_fetcher():
                     limit=20,
                     keyword=keyword if keyword_search else None,
                 )
-                st.session_state.topics = existing_topics + new_topics if (more or keyword_search) else new_topics
+                if keyword_search:
+                    keyword_members = tuple(
+                        member
+                        for topic in new_topics
+                        for member in (topic.group_members or (topic,))
+                    )
+                    if keyword_members:
+                        keyword_tile = replace(
+                            keyword_members[0],
+                            group_key=f"keyword:{keyword}",
+                            group_members=keyword_members,
+                        )
+                        st.session_state.topics = existing_topics + [keyword_tile]
+                    else:
+                        st.session_state.topics = existing_topics
+                elif more:
+                    st.session_state.topics = existing_topics + new_topics
+                else:
+                    st.session_state.topics = new_topics
 
             st.session_state.selected_topic = None
             st.session_state.script_data = None
@@ -2830,11 +2864,12 @@ def render_topic_fetcher():
                 key=lambda item: item.score,
                 reverse=True,
             ))
-            tile_title = (
-                tile.group_key.split(":", 1)[1].title()
-                if tile.group_key.startswith("player:")
-                else tile.title
-            )
+            if tile.group_key.startswith("keyword:"):
+                tile_title = f'Keyword: "{tile.group_key.split(":", 1)[1]}"'
+            elif tile.group_key.startswith("player:"):
+                tile_title = tile.group_key.split(":", 1)[1].title()
+            else:
+                tile_title = tile.title
             headline_label = "headline" if len(members) == 1 else "headlines"
 
             with col:
