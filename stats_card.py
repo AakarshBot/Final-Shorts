@@ -10,7 +10,7 @@ import re
 from typing import Any
 
 import requests
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 
 
 API_URL = "https://db-mcp.tigzig.com/v1/query/duckdb"
@@ -606,15 +606,17 @@ def _draw_metric_tiles(
     metrics: list[tuple[str, str]],
     top: int,
     columns: int = 3,
-    tile_height: int = 142,
+    tile_height: int = 132,
 ) -> int:
     gap = 18
     available = WIDTH - (MARGIN * 2)
     tile_width = (available - gap * (columns - 1)) // columns
-    y = top
-    rows = (len(metrics) + columns - 1) // columns
-    for row_index in range(rows):
+    label_font = _font(21)
+    value_font = _font(50)
+
+    for row_index in range((len(metrics) + columns - 1) // columns):
         row = metrics[row_index * columns:(row_index + 1) * columns]
+        y = top + row_index * (tile_height + gap)
         for col_index, (label, value) in enumerate(row):
             x = MARGIN + col_index * (tile_width + gap)
             draw.rounded_rectangle(
@@ -624,20 +626,37 @@ def _draw_metric_tiles(
                 outline=LINE,
                 width=2,
             )
-            label_font = _font(24)
-            value_font = _font(54)
-            draw.text((x + 22, y + 18), label.upper(), font=label_font, fill=MUTED)
-            value_box = draw.textbbox((0, 0), str(value), font=value_font)
-            value_width = value_box[2] - value_box[0]
+            label_lines = _wrap_words(draw, str(label).upper(), label_font, tile_width - 36)
+            label_y = y + 16
+            for label_line in label_lines[:2]:
+                box = draw.textbbox((0, 0), label_line, font=label_font)
+                draw.text(
+                    (x + (tile_width - (box[2] - box[0])) / 2, label_y),
+                    label_line,
+                    font=label_font,
+                    fill=MUTED,
+                )
+                label_y += box[3] - box[1] + 2
+
+            value_text = str(value)
+            value_font_for_tile = value_font
+            while value_font_for_tile.size > 34:
+                box = draw.textbbox((0, 0), value_text, font=value_font_for_tile)
+                if box[2] - box[0] <= tile_width - 32:
+                    break
+                value_font_for_tile = _font(value_font_for_tile.size - 2)
+            box = draw.textbbox((0, 0), value_text, font=value_font_for_tile)
+            value_width = box[2] - box[0]
+            value_height = box[3] - box[1]
             draw.text(
-                (x + tile_width - value_width - 22, y + 58),
-                str(value),
-                font=value_font,
+                (x + (tile_width - value_width) / 2, y + tile_height - value_height - 16),
+                value_text,
+                font=value_font_for_tile,
                 fill=INK,
             )
-        y += tile_height + gap
-    return y
 
+    rows = (len(metrics) + columns - 1) // columns
+    return top + rows * tile_height + max(0, rows - 1) * gap
 
 def _draw_header(
     image: Image.Image,
@@ -646,24 +665,30 @@ def _draw_header(
 ) -> int:
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, PANEL_TOP, WIDTH, PANEL_BOTTOM), fill=(246, 247, 249))
-    title_font, lines = _fit_text(
+
+    eyebrow_text = str(context[0] or "STATS") if context else "STATS"
+    eyebrow_font = _font(22)
+    draw.text((MARGIN, PANEL_TOP + 38), eyebrow_text.upper(), font=eyebrow_font, fill=BRAND_BLUE)
+
+    title_font, title_lines = _fit_text(
         draw,
         title.upper(),
         WIDTH - (MARGIN * 2),
-        82,
-        min_size=52,
+        70,
+        min_size=46,
         max_lines=2,
     )
-    y = PANEL_TOP + 48
-    y = _draw_centered_lines(draw, lines, title_font, WIDTH // 2, y, INK, gap=6)
-    y += 8
-    for line in context:
-        context_font = _font(27, bold=False)
-        wrapped = _wrap_words(draw, line, context_font, WIDTH - (MARGIN * 2))
-        y = _draw_centered_lines(draw, wrapped, context_font, WIDTH // 2, y, MUTED, gap=2)
-        y += 2
-    return y
+    y = PANEL_TOP + 80
+    y = _draw_centered_lines(draw, title_lines, title_font, WIDTH // 2, y, INK, gap=4)
 
+    body_font = _font(23, bold=False)
+    # Keep the metadata deliberately compact: two lines maximum, always above the divider.
+    for line in context[1:3]:
+        wrapped = _wrap_words(draw, line, body_font, WIDTH - (MARGIN * 2))
+        y = _draw_centered_lines(draw, wrapped, body_font, WIDTH // 2, y + 5, MUTED, gap=2)
+
+    draw.line((MARGIN, y + 14, WIDTH - MARGIN, y + 14), fill=LINE, width=2)
+    return y + 30
 
 def _draw_attribution(draw: ImageDraw.ImageDraw) -> None:
     text = f"Source: {SOURCE_NAME} · {SOURCE_LICENSE}"
@@ -671,37 +696,18 @@ def _draw_attribution(draw: ImageDraw.ImageDraw) -> None:
     draw.text((MARGIN, HEIGHT - 44), text, font=font, fill=MUTED)
 
 
-def _draw_image_header(base: Image.Image, source_image: bytes | bytearray | Image.Image, title: str) -> None:
-    image = _fit_cover(
-        _asset_image(source_image),
-        (WIDTH, IMAGE_HEIGHT),
-    )
+def _draw_image_header(base: Image.Image, source_image: bytes | bytearray | Image.Image) -> None:
+    image = _fit_cover(_asset_image(source_image), (WIDTH, IMAGE_HEIGHT))
     overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
     overlay_draw = ImageDraw.Draw(overlay)
-    overlay_draw.rectangle((0, IMAGE_HEIGHT - 280, WIDTH, IMAGE_HEIGHT), fill=(0, 0, 0, 145))
-    overlay = overlay.filter(ImageFilter.GaussianBlur(radius=0.2))
+    overlay_draw.rectangle(
+        (0, IMAGE_HEIGHT - 230, WIDTH, IMAGE_HEIGHT),
+        fill=(0, 0, 0, 125),
+    )
     image = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
     base.paste(image, (0, 0))
     draw = ImageDraw.Draw(base)
-    kicker_font = _font(24)
-    draw.text((MARGIN, 34), "STATS CARD", font=kicker_font, fill=WHITE)
-    title_font, lines = _fit_text(
-        draw,
-        title,
-        WIDTH - (MARGIN * 2),
-        76,
-        min_size=46,
-        max_lines=2,
-    )
-    _draw_centered_lines(
-        draw,
-        lines,
-        title_font,
-        WIDTH // 2,
-        IMAGE_HEIGHT - 220,
-        WHITE,
-        gap=4,
-    )
+    draw.text((MARGIN, 34), "STATS CARD", font=_font(24), fill=WHITE)
 
 
 def _asset_image(value: bytes | bytearray | Image.Image) -> Image.Image:
@@ -718,7 +724,7 @@ def _asset_image(value: bytes | bytearray | Image.Image) -> Image.Image:
 
 def _career_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     base = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
-    _draw_image_header(base, source_image, stats["player"])
+    _draw_image_header(base, source_image)
     context = [
         f"{stats['format']} · {stats['team'] or 'Team not recorded'} · CAREER",
         f"{stats['matches']} matches · {stats['innings']} batting innings",
@@ -743,7 +749,7 @@ def _career_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
 
 def _h2h_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     base = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
-    _draw_image_header(base, source_image, f"{stats['team1']} vs {stats['team2']}")
+    _draw_image_header(base, source_image)
     context = [
         f"{stats['format']} · HEAD-TO-HEAD · {stats['matches']} matches",
         f"Date range: {_date_label(stats['first_date'])} – {_date_label(stats['latest_date'])}",
@@ -766,61 +772,104 @@ def _h2h_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
 
 def _last_n_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     base = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
-    _draw_image_header(base, source_image, stats["player"])
-    count_text = f"{stats['count_available']} completed batting innings shown"
-    if stats["count_available"] < stats["count_requested"]:
-        count_text += f" · only {stats['count_available']} available in the dataset"
+    _draw_image_header(base, source_image)
+    draw = ImageDraw.Draw(base)
+
+    count_available = int(stats["count_available"])
+    count_requested = int(stats["count_requested"])
     context = [
-        f"{stats['format']} · LAST {stats['count_requested']} COMPLETED INNINGS",
-        count_text,
+        f"{count_available} completed innings shown"
+        + (
+            f" · {count_requested - count_available} fewer than requested"
+            if count_available < count_requested
+            else ""
+        ),
         f"Stats through {_date_label(stats['last_date'])}",
     ]
     y = _draw_header(
         base,
-        f"{stats['player']} · last {stats['count_requested']} innings",
+        f"{stats['player']} · last {count_requested} innings",
         context,
     )
-    draw = ImageDraw.Draw(base)
-    table_top = y + 10
-    row_h = 63
-    x_date = MARGIN
-    x_opp = MARGIN + 220
-    x_score = WIDTH - MARGIN - 120
-    header_font = _font(22)
-    body_font = _font(31)
-    draw.text((x_date, table_top), "DATE", font=header_font, fill=MUTED)
-    draw.text((x_opp, table_top), "OPPONENT", font=header_font, fill=MUTED)
-    draw.text((x_score, table_top), "SCORE", font=header_font, fill=MUTED)
-    y = table_top + 38
-    for row in stats["innings"]:
-        draw.line((MARGIN, y - 7, WIDTH - MARGIN, y - 7), fill=LINE, width=2)
-        draw.text((x_date, y), _date_label(row["date"]), font=body_font, fill=INK)
-        opponent = row["opponent"] or "—"
-        draw.text((x_opp, y), opponent[:22], font=body_font, fill=INK)
-        score_box = draw.textbbox((0, 0), row["score"], font=body_font)
-        draw.text(
-            (x_score + 120 - (score_box[2] - score_box[0]), y),
-            row["score"],
-            font=body_font,
-            fill=INK,
-        )
-        y += row_h
-    y += 8
+
+    # Put the compact summary before the table so 20 innings still fit cleanly.
     metrics = [
         ("Runs", f"{stats['runs']:,}"),
         ("Average", f"{stats['average']:.2f}" if stats["average"] is not None else "—"),
         ("100s", str(stats["hundreds"])),
         ("50s", str(stats["fifties"])),
     ]
-    _draw_metric_tiles(draw, metrics, y, columns=4, tile_height=118)
-    note = (
-        "Completed batting innings only. DNB innings are not listed; not-out scores use *."
+    metrics_bottom = _draw_metric_tiles(
+        draw,
+        metrics,
+        y + 10,
+        columns=4,
+        tile_height=104,
     )
-    note_font = _font(20, bold=False)
-    draw.text((MARGIN, HEIGHT - 72), note, font=note_font, fill=MUTED)
+
+    table_top = metrics_bottom + 28
+    table_header_font = _font(19)
+    draw.text((MARGIN, table_top), "RECENT INNINGS", font=table_header_font, fill=BRAND_BLUE)
+    header_y = table_top + 30
+    small_font = _font(17, bold=False)
+    draw.text((MARGIN, header_y), "DATE · OPPONENT", font=small_font, fill=MUTED)
+    score_header = "SCORE"
+    score_box = draw.textbbox((0, 0), score_header, font=small_font)
+    draw.text(
+        (WIDTH - MARGIN - (score_box[2] - score_box[0]), header_y),
+        score_header,
+        font=small_font,
+        fill=MUTED,
+    )
+
+    gap = 18
+    column_width = (WIDTH - (MARGIN * 2) - gap) // 2
+    rows_per_column = max(1, (len(stats["innings"]) + 1) // 2)
+    dense = len(stats["innings"]) > 10
+    row_height = 43 if dense else 52
+    row_gap = 3 if dense else 5
+    body_font = _font(22 if dense else 25)
+    score_font = _font(27 if dense else 30)
+    table_rows_top = header_y + 26
+
+    for column in range(2):
+        column_rows = stats["innings"][
+            column * rows_per_column:(column + 1) * rows_per_column
+        ]
+        x = MARGIN + column * (column_width + gap)
+        for row_index, row in enumerate(column_rows):
+            row_y = table_rows_top + row_index * (row_height + row_gap)
+            draw.rounded_rectangle(
+                (x, row_y, x + column_width, row_y + row_height),
+                radius=12,
+                fill=(255, 255, 255),
+                outline=LINE,
+                width=1,
+            )
+            score = str(row.get("score") or "—")
+            score_box = draw.textbbox((0, 0), score, font=score_font)
+            score_width = score_box[2] - score_box[0]
+            draw.text(
+                (x + column_width - score_width - 16, row_y + 10),
+                score,
+                font=score_font,
+                fill=INK,
+            )
+            opponent = str(row.get("opponent") or "—")
+            left_width = column_width - score_width - 42
+            left_text = f"{_date_label(row.get('date'))} · {opponent}"
+            left_font = body_font
+            while left_font.size > (16 if dense else 17):
+                box = draw.textbbox((0, 0), left_text, font=left_font)
+                if box[2] - box[0] <= left_width:
+                    break
+                left_font = _font(left_font.size - 1)
+            draw.text((x + 14, row_y + 9), left_text, font=left_font, fill=INK)
+
+    note = "Completed batting innings only · * = not out"
+    draw.text((MARGIN, HEIGHT - 76), note, font=_font(18, bold=False), fill=MUTED)
     _draw_attribution(draw)
     return base
-
 
 def _stats_for_intent(intent: StatsIntent) -> dict[str, Any]:
     if intent.kind == "h2h":
@@ -871,6 +920,13 @@ def build_stats_card(
         "source": SOURCE_NAME,
         "query": _normalise(query),
         "stats": stats,
+        "layout": {
+            "width": WIDTH,
+            "height": HEIGHT,
+            "image_width": WIDTH,
+            "image_height": IMAGE_HEIGHT,
+            "panel_height": HEIGHT - IMAGE_HEIGHT,
+        },
         "intent": {
             "kind": intent.kind,
             "format": intent.format_name,

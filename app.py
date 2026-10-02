@@ -1303,6 +1303,7 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
             st.session_state.live_visual_assignments[slide] = {
                 "asset_key": f"stats-card-{card_key}",
                 "result_key": "stats-card",
+                "card_layout": dict(result.get("layout") or {}),
                 "source": f"Stats Card · {result.get('source') or 'TigZig / Cricsheet'}",
                 "label": str(result.get("label") or "Stats Card"),
                 "bytes": bytes(result["bytes"]),
