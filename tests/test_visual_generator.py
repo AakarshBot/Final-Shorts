@@ -47,10 +47,11 @@ def test_generate_images_uses_a_fresh_seed_each_time(monkeypatch):
         "PROVIDERS",
         (("Hugging Face", fake_provider),),
     )
+    seeds_to_return = iter((101, 202))
     monkeypatch.setattr(
         visual_generator.secrets,
         "randbelow",
-        iter((101, 202)).__next__,
+        lambda _limit: next(seeds_to_return),
     )
 
     first = visual_generator.generate_images("player celebrating")
