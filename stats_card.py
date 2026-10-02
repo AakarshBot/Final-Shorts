@@ -219,18 +219,34 @@ def _query(sql: str) -> list[dict[str, Any]]:
     except ValueError as exc:
         raise StatsCardError("Stats database returned invalid JSON.") from exc
 
-    if isinstance(payload, dict):
-        for key in ("rows", "data", "results"):
-            value = payload.get(key)
-            if isinstance(value, list):
-                payload = value
-                break
-        else:
-            columns = payload.get("columns")
-            rows = payload.get("values")
-            if isinstance(columns, list) and isinstance(rows, list):
-                return [dict(zip(columns, row)) for row in rows]
-            raise StatsCardError("Stats database returned an unexpected response.")
+    while isinstance(payload, dict):
+        columns = payload.get("columns") or payload.get("column_names")
+        for key in ("rows", "data", "results", "values"):
+            rows = payload.get(key)
+            if not isinstance(rows, list):
+                continue
+            if not rows:
+                return []
+            if isinstance(rows[0], dict):
+                return [dict(item) for item in rows]
+            if isinstance(columns, list) and all(isinstance(row, (list, tuple)) for row in rows):
+                return [
+                    dict(zip(columns, row))
+                    for row in rows
+                ]
+            if key in {"data", "results"} and isinstance(rows[0], list):
+                nested = rows[0]
+                if isinstance(payload.get("result"), dict):
+                    payload = payload["result"]
+                    continue
+            break
+
+        nested = payload.get("result")
+        if isinstance(nested, dict):
+            payload = nested
+            continue
+
+        raise StatsCardError("Stats database returned an unexpected response.")
 
     if not isinstance(payload, list):
         raise StatsCardError("Stats database returned an unexpected response.")
