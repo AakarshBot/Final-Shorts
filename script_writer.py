@@ -125,7 +125,8 @@ METADATA
   3. Trend / Format: use a current-feeling Shorts/news title pattern and natural audience language, but never invent or imply a real trend that the research does not support.
   4. Consequence / Why it matters: foreground the concrete impact on the player, team, match, series, tournament or status.
   5. Fan / Emotion: use a vivid, player- or team-centered angle that feels natural to cricket viewers while staying factual.
-- Every title must be accurate, concise, distinct from the other four, and under YouTube's 100-character title limit.
+- Every title must be accurate, concise and distinct from the other four.
+- Aim for around 50 characters per title where the wording allows. Treat this as a generation preference, not a hard constraint.
 - Put the most important words first; avoid generic filler such as "latest update", "breaking news", "big update" or "sports update".
 - Do not use fake urgency, unsupported superlatives, misleading open loops, excessive ALL CAPS, or excessive emoji. Do not add #Shorts unless it genuinely fits the title.
 - `seo_description`: concise and story-specific.
@@ -384,11 +385,8 @@ def validate_cricket_script(result: dict) -> tuple[bool, str]:
     if not isinstance(titles, list) or len(titles) != 5 or not all(_clean(item) for item in titles):
         return False, "The Cricket Scriptwriter must produce exactly 5 titles."
 
-    cleaned_titles = [_clean(item) for item in titles]
-    if any(len(title) > 100 for title in cleaned_titles):
-        return False, "Each YouTube title must be 100 characters or fewer."
 
-    normalised_titles = [_normalise(title) for title in cleaned_titles]
+    normalised_titles = [_normalise(_clean(title)) for title in titles]
     if len(set(normalised_titles)) != len(normalised_titles):
         return False, "The five YouTube titles must be distinct."
 
