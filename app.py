@@ -654,11 +654,14 @@ if "test_top5_real_image_result" not in st.session_state:
 if "test_top5_ai_image_result" not in st.session_state:
     st.session_state.test_top5_ai_image_result = None
 if "test_top5_visual_slide_type" not in st.session_state:
-    st.session_state.test_top5_visual_slide_type = "Slide 1 · Package opener"
+    st.session_state.test_top5_visual_slide_type = "Story slide"
 if "test_top5_standalone_headline" not in st.session_state:
-    st.session_state.test_top5_standalone_headline = ""
+    st.session_state.test_top5_standalone_headline = "India confirm the latest squad change"
 if "test_top5_standalone_body" not in st.session_state:
-    st.session_state.test_top5_standalone_body = ""
+    st.session_state.test_top5_standalone_body = (
+        "The board confirmed the change after reviewing the latest selection update. "
+        "The decision affects the lineup ahead of the next series."
+    )
 if "test_top5_standalone_query" not in st.session_state:
     st.session_state.test_top5_standalone_query = ""
 if "test_top5_standalone_result" not in st.session_state:
@@ -4688,7 +4691,7 @@ elif st.session_state.app_mode == "test":
                 ["Slide 1 · Package opener", "Story slide"],
                 default=st.session_state.get(
                     "test_top5_visual_slide_type",
-                    "Slide 1 · Package opener",
+                    "Story slide",
                 ),
                 key="test-top5-standalone-slide-type",
                 label_visibility="collapsed",
@@ -4748,8 +4751,11 @@ elif st.session_state.app_mode == "test":
             if clear:
                 for key, value in (
                     ("test_top5_standalone_query", ""),
-                    ("test_top5_standalone_headline", ""),
-                    ("test_top5_standalone_body", ""),
+                    ("test_top5_standalone_headline", "India confirm the latest squad change"),
+                    ("test_top5_standalone_body", (
+                        "The board confirmed the change after reviewing the latest selection update. "
+                        "The decision affects the lineup ahead of the next series."
+                    )),
                 ):
                     st.session_state[key] = value
                 st.session_state.test_top5_standalone_result = None
