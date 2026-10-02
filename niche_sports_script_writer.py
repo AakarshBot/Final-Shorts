@@ -3,14 +3,52 @@
 from script_writer import (
     LANGUAGE_INSTRUCTIONS,
     MODELS,
-    _clean,
     _research_story,
     _request,
-    _story_value,
     _source_text,
-    validate_script,
-    HOOK_MAX_SECONDS,
+    _story_value,
 )
+
+GENERIC_OPENERS = (
+    "welcome to",
+    "hey everyone",
+    "hey guys",
+    "in this video",
+    "today we are going to",
+    "let's talk about",
+    "here is the latest",
+)
+
+RETENTION_BAIT = (
+    "wait until the end",
+    "wait till the end",
+    "watch till the end",
+    "keep watching",
+    "stay tuned",
+    "don't skip",
+    "don't scroll",
+    "find out later",
+)
+
+
+def _validate_script(result: dict) -> tuple[bool, str]:
+    if not isinstance(result, dict):
+        return False, "The provider returned no script object."
+    scenes = result.get("script")
+    if not isinstance(scenes, list) or not scenes:
+        return False, "The provider did not return a script."
+    first = " ".join(str((scenes[0] or {}).get("voiceover") or "").split()).casefold()
+    if any(first.startswith(opener) for opener in GENERIC_OPENERS):
+        return False, "Scene 1 starts with a generic opener."
+    narration = " ".join(
+        " ".join(str(scene.get("voiceover") or "").split()).casefold()
+        for scene in scenes
+        if isinstance(scene, dict)
+    )
+    if any(phrase in narration for phrase in RETENTION_BAIT):
+        return False, "The narration contains retention bait."
+    return True, ""
+
 
 NICHE_SYSTEM_PROMPT = """You are the original editorial writer for a human-reviewed niche-sports YouTube Shorts channel.
 
@@ -197,7 +235,7 @@ def write_niche_sports_script(story, language: str = "english") -> dict:
                 )
 
             result = _request(model, model_instruction, source)
-            valid, reason = validate_script(result, source)
+            valid, reason = _validate_script(result)
             if valid:
                 result["provider_used"] = model
                 result["delivery_profile"] = "NICHE SPORTS"
