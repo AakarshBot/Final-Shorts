@@ -705,6 +705,10 @@ if "real_image_result" not in st.session_state:
     st.session_state.real_image_result = None
 if "ai_image_result" not in st.session_state:
     st.session_state.ai_image_result = None
+if "stats_card_result" not in st.session_state:
+    st.session_state.stats_card_result = None
+if "stats_card_image_selection" not in st.session_state:
+    st.session_state.stats_card_image_selection = None
 
 if "live_production_line" not in st.session_state:
     st.session_state.live_production_line = None
@@ -744,6 +748,10 @@ if "live_real_image_result" not in st.session_state:
     st.session_state.live_real_image_result = None
 if "live_ai_image_result" not in st.session_state:
     st.session_state.live_ai_image_result = None
+if "live_stats_card_result" not in st.session_state:
+    st.session_state.live_stats_card_result = None
+if "live_stats_card_image_selection" not in st.session_state:
+    st.session_state.live_stats_card_image_selection = None
 if "live_ranked_visual_result" not in st.session_state:
     st.session_state.live_ranked_visual_result = None
 if "live_script_language" not in st.session_state:
@@ -973,6 +981,248 @@ def _render_visual_asset_grid(assets: list[dict], result_key: str):
                         else:
                             st.markdown('<div class="visual-detail">No source link</div>', unsafe_allow_html=True)
 
+
+
+
+def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
+    if live:
+        specs = [
+            ("live_visual_result", "auto", "Automatic Scraper"),
+            ("live_manual_visual_result", "manual", "Manual Scraper"),
+            ("live_real_image_result", "real", "Real Image Search"),
+            ("live_ai_image_result", "ai", "AI Generation"),
+            ("live_ranked_visual_result", "ranked", "Ranked Scene Search"),
+        ]
+        crop_store = st.session_state.get("live_visual_crops") or {}
+        deleted = st.session_state.get("live_visual_deleted") or set()
+    else:
+        specs = [
+            ("visual_result", "auto-crawler", "Automatic Scraper"),
+            ("manual_visual_result", "manual-crawler", "Manual Scraper"),
+            ("real_image_result", "real-search", "Real Image Search"),
+            ("ai_image_result", "ai-generation", "AI Generation"),
+            ("ranked_visual_result", "ranked-search", "Ranked Scene Search"),
+        ]
+        crop_store = st.session_state.get("visual_crops") or {}
+        deleted = set()
+
+    entries = []
+    for state_key, result_key, source_name in specs:
+        result = st.session_state.get(state_key) or {}
+        for index, asset in enumerate(result.get("assets") or []):
+            asset_key = (
+                _live_asset_key(result_key, index, asset)
+                if live
+                else _visual_asset_key(result_key, index, asset)
+            )
+            if asset_key in deleted:
+                continue
+            raw = crop_store.get(asset_key) or asset.get("bytes")
+            if not isinstance(raw, (bytes, bytearray)):
+                continue
+            if _asset_to_image(raw) is None:
+                continue
+            entries.append(
+                (
+                    asset_key,
+                    index,
+                    asset,
+                    bytes(raw),
+                    source_name,
+                )
+            )
+    return entries
+
+
+def _render_stats_card(live: bool = False, slide_count: int = 0):
+    from stats_card import StatsCardError, build_stats_card
+
+    state_key = "live_stats_card_result" if live else "stats_card_result"
+    selection_key = (
+        "live_stats_card_image_selection"
+        if live
+        else "stats_card_image_selection"
+    )
+    build_key = "live-stats-card-build" if live else "test-stats-card-build"
+
+    st.subheader("Stats Card")
+    st.caption(
+        "Enter the stat you want. The numbers come from TigZig / Cricsheet; "
+        "the factory does not generate or guess statistics with AI."
+    )
+
+    with st.form(f"{build_key}-query-form"):
+        query = st.text_input(
+            "Manual query",
+            placeholder=(
+                "e.g. MS Dhoni ODI stats · India vs Pakistan H2H stats · "
+                "Virat Kohli's last 10 innings scores"
+            ),
+            key=f"{build_key}-query",
+        )
+        build = st.form_submit_button(
+            "Build Stats Card",
+            type="primary",
+            width="stretch",
+        )
+
+    entries = _stats_card_pool_entries(live)
+    if not entries:
+        st.info(
+            "Run one of the existing visual options first. "
+            "Stats Card uses that existing image pool and does not run another image search."
+        )
+        return
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">IMAGE POOL</div>'
+        '<div class="section-title">Choose the player image</div></div>'
+        '<div class="section-count">existing visuals only</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    current_selection = st.session_state.get(selection_key)
+    for start in range(0, len(entries), 3):
+        row = entries[start:start + 3]
+        cols = st.columns(len(row), gap="medium")
+        for col, (asset_key, index, asset, image_bytes, source_name) in zip(cols, row):
+            with col:
+                source = str(
+                    asset.get("publisher")
+                    or asset.get("source")
+                    or asset.get("model")
+                    or source_name
+                )
+                label = str(
+                    asset.get("article_title")
+                    or asset.get("model")
+                    or source_name
+                )
+                with st.container(key=f"{build_key}-image-{asset_key}"):
+                    preview = _asset_to_image(image_bytes)
+                    if preview is not None:
+                        preview.thumbnail((420, 420), Image.Resampling.LANCZOS)
+                        st.image(preview, width="stretch")
+                    st.markdown(
+                        f'<div class="visual-source">{source}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if label:
+                        st.markdown(
+                            f'<div class="visual-detail">{label}</div>',
+                            unsafe_allow_html=True,
+                        )
+                    selected = (
+                        isinstance(current_selection, dict)
+                        and current_selection.get("asset_key") == asset_key
+                    )
+                    if st.button(
+                        "Selected" if selected else "Select image",
+                        type="primary" if selected else "secondary",
+                        width="stretch",
+                        key=f"{build_key}-select-{asset_key}",
+                    ):
+                        st.session_state[selection_key] = {
+                            "asset_key": asset_key,
+                            "source": source,
+                            "label": label,
+                            "bytes": image_bytes,
+                        }
+                        st.session_state[state_key] = None
+                        st.rerun()
+
+    selected = st.session_state.get(selection_key)
+    if not isinstance(selected, dict):
+        return
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">SELECTED IMAGE</div>'
+        '<div class="section-title">This image will sit above the stats</div></div></div>',
+        unsafe_allow_html=True,
+    )
+    selected_image = _asset_to_image(selected.get("bytes"))
+    if selected_image is not None:
+        selected_image.thumbnail((420, 420), Image.Resampling.LANCZOS)
+        st.image(selected_image, width=320)
+    st.caption(f'{selected.get("source") or "Existing visual"} · {selected.get("label") or ""}')
+
+    if build:
+        query = query.strip()
+        if not query:
+            st.warning("Enter a stats query first.")
+        else:
+            with st.spinner("Building the stats card from the cricket database…"):
+                try:
+                    st.session_state[state_key] = build_stats_card(
+                        query,
+                        selected["bytes"],
+                    )
+                except (StatsCardError, OSError, RuntimeError) as exc:
+                    st.session_state[state_key] = {
+                        "error": str(exc)
+                    }
+
+    result = st.session_state.get(state_key) or {}
+    if result.get("error"):
+        st.error(result["error"])
+        return
+    if not result:
+        return
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">OUTPUT</div>'
+        '<div class="section-title">9:16 Stats Card</div></div>'
+        '<div class="section-count">1080 × 1920 PNG</div></div>',
+        unsafe_allow_html=True,
+    )
+    st.image(result["bytes"], width=360)
+    stats = result.get("stats") or {}
+    st.caption(
+        f'{result.get("label") or "Stats Card"} · '
+        f'{result.get("source") or "Cricket data"}'
+    )
+    if result.get("query"):
+        st.code(result["query"])
+    if stats.get("last_date"):
+        st.caption(f"Data through {stats['last_date']}")
+    elif stats.get("latest_date"):
+        st.caption(f"Latest meeting: {stats['latest_date']}")
+
+    st.download_button(
+        "Save Stats Card PNG",
+        data=result["bytes"],
+        file_name="stats-card.png",
+        mime="image/png",
+        width="stretch",
+        key=f"{build_key}-download",
+    )
+
+    if live:
+        if slide_count <= 0:
+            return
+        slide = st.selectbox(
+            "Use Stats Card for slide",
+            list(range(1, slide_count + 1)),
+            key="live-stats-card-slide",
+        )
+        if st.button(
+            "Use Stats Card for this slide",
+            type="primary",
+            width="stretch",
+            key="live-stats-card-attach",
+        ):
+            card_key = hashlib.sha1(
+                (str(result.get("path") or "") + str(result.get("query") or "")).encode("utf-8")
+            ).hexdigest()[:12]
+            st.session_state.live_visual_assignments[slide] = {
+                "asset_key": f"stats-card-{card_key}",
+                "result_key": "stats-card",
+                "source": f"Stats Card · {result.get('source') or 'TigZig / Cricsheet'}",
+                "label": str(result.get("label") or "Stats Card"),
+                "bytes": bytes(result["bytes"]),
+            }
+            st.session_state.live_visuals_approved = False
+            st.rerun()
 
 
 def _top5_visual_asset_key(result_key: str, index: int, asset: dict) -> str:
@@ -1434,6 +1684,8 @@ def _live_reset_downstream():
         "live_real_image_result": None,
         "live_ai_image_result": None,
         "live_ranked_visual_result": None,
+        "live_stats_card_result": None,
+        "live_stats_card_image_selection": None,
         "live_visual_crops": {},
         "live_visual_deleted": set(),
         "live_visual_assignments": {},
@@ -1966,6 +2218,9 @@ def _render_live_visuals(slide_count: int):
                         "ranked",
                         slide_count,
                     )
+
+    with st.expander("Option 6 · Stats Card", expanded=False):
+        _render_stats_card(live=True, slide_count=slide_count)
 
     ready = all(
         slide in st.session_state.live_visual_assignments
@@ -2752,6 +3007,7 @@ def render_topic_fetcher():
             "rendered_video_path": None, "upload_qc_approved": False, "upload_result": None,
             "upload_qc": None, "manual_visual_result": None, "real_image_result": None,
             "ai_image_result": None, "ranked_visual_result": None, "visual_crops": {},
+            "stats_card_result": None, "stats_card_image_selection": None,
         }.items():
             st.session_state[key] = value
     st.session_state.topic_desk_profile = profiles[desk]
@@ -2931,6 +3187,8 @@ def render_topic_fetcher():
                                 st.session_state.real_image_result = None
                                 st.session_state.ai_image_result = None
                                 st.session_state.ranked_visual_result = None
+                                st.session_state.stats_card_result = None
+                                st.session_state.stats_card_image_selection = None
                                 st.session_state.visual_result = None
                                 st.session_state.visual_loaded_story = None
                                 st.session_state.visual_crops = {}
@@ -3381,6 +3639,7 @@ def render_visuals():
             "Option 3 · Real Image Search",
             "Option 4 · AI Generation",
             "Option 5 · Ranked Scene Search",
+            "Option 6 · Stats Card",
         ],
         default="Option 1 · Automatic Scraper",
         key="visual_test_mode",
@@ -3394,8 +3653,10 @@ def render_visuals():
         _render_manual_real_images()
     elif mode.startswith("Option 4"):
         _render_manual_ai_images()
-    else:
+    elif mode.startswith("Option 5"):
         _render_ranked_visual_search()
+    else:
+        _render_stats_card()
 
 
 def render_subtitles():
