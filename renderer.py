@@ -1283,16 +1283,27 @@ def render_production_video(
             if visual["is_stats_card"]:
                 image_height = visual["image_height"] or 860
                 subtitle_y = max(64, image_height - 96)
-            yield render_frame(
-                visual["image"],
-                t,
-                subtitle_data,
-                headline_text or HEADLINE_TEXT,
-                headline_enabled,
-                source_label,
-                subtitle_y,
-                top5_card=visual.get("top5_card") if visual.get("is_top5_card") else None,
-            )
+            if visual.get("is_top5_card"):
+                yield render_frame(
+                    visual["image"],
+                    t,
+                    subtitle_data,
+                    headline_text or HEADLINE_TEXT,
+                    headline_enabled,
+                    source_label,
+                    subtitle_y,
+                    top5_card=visual["top5_card"],
+                )
+            else:
+                yield render_frame(
+                    visual["image"],
+                    t,
+                    subtitle_data,
+                    headline_text or HEADLINE_TEXT,
+                    headline_enabled,
+                    source_label,
+                    subtitle_y,
+                )
 
     try:
         write_preview_video(frames(), silent_video)
