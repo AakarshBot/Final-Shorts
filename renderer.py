@@ -102,6 +102,274 @@ PREVIEW_SUBTITLE_DATA = {
     ],
 }
 
+def _font(candidates: tuple[Path, ...], size: int):
+    for path in candidates:
+        if path.exists():
+            return ImageFont.truetype(str(path), size)
+
+    for path in (
+        Path("C:/Windows/Fonts/arialbd.ttf"),
+        Path("C:/Windows/Fonts/ARLRDBD.TTF"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ):
+        if path.exists():
+            return ImageFont.truetype(str(path), size)
+
+    return ImageFont.load_default()
+
+
+def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
+    root = Path(__file__).resolve().parent / "fonts"
+    language = str(language or "english").casefold()
+
+    if role == "headline":
+        if language == "hindi":
+            return (
+                root / "NotoSansDevanagari-CondensedBlack.ttf",
+                root / "NotoSansDevanagari-Black.ttf",
+            )
+        if language == "telugu":
+            return (
+                root / "NotoSansTelugu-CondensedBlack.ttf",
+                root / "NotoSansTelugu-Black.ttf",
+            )
+        return (root / "Oswald-Bold.ttf",)
+
+    if language == "hindi":
+        return (
+            root / "NotoSansDevanagariUI-ExtraBold.ttf",
+            root / "NotoSansDevanagari-ExtraBold.ttf",
+            root / "NotoSansDevanagari-Bold.ttf",
+        )
+    if language == "telugu":
+        return (
+            root / "NotoSansTelugu-ExtraBold.ttf",
+            root / "NotoSansTelugu-Bold.ttf",
+        )
+    return (
+        root / "Oswald-Bold.ttf",
+    )
+
+
+def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
+    candidates = list(_font_candidates("headline", language))
+    candidates.extend(
+        [
+            Path("C:/Windows/Fonts/seguiemj.ttf"),
+            Path("C:/Windows/Fonts/seguisym.ttf"),
+            Path("C:/Windows/Fonts/Nirmala.ttf"),
+            Path("C:/Windows/Fonts/NirmalaUI.ttf"),
+            Path("C:/Windows/Fonts/msyh.ttc"),
+            Path("C:/Windows/Fonts/msgothic.ttc"),
+            Path("C:/Windows/Fonts/malgun.ttf"),
+            Path("C:/Windows/Fonts/arialuni.ttf"),
+            Path("C:/Windows/Fonts/seguisb.ttf"),
+            Path("C:/Windows/Fonts/arial.ttf"),
+            Path("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf"),
+            Path("/usr/share/fonts/opentype/noto/NotoSansSymbols2-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ]
+    )
+    fonts = []
+    seen = set()
+    for path in candidates:
+        key = str(path).casefold()
+        if key in seen or not path.exists():
+            continue
+        seen.add(key)
+        try:
+            fonts.append(ImageFont.truetype(str(path), size))
+        except OSError:
+            continue
+    if not fonts:
+        fonts.append(ImageFont.load_default())
+    return tuple(fonts)
+
+
+def _headline_font_supports(font, char: str) -> bool:
+    if not char or char in "\n\r\t":
+        return True
+    try:
+        actual = font.getmask(char)
+        missing = font.getmask("\U0010ffff")
+        return actual.size != missing.size or bytes(actual) != bytes(missing)
+    except (AttributeError, OSError, ValueError):
+        return False
+
+
+def _headline_runs(text: str, fonts: tuple[object, ...]) -> list[tuple[str, object]]:
+    if not text:
+        return []
+    runs = []
+    current_font = None
+    current_text = []
+    for char in text:
+        font = next((candidate for candidate in fonts if _headline_font_supports(candidate, char)), fonts[-1])
+        if current_font is not None and font is not current_font:
+            runs.append(("".join(current_text), current_font))
+            current_text = []
+        if current_font is None or font is not current_font:
+            current_font = font
+        current_text.append(char)
+    if current_text:
+        runs.append(("".join(current_text), current_font))
+    return runs
+
+
+def _measure_headline_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    fonts: tuple[object, ...],
+) -> tuple[int, int]:
+    runs = _headline_runs(text, fonts)
+    if not runs:
+        return 0, 0
+    widths = []
+    heights = []
+    for run, font in runs:
+        box = draw.textbbox(
+            (0, 0),
+            run,
+            font=font,
+            stroke_width=HEADLINE_STROKE_WIDTH,
+        )
+        widths.append(box[2] - box[0])
+        heights.append(box[3] - box[1])
+    return sum(widths), max(heights)
+
+
+def _measure(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font,
+    stroke_width: int = 0,
+) -> tuple[int, int]:
+    box = draw.textbbox(
+        (0, 0),
+        text,
+        font=font,
+        stroke_width=stroke_width,
+    )
+    return box[2] - box[0], box[3] - box[1]
+
+
+def _headline_lines(
+    text: str,
+    draw: ImageDraw.ImageDraw,
+    fonts: tuple[object, ...],
+) -> list[list[str]]:
+    words = text.split()
+    if not words:
+        return []
+
+    measurements = [
+        _measure_headline_text(draw, word, fonts)[0]
+        for word in words
+    ]
+    max_line_width = HEADLINE_MAX_WIDTH - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
+
+    lines: list[list[str]] = []
+    current: list[str] = []
+    current_width = 0
+
+    for word, word_width in zip(words, measurements):
+        if word_width > max_line_width:
+            raise ValueError("Headline contains a word that is too wide to fit.")
+        next_width = (
+            current_width
+            + word_width
+            + (HEADLINE_MARKER_GAP if current else 0)
+        )
+        if current and next_width > max_line_width:
+            lines.append(current)
+            current = [word]
+            current_width = word_width
+        else:
+            current.append(word)
+            current_width = next_width
+
+    if current:
+        lines.append(current)
+
+    if len(lines) > HEADLINE_MAX_LINES:
+        raise ValueError("Headline is too long to fit on screen.")
+
+    return lines
+
+
+def _fit_headline_font(
+    text: str,
+    language: str = "english",
+):
+    clean = " ".join(str(text or "").upper().split()) or HEADLINE_TEXT
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+
+    for size in range(HEADLINE_MAX_SIZE, HEADLINE_MIN_SIZE - 1, -1):
+        fonts = _headline_font_stack(size, language)
+        try:
+            lines = _headline_lines(clean, probe, fonts)
+        except ValueError:
+            continue
+        return fonts[0], clean, lines
+
+    raise ValueError("Headline is too long to fit in two lines.")
+def make_sample_background() -> Image.Image:
+    image = Image.new("RGB", (WIDTH, HEIGHT))
+    draw = ImageDraw.Draw(image)
+    top = (24, 28, 36)
+    bottom = (8, 10, 14)
+
+    for y in range(HEIGHT):
+        mix = y / max(1, HEIGHT - 1)
+        color = tuple(
+            int(top[i] * (1 - mix) + bottom[i] * mix)
+            for i in range(3)
+        )
+        draw.line((0, y, WIDTH, y), fill=color)
+
+    return image
+
+
+def _load_logo():
+    path = Path(__file__).resolve().parent / "logo.png"
+    if not path.exists():
+        return None
+
+    with Image.open(path) as source:
+        logo = source.convert("RGBA")
+    logo.thumbnail((150, 150), Image.Resampling.LANCZOS)
+    return logo
+
+
+def _paste_logo(base: Image.Image) -> None:
+    logo = _load_logo()
+    if logo is None:
+        return
+
+    base.paste(
+        logo,
+        (WIDTH - logo.width - 42, 36),
+        logo,
+    )
+
+
+def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
+    draw = ImageDraw.Draw(base)
+    font = _font((), 24)
+    label = str(source_label or SOURCE_LABEL).strip() or SOURCE_LABEL
+    width, _ = _measure(draw, label, font)
+    draw.text(
+        (WIDTH - width - 42, HEIGHT - 86),
+        label,
+        font=font,
+        fill=(210, 216, 224),
+    )
+
+
+
+
 
 def _top5_body_font(size: int, language: str = "english"):
     root = Path(__file__).resolve().parent / "fonts"
