@@ -50,30 +50,21 @@ WHITE = (249, 250, 252)
 DARK = (5, 7, 10)
 
 
-TOP5_CARD_X = 40
-TOP5_CARD_TOP = 32
-TOP5_IMAGE_BOTTOM = 980
-TOP5_CARD_BOTTOM = 1880
-TOP5_CARD_RADIUS = 30
-TOP5_CARD_PADDING_X = 44
-TOP5_HEADLINE_MAX_SIZE = 72
-TOP5_HEADLINE_MIN_SIZE = 28
-TOP5_BODY_MAX_SIZE = 34
-TOP5_BODY_MIN_SIZE = 22
-TOP5_BODY_MAX_WIDTH = 760
-TOP5_BODY_MAX_LINES = 5
-TOP5_BODY_LINE_GAP = 10
-TOP5_BODY_AREA_TOP = 1080
-TOP5_BODY_AREA_BOTTOM = 1715
-TOP5_INTERACTION_X = 905
-TOP5_INTERACTION_Y = 1355
-TOP5_INTERACTION_SIZE = 78
-TOP5_INTERACTION_START = 0.90
-TOP5_INTERACTION_DURATION = 0.68
-TOP5_INTERACTION_INTERVAL = 2.85
-TOP5_HEADLINE_SHADOW_ALPHA = 190
-
-TOP5_INTERACTION_TYPES = ("heart", "comment", "share", "tap")
+TOP5_IMAGE_HEIGHT = 860
+TOP5_PANEL_TOP = TOP5_IMAGE_HEIGHT
+TOP5_PANEL_BACKGROUND = (246, 247, 249)
+TOP5_MARGIN = 64
+TOP5_HEADLINE_MAX_SIZE = 84
+TOP5_HEADLINE_MIN_SIZE = 42
+TOP5_HEADLINE_MAX_LINES = 2
+TOP5_HEADLINE_LINE_GAP = 6
+TOP5_BODY_MAX_SIZE = 42
+TOP5_BODY_MIN_SIZE = 25
+TOP5_BODY_MAX_WIDTH = WIDTH - (TOP5_MARGIN * 2)
+TOP5_BODY_MAX_LINES = 8
+TOP5_BODY_LINE_GAP = 12
+TOP5_HEADLINE_BODY_GAP = 58
+TOP5_SOURCE_COLOR = (86, 91, 100)
 
 PREVIEW_SUBTITLE_DATA = {
     "schema": "final-shorts.subtitles.v1",
@@ -110,275 +101,6 @@ PREVIEW_SUBTITLE_DATA = {
         },
     ],
 }
-
-
-def _font(candidates: tuple[Path, ...], size: int):
-    for path in candidates:
-        if path.exists():
-            return ImageFont.truetype(str(path), size)
-
-    for path in (
-        Path("C:/Windows/Fonts/arialbd.ttf"),
-        Path("C:/Windows/Fonts/ARLRDBD.TTF"),
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"),
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-    ):
-        if path.exists():
-            return ImageFont.truetype(str(path), size)
-
-    return ImageFont.load_default()
-
-
-def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
-    root = Path(__file__).resolve().parent / "fonts"
-    language = str(language or "english").casefold()
-
-    if role == "headline":
-        if language == "hindi":
-            return (
-                root / "NotoSansDevanagari-CondensedBlack.ttf",
-                root / "NotoSansDevanagari-Black.ttf",
-            )
-        if language == "telugu":
-            return (
-                root / "NotoSansTelugu-CondensedBlack.ttf",
-                root / "NotoSansTelugu-Black.ttf",
-            )
-        return (root / "Oswald-Bold.ttf",)
-
-    if language == "hindi":
-        return (
-            root / "NotoSansDevanagariUI-ExtraBold.ttf",
-            root / "NotoSansDevanagari-ExtraBold.ttf",
-            root / "NotoSansDevanagari-Bold.ttf",
-        )
-    if language == "telugu":
-        return (
-            root / "NotoSansTelugu-ExtraBold.ttf",
-            root / "NotoSansTelugu-Bold.ttf",
-        )
-    return (
-        root / "Oswald-Bold.ttf",
-    )
-
-
-def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
-    candidates = list(_font_candidates("headline", language))
-    candidates.extend(
-        [
-            Path("C:/Windows/Fonts/seguiemj.ttf"),
-            Path("C:/Windows/Fonts/seguisym.ttf"),
-            Path("C:/Windows/Fonts/Nirmala.ttf"),
-            Path("C:/Windows/Fonts/NirmalaUI.ttf"),
-            Path("C:/Windows/Fonts/msyh.ttc"),
-            Path("C:/Windows/Fonts/msgothic.ttc"),
-            Path("C:/Windows/Fonts/malgun.ttf"),
-            Path("C:/Windows/Fonts/arialuni.ttf"),
-            Path("C:/Windows/Fonts/seguisb.ttf"),
-            Path("C:/Windows/Fonts/arial.ttf"),
-            Path("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf"),
-            Path("/usr/share/fonts/opentype/noto/NotoSansSymbols2-Regular.ttf"),
-            Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
-            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-        ]
-    )
-    fonts = []
-    seen = set()
-    for path in candidates:
-        key = str(path).casefold()
-        if key in seen or not path.exists():
-            continue
-        seen.add(key)
-        try:
-            fonts.append(ImageFont.truetype(str(path), size))
-        except OSError:
-            continue
-    if not fonts:
-        fonts.append(ImageFont.load_default())
-    return tuple(fonts)
-
-
-def _headline_font_supports(font, char: str) -> bool:
-    if not char or char in "\n\r\t":
-        return True
-    try:
-        actual = font.getmask(char)
-        missing = font.getmask("\U0010ffff")
-        return actual.size != missing.size or bytes(actual) != bytes(missing)
-    except (AttributeError, OSError, ValueError):
-        return False
-
-
-def _headline_runs(text: str, fonts: tuple[object, ...]) -> list[tuple[str, object]]:
-    if not text:
-        return []
-    runs = []
-    current_font = None
-    current_text = []
-    for char in text:
-        font = next((candidate for candidate in fonts if _headline_font_supports(candidate, char)), fonts[-1])
-        if current_font is not None and font is not current_font:
-            runs.append(("".join(current_text), current_font))
-            current_text = []
-        if current_font is None or font is not current_font:
-            current_font = font
-        current_text.append(char)
-    if current_text:
-        runs.append(("".join(current_text), current_font))
-    return runs
-
-
-def _measure_headline_text(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    fonts: tuple[object, ...],
-) -> tuple[int, int]:
-    runs = _headline_runs(text, fonts)
-    if not runs:
-        return 0, 0
-    widths = []
-    heights = []
-    for run, font in runs:
-        box = draw.textbbox(
-            (0, 0),
-            run,
-            font=font,
-            stroke_width=HEADLINE_STROKE_WIDTH,
-        )
-        widths.append(box[2] - box[0])
-        heights.append(box[3] - box[1])
-    return sum(widths), max(heights)
-
-
-def _measure(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font,
-    stroke_width: int = 0,
-) -> tuple[int, int]:
-    box = draw.textbbox(
-        (0, 0),
-        text,
-        font=font,
-        stroke_width=stroke_width,
-    )
-    return box[2] - box[0], box[3] - box[1]
-
-
-def _headline_lines(
-    text: str,
-    draw: ImageDraw.ImageDraw,
-    fonts: tuple[object, ...],
-) -> list[list[str]]:
-    words = text.split()
-    if not words:
-        return []
-
-    measurements = [
-        _measure_headline_text(draw, word, fonts)[0]
-        for word in words
-    ]
-    max_line_width = HEADLINE_MAX_WIDTH - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
-
-    lines: list[list[str]] = []
-    current: list[str] = []
-    current_width = 0
-
-    for word, word_width in zip(words, measurements):
-        if word_width > max_line_width:
-            raise ValueError("Headline contains a word that is too wide to fit.")
-        next_width = (
-            current_width
-            + word_width
-            + (HEADLINE_MARKER_GAP if current else 0)
-        )
-        if current and next_width > max_line_width:
-            lines.append(current)
-            current = [word]
-            current_width = word_width
-        else:
-            current.append(word)
-            current_width = next_width
-
-    if current:
-        lines.append(current)
-
-    if len(lines) > HEADLINE_MAX_LINES:
-        raise ValueError("Headline is too long to fit on screen.")
-
-    return lines
-
-
-def _fit_headline_font(
-    text: str,
-    language: str = "english",
-):
-    clean = " ".join(str(text or "").upper().split()) or HEADLINE_TEXT
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-
-    for size in range(HEADLINE_MAX_SIZE, HEADLINE_MIN_SIZE - 1, -1):
-        fonts = _headline_font_stack(size, language)
-        try:
-            lines = _headline_lines(clean, probe, fonts)
-        except ValueError:
-            continue
-        return fonts[0], clean, lines
-
-    raise ValueError("Headline is too long to fit in two lines.")
-def make_sample_background() -> Image.Image:
-    image = Image.new("RGB", (WIDTH, HEIGHT))
-    draw = ImageDraw.Draw(image)
-    top = (24, 28, 36)
-    bottom = (8, 10, 14)
-
-    for y in range(HEIGHT):
-        mix = y / max(1, HEIGHT - 1)
-        color = tuple(
-            int(top[i] * (1 - mix) + bottom[i] * mix)
-            for i in range(3)
-        )
-        draw.line((0, y, WIDTH, y), fill=color)
-
-    return image
-
-
-def _load_logo():
-    path = Path(__file__).resolve().parent / "logo.png"
-    if not path.exists():
-        return None
-
-    with Image.open(path) as source:
-        logo = source.convert("RGBA")
-    logo.thumbnail((150, 150), Image.Resampling.LANCZOS)
-    return logo
-
-
-def _paste_logo(base: Image.Image) -> None:
-    logo = _load_logo()
-    if logo is None:
-        return
-
-    base.paste(
-        logo,
-        (WIDTH - logo.width - 42, 36),
-        logo,
-    )
-
-
-def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
-    draw = ImageDraw.Draw(base)
-    font = _font((), 24)
-    label = str(source_label or SOURCE_LABEL).strip() or SOURCE_LABEL
-    width, _ = _measure(draw, label, font)
-    draw.text(
-        (WIDTH - width - 42, HEIGHT - 86),
-        label,
-        font=font,
-        fill=(210, 216, 224),
-    )
-
-
-
 
 
 def _top5_body_font(size: int, language: str = "english"):
@@ -423,7 +145,7 @@ def _top5_headline_font(size: int):
     return ImageFont.load_default()
 
 
-def _top5_wrap_words(draw, text: str, font, max_width: int, word_spacing: int = 0):
+def _top5_wrap_words(draw, text: str, font, max_width: int):
     words = " ".join(str(text or "").split()).split()
     if not words:
         return []
@@ -433,7 +155,7 @@ def _top5_wrap_words(draw, text: str, font, max_width: int, word_spacing: int = 
     for word in words:
         box = draw.textbbox((0, 0), word, font=font)
         width = box[2] - box[0]
-        candidate = current_width + width + (word_spacing if current else 0)
+        candidate = current_width + width + (10 if current else 0)
         if current and candidate > max_width:
             lines.append(current)
             current = [word]
@@ -446,278 +168,103 @@ def _top5_wrap_words(draw, text: str, font, max_width: int, word_spacing: int = 
     return lines
 
 
-def _fit_top5_headline(text: str):
+def _top5_sentences(text: str) -> list[str]:
+    clean = " ".join(str(text or "").split())
+    if not clean:
+        return []
+
+    sentences = []
+    current = []
+    for word in clean.split():
+        current.append(word)
+        if word.endswith((".", "?", "!")) and len(sentences) < 2:
+            sentences.append(" ".join(current))
+            current = []
+
+    if current:
+        if sentences:
+            sentences[-1] = f"{sentences[-1]} {' '.join(current)}"
+        else:
+            sentences.append(" ".join(current))
+    return sentences[:2]
+
+
+def _fit_top5_headline(text: str, story_number: int = 0):
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     clean = " ".join(str(text or "").split())
-    max_width = WIDTH - (TOP5_CARD_PADDING_X * 2) - (TOP5_CARD_X * 2)
-    for size in range(TOP5_HEADLINE_MAX_SIZE, TOP5_HEADLINE_MIN_SIZE - 1, -1):
+    if not clean:
+        raise ValueError("Top-5 headline requires text.")
+
+    max_size = TOP5_HEADLINE_MAX_SIZE
+    for size in range(max_size, TOP5_HEADLINE_MIN_SIZE - 1, -1):
         font = _top5_headline_font(size)
         lines = _top5_wrap_words(
             probe,
             clean,
             font,
-            max_width,
-            5,
+            WIDTH - (TOP5_MARGIN * 2),
         )
-        if len(lines) == 1:
+        if len(lines) <= TOP5_HEADLINE_MAX_LINES:
             return font, lines
-    raise ValueError("Top-5 headline is too long to fit on one line.")
+    raise ValueError("Top-5 headline is too long to fit cleanly.")
 
 
-def _fit_top5_body(text: str, language: str):
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+def _fit_top5_body(
+    text: str,
+    language: str,
+    max_height: int | None = None,
+):
     clean = " ".join(str(text or "").split())
     if not clean:
         return None, []
+
+    sentences = _top5_sentences(clean)
+    if not sentences:
+        return None, []
+
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    available_height = max_height or (
+        HEIGHT - TOP5_PANEL_TOP - TOP5_MARGIN - TOP5_HEADLINE_BODY_GAP - 90
+    )
+
     for size in range(TOP5_BODY_MAX_SIZE, TOP5_BODY_MIN_SIZE - 1, -1):
         font = _top5_body_font(size, language)
-        lines = _top5_wrap_words(
-            probe,
-            clean,
-            font,
-            TOP5_BODY_MAX_WIDTH,
-            7,
-        )
-        if len(lines) <= TOP5_BODY_MAX_LINES:
-            return font, lines
-    raise ValueError("Top-5 body copy is too long to fit on the visual card.")
-
-
-def _top5_default_interaction(story_number: int) -> str:
-    return {
-        0: "heart",
-        1: "heart",
-        2: "comment",
-        3: "heart",
-        4: "share",
-        5: "heart",
-    }.get(int(story_number or 0), "heart")
-
-
-def _top5_interaction_frame(t: float) -> tuple[float, float]:
-    if t < TOP5_INTERACTION_START:
-        return 0.0, 0.0
-    phase = (t - TOP5_INTERACTION_START) % TOP5_INTERACTION_INTERVAL
-    if phase >= TOP5_INTERACTION_DURATION:
-        return 0.0, 0.0
-    progress = phase / TOP5_INTERACTION_DURATION
-    if progress < 0.35:
-        eased = progress / 0.35
-        scale = 0.72 + 0.38 * (1 - (1 - eased) ** 3)
-        alpha = eased
-    elif progress < 0.68:
-        eased = (progress - 0.35) / 0.33
-        scale = 1.10 - 0.10 * eased
-        alpha = 1.0
-    else:
-        eased = (progress - 0.68) / 0.32
-        scale = 1.0
-        alpha = 1.0 - eased
-    return scale, max(0.0, min(1.0, alpha))
-
-
-def _draw_heart(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, alpha: int):
-    points = []
-    for step in range(41):
-        angle = math.pi * 2 * step / 40
-        x = 16 * math.sin(angle) ** 3
-        y = 13 * math.cos(angle) - 5 * math.cos(2 * angle) - 2 * math.cos(3 * angle) - math.cos(4 * angle)
-        points.append(
-            (
-                int(cx + x * size / 34),
-                int(cy - y * size / 34),
-            )
-        )
-    draw.polygon(points, fill=(255, 255, 255, alpha))
-
-
-def _draw_comment(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, alpha: int):
-    left = cx - size // 2
-    top = cy - size // 2
-    right = cx + size // 2
-    bottom = cy + size // 3
-    draw.rounded_rectangle(
-        (left, top, right, bottom),
-        radius=max(8, size // 6),
-        outline=(255, 255, 255, alpha),
-        width=max(4, size // 13),
-    )
-    tail = [
-        (left + size // 5, bottom - 2),
-        (left + size // 8, bottom + size // 5),
-        (left + size // 3, bottom - size // 5),
-    ]
-    draw.polygon(tail, fill=(255, 255, 255, alpha))
-    dot = max(4, size // 12)
-    for offset in (-dot * 2, 0, dot * 2):
-        draw.ellipse(
-            (cx + offset - dot // 2, cy - dot // 2, cx + offset + dot // 2, cy + dot // 2),
-            fill=(255, 255, 255, alpha),
-        )
-
-
-def _draw_share(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, alpha: int):
-    stroke = max(4, size // 13)
-    r = max(7, size // 10)
-    top = (cx - size // 4, cy - size // 5)
-    right = (cx + size // 3, cy)
-    bottom = (cx - size // 4, cy + size // 4)
-    draw.line((top[0] + r, top[1] + r, right[0] - r, right[1]), fill=(255, 255, 255, alpha), width=stroke)
-    draw.line((bottom[0] + r, bottom[1] - r, right[0] - r, right[1]), fill=(255, 255, 255, alpha), width=stroke)
-    for point in (top, right, bottom):
-        draw.ellipse((point[0] - r, point[1] - r, point[0] + r, point[1] + r), fill=(255, 255, 255, alpha))
-
-
-def _draw_tap(draw: ImageDraw.ImageDraw, cx: int, cy: int, size: int, alpha: int, scale: float):
-    center = max(1, int(size * 0.15 * scale))
-    radius = max(6, int(size * 0.32 * scale))
-    draw.ellipse(
-        (cx - center, cy - center, cx + center, cy + center),
-        outline=(255, 255, 255, alpha),
-        width=max(3, size // 13),
-    )
-    for extra in (1.0, 1.35):
-        ring = int(radius * extra)
-        draw.ellipse(
-            (cx - ring, cy - ring, cx + ring, cy + ring),
-            outline=(255, 255, 255, max(0, alpha - int(55 * (extra - 1)))),
-            width=max(3, size // 18),
-        )
-
-
-def _draw_top5_interaction(base: Image.Image, card: dict, t: float):
-    scale, alpha = _top5_interaction_frame(t)
-    if alpha <= 0:
-        return
-    animation = str(card.get("interaction_animation") or "").strip().casefold()
-    if animation not in TOP5_INTERACTION_TYPES:
-        animation = _top5_default_interaction(int(card.get("story_number") or 0))
-    size = max(12, int(TOP5_INTERACTION_SIZE * scale))
-    draw = ImageDraw.Draw(base, "RGBA")
-    cx = TOP5_INTERACTION_X
-    cy = TOP5_INTERACTION_Y
-    if animation == "heart":
-        _draw_heart(draw, cx, cy, size, int(255 * alpha))
-    elif animation == "comment":
-        _draw_comment(draw, cx, cy, size, int(255 * alpha))
-    elif animation == "share":
-        _draw_share(draw, cx, cy, size, int(255 * alpha))
-    else:
-        _draw_tap(draw, cx, cy, size, int(255 * alpha), scale)
-
-
-def _draw_top5_card(
-    base: Image.Image,
-    card: dict,
-    t: float,
-) -> None:
-    headline = " ".join(str(card.get("headline") or "").split())
-    body = " ".join(str(card.get("body") or "").split())
-    if not headline:
-        raise ValueError("Top-5 card requires a headline.")
-
-    language = str(card.get("language") or "english")
-    story_number = int(card.get("story_number") or 0)
-
-    headline_font, headline_lines = _fit_top5_headline(headline)
-    body_font, body_lines = _fit_top5_body(body, language)
-
-    base = base.convert("RGBA")
-    draw = ImageDraw.Draw(base, "RGBA")
-
-    card_left = TOP5_CARD_X
-    card_right = WIDTH - TOP5_CARD_X
-    card_top = TOP5_CARD_TOP
-    card_bottom = TOP5_CARD_BOTTOM
-    image_bottom = TOP5_IMAGE_BOTTOM
-
-    draw.rounded_rectangle(
-        (card_left, card_top, card_right, card_bottom),
-        radius=TOP5_CARD_RADIUS,
-        fill=(8, 11, 16, 255),
-    )
-
-    image = _fit_visual_to_card_image(base, image_bottom - card_top)
-    image_mask = Image.new("L", image.size, 255)
-    mask_draw = ImageDraw.Draw(image_mask)
-    mask_draw.rounded_rectangle(
-        (0, 0, image.width, image.height),
-        radius=TOP5_CARD_RADIUS,
-        fill=255,
-    )
-    mask_draw.rectangle(
-        (0, image.height - TOP5_CARD_RADIUS, image.width, image.height),
-        fill=255,
-    )
-    base.paste(image, (card_left, card_top), image_mask)
-
-    headline_box = draw.textbbox((0, 0), "Ag", font=headline_font)
-    headline_h = headline_box[3] - headline_box[1]
-    headline_y = image_bottom - headline_h - 22
-
-    headline_shadow = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(headline_shadow, "RGBA")
-    for offset in range(160):
-        alpha = int(TOP5_HEADLINE_SHADOW_ALPHA * (1 - offset / 160) ** 2)
-        y = image_bottom - 160 + offset
-        shadow_draw.line(
-            (card_left, y, card_right, y),
-            fill=(0, 0, 0, alpha),
-        )
-    base.alpha_composite(headline_shadow)
-
-    draw = ImageDraw.Draw(base, "RGBA")
-    box = draw.textbbox((0, 0), headline, font=headline_font)
-    headline_w = box[2] - box[0]
-    headline_x = max(
-        card_left + TOP5_CARD_PADDING_X,
-        (WIDTH - headline_w) // 2,
-    )
-    draw.text(
-        (headline_x - box[0], headline_y - box[1]),
-        headline,
-        font=headline_font,
-        fill=WHITE,
-        stroke_width=2,
-        stroke_fill=DARK,
-    )
-
-    if body_lines and body_font:
-        line_boxes = [
-            draw.textbbox((0, 0), "Ag", font=body_font)
-            for _ in body_lines
+        paragraphs = [
+            _top5_wrap_words(probe, sentence, font, TOP5_BODY_MAX_WIDTH)
+            for sentence in sentences
         ]
-        line_h = max(box[3] - box[1] for box in line_boxes)
-        total_h = line_h * len(body_lines) + TOP5_BODY_LINE_GAP * max(0, len(body_lines) - 1)
-        area_top = TOP5_BODY_AREA_TOP
-        area_bottom = TOP5_BODY_AREA_BOTTOM
-        body_y = area_top + max(0, (area_bottom - area_top - total_h) // 2)
-        for line in body_lines:
-            text_line = " ".join(line)
-            box = draw.textbbox((0, 0), text_line, font=body_font)
-            line_w = box[2] - box[0]
-            body_x = card_left + TOP5_CARD_PADDING_X
-            draw.text(
-                (body_x - box[0], body_y - box[1]),
-                text_line,
-                font=body_font,
-                fill=(221, 226, 234, 255),
-            )
-            body_y += line_h + TOP5_BODY_LINE_GAP
+        total_lines = sum(len(lines) for lines in paragraphs)
+        if total_lines > TOP5_BODY_MAX_LINES:
+            continue
+        line_box = probe.textbbox((0, 0), "Ag", font=font)
+        line_height = line_box[3] - line_box[1]
+        total_height = (
+            line_height * total_lines
+            + TOP5_BODY_LINE_GAP * max(0, total_lines - len(paragraphs))
+            + 24 * max(0, len(paragraphs) - 1)
+        )
+        if total_height <= available_height:
+            return font, paragraphs
 
-    _draw_top5_interaction(base, card, t)
-
-    return base
+    raise ValueError("Top-5 body copy is too long to fit cleanly.")
 
 
-def _fit_visual_to_card_image(base: Image.Image, target_height: int) -> Image.Image:
-    image = base.convert("RGB")
-    width = WIDTH - (TOP5_CARD_X * 2)
-    if image.size == (width, target_height):
-        return image
-    target_ratio = width / target_height
-    current_ratio = image.width / image.height
-    if current_ratio > target_ratio:
+def _fit_top5_image(value: bytes | bytearray | Image.Image) -> Image.Image:
+    if isinstance(value, Image.Image):
+        image = value.convert("RGB")
+    elif isinstance(value, (bytes, bytearray)):
+        try:
+            with Image.open(BytesIO(bytes(value))) as source:
+                image = source.convert("RGB")
+        except (OSError, ValueError) as exc:
+            raise ValueError("A Top-5 visual could not be decoded.") from exc
+    else:
+        raise ValueError("A Top-5 visual is missing.")
+
+    target = (WIDTH, TOP5_IMAGE_HEIGHT)
+    source_ratio = image.width / image.height
+    target_ratio = target[0] / target[1]
+    if source_ratio > target_ratio:
         crop_width = max(1, int(image.height * target_ratio))
         left = (image.width - crop_width) // 2
         image = image.crop((left, 0, left + crop_width, image.height))
@@ -725,7 +272,105 @@ def _fit_visual_to_card_image(base: Image.Image, target_height: int) -> Image.Im
         crop_height = max(1, int(image.width / target_ratio))
         top = (image.height - crop_height) // 2
         image = image.crop((0, top, image.width, top + crop_height))
-    return image.resize((width, target_height), Image.Resampling.LANCZOS)
+    return image.resize(target, Image.Resampling.LANCZOS)
+
+
+def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
+    headline = " ".join(str(card.get("headline") or "").split())
+    body = " ".join(str(card.get("body") or "").split())
+    if not headline:
+        raise ValueError("Top-5 card requires a headline.")
+
+    language = str(card.get("language") or "english")
+    story_number = int(card.get("story_number") or 0)
+    headline_font, headline_lines = _fit_top5_headline(headline, story_number)
+
+    canvas = Image.new("RGBA", (WIDTH, HEIGHT), (*TOP5_PANEL_BACKGROUND, 255))
+    image = _fit_top5_image(base)
+    canvas.paste(image, (0, 0))
+
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+
+    headline_metrics = [
+        probe.textbbox((0, 0), "Ag", font=headline_font)
+        for _ in headline_lines
+    ]
+    headline_line_height = max(
+        box[3] - box[1]
+        for box in headline_metrics
+    )
+    headline_height = (
+        headline_line_height * len(headline_lines)
+        + TOP5_HEADLINE_LINE_GAP * max(0, len(headline_lines) - 1)
+    )
+
+    if story_number == 0 or not body:
+        headline_y = TOP5_PANEL_TOP + (
+            HEIGHT - TOP5_PANEL_TOP - headline_height
+        ) // 2
+    else:
+        headline_y = TOP5_PANEL_TOP + TOP5_MARGIN + 30
+
+    for row, line_words in enumerate(headline_lines):
+        line = " ".join(line_words)
+        box = draw.textbbox((0, 0), line, font=headline_font)
+        width = box[2] - box[0]
+        x = (WIDTH - width) // 2
+        y = headline_y + row * (headline_line_height + TOP5_HEADLINE_LINE_GAP)
+        draw.text(
+            (x - box[0], y - box[1]),
+            line,
+            font=headline_font,
+            fill=(*INK, 255) if "INK" in globals() else (14, 16, 20, 255),
+        )
+
+    if body:
+        body_top = headline_y + headline_height + TOP5_HEADLINE_BODY_GAP
+        body_bottom = HEIGHT - 112
+        body_font, paragraphs = _fit_top5_body(
+            body,
+            language,
+            max_height=max(1, body_bottom - body_top),
+        )
+        if body_font:
+            cursor_y = body_top
+            line_box = draw.textbbox((0, 0), "Ag", font=body_font)
+            line_height = line_box[3] - line_box[1]
+            for paragraph_index, lines in enumerate(paragraphs):
+                for line_words in lines:
+                    line = " ".join(line_words)
+                    box = draw.textbbox((0, 0), line, font=body_font)
+                    draw.text(
+                        (
+                            TOP5_MARGIN - box[0],
+                            cursor_y - box[1],
+                        ),
+                        line,
+                        font=body_font,
+                        fill=(*MUTED, 255) if "MUTED" in globals() else (86, 91, 100, 255),
+                    )
+                    cursor_y += line_height + TOP5_BODY_LINE_GAP
+                if paragraph_index < len(paragraphs) - 1:
+                    cursor_y += 24
+
+    return canvas
+
+
+def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
+    label = str(source_label or "Commons").strip() or "Commons"
+    draw = ImageDraw.Draw(base)
+    font = _font((), 20)
+    box = draw.textbbox((0, 0), label, font=font)
+    draw.text(
+        (
+            WIDTH - TOP5_MARGIN - (box[2] - box[0]),
+            HEIGHT - 48,
+        ),
+        label,
+        font=font,
+        fill=TOP5_SOURCE_COLOR,
+    )
 
 
 def build_top5_card_preview(
@@ -735,59 +380,19 @@ def build_top5_card_preview(
     story_number: int = 0,
     total_stories: int = 5,
     source_label: str | None = None,
-    interaction_animation: str | None = None,
 ) -> bytes:
-    """Render the selected Top-5 image with the card layout."""
-    base = _fit_visual_to_frame(source_image)
-    card = {
+    "Render one static Top-5 slide using the same full-frame visual language as the approved Cricket Stats Card."
+    frame = _draw_top5_card(_fit_visual_to_frame(source_image), {
         "headline": headline,
         "body": body,
         "story_number": story_number,
         "total_stories": total_stories,
-        "interaction_animation": interaction_animation or _top5_default_interaction(story_number),
-    }
-    frame = _draw_top5_card(base, card, 1.20)
+    })
     _paste_logo(frame)
-    _paste_source(frame, source_label)
+    _paste_top5_source(frame, source_label)
     buffer = BytesIO()
     frame.convert("RGB").save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
-
-
-def build_top5_card_motion_preview(
-    source_image: bytes | bytearray | Image.Image,
-    headline: str,
-    body: str = "",
-    story_number: int = 0,
-    total_stories: int = 5,
-    interaction_animation: str | None = None,
-) -> Path:
-    """Render one silent Top-5 slide so the UI-inspired motion can be reviewed."""
-    base = _fit_visual_to_frame(source_image)
-    card = {
-        "headline": headline,
-        "body": body,
-        "story_number": story_number,
-        "total_stories": total_stories,
-        "interaction_animation": interaction_animation or _top5_default_interaction(story_number),
-    }
-    frame_count = max(1, int(3.60 * FPS))
-
-    return write_preview_video(
-        (
-            _paste_top5_preview_frame(base.copy(), card, index / FPS)
-            for index in range(frame_count)
-        ),
-        Path(__file__).resolve().parent / "output" / "top5_standalone_preview.mp4",
-    )
-
-
-def _paste_top5_preview_frame(base: Image.Image, card: dict, t: float) -> Image.Image:
-    frame = _draw_top5_card(base, card, t)
-    _paste_logo(frame)
-    _paste_source(frame, "Commons")
-    return frame.convert("RGB")
-
 def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
     primary_font, clean, lines = _fit_headline_font(text, language)
     fonts = _headline_font_stack(primary_font.size, language)
