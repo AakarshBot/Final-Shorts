@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
+from functools import lru_cache
 import math
 import shutil
 import subprocess
@@ -50,22 +51,22 @@ WHITE = (249, 250, 252)
 DARK = (5, 7, 10)
 
 
-TOP5_CARD_X = 40
-TOP5_CARD_TOP = 930
-TOP5_CARD_BOTTOM = 1810
-TOP5_CARD_OPENER_TOP = 1160
-TOP5_CARD_RADIUS = 30
-TOP5_CARD_PADDING_X = 58
-TOP5_CARD_META_SIZE = 25
-TOP5_CARD_HEADLINE_MAX_SIZE = 86
-TOP5_CARD_HEADLINE_MIN_SIZE = 52
-TOP5_CARD_HEADLINE_MAX_LINES = 4
-TOP5_CARD_HEADLINE_WORD_SPACING = 14
-TOP5_CARD_BODY_MAX_SIZE = 31
-TOP5_CARD_BODY_MIN_SIZE = 23
-TOP5_CARD_BODY_MAX_LINES = 6
-TOP5_CARD_BODY_LINE_GAP = 8
-TOP5_CARD_DIVIDER_GAP = 26
+TOP5_TEXT_LEFT = 58
+TOP5_TEXT_RIGHT = 58
+TOP5_TEXT_BOTTOM = 1760
+TOP5_TEXT_TOP_LIMIT = 650
+TOP5_META_SIZE = 21
+TOP5_HEADLINE_START_SIZE = 76
+TOP5_HEADLINE_MIN_SIZE = 22
+TOP5_BODY_START_SIZE = 28
+TOP5_BODY_MIN_SIZE = 17
+TOP5_HEADLINE_WORD_SPACING = 10
+TOP5_META_GAP = 12
+TOP5_HEADLINE_BODY_GAP = 22
+TOP5_HEADLINE_LINE_GAP_RATIO = 0.08
+TOP5_BODY_LINE_GAP_RATIO = 0.20
+TOP5_DIVIDER_GAP = 18
+TOP5_SCRIM_PADDING = 300
 
 # Function 05 should hand this exact shape to Function 06.
 PREVIEW_SUBTITLE_DATA = {
@@ -421,7 +422,6 @@ def _top5_wrap_words(
     font,
     max_width: int,
     word_spacing: int = 0,
-    max_lines: int | None = None,
 ) -> list[list[str]]:
     words = " ".join(str(text or "").split()).split()
     if not words:
@@ -434,6 +434,25 @@ def _top5_wrap_words(
     for word in words:
         box = draw.textbbox((0, 0), word, font=font)
         word_width = box[2] - box[0]
+        if word_width > max_width:
+            if current:
+                lines.append(current)
+                current = []
+                current_width = 0
+            piece = ""
+            for char in word:
+                candidate = piece + char
+                candidate_width = draw.textbbox((0, 0), candidate, font=font)[2]
+                if piece and candidate_width > max_width:
+                    lines.append([piece])
+                    piece = char
+                else:
+                    piece = candidate
+            if piece:
+                current = [piece]
+                current_width = draw.textbbox((0, 0), piece, font=font)[2]
+            continue
+
         candidate_width = (
             current_width
             + word_width
@@ -449,46 +468,189 @@ def _top5_wrap_words(
 
     if current:
         lines.append(current)
-
-    if max_lines is not None and len(lines) > max_lines:
-        return []
     return lines
 
 
-def _fit_top5_headline(text: str):
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    clean = " ".join(str(text or "").split())
-    for size in range(TOP5_CARD_HEADLINE_MAX_SIZE, TOP5_CARD_HEADLINE_MIN_SIZE - 1, -1):
-        font = _top5_headline_font(size)
-        lines = _top5_wrap_words(
-            probe,
-            clean,
-            font,
-            WIDTH - (TOP5_CARD_X * 2) - (TOP5_CARD_PADDING_X * 2),
-            TOP5_CARD_HEADLINE_WORD_SPACING,
-            TOP5_CARD_HEADLINE_MAX_LINES,
-        )
-        if lines:
-            return font, lines
-    raise ValueError("Top-5 headline is too long to fit on the visual card.")
+def _top5_lines_height(
+    draw: ImageDraw.ImageDraw,
+    lines: list[list[str]],
+    font,
+    gap_ratio: float,
+) -> int:
+    if not lines:
+        return 0
+    box = draw.textbbox((0, 0), "Ag", font=font)
+    line_height = box[3] - box[1]
+    gap = max(4, int(font.size * gap_ratio))
+    return line_height * len(lines) + gap * max(0, len(lines) - 1)
 
 
-def _fit_top5_body(text: str, language: str):
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    clean = " ".join(str(text or "").split())
-    for size in range(TOP5_CARD_BODY_MAX_SIZE, TOP5_CARD_BODY_MIN_SIZE - 1, -1):
-        font = _top5_body_font(size, language)
-        lines = _top5_wrap_words(
-            probe,
-            clean,
-            font,
-            WIDTH - (TOP5_CARD_X * 2) - (TOP5_CARD_PADDING_X * 2),
-            10,
-            TOP5_CARD_BODY_MAX_LINES,
+def _top5_meta_height(draw: ImageDraw.ImageDraw) -> int:
+    font = _top5_headline_font(TOP5_META_SIZE)
+    box = draw.textbbox((0, 0), "TOP 5 CRICKET", font=font)
+    return box[3] - box[1]
+
+
+def _top5_layout_height(
+    draw: ImageDraw.ImageDraw,
+    headline_lines: list[list[str]],
+    headline_font,
+    body_lines: list[list[str]],
+    body_font,
+) -> int:
+    height = 6
+    height += _top5_meta_height(draw) + TOP5_META_GAP
+    height += _top5_lines_height(
+        draw,
+        headline_lines,
+        headline_font,
+        TOP5_HEADLINE_LINE_GAP_RATIO,
+    )
+    if body_lines and body_font:
+        height += TOP5_HEADLINE_BODY_GAP + TOP5_DIVIDER_GAP
+        height += _top5_lines_height(
+            draw,
+            body_lines,
+            body_font,
+            TOP5_BODY_LINE_GAP_RATIO,
         )
-        if lines:
-            return font, lines
-    raise ValueError("Top-5 body copy is too long to fit on the visual card.")
+    return height
+
+
+def _top5_fit_layout(
+    headline: str,
+    body: str,
+    language: str = "english",
+) -> dict:
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    max_width = WIDTH - TOP5_TEXT_LEFT - TOP5_TEXT_RIGHT
+    clean_headline = " ".join(str(headline or "").split())
+    clean_body = " ".join(str(body or "").split())
+
+    best = None
+    for body_size in range(
+        TOP5_BODY_START_SIZE if clean_body else TOP5_BODY_MIN_SIZE,
+        TOP5_BODY_MIN_SIZE - 1,
+        -1,
+    ):
+        body_font = _top5_body_font(body_size, language) if clean_body else None
+        body_lines = (
+            _top5_wrap_words(probe, clean_body, body_font, max_width)
+            if body_font
+            else []
+        )
+        for headline_size in range(
+            TOP5_HEADLINE_START_SIZE,
+            TOP5_HEADLINE_MIN_SIZE - 1,
+            -1,
+        ):
+            headline_font = _top5_headline_font(headline_size)
+            headline_lines = _top5_wrap_words(
+                probe,
+                clean_headline,
+                headline_font,
+                max_width,
+                TOP5_HEADLINE_WORD_SPACING,
+            )
+            if not headline_lines:
+                continue
+
+            total_height = _top5_layout_height(
+                probe,
+                headline_lines,
+                headline_font,
+                body_lines,
+                body_font,
+            )
+            fits = total_height <= (TOP5_TEXT_BOTTOM - TOP5_TEXT_TOP_LIMIT)
+            if fits:
+                return {
+                    "headline_font": headline_font,
+                    "headline_lines": headline_lines,
+                    "body_font": body_font,
+                    "body_lines": body_lines,
+                    "height": total_height,
+                }
+            if best is None or total_height < best["height"]:
+                best = {
+                    "headline_font": headline_font,
+                    "headline_lines": headline_lines,
+                    "body_font": body_font,
+                    "body_lines": body_lines,
+                    "height": total_height,
+                }
+
+    if best is None:
+        headline_font = _top5_headline_font(TOP5_HEADLINE_MIN_SIZE)
+        headline_lines = _top5_wrap_words(
+            probe,
+            clean_headline,
+            headline_font,
+            max_width,
+            TOP5_HEADLINE_WORD_SPACING,
+        )
+        body_font = _top5_body_font(TOP5_BODY_MIN_SIZE, language) if clean_body else None
+        body_lines = _top5_wrap_words(probe, clean_body, body_font, max_width) if body_font else []
+        best = {
+            "headline_font": headline_font,
+            "headline_lines": headline_lines,
+            "body_font": body_font,
+            "body_lines": body_lines,
+            "height": _top5_layout_height(
+                probe,
+                headline_lines,
+                headline_font,
+                body_lines,
+                body_font,
+            ),
+        }
+    return best
+
+
+@lru_cache(maxsize=64)
+def _top5_scrim(height: int, max_alpha: int) -> Image.Image:
+    height = max(1, int(height))
+    max_alpha = max(1, min(255, int(max_alpha)))
+    gradient = Image.new("L", (1, height))
+    gradient.putdata(
+        [
+            int(max_alpha * (index / max(1, height - 1)) ** 2.2)
+            for index in range(height)
+        ]
+    )
+    alpha = gradient.resize((WIDTH, height), Image.Resampling.BICUBIC)
+    overlay = Image.new("RGBA", (WIDTH, height), (0, 0, 0, 0))
+    overlay.putalpha(alpha)
+    return overlay
+
+
+def _top5_draw_lines(
+    draw: ImageDraw.ImageDraw,
+    lines: list[list[str]],
+    font,
+    x: int,
+    y: int,
+    fill,
+    word_spacing: int = 0,
+    gap_ratio: float = 0.0,
+) -> int:
+    gap = max(4, int(font.size * gap_ratio))
+    for line in lines:
+        cursor_x = x
+        for word in line:
+            box = draw.textbbox((0, 0), word, font=font)
+            draw.text(
+                (cursor_x - box[0], y - box[1]),
+                word,
+                font=font,
+                fill=fill,
+                stroke_width=2,
+                stroke_fill=(0, 0, 0, 150),
+            )
+            cursor_x += (box[2] - box[0]) + word_spacing
+        line_box = draw.textbbox((0, 0), "Ag", font=font)
+        y += (line_box[3] - line_box[1]) + gap
+    return y
 
 
 def _draw_top5_card(
@@ -505,125 +667,113 @@ def _draw_top5_card(
     story_number = int(card.get("story_number") or 0)
     total_stories = max(1, int(card.get("total_stories") or 5))
 
-    card_top = TOP5_CARD_OPENER_TOP if story_number == 0 else TOP5_CARD_TOP
-    card_bottom = TOP5_CARD_BOTTOM
-    card_width = WIDTH - (TOP5_CARD_X * 2)
+    layout = _top5_fit_layout(headline, body, language)
+    content_bottom = TOP5_TEXT_BOTTOM
+    content_top = content_bottom - layout["height"]
+    if story_number == 0:
+        content_top += 70
 
-    headline_font, headline_lines = _fit_top5_headline(headline)
-    body_font = None
-    body_lines: list[list[str]] = []
-    if body:
-        body_font, body_lines = _fit_top5_body(body, language)
+    scrim_top = max(0, content_top - TOP5_SCRIM_PADDING)
+    max_alpha = min(205, 150 + int(layout["height"] * 0.07))
+    scrim = _top5_scrim(
+        max(1, HEIGHT - scrim_top),
+        max_alpha,
+    )
 
     layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    shadow = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    shadow_draw = ImageDraw.Draw(shadow)
-    shadow_draw.rounded_rectangle(
-        (
-            TOP5_CARD_X,
-            card_top + 10,
-            TOP5_CARD_X + card_width,
-            card_bottom + 10,
-        ),
-        radius=TOP5_CARD_RADIUS,
-        fill=(0, 0, 0, 90),
-    )
-    shadow = shadow.filter(ImageFilter.GaussianBlur(radius=16))
-    layer.alpha_composite(shadow)
+    layer.alpha_composite(scrim, (0, scrim_top))
 
     draw = ImageDraw.Draw(layer)
-    draw.rounded_rectangle(
-        (
-            TOP5_CARD_X,
-            card_top,
-            TOP5_CARD_X + card_width,
-            card_bottom,
-        ),
-        radius=TOP5_CARD_RADIUS,
-        fill=(9, 12, 18, 248),
-    )
+    content_left = TOP5_TEXT_LEFT
+    y = content_top + 3
 
-    content_left = TOP5_CARD_X + TOP5_CARD_PADDING_X
-    content_right = TOP5_CARD_X + card_width - TOP5_CARD_PADDING_X
-    y = card_top + 42
-
-    accent_h = 7
-    accent_w = 112
+    accent_width = 94
+    accent_height = 6
     draw.rectangle(
-        (content_left, y, content_left + int(accent_w * 0.58), y + accent_h),
+        (content_left, y, content_left + 52, y + accent_height),
         fill=BRAND_BLUE,
     )
     draw.rectangle(
-        (
-            content_left + int(accent_w * 0.58),
-            y,
-            content_left + accent_w,
-            y + accent_h,
-        ),
+        (content_left + 52, y, content_left + accent_width, y + accent_height),
         fill=ACCENT,
     )
-    y += 28
+    y += accent_height + 16
 
     meta = (
         f"STORY {story_number:02d} / {total_stories}"
         if story_number
-        else "TOP-5 CRICKET · FIVE STORIES"
+        else "TOP 5 CRICKET · FIVE STORIES"
     )
-    meta_font = _top5_headline_font(TOP5_CARD_META_SIZE)
-    draw.text((content_left, y), meta, font=meta_font, fill=(164, 174, 190))
-    y += 44
+    meta_font = _top5_headline_font(TOP5_META_SIZE)
+    meta_box = draw.textbbox((0, 0), meta, font=meta_font)
+    draw.text(
+        (content_left, y - meta_box[1]),
+        meta,
+        font=meta_font,
+        fill=(178, 187, 201, 255),
+        stroke_width=1,
+        stroke_fill=(0, 0, 0, 130),
+    )
+    y += (meta_box[3] - meta_box[1]) + TOP5_META_GAP
 
-    global_index = 0
-    line_heights = []
-    for _line in headline_lines:
-        box = draw.textbbox((0, 0), "Ag", font=headline_font)
-        line_heights.append(box[3] - box[1])
-
-    for row, line in enumerate(headline_lines):
-        cursor_x = content_left
-        row_height = line_heights[row]
-        for word in line:
-            box = draw.textbbox((0, 0), word, font=headline_font)
-            word_width = box[2] - box[0]
-            fill = WHITE
-            draw.text(
-                (cursor_x - box[0], y - box[1]),
-                word,
-                font=headline_font,
-                fill=fill,
-            )
-            cursor_x += word_width + TOP5_CARD_HEADLINE_WORD_SPACING
-            global_index += 1
-        y += row_height + 6
-
-    divider_y = y + TOP5_CARD_DIVIDER_GAP
-    draw.line(
-        (content_left, divider_y, content_right, divider_y),
-        fill=(54, 61, 72),
-        width=2,
+    y = _top5_draw_lines(
+        draw,
+        layout["headline_lines"],
+        layout["headline_font"],
+        content_left,
+        y,
+        WHITE,
+        TOP5_HEADLINE_WORD_SPACING,
+        TOP5_HEADLINE_LINE_GAP_RATIO,
     )
 
+    body_lines = layout["body_lines"]
+    body_font = layout["body_font"]
     if body_lines and body_font:
-        body_y = divider_y + 24
-        for line in body_lines:
-            text_line = " ".join(line)
-            draw.text(
-                (content_left, body_y),
-                text_line,
-                font=body_font,
-                fill=(219, 224, 232),
-            )
-            box = draw.textbbox((0, 0), text_line, font=body_font)
-            body_y += (box[3] - box[1]) + TOP5_CARD_BODY_LINE_GAP
+        headline_line_box = draw.textbbox(
+            (0, 0),
+            "Ag",
+            font=layout["headline_font"],
+        )
+        headline_gap = max(
+            4,
+            int(layout["headline_font"].size * TOP5_HEADLINE_LINE_GAP_RATIO),
+        )
+        y += TOP5_HEADLINE_BODY_GAP - headline_gap
 
-    progress = min(1.0, max(0.0, t / 0.45))
+        draw.line(
+            (
+                content_left,
+                y + TOP5_DIVIDER_GAP // 2,
+                WIDTH - TOP5_TEXT_RIGHT,
+                y + TOP5_DIVIDER_GAP // 2,
+            ),
+            fill=(190, 196, 207, 90),
+            width=1,
+        )
+        y += TOP5_DIVIDER_GAP
+
+        _top5_draw_lines(
+            draw,
+            body_lines,
+            body_font,
+            content_left,
+            y,
+            (224, 228, 235, 255),
+            0,
+            TOP5_BODY_LINE_GAP_RATIO,
+        )
+
+    progress = min(1.0, max(0.0, t / 0.35))
     eased = 1 - (1 - progress) ** 3
-    offset = int(42 * (1 - eased))
+    offset = int(32 * (1 - eased))
 
-    alpha = int(255 * min(1.0, max(0.0, t / 0.25)))
+    alpha = int(255 * min(1.0, max(0.0, t / 0.20)))
     if alpha < 255:
-        alpha_layer = layer.getchannel("A").point(lambda value: value * alpha // 255)
-        layer.putalpha(alpha_layer)
+        layer_alpha = layer.getchannel("A").point(
+            lambda value: value * alpha // 255
+        )
+        layer.putalpha(layer_alpha)
 
     moved = Image.new("RGBA", base.size, (0, 0, 0, 0))
     moved.alpha_composite(layer, (0, offset))
@@ -638,13 +788,8 @@ def build_top5_card_preview(
     total_stories: int = 5,
     source_label: str | None = None,
 ) -> bytes:
-    """Render the selected Top-5 visual as the final 9:16 card treatment."""
+    """Render the selected Top-5 image with adaptive editorial typography."""
     base = _fit_visual_to_frame(source_image)
-    preview_subtitles = {
-        "schema": "final-shorts.subtitles.v1",
-        "language": "english",
-        "cues": [],
-    }
     _draw_top5_card(
         base,
         {
