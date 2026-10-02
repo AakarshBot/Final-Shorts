@@ -1,3 +1,4 @@
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 
 import topic_fetcher
@@ -86,7 +87,7 @@ def test_fuzzy_paraphrases_of_the_same_story_are_collapsed():
     assert len(chosen) == 2
 
 
-def test_same_player_different_events_are_not_collapsed():
+def test_same_player_different_events_share_one_tile():
     rows = [
         make_topic(
             "Shubman Gill ruled out after injury",
@@ -104,11 +105,58 @@ def test_same_player_different_events_are_not_collapsed():
     ]
     chosen = topic_fetcher._select(
         rows,
-        3,
+        2,
         set(),
         profile="cricket_india_asia",
     )
-    assert len(chosen) == 3
+    assert len(chosen) == 2
+    gill = next(item for item in chosen if item.group_key == "player:shubman gill")
+    assert [item.title for item in gill.group_members] == [
+        "Shubman Gill ruled out after injury",
+        "Shubman Gill signs new franchise endorsement deal",
+    ]
+
+
+def test_country_names_do_not_create_shared_player_tiles():
+    rows = [
+        make_topic("India announces a new cricket decision", url="https://example.com/india"),
+        make_topic("India confirms another cricket decision", url="https://example.com/india-2"),
+    ]
+    chosen = topic_fetcher._select(
+        rows,
+        2,
+        set(),
+        profile="cricket_india_asia",
+    )
+    assert len(chosen) == 2
+    assert all(not item.group_key.startswith("player:") for item in chosen)
+
+
+def test_existing_player_tile_blocks_new_headline_from_same_player():
+    existing = make_topic(
+        "Shubman Gill ruled out after injury",
+        url="https://example.com/existing",
+    )
+    existing = replace(existing, group_key="player:shubman gill", group_members=(existing,))
+    rows = [
+        make_topic(
+            "Shubman Gill signs new franchise endorsement deal",
+            url="https://example.com/new-gill",
+        ),
+        make_topic(
+            "Rohit Sharma reveals new training plan",
+            url="https://example.com/rohit",
+        ),
+    ]
+    chosen = topic_fetcher._select(
+        rows,
+        2,
+        set(),
+        existing=[existing],
+        profile="cricket_india_asia",
+    )
+    assert len(chosen) == 1
+    assert chosen[0].group_key == "player:rohit sharma"
 
 
 def test_different_boilerplate_stories_are_not_collapsed():
