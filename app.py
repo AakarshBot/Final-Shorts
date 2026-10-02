@@ -1035,7 +1035,7 @@ def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, st
 
 
 def _render_stats_card(live: bool = False, slide_count: int = 0):
-    from stats_card import StatsCardError, build_stats_card
+    from stats_card import StatsCardError, build_stats_card, build_stats_card_preview
 
     state_key = "live_stats_card_result" if live else "stats_card_result"
     selection_key = (
@@ -1136,14 +1136,19 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
         return
 
     st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">SELECTED IMAGE</div>'
-        '<div class="section-title">This image will sit above the stats</div></div></div>',
+        '<div class="section-head"><div><div class="eyebrow">CARD PREVIEW</div>'
+        '<div class="section-title">Selected image + empty stats panel</div></div>'
+        '<div class="section-count">1080 × 1920 · image area 1080 × 860</div></div>',
         unsafe_allow_html=True,
     )
+    preview_bytes = build_stats_card_preview(selected["bytes"])
+    st.image(preview_bytes, width=360)
     selected_image = _asset_to_image(selected.get("bytes"))
     if selected_image is not None:
-        selected_image.thumbnail((420, 420), Image.Resampling.LANCZOS)
-        st.image(selected_image, width=320)
+        st.caption(
+            f'Manual QC selection · source image {selected_image.width} × {selected_image.height}px · '
+            'card image area 1080 × 860px'
+        )
     st.caption(f'{selected.get("source") or "Existing visual"} · {selected.get("label") or ""}')
 
     if build:
