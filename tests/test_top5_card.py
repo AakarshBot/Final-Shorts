@@ -85,3 +85,58 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
         output,
     )
     assert seen and seen[0]["story_number"] == 2
+
+
+def test_top5_layout_is_driven_by_text_length():
+    short = renderer._top5_fit_layout(
+        "India make a major change",
+        "The decision follows the latest selection update.",
+    )
+    long = renderer._top5_fit_layout(
+        "India reshuffles the squad after a late selection change before the next major series",
+        "The move changes the lineup and follows the latest selection update. "
+        "Officials said the decision was made after reviewing the latest developments "
+        "and the expected requirements for the next series.",
+    )
+
+    assert short["headline_font"].size >= long["headline_font"].size
+    assert short["body_font"].size >= long["body_font"].size
+    assert long["height"] >= short["height"]
+
+
+def test_top5_opener_uses_same_adaptive_treatment_without_body():
+    source = BytesIO()
+    Image.new("RGB", (900, 1600), "white").save(source, format="JPEG")
+
+    preview = renderer.build_top5_card_preview(
+        source.getvalue(),
+        "Five cricket stories shaping today",
+        story_number=0,
+    )
+    image = Image.open(BytesIO(preview))
+
+    assert image.size == (1080, 1920)
+    assert renderer._top5_fit_layout(
+        "Five cricket stories shaping today",
+        "",
+    )["body_font"] is None
+
+
+def test_top5_scrim_is_gradient_not_opaque_panel():
+    source = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(source, format="PNG")
+
+    preview = renderer.build_top5_card_preview(
+        source.getvalue(),
+        "A major cricket development",
+        "A concise factual summary sits below the headline.",
+        story_number=2,
+    )
+    image = Image.open(BytesIO(preview)).convert("RGB")
+
+    top_pixel = image.getpixel((20, 700))
+    lower_pixel = image.getpixel((20, 1650))
+
+    assert top_pixel == (255, 255, 255)
+    assert lower_pixel[0] < 255
+    assert lower_pixel[0] > 40
