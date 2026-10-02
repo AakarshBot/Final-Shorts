@@ -197,12 +197,16 @@ def _parse_query(query: str) -> StatsIntent:
 
 
 def _query(sql: str) -> list[dict[str, Any]]:
-    response = requests.post(
-        API_URL,
-        json={"sql": sql, "format": "json"},
-        headers={"Content-Type": "application/json", "User-Agent": "Final-Shorts/1.0"},
-        timeout=REQUEST_TIMEOUT,
-    )
+    try:
+        response = requests.post(
+            API_URL,
+            json={"sql": sql, "format": "json"},
+            headers={"Content-Type": "application/json", "User-Agent": "Final-Shorts/1.0"},
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        raise StatsCardError("Stats database could not be reached. Try again.") from exc
+
     if response.status_code != 200:
         detail = response.text.strip()
         raise StatsCardError(
@@ -464,7 +468,7 @@ def _h2h_stats(intent: StatsIntent) -> dict[str, Any]:
         else:
             other += 1
 
-    latest = rows[0].get("start_date")
+    dates = [parsed for row in rows if (parsed := _date_value(row.get("start_date"))) is not None]
     return {
         "team1": intent.team1,
         "team2": intent.team2,
@@ -474,7 +478,8 @@ def _h2h_stats(intent: StatsIntent) -> dict[str, Any]:
         "wins1": wins1,
         "wins2": wins2,
         "other": other,
-        "latest_date": _date_value(latest),
+        "first_date": min(dates) if dates else None,
+        "latest_date": max(dates) if dates else None,
     }
 
 
@@ -721,7 +726,7 @@ def _h2h_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     _draw_image_header(base, source_image, f"{stats['team1']} vs {stats['team2']}")
     context = [
         f"{stats['format']} · HEAD-TO-HEAD · {stats['matches']} matches",
-        f"Latest match: {_date_label(stats['latest_date'])}",
+        f"Date range: {_date_label(stats['first_date'])} – {_date_label(stats['latest_date'])}",
     ]
     y = _draw_header(
         base,
