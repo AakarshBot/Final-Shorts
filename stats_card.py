@@ -522,6 +522,19 @@ def _fit_cover(image: Image.Image, size: tuple[int, int]) -> Image.Image:
     return source.resize(size, Image.Resampling.LANCZOS)
 
 
+def build_stats_card_preview(source_image: bytes | bytearray | Image.Image) -> bytes:
+    """Render the selected Manual QC image in its final card frame with an empty stats panel."""
+    base = Image.new("RGB", (WIDTH, HEIGHT), WHITE)
+    image = _fit_cover(_asset_image(source_image), (WIDTH, IMAGE_HEIGHT))
+    base.paste(image, (0, 0))
+    draw = ImageDraw.Draw(base)
+    draw.rectangle((0, PANEL_TOP, WIDTH, PANEL_BOTTOM), fill=(246, 247, 249))
+
+    buffer = BytesIO()
+    base.save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
 def _wrap_words(
     draw: ImageDraw.ImageDraw,
     text: str,
