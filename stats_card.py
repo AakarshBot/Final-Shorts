@@ -142,11 +142,10 @@ def _parse_query(query: str) -> StatsIntent:
 
     format_name = _format_from_text(clean) or "odi"
     gender = _gender_from_text(clean)
-    lower = clean.casefold()
 
     h2h = re.match(
-        r"^(.+?)\\s+(?:vs\\.?|v\\.?|versus)\\s+(.+?)\\s+"
-        r"(?:h2h|head[- ]to[- ]head)(?:\\s+stats?)?\\s*$",
+        r"^(.+?)\s+(?:vs\.?|v\.?|versus)\s+(.+?)\s+"
+        r"(?:h2h|head[- ]to[- ]head)(?:\s+stats?)?\s*$",
         clean,
         flags=re.IGNORECASE,
     )
@@ -164,8 +163,8 @@ def _parse_query(query: str) -> StatsIntent:
         )
 
     last_n = re.search(
-        r"^(.+?)(?:['’]s)?\\s+(?:last|latest)\\s+(\\d{1,2})\\s+"
-        r"(?:completed\\s+)?innings?(?:\\s+scores?)?(?:\\s+stats?)?\\s*$",
+        r"^(.+?)(?:['’]s)?\s+(?:last|latest)\s+(\d{1,2})\s+"
+        r"(?:completed\s+)?innings?(?:\s+scores?)?(?:\s+stats?)?\s*$",
         clean,
         flags=re.IGNORECASE,
     )
