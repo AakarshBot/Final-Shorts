@@ -695,7 +695,7 @@ def render_frame(
     )
 
     if top5_card is not None:
-        _draw_top5_card(frame, top5_card, t)
+        _draw_top5_card(frame, top5_card)
     else:
         if headline_enabled and t < HEADLINE_SECONDS:
             _draw_headline(
