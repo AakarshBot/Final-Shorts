@@ -606,15 +606,17 @@ def _draw_metric_tiles(
     metrics: list[tuple[str, str]],
     top: int,
     columns: int = 3,
-    tile_height: int = 142,
+    tile_height: int = 132,
 ) -> int:
     gap = 18
     available = WIDTH - (MARGIN * 2)
     tile_width = (available - gap * (columns - 1)) // columns
-    y = top
-    rows = (len(metrics) + columns - 1) // columns
-    for row_index in range(rows):
+    label_font = _font(21)
+    value_font = _font(50)
+
+    for row_index in range((len(metrics) + columns - 1) // columns):
         row = metrics[row_index * columns:(row_index + 1) * columns]
+        y = top + row_index * (tile_height + gap)
         for col_index, (label, value) in enumerate(row):
             x = MARGIN + col_index * (tile_width + gap)
             draw.rounded_rectangle(
@@ -624,20 +626,37 @@ def _draw_metric_tiles(
                 outline=LINE,
                 width=2,
             )
-            label_font = _font(24)
-            value_font = _font(54)
-            draw.text((x + 22, y + 18), label.upper(), font=label_font, fill=MUTED)
-            value_box = draw.textbbox((0, 0), str(value), font=value_font)
-            value_width = value_box[2] - value_box[0]
+            label_lines = _wrap_words(draw, str(label).upper(), label_font, tile_width - 36)
+            label_y = y + 16
+            for label_line in label_lines[:2]:
+                box = draw.textbbox((0, 0), label_line, font=label_font)
+                draw.text(
+                    (x + (tile_width - (box[2] - box[0])) / 2, label_y),
+                    label_line,
+                    font=label_font,
+                    fill=MUTED,
+                )
+                label_y += box[3] - box[1] + 2
+
+            value_text = str(value)
+            value_font_for_tile = value_font
+            while value_font_for_tile.size > 34:
+                box = draw.textbbox((0, 0), value_text, font=value_font_for_tile)
+                if box[2] - box[0] <= tile_width - 32:
+                    break
+                value_font_for_tile = _font(value_font_for_tile.size - 2)
+            box = draw.textbbox((0, 0), value_text, font=value_font_for_tile)
+            value_width = box[2] - box[0]
+            value_height = box[3] - box[1]
             draw.text(
-                (x + tile_width - value_width - 22, y + 58),
-                str(value),
-                font=value_font,
+                (x + (tile_width - value_width) / 2, y + tile_height - value_height - 16),
+                value_text,
+                font=value_font_for_tile,
                 fill=INK,
             )
-        y += tile_height + gap
-    return y
 
+    rows = (len(metrics) + columns - 1) // columns
+    return top + rows * tile_height + max(0, rows - 1) * gap
 
 def _draw_header(
     image: Image.Image,
@@ -646,24 +665,30 @@ def _draw_header(
 ) -> int:
     draw = ImageDraw.Draw(image)
     draw.rectangle((0, PANEL_TOP, WIDTH, PANEL_BOTTOM), fill=(246, 247, 249))
-    title_font, lines = _fit_text(
+
+    eyebrow_text = str(context[0] or "STATS") if context else "STATS"
+    eyebrow_font = _font(22)
+    draw.text((MARGIN, PANEL_TOP + 38), eyebrow_text.upper(), font=eyebrow_font, fill=BRAND_BLUE)
+
+    title_font, title_lines = _fit_text(
         draw,
         title.upper(),
         WIDTH - (MARGIN * 2),
-        82,
-        min_size=52,
+        70,
+        min_size=46,
         max_lines=2,
     )
-    y = PANEL_TOP + 48
-    y = _draw_centered_lines(draw, lines, title_font, WIDTH // 2, y, INK, gap=6)
-    y += 8
-    for line in context:
-        context_font = _font(27, bold=False)
-        wrapped = _wrap_words(draw, line, context_font, WIDTH - (MARGIN * 2))
-        y = _draw_centered_lines(draw, wrapped, context_font, WIDTH // 2, y, MUTED, gap=2)
-        y += 2
-    return y
+    y = PANEL_TOP + 80
+    y = _draw_centered_lines(draw, title_lines, title_font, WIDTH // 2, y, INK, gap=4)
 
+    body_font = _font(23, bold=False)
+    # Keep the metadata deliberately compact: two lines maximum, always above the divider.
+    for line in context[1:3]:
+        wrapped = _wrap_words(draw, line, body_font, WIDTH - (MARGIN * 2))
+        y = _draw_centered_lines(draw, wrapped, body_font, WIDTH // 2, y + 5, MUTED, gap=2)
+
+    draw.line((MARGIN, y + 14, WIDTH - MARGIN, y + 14), fill=LINE, width=2)
+    return y + 30
 
 def _draw_attribution(draw: ImageDraw.ImageDraw) -> None:
     text = f"Source: {SOURCE_NAME} · {SOURCE_LICENSE}"
@@ -800,9 +825,11 @@ def _last_n_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     gap = 18
     column_width = (WIDTH - (MARGIN * 2) - gap) // 2
     rows_per_column = max(1, (len(stats["innings"]) + 1) // 2)
-    row_height = 55
-    body_font = _font(25)
-    score_font = _font(30)
+    dense = len(stats["innings"]) > 10
+    row_height = 43 if dense else 52
+    row_gap = 3 if dense else 5
+    body_font = _font(22 if dense else 25)
+    score_font = _font(27 if dense else 30)
     table_rows_top = header_y + 26
 
     for column in range(2):
@@ -811,7 +838,7 @@ def _last_n_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
         ]
         x = MARGIN + column * (column_width + gap)
         for row_index, row in enumerate(column_rows):
-            row_y = table_rows_top + row_index * (row_height + 8)
+            row_y = table_rows_top + row_index * (row_height + row_gap)
             draw.rounded_rectangle(
                 (x, row_y, x + column_width, row_y + row_height),
                 radius=12,
@@ -832,12 +859,12 @@ def _last_n_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
             left_width = column_width - score_width - 42
             left_text = f"{_date_label(row.get('date'))} · {opponent}"
             left_font = body_font
-            while left_font.size > 17:
+            while left_font.size > (16 if dense else 17):
                 box = draw.textbbox((0, 0), left_text, font=left_font)
                 if box[2] - box[0] <= left_width:
                     break
                 left_font = _font(left_font.size - 1)
-            draw.text((x + 14, row_y + 13), left_text, font=left_font, fill=INK)
+            draw.text((x + 14, row_y + 9), left_text, font=left_font, fill=INK)
 
     note = "Completed batting innings only · * = not out"
     draw.text((MARGIN, HEIGHT - 76), note, font=_font(18, bold=False), fill=MUTED)
