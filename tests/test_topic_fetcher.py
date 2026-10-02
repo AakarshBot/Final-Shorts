@@ -338,10 +338,11 @@ def test_top5_fetcher_uses_smaller_query_plan(monkeypatch):
     monkeypatch.setattr(
         topic_fetcher,
         "_fetch_google",
-        lambda query: queries.append(query) or rows,
+        lambda query, timeout: queries.append((query, timeout)) or rows,
     )
     result = topic_fetcher.fetch_top5_topics(limit=20)
-    assert len(queries) == 6
+    assert len(queries) == 2
+    assert all(timeout == topic_fetcher.TOP5_TIMEOUT for _, timeout in queries)
     assert len(result) == 20
 
 
