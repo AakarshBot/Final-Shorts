@@ -612,6 +612,7 @@ def fetch_topics(
         for topic in existing
         for member in (topic.group_members or (topic,))
     }
+    selection_existing = existing if more and not keyword else []
 
     if keyword:
         clean_keyword = _clean(keyword).replace('"', " ")
@@ -638,7 +639,7 @@ def fetch_topics(
                 continue
 
     prepared = _prepare(rows, seen_urls, profile=profile)
-    chosen = _select(prepared, limit, seen_urls, existing=existing, profile=profile)
+    chosen = _select(prepared, limit, seen_urls, existing=selection_existing, profile=profile)
 
     if len(chosen) < limit and profile != "niche_sports":
         try:
@@ -665,7 +666,7 @@ def fetch_topics(
                     fallback_rows,
                     limit - len(chosen),
                     seen_urls | {_canonical_url(topic.url) for topic in chosen},
-                    existing=existing + chosen,
+                    existing=selection_existing + chosen,
                     profile=profile,
                 )
             )
