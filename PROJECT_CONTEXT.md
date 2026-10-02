@@ -610,6 +610,25 @@ Cleanup baseline:
 Status: **Approved / cleaned / entity tiles implemented / keyword tile implemented.**
 
 
+### Cricket Pipeline Checkpoint — 6/10
+
+Current overall cricket-line checkpoint: **6/10**.
+
+This is the baseline for future Cricket pipeline changes. The current factory functionality is usable, but the latest Stats Card work exposed layout problems that are intentionally deferred.
+
+Stats Card checkpoint:
+- Player resolution has been hardened around the Cricsheet people registry and name variants.
+- Stats Card crop selection now uses the existing Manual QC image pool and a dedicated 9:16 card-image crop.
+- The completed card still has **text-overlap issues** in the lower information panel.
+- A substantial portion of the lower half of the 1080 × 1920 card remains unused.
+- Future Stats Card work should redesign the information hierarchy and space allocation intelligently rather than simply shrinking fonts or adding more text.
+- Do not treat the current Stats Card visual layout as final/approved.
+- Preserve the existing player-resolution and renderer/subtitle handoffs when revisiting the card layout unless a concrete regression requires otherwise.
+
+Checkpoint rule:
+- Use **Cricket line = 6/10** as the starting quality baseline for future Cricket pipeline improvements.
+- Do not reopen already-approved Cricket components without a concrete regression or a clearly scoped improvement.
+
 ### Function 02 — Cricket Scriptwriter
 
 The Cricket Scriptwriter is a direct four-slide writer with bounded research, one primary generation call and one hidden recovery rewrite.
