@@ -257,18 +257,18 @@ Top-5 Visuals:
 - Existing 9:16 crop workflow remains in place.
 
 Top-5 visual treatment:
-- The approved visual reference is the existing Cricket Stats Card language: full-width image at the top of the 1080 × 1920 frame, followed by a light information panel below.
-- Top-5 does **not** use an inset/rounded dark card. The selected image remains the hero and is never covered by a surrounding card.
-- The lower panel uses the same light neutral treatment as the Cricket Stats Card, with strong editorial headline typography and readable body copy.
-- Slide 1 is the package opener: the selected image is followed by the package headline only. It has no story body, progress indicator, fact kicker or extra UI copy.
-- Slides 2–6 show the spoken story headline followed by two concise factual silent sentences in the lower panel.
-- Body layout is dynamic: font size, line wrapping and vertical spacing respond to the actual amount of body copy and the remaining panel space. It is top-anchored under the headline rather than floating in the middle of the panel.
-- The Top-5 Test Visuals stage remains a standalone visual sandbox: search Commons, choose an image, crop/reposition, type a headline/body and render one slide without Scriptwriter or Audio approval.
-- Image-pool, selected-image and rendered-slide previews are intentionally shown at the same normal preview size in Test.
-- Top-5 render preview is currently static. No YouTube-like hearts, comments, shares, taps, interaction animations, progress sliders, or other fake platform UI are part of the factory.
-- The existing 9:16 crop workflow remains in place.
+- The approved visual reference is the existing Cricket Stats Card language: a full 1080 × 1920 frame with the image remaining the hero and a light information treatment below/over it.
+- The selected Top-5 visual is a manually cropped 9:16 image. The renderer does not crop it again; the existing Top-5 crop workflow remains responsible for framing.
+- The lower information panel is content-sized. It grows only as much as the headline and two factual body sentences require, so short copy does not leave a huge empty card while longer copy gets enough room.
+- The two-sentence story body is dynamically fitted: width, wrapping, font size and vertical spacing respond to the actual copy.
+- Important headline/body content is kept inside a conservative Shorts-safe content column, with reserved space on the right and bottom because YouTube's visual guides show that the like/comment/description UI can cover those regions and that the exact safe area varies by device. citeturn912592search0turn912592search2
+- The image remains full-frame 9:16 and transitions into the light information area with a smooth transparent-to-opaque white fade whose endpoint aligns with the headline.
+- Slide 1 is the package opener: image + package headline only. It has no body, progress indicator, fact kicker or fake platform UI.
+- Slides 2–6 show the spoken story headline followed by the Scriptwriter's two concise factual silent sentences.
+- Test Visuals is a standalone visual sandbox: search Commons, choose an image, use the existing 9:16 crop/reposition workflow, edit headline/body and render one slide without Scriptwriter or Audio approval.
+- Image-pool, selected-image and rendered-slide previews use the same normal 300 × 533 preview size.
+- There are no YouTube-like heart, comment, share or tap animations in the factory.
 - Approved Top-5 visual handoffs carry the selected image, headline and silent body into the production renderer.
-- The design is informed by current Shorts constraints: YouTube provides visual guides because platform controls can overlap the content area, so important editorial content stays clear of those regions.
 
 Top-5 Visual status:
 - **Pending user approval.**
