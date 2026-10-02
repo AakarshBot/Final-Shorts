@@ -4892,9 +4892,9 @@ elif st.session_state.app_mode == "test":
                     )
                     render_preview_cols = st.columns(3, gap="medium")
                     with render_preview_cols[0]:
-                        st.image(preview, width=300)
+                        st.image(preview, width=420)
                     st.caption(
-                        "Static render preview. It uses the selected 9:16 crop and the same 1080 × 1920 frame as production."
+                        "Static 1080 × 1920 render preview. The selected 9:16 crop is used as-is; the renderer adds only the editorial text treatment."
                     )
         else:
             stage_labels = {
