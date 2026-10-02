@@ -4695,25 +4695,6 @@ elif st.session_state.app_mode == "test":
             ) or "Slide 1 · Package opener"
             st.session_state.test_top5_visual_slide_type = slide_type
 
-            animation_options = {
-                "Heart": "heart",
-                "Comment": "comment",
-                "Share": "share",
-                "Tap": "tap",
-            }
-            animation_label = st.pills(
-                "Micro interaction",
-                list(animation_options),
-                default=st.session_state.get(
-                    "test_top5_standalone_animation",
-                    "Heart",
-                ),
-                key="test-top5-standalone-animation",
-                label_visibility="collapsed",
-            ) or "Heart"
-            interaction_animation = animation_options[animation_label]
-            st.session_state.test_top5_standalone_animation = animation_label
-
             headline = st.text_area(
                 "Headline",
                 value=st.session_state.get("test_top5_standalone_headline", ""),
@@ -4769,13 +4750,11 @@ elif st.session_state.app_mode == "test":
                     ("test_top5_standalone_query", ""),
                     ("test_top5_standalone_headline", ""),
                     ("test_top5_standalone_body", ""),
-                    ("test_top5_standalone_animation", "Heart"),
                 ):
                     st.session_state[key] = value
                 st.session_state.test_top5_standalone_result = None
                 st.session_state.test_top5_standalone_selected = None
                 st.session_state.test_top5_standalone_preview = None
-                st.session_state.test_top5_standalone_motion_preview = None
                 st.session_state.test_top5_visual_crops.pop("top5-standalone", None)
                 st.rerun()
 
@@ -4807,7 +4786,9 @@ elif st.session_state.app_mode == "test":
             else:
                 assets = list(result.get("assets") or [])
                 if result:
-                    st.caption(f'{len(assets)} Commons images returned for “{result.get("query") or ""}”.')
+                    st.caption(
+                        f'{len(assets)} Commons images returned for “{result.get("query") or ""}”.'
+                    )
 
                 if assets:
                     for start_index in range(0, len(assets), 3):
@@ -4817,7 +4798,11 @@ elif st.session_state.app_mode == "test":
                         ):
                             index = start_index + offset
                             with col:
-                                st.image(_top5_fit_preview(asset.get("bytes")) or asset.get("bytes"), width="stretch")
+                                preview = _top5_fit_preview(asset.get("bytes"))
+                                if preview is not None:
+                                    st.image(preview, width=300)
+                                else:
+                                    st.image(asset.get("bytes"), width=300)
                                 st.caption(str(asset.get("title") or "Commons image"))
                                 if st.button(
                                     "Use this image",
@@ -4840,7 +4825,13 @@ elif st.session_state.app_mode == "test":
 
                 st.divider()
                 st.markdown('<div class="mini-label">SELECTED IMAGE</div>', unsafe_allow_html=True)
-                st.image(_top5_fit_preview(working_bytes) or working_bytes, width="stretch")
+                selected_preview = _top5_fit_preview(working_bytes)
+                preview_cols = st.columns(3, gap="medium")
+                with preview_cols[0]:
+                    if selected_preview is not None:
+                        st.image(selected_preview, width=300)
+                    else:
+                        st.image(working_bytes, width=300)
 
                 action_cols = st.columns([1, 1], gap="small")
                 with action_cols[0]:
@@ -4862,45 +4853,34 @@ elif st.session_state.app_mode == "test":
                     render = st.button(
                         "Render slide preview",
                         type="primary",
-                        width="content",
+                        width="stretch",
                         key="test-top5-standalone-render",
                     )
 
                 if render:
-                    from renderer import (
-                        build_top5_card_motion_preview,
-                        build_top5_card_preview,
-                    )
+                    from renderer import build_top5_card_preview
+
                     story_number = 0 if slide_type.startswith("Slide 1") else 1
-                    preview = build_top5_card_preview(
+                    st.session_state.test_top5_standalone_preview = build_top5_card_preview(
                         working_bytes,
                         headline,
                         body,
                         story_number=story_number,
                         total_stories=5,
                         source_label="Commons",
-                        interaction_animation=interaction_animation,
                     )
-                    motion_preview = build_top5_card_motion_preview(
-                        working_bytes,
-                        headline,
-                        body,
-                        story_number=story_number,
-                        total_stories=5,
-                        interaction_animation=interaction_animation,
-                    )
-                    st.session_state.test_top5_standalone_preview = preview
-                    st.session_state.test_top5_standalone_motion_preview = motion_preview
 
                 preview = st.session_state.get("test_top5_standalone_preview")
-                motion_preview = st.session_state.get("test_top5_standalone_motion_preview")
                 if preview:
-                    st.markdown('<div class="mini-label" style="margin-top:1rem;">RENDERED SLIDE</div>', unsafe_allow_html=True)
-                    st.image(preview, width="stretch")
-                    if motion_preview:
-                        st.video(motion_preview)
+                    st.markdown(
+                        '<div class="mini-label" style="margin-top:1rem;">RENDERED SLIDE</div>',
+                        unsafe_allow_html=True,
+                    )
+                    render_preview_cols = st.columns(3, gap="medium")
+                    with render_preview_cols[0]:
+                        st.image(preview, width=300)
                     st.caption(
-                        "Still preview above; motion preview below. The source image remains unchanged."
+                        "Static render preview. It uses the selected 9:16 crop and the same 1080 × 1920 frame as production."
                     )
         else:
             stage_labels = {
