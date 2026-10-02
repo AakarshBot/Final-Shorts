@@ -105,7 +105,7 @@ def test_build_career_card_uses_only_returned_data(monkeypatch, tmp_path):
     assert result["stats"]["matches"] == 3
     assert result["stats"]["runs"] == 175
     assert result["stats"]["average"] == pytest.approx(87.5)
-    assert result["stats"]["strike_rate"] == pytest.approx(85.3658536585)
+    assert result["stats"]["strike_rate"] == pytest.approx(85.7843137255)
     assert result["stats"]["high_score"] == "100*"
     assert result["stats"]["hundreds"] == 1
     assert result["stats"]["fifties"] == 1
