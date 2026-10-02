@@ -760,9 +760,8 @@ def build_top5_card_motion_preview(
     body: str = "",
     story_number: int = 0,
     total_stories: int = 5,
-    source_label: str | None = None,
     interaction_animation: str | None = None,
-) -> bytes:
+) -> Path:
     """Render one silent Top-5 slide so the UI-inspired motion can be reviewed."""
     base = _fit_visual_to_frame(source_image)
     card = {
