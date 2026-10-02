@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import csv
 from dataclasses import dataclass
 from datetime import date, datetime
+from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 import re
+import time
+import unicodedata
 from typing import Any
+
+from rapidfuzz import fuzz, process
 
 import requests
 from PIL import Image, ImageDraw, ImageFont
@@ -29,6 +35,11 @@ LINE = (218, 220, 224)
 ACCENT = (255, 205, 66)
 BRAND_BLUE = (35, 105, 255)
 REQUEST_TIMEOUT = 28
+CRICSHEET_PEOPLE_URL = "https://cricsheet.org/register/people.csv"
+CRICSHEET_NAMES_URL = "https://cricsheet.org/register/names.csv"
+REGISTRY_TIMEOUT = 8
+REGISTRY_CACHE_SECONDS = 6 * 60 * 60
+PLAYER_SEARCH_LIMIT = 50
 
 
 class StatsCardError(ValueError):
@@ -249,61 +260,349 @@ def _query(sql: str) -> list[dict[str, Any]]:
     raise StatsCardError("Stats database returned rows without column names.")
 
 
-def _resolve_player(intent: StatsIntent) -> dict[str, str]:
+
+def _name_key(value: str) -> str:
+    """Normalize a user/registry name for safe comparison."""
+    text = unicodedata.normalize("NFKD", _normalise(value)).casefold()
+    text = "".join(char for char in text if not unicodedata.combining(char))
+    return " ".join(
+        "".join(char if char.isalnum() else " " for char in text).split()
+    )
+
+
+def _initial_name_keys(value: str) -> set[str]:
+    tokens = _name_key(value).split()
+    if len(tokens) < 2:
+        return set()
+
+    first_initial = tokens[0][0]
+    keys = {f"{first_initial} {tokens[-1]}"}
+    if len(tokens) >= 3:
+        keys.add(f"{first_initial} {' '.join(tokens[-2:])}")
+    return keys
+
+
+def _registry_cache_bucket() -> int:
+    return int(time.time() // REGISTRY_CACHE_SECONDS)
+
+
+@lru_cache(maxsize=4)
+def _cricsheet_registry(
+    cache_bucket: int,
+) -> tuple[dict[str, dict[str, Any]], dict[str, set[str]]]:
+    """Load Cricsheet's stable people IDs and published name variants."""
+    people: dict[str, dict[str, Any]] = {}
+    aliases: dict[str, set[str]] = {}
+
+    people_response = requests.get(
+        CRICSHEET_PEOPLE_URL,
+        headers={"User-Agent": "Final-Shorts/1.0"},
+        timeout=REGISTRY_TIMEOUT,
+    )
+    people_response.raise_for_status()
+    for row in csv.DictReader(
+        people_response.text.lstrip("\ufeff").splitlines()
+    ):
+        identifier = _normalise(row.get("identifier") or "")
+        if not identifier:
+            continue
+        people[identifier] = {
+            "identifier": identifier,
+            "name": _normalise(row.get("name") or ""),
+            "unique_name": _normalise(row.get("unique_name") or ""),
+            "aliases": set(),
+        }
+
+    names_response = requests.get(
+        CRICSHEET_NAMES_URL,
+        headers={"User-Agent": "Final-Shorts/1.0"},
+        timeout=REGISTRY_TIMEOUT,
+    )
+    names_response.raise_for_status()
+    for row in csv.DictReader(
+        names_response.text.lstrip("\ufeff").splitlines()
+    ):
+        identifier = _normalise(row.get("identifier") or "")
+        alias = _normalise(row.get("name") or "")
+        if identifier not in people or not alias:
+            continue
+        people[identifier]["aliases"].add(alias)
+        key = _name_key(alias)
+        if key:
+            aliases.setdefault(key, set()).add(identifier)
+
+    for identifier, person in people.items():
+        for name in (person["name"], person["unique_name"]):
+            if not name:
+                continue
+            person["aliases"].add(name)
+            key = _name_key(name)
+            if key:
+                aliases.setdefault(key, set()).add(identifier)
+
+    return people, aliases
+
+
+def _candidate_from_registry(
+    people: dict[str, dict[str, Any]],
+    identifier: str,
+) -> dict[str, Any] | None:
+    person = people.get(identifier)
+    if not person:
+        return None
+
+    unique_name = _normalise(person.get("unique_name") or "")
+    if not unique_name:
+        return None
+
+    return {
+        "identifier": identifier,
+        "name": _normalise(person.get("name") or unique_name),
+        "unique_name": unique_name,
+        "aliases": {
+            _normalise(alias)
+            for alias in (person.get("aliases") or ())
+            if _normalise(alias)
+        },
+    }
+
+
+def _fallback_people_candidates(intent: StatsIntent) -> list[dict[str, Any]]:
+    """Use TigZig's player registry if Cricsheet's registry is unavailable."""
     needle = _sql_text(intent.player)
+    tokens = _name_key(intent.player).split()
+    conditions = [
+        f"lower(name) = lower('{needle}')",
+        f"lower(unique_name) = lower('{needle}')",
+    ]
+
+    if len(tokens) == 1:
+        conditions.extend(
+            [
+                f"lower(name) LIKE lower('%{needle}%')",
+                f"lower(unique_name) LIKE lower('%{needle}%')",
+            ]
+        )
+    elif len(tokens) >= 2:
+        initial = _sql_text(tokens[0][0])
+        surname = _sql_text(tokens[-1])
+        conditions.extend(
+            [
+                f"lower(name) LIKE lower('{initial}% {surname}')",
+                f"lower(unique_name) LIKE lower('{initial}% {surname}')",
+                f"lower(name) LIKE lower('% {surname}')",
+                f"lower(unique_name) LIKE lower('% {surname}')",
+            ]
+        )
+
     rows = _query(
         "SELECT identifier, name, unique_name "
-        "FROM people "
-        f"WHERE lower(name) = lower('{needle}') "
-        f"OR lower(unique_name) = lower('{needle}') "
-        f"OR lower(name) LIKE lower('%{needle}%') "
-        f"OR lower(unique_name) LIKE lower('%{needle}%') "
-        "ORDER BY CASE "
-        f"WHEN lower(name) = lower('{needle}') THEN 0 "
-        f"WHEN lower(unique_name) = lower('{needle}') THEN 1 ELSE 2 END, "
-        "name "
-        "LIMIT 10"
+        "FROM people WHERE "
+        + " OR ".join(conditions)
+        + f" ORDER BY name LIMIT {PLAYER_SEARCH_LIMIT}"
     )
-    if not rows:
-        raise StatsCardError(f"Could not find player '{intent.player}' in the cricket database.")
+
+    candidates: list[dict[str, Any]] = []
+    for row in rows:
+        name = _normalise(row.get("name") or "")
+        unique_name = _normalise(row.get("unique_name") or "")
+        identifier = _normalise(row.get("identifier") or "")
+        if not identifier or not unique_name:
+            continue
+        candidates.append(
+            {
+                "identifier": identifier,
+                "name": name or unique_name,
+                "unique_name": unique_name,
+                "aliases": {value for value in (name, unique_name) if value},
+            }
+        )
+    return candidates
+
+
+def _filter_candidates_by_format(
+    candidates: list[dict[str, Any]],
+    intent: StatsIntent,
+) -> list[dict[str, Any]]:
+    table = FORMAT_TABLES.get((intent.format_name, intent.gender))
+    if not table:
+        return []
+
+    names = list(
+        dict.fromkeys(
+            _normalise(candidate.get("unique_name") or "")
+            for candidate in candidates
+            if _normalise(candidate.get("unique_name") or "")
+        )
+    )
+    if not names:
+        return []
+
+    literals = ", ".join(f"lower('{_sql_text(name)}')" for name in names)
+    rows = _query(
+        f"SELECT lower(striker) AS striker FROM {table} "
+        f"WHERE lower(striker) IN ({literals}) "
+        "GROUP BY lower(striker)"
+    )
+    present = {
+        _normalise(row.get("striker") or "").casefold()
+        for row in rows
+    }
+    return [
+        candidate
+        for candidate in candidates
+        if _normalise(candidate.get("unique_name") or "").casefold() in present
+    ]
+
+
+def _fuzzy_registry_candidates(intent: StatsIntent) -> list[dict[str, Any]]:
+    try:
+        people, aliases = _cricsheet_registry(_registry_cache_bucket())
+    except (requests.RequestException, OSError, ValueError):
+        return []
+
+    query_key = _name_key(intent.player)
+    if not query_key:
+        return []
+
+    matches = process.extract(
+        query_key,
+        list(aliases),
+        scorer=fuzz.WRatio,
+        limit=8,
+        score_cutoff=90,
+    )
+    if not matches:
+        return []
+
+    best_score = float(matches[0][1])
+    identifiers = {
+        identifier
+        for alias_key, score, _ in matches
+        if best_score - float(score) < 4
+        for identifier in aliases.get(alias_key, set())
+    }
+    if len(identifiers) != 1:
+        return []
+
+    candidate = _candidate_from_registry(people, next(iter(identifiers)))
+    return [candidate] if candidate else []
+
+
+def _resolve_player(intent: StatsIntent) -> dict[str, Any]:
+    """Resolve a human name to one stable person and its match-data names."""
+    query_key = _name_key(intent.player)
+    candidates: list[dict[str, Any]] = []
+
+    try:
+        people, aliases = _cricsheet_registry(_registry_cache_bucket())
+        identifiers = set(aliases.get(query_key, set()))
+
+        if not identifiers:
+            identifiers = {
+                identifier
+                for key in _initial_name_keys(intent.player)
+                for identifier in aliases.get(key, set())
+            }
+
+        if not identifiers and len(query_key.split()) == 1:
+            identifiers = {
+                identifier
+                for key, key_identifiers in aliases.items()
+                if query_key in key.split()
+                for identifier in key_identifiers
+            }
+
+        for identifier in sorted(identifiers):
+            candidate = _candidate_from_registry(people, identifier)
+            if candidate:
+                candidates.append(candidate)
+
+        if not candidates:
+            candidates = _fallback_people_candidates(intent)
+    except (requests.RequestException, OSError, ValueError):
+        candidates = _fallback_people_candidates(intent)
+
+    if not candidates:
+        candidates = _fuzzy_registry_candidates(intent)
+
+    if not candidates:
+        raise StatsCardError(
+            f"Could not find player '{intent.player}' in the cricket database."
+        )
 
     exact = [
-        row for row in rows
-        if _normalise(row.get("name", "")).casefold() == intent.player.casefold()
-        or _normalise(row.get("unique_name", "")).casefold() == intent.player.casefold()
+        candidate
+        for candidate in candidates
+        if query_key
+        in {
+            _name_key(candidate.get("name") or ""),
+            _name_key(candidate.get("unique_name") or ""),
+            *{
+                _name_key(alias)
+                for alias in (candidate.get("aliases") or ())
+                if alias
+            },
+        }
     ]
-    if len(exact) == 1:
-        row = exact[0]
-    elif len(rows) == 1:
-        row = rows[0]
-    else:
-        names = list(dict.fromkeys(
-            _normalise(row.get("name") or row.get("unique_name") or "")
-            for row in rows
-        ))
+    if exact:
+        candidates = exact
+
+    if len(candidates) > 1:
+        format_candidates = _filter_candidates_by_format(candidates, intent)
+        if len(format_candidates) == 1:
+            candidates = format_candidates
+
+    if len(candidates) > 1:
+        names = list(
+            dict.fromkeys(
+                _normalise(candidate.get("name") or candidate.get("unique_name") or "")
+                for candidate in candidates
+            )
+        )
         names = [name for name in names if name]
         raise StatsCardError(
             "Player query is ambiguous. Use the full player name."
             + (f" Matches: {', '.join(names[:5])}." if names else "")
         )
 
-    unique_name = _normalise(row.get("unique_name") or row.get("name") or "")
-    display_name = _normalise(row.get("name") or unique_name)
+    candidate = candidates[0]
+    unique_name = _normalise(candidate.get("unique_name") or "")
     if not unique_name:
         raise StatsCardError("The matched player has no usable database identifier.")
-    return {"name": display_name, "unique_name": unique_name}
 
+    display_name = _normalise(candidate.get("name") or unique_name)
+    matched_aliases = sorted(
+        (
+            _normalise(alias)
+            for alias in (candidate.get("aliases") or ())
+            if _name_key(alias) == query_key
+        ),
+        key=lambda value: (bool(re.search(r"[^A-Za-z0-9 ]", value)), -len(value), value.casefold()),
+    )
+    if matched_aliases:
+        display_name = matched_aliases[0]
+    return {
+        "identifier": _normalise(candidate.get("identifier") or ""),
+        "name": display_name,
+        "unique_name": unique_name,
+    }
 
 def _innings_limit(format_name: str) -> int:
     return 4 if format_name == "test" else 2
 
 
-def _player_rows(intent: StatsIntent, player: dict[str, str]) -> list[dict[str, Any]]:
+def _player_rows(intent: StatsIntent, player: dict[str, Any]) -> list[dict[str, Any]]:
     table = FORMAT_TABLES.get((intent.format_name, intent.gender))
     if not table:
-        raise StatsCardError("That format/gender combination is not available in the stats database.")
+        raise StatsCardError(
+            "That format/gender combination is not available in the stats database."
+        )
 
-    unique_name = _sql_text(player["unique_name"])
+    unique_name = _normalise(player.get("unique_name") or "")
+    if not unique_name:
+        raise StatsCardError("The matched player has no usable database name.")
+
     innings_limit = _innings_limit(intent.format_name)
     sql = (
         "SELECT b.match_id, b.start_date, b.innings, b.batting_team, b.bowling_team, "
@@ -311,16 +610,13 @@ def _player_rows(intent: StatsIntent, player: dict[str, str]) -> list[dict[str, 
         "COUNT(*) FILTER (WHERE b.wides IS NULL) AS balls_faced, "
         "MAX(CASE WHEN lower(b.player_dismissed) = lower(b.striker) THEN 1 ELSE 0 END) AS dismissed "
         f"FROM {table} b "
-        "WHERE lower(b.striker) = lower('"
-        + unique_name
-        + "') "
+        f"WHERE lower(b.striker) = lower('{_sql_text(unique_name)}') "
         f"AND b.innings <= {innings_limit} "
         "GROUP BY b.match_id, b.start_date, b.innings, b.batting_team, "
         "b.bowling_team, b.striker "
         "ORDER BY b.start_date DESC, b.match_id DESC, b.innings DESC"
     )
     return _query(sql)
-
 
 def _to_int(value: Any, default: int = 0) -> int:
     try:
@@ -349,7 +645,7 @@ def _date_label(value: Any) -> str:
     return parsed.strftime("%d %b %Y") if parsed else _normalise(str(value))[:20]
 
 
-def _career_stats(intent: StatsIntent, player: dict[str, str]) -> dict[str, Any]:
+def _career_stats(intent: StatsIntent, player: dict[str, Any]) -> dict[str, Any]:
     rows = _player_rows(intent, player)
     if not rows:
         raise StatsCardError(
@@ -409,7 +705,7 @@ def _career_stats(intent: StatsIntent, player: dict[str, str]) -> dict[str, Any]
     }
 
 
-def _last_n_stats(intent: StatsIntent, player: dict[str, str]) -> dict[str, Any]:
+def _last_n_stats(intent: StatsIntent, player: dict[str, Any]) -> dict[str, Any]:
     stats = _career_stats(intent, player)
     innings = stats["innings_rows"][: intent.count]
     if not innings:
