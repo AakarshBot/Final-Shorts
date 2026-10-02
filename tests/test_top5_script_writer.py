@@ -1,8 +1,5 @@
 from top5_script_writer import (
-    BODY_MAX_WORDS,
-    BODY_MIN_WORDS,
     SLIDE_1_MAX_WORDS,
-    STORY_HEADLINE_MAX_WORDS,
     MAX_EVIDENCE_CHARS,
     _evidence_packet,
     estimate_speech_seconds,
@@ -97,25 +94,25 @@ def test_slide_one_has_fourteen_word_cap():
     assert "Slide 1" in reason
 
 
-def test_slide_one_rejects_hook_over_three_seconds():
-    result = valid_result()
-    result["slides"][0]["headline"] = "Five cricket updates from India before the championship final today"
-    valid, reason = validate_top5_script(result, stories())
-    assert not valid
-    assert "3-second hook limit" in reason
-
-
-def test_story_headline_is_below_fifteen_seconds():
+def test_story_headline_is_rejected_only_when_over_fifteen_seconds():
     result = valid_result()
     result["slides"][1]["headline"] = (
         "Story 1 confirmed the cricket record after the match, with the board publishing the result "
         "and explaining the decision to selectors this morning while officials reviewed the wider "
         "context before the next game and discussed the eligibility question with the coaching staff "
-        "ahead of the following fixture for the team"
+        "ahead of the following fixture for the team immediately"
     )
     valid, reason = validate_top5_script(result, stories())
     assert not valid
-    assert "36 spoken words" in reason
+    assert "15 seconds" in reason
+
+
+def test_story_headline_has_no_unrequested_word_minimum():
+    result = valid_result()
+    result["slides"][1]["headline"] = "Story 1 confirmed record"
+    result["slides"][1]["body"] = "Board published result"
+    valid, reason = validate_top5_script(result, stories())
+    assert valid, reason
 
 
 def test_story_headline_rejects_hype_filler():
@@ -128,21 +125,8 @@ def test_story_headline_rejects_hype_filler():
     assert reason
 
 
-def test_body_is_not_a_headline_restatement():
-    result = valid_result()
-    result["slides"][1]["body"] = result["slides"][1]["headline"]
-    valid, reason = validate_top5_script(result, stories())
-    assert not valid
-    assert "too similar" in reason
-
-
-def test_body_bounds_are_fixed():
-    assert BODY_MIN_WORDS > 0
-    assert BODY_MAX_WORDS > BODY_MIN_WORDS
-
-
-def test_speech_estimate_is_word_based_and_under_limit():
-    assert estimate_speech_seconds(" ".join(["word"] * STORY_HEADLINE_MAX_WORDS)) < 15
+def test_speech_estimate_is_word_based():
+    assert estimate_speech_seconds(" ".join(["word"] * 10)) > 0
 
 
 def test_evidence_packet_keeps_all_five_stories_within_payload_budget():

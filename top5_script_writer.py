@@ -5,7 +5,6 @@ six-slide Top-5 package from five approved Topic Fetcher stories.
 """
 
 from concurrent.futures import ThreadPoolExecutor
-from difflib import SequenceMatcher
 from html import unescape
 import json
 import os
@@ -31,11 +30,6 @@ MAX_EVIDENCE_CHARS = 6500
 MAX_PACKAGE_STORY_CHARS = 1200
 MIN_ARTICLE_CHARS = 500
 SLIDE_1_MAX_WORDS = 14
-HOOK_MAX_SECONDS = 3.0
-STORY_HEADLINE_MAX_WORDS = 36
-STORY_HEADLINE_TARGET_WORDS = (24, 32)
-BODY_MIN_WORDS = 14
-BODY_MAX_WORDS = 48
 SPEECH_WORDS_PER_MINUTE = 150.0
 MIN_HASHTAGS = 3
 MAX_HASHTAGS = 5
@@ -165,19 +159,15 @@ EDITORIAL STANDARD
 
 SLIDE STRUCTURE
 - Return exactly six slides.
-- Slide 1 is the package opener. It has ONE spoken headline and no meaningful body copy.
-  Target 6–8 spoken words and keep it at or below 3 seconds of estimated natural speech.
-  The 14-word limit remains a structural ceiling, not the target.
+- Slide 1 is the package opener. It has ONE spoken headline, a maximum of 14 words, and no body copy.
 - Slides 2–6 correspond exactly, in order, to selected stories 1–5.
 - For Slides 2–6, the headline IS the spoken narration for that slide.
 - Each story headline must tell the complete important development in ONE clean sentence.
-- Target 24–32 words and never exceed 36 words.
-- It must be natural to speak in under 15 seconds without rushing.
+- Each story headline must remain under 15 seconds of estimated natural speech.
 - Do not merely repeat the source title. Add the key development, context or consequence
   that makes the story understandable on its own.
-- The body is visual-only. Write 2 or 3 short factual sentences, roughly 14–48 words total.
-  Add useful information not already fully stated in the headline.
-- Keep body copy compact enough for a 9:16 visual card. Do not write a mini article.
+- The body is visual-only supporting copy. Add useful factual detail or context from the same
+  story that is not already fully stated in the headline. Do not pad it with filler.
 - For every slide, provide a concrete visual entity, visual intent and a specific search prompt.
   Slide 1 should describe a factual cricket-package visual, not an invented mood or theme.
 - Generate 3–5 relevant hashtags. No spaces inside hashtags.
@@ -434,12 +424,6 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
         if expected_number == 1:
             if _words(headline) > SLIDE_1_MAX_WORDS:
                 return False, f"Slide 1 exceeds {SLIDE_1_MAX_WORDS} words."
-            hook_seconds = estimate_speech_seconds(headline)
-            if hook_seconds > HOOK_MAX_SECONDS:
-                return False, (
-                    f"Slide 1 exceeds the 3-second hook limit "
-                    f"({hook_seconds:.2f}s estimated)."
-                )
             if _is_generic_package_headline(headline):
                 return False, "Slide 1 is a generic Top-5 headline."
             if not _references_any_selected_story(headline, stories):
@@ -450,27 +434,15 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
             ):
                 return False, "Slide 1 cannot duplicate a story headline."
             body = _clean(slide.get("body"))
-            if body and _words(body) > 12:
-                return False, "Slide 1 should not contain a meaningful body."
         else:
             story = stories[expected_number - 2]
             if not _story_references_headline(headline, story):
                 return False, f"Slide {expected_number} does not reference its selected story."
-            if _words(headline) > STORY_HEADLINE_MAX_WORDS:
-                return False, f"Slide {expected_number} exceeds {STORY_HEADLINE_MAX_WORDS} spoken words."
             if estimate_speech_seconds(headline) >= 15.0:
                 return False, f"Slide {expected_number} is not below 15 seconds at the speech-rate estimate."
-            words = _words(headline)
-            if words < 12:
-                return False, f"Slide {expected_number} is too compressed to tell the full story."
             body = _clean(slide.get("body"))
             if not body:
                 return False, f"Slide {expected_number} is missing body copy."
-            body_words = _words(body)
-            if not BODY_MIN_WORDS <= body_words <= BODY_MAX_WORDS:
-                return False, f"Slide {expected_number} body must contain {BODY_MIN_WORDS}–{BODY_MAX_WORDS} words."
-            if SequenceMatcher(None, _normalise(headline), _normalise(body)).ratio() >= 0.88:
-                return False, f"Slide {expected_number} body is too similar to its headline."
 
     hashtags = result.get("hashtags")
     if (
