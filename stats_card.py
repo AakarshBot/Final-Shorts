@@ -448,10 +448,12 @@ def _h2h_stats(intent: StatsIntent) -> dict[str, Any]:
         "test": "TEST",
         "ipl": "IPL",
     }[intent.format_name]
+    gender_value = "female" if intent.gender == "women" else "male"
     sql = (
         "SELECT match_id, start_date, team1, team2, winner "
         "FROM match_info "
         f"WHERE match_type = '{match_type}' "
+        f"AND gender = '{gender_value}' "
         f"AND ((lower(team1) = lower('{team1}') AND lower(team2) = lower('{team2}')) "
         f"OR (lower(team1) = lower('{team2}') AND lower(team2) = lower('{team1}'))) "
         "ORDER BY start_date DESC, match_id DESC"
