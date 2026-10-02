@@ -85,6 +85,9 @@ TOP5_QUERIES = [
     'cricket (BCCI OR PCB OR ICC OR board OR IPL OR PSL OR WPL) (decision OR rule OR signing OR retention OR appointment) when:3d',
 ]
 
+TOP5_TIMEOUT = 4.0
+TOP5_QUERY_BATCH_SIZE = 2
+
 TOP5_MORE_QUERIES = [
     'cricket (Nepal OR Oman OR UAE OR Scotland OR Zimbabwe OR Namibia OR Uganda OR USA) when:3d',
     'cricket (youngest OR oldest OR first-ever OR unbeaten OR milestone OR record) when:3d',
@@ -378,12 +381,12 @@ def _parse_rss(xml_text: str) -> list[Topic]:
             rows.append(Topic(title, source, _parse_date(item.findtext("pubDate") or ""), url, _clean(item.findtext("description") or "")))
     return rows
 
-def _fetch_google(query: str) -> list[Topic]:
+def _fetch_google(query: str, timeout: float = TIMEOUT) -> list[Topic]:
     response = requests.get(
         GOOGLE_NEWS_URL,
         params={"q": query, "hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
         headers=HEADERS,
-        timeout=TIMEOUT,
+        timeout=timeout,
     )
     response.raise_for_status()
     return _parse_rss(response.text)
@@ -620,7 +623,7 @@ def fetch_top5_topics(
     exclude_topics: list[Topic] | None = None,
     limit: int = TARGET,
 ) -> list[Topic]:
-    """Build the Top-5 story pool with a smaller Google query plan."""
+    """Build the Top-5 story pool with an adaptive, fast query plan."""
     if limit <= 0:
         return []
 
@@ -631,24 +634,34 @@ def fetch_top5_topics(
         for member in (topic.group_members or (topic,))
     }
     queries = TOP5_MORE_QUERIES if more else TOP5_QUERIES
-
     rows = []
-    with ThreadPoolExecutor(max_workers=len(queries)) as pool:
-        futures = [pool.submit(_fetch_google, query) for query in queries]
-        for future in as_completed(futures):
-            try:
-                rows.extend(future.result())
-            except (requests.RequestException, ET.ParseError, ValueError):
-                continue
+    selection_existing = existing if more else []
 
-    prepared = _prepare(rows, seen_urls, profile="cricket_india_asia")
-    return _select(
-        prepared,
-        limit,
-        seen_urls,
-        existing=existing if more else [],
-        profile="cricket_india_asia",
-    )[:limit]
+    for start in range(0, len(queries), TOP5_QUERY_BATCH_SIZE):
+        batch = queries[start:start + TOP5_QUERY_BATCH_SIZE]
+        with ThreadPoolExecutor(max_workers=len(batch)) as pool:
+            futures = [
+                pool.submit(_fetch_google, query, TOP5_TIMEOUT)
+                for query in batch
+            ]
+            for future in as_completed(futures):
+                try:
+                    rows.extend(future.result())
+                except (requests.RequestException, ET.ParseError, ValueError):
+                    continue
+
+        prepared = _prepare(rows, seen_urls, profile="cricket_india_asia")
+        chosen = _select(
+            prepared,
+            limit,
+            seen_urls,
+            existing=selection_existing,
+            profile="cricket_india_asia",
+        )
+        if len(chosen) >= limit:
+            return chosen[:limit]
+
+    return chosen[:limit] if "chosen" in locals() else []
 
 
 def fetch_topics(
