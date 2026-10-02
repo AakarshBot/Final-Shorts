@@ -396,12 +396,6 @@ def _score_cricket(topic: Topic, profile: str) -> float:
     return freshness + specificity + narrative + consequence + undercovered + unusual + local - generic - source_penalty
 
 
-def _score(topic: Topic, profile: str | None = None) -> float:
-    if profile == "niche_sports":
-        return _score_niche(topic)
-    return _score_cricket(topic, profile or "cricket_india_asia")
-
-
 def _prepare(
     rows: list[Topic],
     seen_urls: set[str],
@@ -462,7 +456,14 @@ def _select(
 
     ranked = sorted(
         (
-            Topic(r.title, r.source, r.published_at, r.url, r.description, _score(r, profile))
+            Topic(
+                r.title,
+                r.source,
+                r.published_at,
+                r.url,
+                r.description,
+                _score_niche(r) if profile == "niche_sports" else _score_cricket(r, profile),
+            )
             for r in rows
         ),
         key=lambda r: r.score,
