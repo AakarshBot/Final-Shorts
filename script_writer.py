@@ -386,7 +386,7 @@ def validate_cricket_script(result: dict) -> tuple[bool, str]:
         return False, "The Cricket Scriptwriter must produce exactly 5 titles."
 
 
-    normalised_titles = [_normalise(title) for title in cleaned_titles]
+    normalised_titles = [_normalise(_clean(title)) for title in titles]
     if len(set(normalised_titles)) != len(normalised_titles):
         return False, "The five YouTube titles must be distinct."
 
