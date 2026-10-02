@@ -140,8 +140,8 @@ EDITORIAL STANDARD
   explicitly establishes it.
 - Write like a sharp human cricket editor: specific, economical and natural.
 - Avoid promotional, dramatic, clickbait or generic AI language.
-- Never address the viewer directly in Slide 1. It is a factual package headline, not a
-  call to action, teaser or reason to watch.
+- Never address the viewer directly in Slide 1. It is an editorial package headline, not a
+  call to action or teaser.
 - Never pad Slide 1 with phrases such as "you need to see", "you need to know", "right now",
   "don't miss", "can't miss", "must-see", "worth watching", "find out", "here's why",
   "make you see the game differently", "change the way you see the game", "change the world",
@@ -149,17 +149,19 @@ EDITORIAL STANDARD
 - Do not use phrases such as "changing the conversation", "everyone is talking",
   "the cricket world is buzzing", "sending shockwaves", "game changer",
   "what you need to know", "here's what happened", or similar synthetic framing.
-- Slide 1 must be an original, impactful package headline built by the scriptwriter
-  from the strongest concrete development in the five selected stories. It should name
-  a person, team, event, record, result or other story-specific detail.
-- Write Slide 1 yourself; do not copy, lightly rewrite, or concatenate a source headline.
-  The opener should lead with the actual news, not announce that this is a Top-5 package.
-- Do not use a generic roundup headline such as "Top 5 Cricket Stories" or "Cricket News
-  Today". Do not invent a common theme just to make the opener sound clever.
+- Slide 1 is the package opener for the Top-5 Short. It should clearly communicate that
+  this is today's five-story cricket news/headline roundup while incorporating a few
+  concrete names, teams, events, results or other headline details from the selected stories.
+- Make Slide 1 feel like a smart human-written front-page/scoreboard headline: concise,
+  informative and varied. It may reference two or three of the selected stories in one line,
+  but must not invent a shared theme or imply facts that are not supported.
+- Do not simply output "Top 5 Cricket Stories", "Cricket News Today" or another bare roundup label.
+  The package meaning must come through from the wording itself.
+- Write Slide 1 yourself rather than copying one source headline verbatim.
 
 SLIDE STRUCTURE
 - Return exactly six slides.
-- Slide 1 is the package opener. It has ONE spoken headline, a maximum of 14 words, and no body copy.
+- Slide 1 is the Top-5 package opener. It has ONE spoken headline, a maximum of 14 words, and no body copy.
 - Slides 2–6 correspond exactly, in order, to selected stories 1–5.
 - For Slides 2–6, the headline IS the spoken narration for that slide.
 - Each story headline must tell the complete important development in ONE clean sentence.
@@ -427,7 +429,7 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
             if _is_generic_package_headline(headline):
                 return False, "Slide 1 is a generic Top-5 headline."
             if not _references_any_selected_story(headline, stories):
-                return False, "Slide 1 is not grounded in a selected story."
+                return False, "Slide 1 must incorporate a concrete detail from the selected stories."
             if any(
                 _clean(other.get("headline")).casefold() == headline.casefold()
                 for other in slides[1:]
