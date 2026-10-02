@@ -4751,6 +4751,7 @@ elif st.session_state.app_mode == "test":
                     st.session_state[key] = value
                 st.session_state.test_top5_standalone_result = None
                 st.session_state.test_top5_standalone_selected = None
+                st.session_state.test_top5_standalone_preview = None
                 st.session_state.test_top5_visual_crops.pop("top5-standalone", None)
                 st.rerun()
 
@@ -4787,8 +4788,10 @@ elif st.session_state.app_mode == "test":
                 if assets:
                     for start_index in range(0, len(assets), 3):
                         cols = st.columns(3, gap="medium")
-                        for col, asset in zip(cols, assets[start_index:start_index + 3]):
-                            index = assets.index(asset)
+                        for offset, (col, asset) in enumerate(
+                            zip(cols, assets[start_index:start_index + 3]),
+                        ):
+                            index = start_index + offset
                             with col:
                                 st.image(_top5_fit_preview(asset.get("bytes")) or asset.get("bytes"), width="stretch")
                                 st.caption(str(asset.get("title") or "Commons image"))
