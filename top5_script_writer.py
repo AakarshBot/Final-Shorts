@@ -133,9 +133,9 @@ EDITORIAL STANDARD
 - Use only facts explicitly supported by the supplied evidence.
 - Research evidence is provided for each selected story. Stay inside that story's evidence.
 - A headline must tell the important development, not simply rephrase the source headline.
-- The body is visual-only supporting copy. It must add useful facts, context, timing,
-  consequence or supporting detail from the same story. Never make it a restatement
-  of the headline.
+- The body is visual-only supporting copy. Write exactly two concise factual sentences.
+  Together they should add useful facts, context, timing, consequence or supporting detail
+  from the same story. Never make them a restatement of the headline.
 - Never invent quotes, numbers, motives, reactions, implications, predictions or outcomes.
 - Do not imply public reaction, global importance or a wider trend unless the evidence
   explicitly establishes it.
