@@ -22,7 +22,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
             "India's Gill Injury Has Cricket Fans Asking Questions",
         ],
         "seo_description": "Shubman Gill's injury status ahead of India's next ODI.",
-        "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
+        "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket", "#ODI"],
         "comment": "Should India risk Gill in the next ODI?",
         "script": [
             {
@@ -113,6 +113,7 @@ def test_validator_requires_subject_name_in_narration():
 def test_valid_script_passes():
     valid, reason = script_writer.validate_cricket_script(valid_result())
     assert valid, reason
+
 
 def test_validator_requires_five_distinct_titles():
     result = valid_result()
