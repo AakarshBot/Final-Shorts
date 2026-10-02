@@ -587,22 +587,27 @@ Active responsibilities:
 - Fetch Google News concurrently.
 - Prepare and filter candidate stories for freshness, story quality and profile relevance.
 - Cluster duplicate/near-duplicate events without collapsing genuinely different stories.
-- Score and select the requested number of topics while respecting existing/previously returned stories.
+- Score and select the requested number of cricket story/entity groups while respecting existing/previously returned groups.
 - Use GDELT only as the cricket fallback when the primary fetch does not fill the requested batch.
-- Keep the initial/current batch at up to 20 stories and allow the existing “Find 20 more” flow to append additional unique stories.
+- Keep the initial cricket batch at **20 unique tiles/groups**.
+- A tile is an entity-based grouping for diversity, not a selectable item.
+- For Cricket, if multiple qualifying headlines contain the same player name in the title, they share one tile. Country names, teams, competitions and known organisations are not treated as player entities.
+- A tile can contain multiple different headlines/events. Each headline remains individually selectable in the Dashboard.
+- A solo headline with no detected player entity remains its own tile.
+- The 20-tile limit is applied after the existing event clustering/selection logic, so multiple distinct stories about the same player can occupy one tile without being discarded as the same story.
+- The returned Topic object remains the existing downstream handoff contract. It carries lightweight tile metadata and the tile's retained headline members; selecting an individual headline makes that exact Topic the active handoff to Scriptwriter.
+- “Find 20 more” respects existing tile/entity groups so the same player group is not repeatedly used to fill later batches.
+- The entity grouping is local string processing only. It adds no API/LLM call and does not change the Google/GDELT request count or worker model.
+- Niche Sports retains its existing non-tile selection behaviour.
 
-Cleanup applied:
-- Removed the unused `source` parameter from `_profile_relevant()`.
-- Simplified the Cricket relevance branch to its actual rejection rule.
-- Removed the redundant `title_key` temporary.
-- Removed the `_score()` dispatch wrapper; `_select()` calls the relevant scoring function directly.
-- Removed the single-use `_keyword_queries()` helper and inlined its query construction.
-- Removed the single-use `_gdelt_query()` helper and inlined its fallback query selection.
-- Removed the unused `lookback_hours` override from `_prepare()`; the fetcher uses its configured lookback window directly.
+Cleanup baseline:
+- No unnecessary runtime wrappers or compatibility layers remain in the Topic Fetcher.
+- Single-use dispatch/query-construction helpers were removed where inlining made the flow clearer.
+- Behaviour-bearing research, scoring, clustering, filtering and provider adapters remain because they are actively used.
+- The repository does not currently contain a production Python file that is safe to delete based on active imports/callers/tests.
 
-Remaining helpers in this module are functional and referenced by the production path or tests. In particular, `_fetch_google()`, `_fetch_gdelt()`, `_prepare()`, `_select()`, the event-matching logic and scoring functions are not dead scaffolding.
+Status: **Approved / cleaned / entity-tile update in progress.**
 
-Status: **Approved / cleaned.**
 
 ### Function 02 — Cricket Scriptwriter
 
