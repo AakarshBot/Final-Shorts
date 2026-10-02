@@ -18,7 +18,6 @@ FPS = 24
 HEADLINE_SECONDS = 1.35
 HEADLINE_TEXT = "THE GAME JUST CHANGED"
 SOURCE_LABEL = "SPORTS DESK"
-FINAL_STYLE_NAME = "Editorial Highlight"
 
 HEADLINE_SAFE_MARGIN = 60
 HEADLINE_MAX_WIDTH = WIDTH - (HEADLINE_SAFE_MARGIN * 2)
@@ -136,14 +135,6 @@ def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
     return (
         root / "Oswald-Bold.ttf",
     )
-
-
-def headline_font(size: int = HEADLINE_MAX_SIZE, language: str = "english"):
-    return _font(_font_candidates("headline", language), size)
-
-
-def subtitle_font(size: int = SUBTITLE_MAX_SIZE, language: str = "english"):
-    return _font(_font_candidates("subtitle", language), size)
 
 
 def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
@@ -562,7 +553,7 @@ def _fit_subtitle_layout(
 ):
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     for size in range(SUBTITLE_MAX_SIZE, SUBTITLE_MIN_SIZE - 1, -1):
-        font = subtitle_font(size, language)
+        font = _font(_font_candidates("subtitle", language), size)
         try:
             lines = _subtitle_lines(words, probe, font)
         except ValueError:
@@ -979,9 +970,3 @@ def render_production_video(
         except FileNotFoundError:
             pass
 
-def get_logo_path() -> Path:
-    return Path(__file__).resolve().parent / "logo.png"
-
-
-def get_headline_font_path() -> Path:
-    return Path(__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"

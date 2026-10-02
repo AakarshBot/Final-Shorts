@@ -309,7 +309,6 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   overflow:hidden;
   text-overflow:ellipsis;
 }
-[data-testid="stVerticalBlock"] [class*="st-key-topic-card-"],
 [data-testid="stVerticalBlock"] [class*="st-key-test-top5-topic-"],
 [data-testid="stVerticalBlock"] [class*="st-key-live-topic-"]{
   background:var(--surface-raised);
@@ -320,7 +319,6 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   min-height:174px;
   box-shadow:0 1px 2px rgba(21,23,19,.025);
 }
-[data-testid="stVerticalBlock"] [class*="st-key-topic-card-"]:hover,
 [data-testid="stVerticalBlock"] [class*="st-key-test-top5-topic-"]:hover,
 [data-testid="stVerticalBlock"] [class*="st-key-live-topic-"]:hover{
   border-color:var(--line-strong);
@@ -380,8 +378,7 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   padding:.35rem .72rem!important;
 }
 
-.topic-card-state,.topic-top{display:flex;align-items:center;justify-content:space-between;min-height:14px;}
-.topic-state-label{font-size:.6rem;font-weight:820;letter-spacing:.04em;color:var(--accent);}
+.topic-top{display:flex;align-items:center;justify-content:space-between;min-height:14px;}
 .topic-rank{font-size:.6rem;font-weight:820;letter-spacing:.09em;color:var(--accent);}
 .selected-story-title{font-size:1.05rem;font-weight:820;letter-spacing:-.025em;line-height:1.18;max-width:760px;color:var(--ink);}
 .st-key-selected-story-card{
@@ -570,14 +567,12 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   .section-head{align-items:flex-start;flex-direction:column;gap:4px;}
   .section-count{text-align:left;}
   [data-testid="stHorizontalBlock"]{gap:9px;}
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-topic-card-"]),
   [data-testid="stHorizontalBlock"]:has([class*="st-key-test-top5-topic-"]),
   [data-testid="stHorizontalBlock"]:has([class*="st-key-live-topic-"]),
   [data-testid="stHorizontalBlock"]:has([class*="st-key-live-slide-"]){
     flex-direction:column!important;
     gap:9px!important;
   }
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-topic-card-"])>div,
   [data-testid="stHorizontalBlock"]:has([class*="st-key-test-top5-topic-"])>div,
   [data-testid="stHorizontalBlock"]:has([class*="st-key-live-topic-"])>div,
   [data-testid="stHorizontalBlock"]:has([class*="st-key-live-slide-"])>div{
@@ -588,7 +583,6 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   [data-testid="stHorizontalBlock"]:has([class*="st-key-landing-live"]){
     flex-direction:column!important;
   }
-  [data-testid="stVerticalBlock"] [class*="st-key-topic-card-"],
   [data-testid="stVerticalBlock"] [class*="st-key-test-top5-topic-"],
   [data-testid="stVerticalBlock"] [class*="st-key-live-topic-"]{
     min-height:156px;
@@ -2583,7 +2577,9 @@ def render_live_dashboard():
                 with col:
                     with st.container(key=f"live-topic-{index}"):
                         tile_label = f'<span class="topic-rank">TILE {index + 1:02d}</span>'
-                        if tile.group_key.startswith("player:"):
+                        if tile.group_key.startswith("keyword:"):
+                            tile_label += f'<span class="topic-meta">Keyword: {tile.group_key.split(":", 1)[1]}</span>'
+                        elif tile.group_key.startswith("player:"):
                             tile_label += f'<span class="topic-meta">{tile.group_key.split(":", 1)[1].title()}</span>'
                         st.markdown(
                             f'<div class="topic-top">{tile_label}</div>',
@@ -2630,7 +2626,21 @@ def render_live_dashboard():
                         limit=20,
                         keyword=keyword if keyword_search else None,
                     )
-                    st.session_state.live_topics = existing + new_topics
+                    if keyword_search:
+                        keyword_members = tuple(
+                            member
+                            for topic in new_topics
+                            for member in (topic.group_members or (topic,))
+                        )
+                        if keyword_members:
+                            keyword_tile = replace(
+                                keyword_members[0],
+                                group_key=f"keyword:{keyword}",
+                                group_members=keyword_members,
+                            )
+                            st.session_state.live_topics = existing + [keyword_tile]
+                    else:
+                        st.session_state.live_topics = existing + new_topics
                 st.rerun()
         return
 
@@ -2799,7 +2809,25 @@ def render_topic_fetcher():
                     limit=20,
                     keyword=keyword if keyword_search else None,
                 )
-                st.session_state.topics = existing_topics + new_topics if (more or keyword_search) else new_topics
+                if keyword_search:
+                    keyword_members = tuple(
+                        member
+                        for topic in new_topics
+                        for member in (topic.group_members or (topic,))
+                    )
+                    if keyword_members:
+                        keyword_tile = replace(
+                            keyword_members[0],
+                            group_key=f"keyword:{keyword}",
+                            group_members=keyword_members,
+                        )
+                        st.session_state.topics = existing_topics + [keyword_tile]
+                    else:
+                        st.session_state.topics = existing_topics
+                elif more:
+                    st.session_state.topics = existing_topics + new_topics
+                else:
+                    st.session_state.topics = new_topics
 
             st.session_state.selected_topic = None
             st.session_state.script_data = None
@@ -2830,11 +2858,12 @@ def render_topic_fetcher():
                 key=lambda item: item.score,
                 reverse=True,
             ))
-            tile_title = (
-                tile.group_key.split(":", 1)[1].title()
-                if tile.group_key.startswith("player:")
-                else tile.title
-            )
+            if tile.group_key.startswith("keyword:"):
+                tile_title = f'Keyword: "{tile.group_key.split(":", 1)[1]}"'
+            elif tile.group_key.startswith("player:"):
+                tile_title = tile.group_key.split(":", 1)[1].title()
+            else:
+                tile_title = tile.title
             headline_label = "headline" if len(members) == 1 else "headlines"
 
             with col:
