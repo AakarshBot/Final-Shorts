@@ -131,7 +131,7 @@ def _strip_format_words(value: str) -> str:
 
 
 def _canonical_team(value: str) -> str:
-    clean = _normalise(value).strip(" '"")
+    clean = _normalise(value).strip(" '")
     return TEAM_ALIASES.get(clean.casefold(), clean.title())
 
 
