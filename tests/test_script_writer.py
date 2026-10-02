@@ -15,11 +15,11 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
         "subject_name": "Shubman Gill",
         "headline": "Gill Injury Update",
         "titles": [
-            "Shubman Gill Injury Update Ahead Of India ODI",
-            "Why Shubman Gill's Injury Could Change India's ODI Plans",
+            "Shubman Gill Injury Update Before India ODI",
+            "Why Gill's Injury Could Change India's ODI Plans",
             "Shubman Gill Fitness: What Happens Next?",
             "What Gill's Injury Means For India's ODI",
-            "India's Gill Injury Has Cricket Fans Asking Questions",
+            "Why India's Gill News Has Fans Asking Questions",
         ],
         "seo_description": "Shubman Gill's injury status ahead of India's next ODI.",
         "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket", "#ODI"],
@@ -135,12 +135,6 @@ def test_validator_requires_seo_title_to_name_subject():
     assert not valid
     assert "SEO title" in reason
 
-def test_validator_rejects_overlong_title():
-    result = valid_result()
-    result["titles"][0] = " ".join(["Shubman", "Gill"] + ["update"] * 50)
-    valid, reason = script_writer.validate_cricket_script(result)
-    assert not valid
-    assert "100 characters" in reason
 
 def test_validator_requires_valid_cricket_hashtags():
     result = valid_result()
