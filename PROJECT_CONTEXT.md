@@ -243,7 +243,7 @@ Important:
 
 Top-5 Scriptwriter:
 - Generates exactly six slides from five selected cricket stories.
-- Slide 1 is an original, story-specific package headline written by the scriptwriter; it must not be a generic “Top 5 Cricket Stories” style roundup label.
+- Slide 1 is the Top-5 package opener: a smart way of communicating today's top five cricket news/headlines while incorporating concrete details from a few selected stories; it must not be a bare generic label.
 - Slides 2–6 use the five selected story headlines as spoken narration.
 - Slides 2–6 also carry separate visual-only body copy, plus visual metadata/search prompts.
 - No additional headline word-count target or hard word-count ceiling is used for Slides 2–6; the 15-second spoken-time limit is the only length constraint there.
@@ -256,11 +256,11 @@ Top-5 Visuals:
 - Existing Manual Scraper, Manual Real Image Search/Commons and Manual AI Generation options remain available.
 - Existing 9:16 crop workflow remains in place.
 
-Top-5 visual card design:
-- Each final slide uses the selected image as the full-frame visual with a floating near-opaque dark editorial card over the lower portion.
-- The card shows the spoken headline at the top and the Scriptwriter’s silent factual story body below it.
-- Slide 1 uses the same visual language but a shorter opener card because its body is intentionally empty.
-- Card previews are shown directly on the Top-5 Visuals Manual QC board after an image is attached, so the reviewer sees the actual 9:16 treatment rather than only the raw crop.
+Top-5 visual treatment:
+- Each final slide uses the selected image as the full-frame visual with an adaptive editorial scrim/gradient behind the text instead of a fixed opaque card.
+- Slides 2–6 show the spoken headline plus the Scriptwriter’s silent factual story body.
+- Slide 1 is a distinct package-opener composition: it shows only the Top-5 package headline and does not use the story-summary layout.
+- Test Visuals is a standalone visual sandbox: it can search Commons, manually crop an image, enter a headline/body, and render one slide without Scriptwriter or Audio approval.
 - Approved Top-5 visual handoffs now carry the card payload into the production renderer.
 - Top-5 card headline font: bundled **Oswald Bold**, retained for its condensed, high-impact display role and because it is already the renderer’s established, tested headline font. Body copy uses a regular sans-serif fallback for readability.
 - The card is intentionally a separate visual treatment from the Cricket Stats Card; Stats Card Manual QC selection/crop interaction is the reference pattern, not its visual styling.
