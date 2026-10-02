@@ -1623,14 +1623,18 @@ def _render_top5_visual_board():
                     st.text(spoken_line)
                 if body:
                     st.text(body)
-                preview = _top5_fit_preview(
-                    assignment.get("bytes") if assignment else None,
-                    240,
-                    427,
-                )
-                if preview is not None:
-                    st.image(preview, width="stretch")
-                    st.caption(assignment.get("source") or "Attached visual")
+                if assignment and assignment.get("bytes"):
+                    from renderer import build_top5_card_preview
+                    card_preview = build_top5_card_preview(
+                        assignment["bytes"],
+                        spoken_line,
+                        body,
+                        story_number=0 if slide == 1 else slide - 1,
+                        total_stories=5,
+                        source_label=assignment.get("source") or "Sports desk",
+                    )
+                    st.image(card_preview, width="stretch")
+                    st.caption("Full Top-5 card preview")
                     if assignment.get("label"):
                         st.caption(assignment["label"])
                 else:
@@ -4901,8 +4905,15 @@ elif st.session_state.app_mode == "test":
                                 assignment = dict(
                                     st.session_state.test_top5_visual_assignments[slide]
                                 )
+                                script_slide = script_slides[slide - 1] if slide <= len(script_slides) else {}
                                 assignment["slide_number"] = slide
                                 assignment["story_index"] = None if slide == 1 else slide - 2
+                                assignment["top5_card"] = {
+                                    "headline": str(script_slide.get("headline") or "").strip(),
+                                    "body": str(script_slide.get("body") or "").strip(),
+                                    "story_number": 0 if slide == 1 else slide - 1,
+                                    "total_stories": 5,
+                                }
                                 visuals.append(assignment)
                                 slides.append(
                                     {
@@ -4912,6 +4923,7 @@ elif st.session_state.app_mode == "test":
                                         "label": assignment.get("label", ""),
                                         "source_page_url": assignment.get("source_page_url", ""),
                                         "source_image_url": assignment.get("source_image_url", ""),
+                                        "top5_card": assignment.get("top5_card"),
                                     }
                                 )
 
