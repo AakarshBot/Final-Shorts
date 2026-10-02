@@ -257,13 +257,18 @@ Top-5 Visuals:
 - Existing 9:16 crop workflow remains in place.
 
 Top-5 visual treatment:
-- Top-5 story cards use a two-zone card treatment: the selected image occupies the upper portion, a single-line headline hugs the image's lower edge, and the lower portion carries the silent body.
-- Slides 2–6 show the spoken headline plus the Scriptwriter’s silent factual story body.
-- Slide 1 is a distinct package-opener composition: it shows only the Top-5 package headline and does not use the story-summary layout.
-- Test Visuals is a standalone visual sandbox: it can search Commons, manually crop an image, enter a headline/body, and render one slide without Scriptwriter or Audio approval.
-- Approved Top-5 visual handoffs now carry the card payload into the production renderer.
-- Top-5 card headline font: bundled **Oswald Bold**, retained for its condensed, high-impact display role and because it is already the renderer’s established, tested headline font. Body copy uses a regular sans-serif fallback for readability.
-- The card is intentionally a separate visual treatment from the Cricket Stats Card; Stats Card Manual QC selection/crop interaction is the reference pattern, not its visual styling.
+- The approved visual reference is the existing Cricket Stats Card language: full-width image at the top of the 1080 × 1920 frame, followed by a light information panel below.
+- Top-5 does **not** use an inset/rounded dark card. The selected image remains the hero and is never covered by a surrounding card.
+- The lower panel uses the same light neutral treatment as the Cricket Stats Card, with strong editorial headline typography and readable body copy.
+- Slide 1 is the package opener: the selected image is followed by the package headline only. It has no story body, progress indicator, fact kicker or extra UI copy.
+- Slides 2–6 show the spoken story headline followed by two concise factual silent sentences in the lower panel.
+- Body layout is dynamic: font size, line wrapping and vertical spacing respond to the actual amount of body copy and the remaining panel space. It is top-anchored under the headline rather than floating in the middle of the panel.
+- The Top-5 Test Visuals stage remains a standalone visual sandbox: search Commons, choose an image, crop/reposition, type a headline/body and render one slide without Scriptwriter or Audio approval.
+- Image-pool, selected-image and rendered-slide previews are intentionally shown at the same normal preview size in Test.
+- Top-5 render preview is currently static. No YouTube-like hearts, comments, shares, taps, interaction animations, progress sliders, or other fake platform UI are part of the factory.
+- The existing 9:16 crop workflow remains in place.
+- Approved Top-5 visual handoffs carry the selected image, headline and silent body into the production renderer.
+- The design is informed by current Shorts constraints: YouTube provides visual guides because platform controls can overlap the content area, so important editorial content stays clear of those regions. citeturn891457search0turn891457search2
 
 Top-5 Visual status:
 - **Pending user approval.**
