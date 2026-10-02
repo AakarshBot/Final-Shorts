@@ -246,7 +246,7 @@ Top-5 Scriptwriter:
 - Slide 1 is an original, story-specific package headline written by the scriptwriter; it must not be a generic “Top 5 Cricket Stories” style roundup label.
 - Slides 2–6 use the five selected story headlines as spoken narration.
 - Slides 2–6 also carry separate visual-only body copy, plus visual metadata/search prompts.
-- Existing length and validation rules remain unchanged.
+- No additional headline word-count target or hard word-count ceiling is used for Slides 2–6; the 15-second spoken-time limit is the only length constraint there.
 
 Top-5 Visuals:
 - Uses a dedicated Top-5 visual fetcher; the completed Cricket visual fetcher remains locked and untouchable.
