@@ -2172,15 +2172,16 @@ def _render_live_upload():
         or []
     )
     if not titles:
-        st.error("Scriptwriter did not return three title candidates.")
+        st.error("Scriptwriter did not return title candidates.")
         return
 
-    st.caption("Edit the three title candidates, choose the one to publish, then approve the metadata once.")
+    st.caption("Edit the title candidates, choose the one to publish, then approve the metadata once.")
     edited_titles = []
-    for index, title in enumerate(titles[:3], 1):
+    for index, title in enumerate(titles, 1):
+        style = TITLE_OPTION_STYLES[index - 1] if index <= len(TITLE_OPTION_STYLES) else "Alternative"
         edited_titles.append(
             st.text_input(
-                f"Title option {index}",
+                f"Title {index} · {style}",
                 value=str(title),
                 max_chars=100,
                 key=f"live-upload-title-{story_id}-{index}",
@@ -3028,7 +3029,7 @@ def render_scriptwriter():
                     st.session_state.upload_result=None
                     st.session_state.rendered_video_path=None
                     st.session_state.upload_qc=None
-                    for index in range(1,4):
+                    for index in range(1,6):
                         st.session_state.pop(f"upload-title-{index}",None)
                     st.session_state.pop("upload_video_file",None)
                     st.session_state.upload_title_options=list(approved.get("titles") or [])
@@ -3490,6 +3491,14 @@ def render_renderer_test():
             if previews:
                 st.markdown('<div style="margin-top:.8rem;color:var(--muted);font-size:.72rem;">Preview bundle ready.</div>',unsafe_allow_html=True)
             st.markdown('</div>',unsafe_allow_html=True)
+TITLE_OPTION_STYLES = (
+    "SEO / Search",
+    "Curiosity / Baity",
+    "Trend / Format",
+    "Consequence / Why It Matters",
+    "Fan / Emotion",
+)
+
 def render_upload_qc():
     st.header("07 · Upload QC")
     script = st.session_state.get("approved_script")
@@ -3538,9 +3547,10 @@ def render_upload_qc():
 
         edited_titles = []
         for index, title in enumerate(titles, 1):
+            style = TITLE_OPTION_STYLES[index - 1] if index <= len(TITLE_OPTION_STYLES) else "Alternative"
             edited_titles.append(
                 st.text_input(
-                    f"Title option {index}",
+                    f"Title {index} · {style}",
                     value=title,
                     key=f"upload-title-{index}",
                     max_chars=100,
