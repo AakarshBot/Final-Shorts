@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
-from functools import lru_cache
 import math
 import shutil
 import subprocess
