@@ -53,17 +53,24 @@ DARK = (5, 7, 10)
 TOP5_IMAGE_HEIGHT = 860
 TOP5_PANEL_TOP = TOP5_IMAGE_HEIGHT
 TOP5_PANEL_BACKGROUND = (246, 247, 249)
-TOP5_MARGIN = 64
+TOP5_PANEL_WHITE = (249, 250, 252)
+TOP5_MARGIN_X = 64
+TOP5_SAFE_RIGHT = 250
+TOP5_SAFE_BOTTOM = 430
+TOP5_HEADLINE_MAX_WIDTH = WIDTH - TOP5_MARGIN_X - TOP5_SAFE_RIGHT
 TOP5_HEADLINE_MAX_SIZE = 84
 TOP5_HEADLINE_MIN_SIZE = 42
 TOP5_HEADLINE_MAX_LINES = 2
 TOP5_HEADLINE_LINE_GAP = 6
+TOP5_BODY_MAX_WIDTH = WIDTH - (TOP5_MARGIN_X * 2) - 40
 TOP5_BODY_MAX_SIZE = 42
 TOP5_BODY_MIN_SIZE = 25
-TOP5_BODY_MAX_WIDTH = WIDTH - (TOP5_MARGIN * 2)
 TOP5_BODY_MAX_LINES = 8
 TOP5_BODY_LINE_GAP = 12
-TOP5_HEADLINE_BODY_GAP = 58
+TOP5_HEADLINE_BODY_GAP = 42
+TOP5_PANEL_BOTTOM_GAP = 56
+TOP5_IMAGE_FADE_HEIGHT = 230
+TOP5_PANEL_CORNER_RADIUS = 30
 TOP5_SOURCE_COLOR = (86, 91, 100)
 
 PREVIEW_SUBTITLE_DATA = {
@@ -117,258 +124,6 @@ def _font(candidates: tuple[Path, ...], size: int):
             return ImageFont.truetype(str(path), size)
 
     return ImageFont.load_default()
-
-
-def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
-    root = Path(__file__).resolve().parent / "fonts"
-    language = str(language or "english").casefold()
-
-    if role == "headline":
-        if language == "hindi":
-            return (
-                root / "NotoSansDevanagari-CondensedBlack.ttf",
-                root / "NotoSansDevanagari-Black.ttf",
-            )
-        if language == "telugu":
-            return (
-                root / "NotoSansTelugu-CondensedBlack.ttf",
-                root / "NotoSansTelugu-Black.ttf",
-            )
-        return (root / "Oswald-Bold.ttf",)
-
-    if language == "hindi":
-        return (
-            root / "NotoSansDevanagariUI-ExtraBold.ttf",
-            root / "NotoSansDevanagari-ExtraBold.ttf",
-            root / "NotoSansDevanagari-Bold.ttf",
-        )
-    if language == "telugu":
-        return (
-            root / "NotoSansTelugu-ExtraBold.ttf",
-            root / "NotoSansTelugu-Bold.ttf",
-        )
-    return (
-        root / "Oswald-Bold.ttf",
-    )
-
-
-def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
-    candidates = list(_font_candidates("headline", language))
-    candidates.extend(
-        [
-            Path("C:/Windows/Fonts/seguiemj.ttf"),
-            Path("C:/Windows/Fonts/seguisym.ttf"),
-            Path("C:/Windows/Fonts/Nirmala.ttf"),
-            Path("C:/Windows/Fonts/NirmalaUI.ttf"),
-            Path("C:/Windows/Fonts/msyh.ttc"),
-            Path("C:/Windows/Fonts/msgothic.ttc"),
-            Path("C:/Windows/Fonts/malgun.ttf"),
-            Path("C:/Windows/Fonts/arialuni.ttf"),
-            Path("C:/Windows/Fonts/seguisb.ttf"),
-            Path("C:/Windows/Fonts/arial.ttf"),
-            Path("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf"),
-            Path("/usr/share/fonts/opentype/noto/NotoSansSymbols2-Regular.ttf"),
-            Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
-            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-        ]
-    )
-    fonts = []
-    seen = set()
-    for path in candidates:
-        key = str(path).casefold()
-        if key in seen or not path.exists():
-            continue
-        seen.add(key)
-        try:
-            fonts.append(ImageFont.truetype(str(path), size))
-        except OSError:
-            continue
-    if not fonts:
-        fonts.append(ImageFont.load_default())
-    return tuple(fonts)
-
-
-def _headline_font_supports(font, char: str) -> bool:
-    if not char or char in "\n\r\t":
-        return True
-    try:
-        actual = font.getmask(char)
-        missing = font.getmask("\U0010ffff")
-        return actual.size != missing.size or bytes(actual) != bytes(missing)
-    except (AttributeError, OSError, ValueError):
-        return False
-
-
-def _headline_runs(text: str, fonts: tuple[object, ...]) -> list[tuple[str, object]]:
-    if not text:
-        return []
-    runs = []
-    current_font = None
-    current_text = []
-    for char in text:
-        font = next((candidate for candidate in fonts if _headline_font_supports(candidate, char)), fonts[-1])
-        if current_font is not None and font is not current_font:
-            runs.append(("".join(current_text), current_font))
-            current_text = []
-        if current_font is None or font is not current_font:
-            current_font = font
-        current_text.append(char)
-    if current_text:
-        runs.append(("".join(current_text), current_font))
-    return runs
-
-
-def _measure_headline_text(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    fonts: tuple[object, ...],
-) -> tuple[int, int]:
-    runs = _headline_runs(text, fonts)
-    if not runs:
-        return 0, 0
-    widths = []
-    heights = []
-    for run, font in runs:
-        box = draw.textbbox(
-            (0, 0),
-            run,
-            font=font,
-            stroke_width=HEADLINE_STROKE_WIDTH,
-        )
-        widths.append(box[2] - box[0])
-        heights.append(box[3] - box[1])
-    return sum(widths), max(heights)
-
-
-def _measure(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font,
-    stroke_width: int = 0,
-) -> tuple[int, int]:
-    box = draw.textbbox(
-        (0, 0),
-        text,
-        font=font,
-        stroke_width=stroke_width,
-    )
-    return box[2] - box[0], box[3] - box[1]
-
-
-def _headline_lines(
-    text: str,
-    draw: ImageDraw.ImageDraw,
-    fonts: tuple[object, ...],
-) -> list[list[str]]:
-    words = text.split()
-    if not words:
-        return []
-
-    measurements = [
-        _measure_headline_text(draw, word, fonts)[0]
-        for word in words
-    ]
-    max_line_width = HEADLINE_MAX_WIDTH - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
-
-    lines: list[list[str]] = []
-    current: list[str] = []
-    current_width = 0
-
-    for word, word_width in zip(words, measurements):
-        if word_width > max_line_width:
-            raise ValueError("Headline contains a word that is too wide to fit.")
-        next_width = (
-            current_width
-            + word_width
-            + (HEADLINE_MARKER_GAP if current else 0)
-        )
-        if current and next_width > max_line_width:
-            lines.append(current)
-            current = [word]
-            current_width = word_width
-        else:
-            current.append(word)
-            current_width = next_width
-
-    if current:
-        lines.append(current)
-
-    if len(lines) > HEADLINE_MAX_LINES:
-        raise ValueError("Headline is too long to fit on screen.")
-
-    return lines
-
-
-def _fit_headline_font(
-    text: str,
-    language: str = "english",
-):
-    clean = " ".join(str(text or "").upper().split()) or HEADLINE_TEXT
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-
-    for size in range(HEADLINE_MAX_SIZE, HEADLINE_MIN_SIZE - 1, -1):
-        fonts = _headline_font_stack(size, language)
-        try:
-            lines = _headline_lines(clean, probe, fonts)
-        except ValueError:
-            continue
-        return fonts[0], clean, lines
-
-    raise ValueError("Headline is too long to fit in two lines.")
-def make_sample_background() -> Image.Image:
-    image = Image.new("RGB", (WIDTH, HEIGHT))
-    draw = ImageDraw.Draw(image)
-    top = (24, 28, 36)
-    bottom = (8, 10, 14)
-
-    for y in range(HEIGHT):
-        mix = y / max(1, HEIGHT - 1)
-        color = tuple(
-            int(top[i] * (1 - mix) + bottom[i] * mix)
-            for i in range(3)
-        )
-        draw.line((0, y, WIDTH, y), fill=color)
-
-    return image
-
-
-def _load_logo():
-    path = Path(__file__).resolve().parent / "logo.png"
-    if not path.exists():
-        return None
-
-    with Image.open(path) as source:
-        logo = source.convert("RGBA")
-    logo.thumbnail((150, 150), Image.Resampling.LANCZOS)
-    return logo
-
-
-def _paste_logo(base: Image.Image) -> None:
-    logo = _load_logo()
-    if logo is None:
-        return
-
-    base.paste(
-        logo,
-        (WIDTH - logo.width - 42, 36),
-        logo,
-    )
-
-
-def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
-    draw = ImageDraw.Draw(base)
-    font = _font((), 24)
-    label = str(source_label or SOURCE_LABEL).strip() or SOURCE_LABEL
-    width, _ = _measure(draw, label, font)
-    draw.text(
-        (WIDTH - width - 42, HEIGHT - 86),
-        label,
-        font=font,
-        fill=(210, 216, 224),
-    )
-
-
-
 
 
 def _top5_body_font(size: int, language: str = "english"):
@@ -463,14 +218,13 @@ def _fit_top5_headline(text: str):
     if not clean:
         raise ValueError("Top-5 headline requires text.")
 
-    max_size = TOP5_HEADLINE_MAX_SIZE
-    for size in range(max_size, TOP5_HEADLINE_MIN_SIZE - 1, -1):
+    for size in range(TOP5_HEADLINE_MAX_SIZE, TOP5_HEADLINE_MIN_SIZE - 1, -1):
         font = _top5_headline_font(size)
         lines = _top5_wrap_words(
             probe,
             clean,
             font,
-            WIDTH - (TOP5_MARGIN * 2),
+            TOP5_HEADLINE_MAX_WIDTH,
         )
         if len(lines) <= TOP5_HEADLINE_MAX_LINES:
             return font, lines
@@ -492,7 +246,7 @@ def _fit_top5_body(
 
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     available_height = max_height or (
-        HEIGHT - TOP5_PANEL_TOP - TOP5_MARGIN - TOP5_HEADLINE_BODY_GAP - 90
+        HEIGHT - TOP5_SAFE_BOTTOM - TOP5_HEADLINE_BODY_GAP - 120
     )
 
     for size in range(TOP5_BODY_MAX_SIZE, TOP5_BODY_MIN_SIZE - 1, -1):
@@ -517,7 +271,55 @@ def _fit_top5_body(
     raise ValueError("Top-5 body copy is too long to fit cleanly.")
 
 
-def _fit_top5_image(value: bytes | bytearray | Image.Image) -> Image.Image:
+def _top5_text_metrics(
+    headline_font,
+    headline_lines: list[list[str]],
+    body_font,
+    body_paragraphs: list[list[list[str]]],
+) -> tuple[int, int]:
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    headline_box = probe.textbbox((0, 0), "Ag", font=headline_font)
+    headline_line_height = headline_box[3] - headline_box[1]
+    headline_height = (
+        headline_line_height * len(headline_lines)
+        + TOP5_HEADLINE_LINE_GAP * max(0, len(headline_lines) - 1)
+    )
+
+    body_lines = [line for paragraph in body_paragraphs for line in paragraph]
+    if not body_lines or body_font is None:
+        return headline_height, 0
+
+    body_box = probe.textbbox((0, 0), "Ag", font=body_font)
+    body_line_height = body_box[3] - body_box[1]
+    body_height = (
+        body_line_height * len(body_lines)
+        + TOP5_BODY_LINE_GAP * max(0, len(body_lines) - 1)
+        + 24 * max(0, len(body_paragraphs) - 1)
+    )
+    return headline_height, body_height
+
+
+def _top5_panel_geometry(
+    headline_height: int,
+    body_height: int,
+    has_body: bool,
+) -> tuple[int, int, int]:
+    content_height = headline_height + (
+        TOP5_HEADLINE_BODY_GAP + body_height if has_body else 0
+    )
+    panel_top = max(
+        720,
+        HEIGHT - TOP5_SAFE_BOTTOM - TOP5_PANEL_BOTTOM_GAP - content_height - 120,
+    )
+    panel_bottom = min(
+        HEIGHT - TOP5_SAFE_BOTTOM,
+        panel_top + content_height + 120,
+    )
+    content_top = panel_top + 56
+    return panel_top, panel_bottom, content_top
+
+
+def _top5_full_frame_image(value: bytes | bytearray | Image.Image) -> Image.Image:
     if isinstance(value, Image.Image):
         image = value.convert("RGB")
     elif isinstance(value, (bytes, bytearray)):
@@ -529,18 +331,38 @@ def _fit_top5_image(value: bytes | bytearray | Image.Image) -> Image.Image:
     else:
         raise ValueError("A Top-5 visual is missing.")
 
-    target = (WIDTH, TOP5_IMAGE_HEIGHT)
-    source_ratio = image.width / image.height
-    target_ratio = target[0] / target[1]
-    if source_ratio > target_ratio:
-        crop_width = max(1, int(image.height * target_ratio))
-        left = (image.width - crop_width) // 2
-        image = image.crop((left, 0, left + crop_width, image.height))
-    else:
-        crop_height = max(1, int(image.width / target_ratio))
-        top = (image.height - crop_height) // 2
-        image = image.crop((0, top, image.width, top + crop_height))
-    return image.resize(target, Image.Resampling.LANCZOS)
+    if image.size == (WIDTH, HEIGHT):
+        return image
+    return image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+
+
+def _draw_top5_image_fade(
+    base: Image.Image,
+    panel_top: int,
+    panel_bottom: int,
+) -> Image.Image:
+    canvas = _top5_full_frame_image(base).convert("RGBA")
+    fade_top = max(0, panel_top - TOP5_IMAGE_FADE_HEIGHT)
+    fade_height = max(1, panel_top - fade_top)
+
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay, "RGBA")
+
+    for index in range(fade_height):
+        progress = index / max(1, fade_height - 1)
+        eased = progress * progress * (3 - 2 * progress)
+        alpha = int(255 * eased)
+        draw.line(
+            (0, fade_top + index, WIDTH, fade_top + index),
+            fill=(*TOP5_PANEL_WHITE, alpha),
+        )
+
+    draw.rectangle(
+        (0, panel_top, WIDTH, panel_bottom),
+        fill=(*TOP5_PANEL_WHITE, 255),
+    )
+    canvas.alpha_composite(overlay)
+    return canvas
 
 
 def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
@@ -550,42 +372,40 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
         raise ValueError("Top-5 card requires a headline.")
 
     language = str(card.get("language") or "english")
-    story_number = int(card.get("story_number") or 0)
     headline_font, headline_lines = _fit_top5_headline(headline)
 
-    canvas = Image.new("RGBA", (WIDTH, HEIGHT), (*TOP5_PANEL_BACKGROUND, 255))
-    image = _fit_top5_image(base)
-    canvas.paste(image, (0, 0))
+    body_font = None
+    body_paragraphs = []
+    if body:
+        body_font, body_paragraphs = _fit_top5_body(body, language)
 
+    headline_height, body_height = _top5_text_metrics(
+        headline_font,
+        headline_lines,
+        body_font,
+        body_paragraphs,
+    )
+    panel_top, panel_bottom, content_top = _top5_panel_geometry(
+        headline_height,
+        body_height,
+        bool(body_paragraphs),
+    )
+
+    canvas = _draw_top5_image_fade(
+        base,
+        panel_top,
+        panel_bottom,
+    )
     draw = ImageDraw.Draw(canvas, "RGBA")
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
-    headline_metrics = [
-        probe.textbbox((0, 0), "Ag", font=headline_font)
-        for _ in headline_lines
-    ]
-    headline_line_height = max(
-        box[3] - box[1]
-        for box in headline_metrics
-    )
-    headline_height = (
-        headline_line_height * len(headline_lines)
-        + TOP5_HEADLINE_LINE_GAP * max(0, len(headline_lines) - 1)
-    )
-
-    if story_number == 0 or not body:
-        headline_y = TOP5_PANEL_TOP + (
-            HEIGHT - TOP5_PANEL_TOP - headline_height
-        ) // 2
-    else:
-        headline_y = TOP5_PANEL_TOP + TOP5_MARGIN + 30
-
+    headline_y = content_top
     for row, line_words in enumerate(headline_lines):
         line = " ".join(line_words)
         box = draw.textbbox((0, 0), line, font=headline_font)
-        width = box[2] - box[0]
-        x = (WIDTH - width) // 2
-        y = headline_y + row * (headline_line_height + TOP5_HEADLINE_LINE_GAP)
+        x = TOP5_MARGIN_X
+        y = headline_y + row * (
+            (box[3] - box[1]) + TOP5_HEADLINE_LINE_GAP
+        )
         draw.text(
             (x - box[0], y - box[1]),
             line,
@@ -593,34 +413,27 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
             fill=(14, 16, 20, 255),
         )
 
-    if body:
-        body_top = headline_y + headline_height + TOP5_HEADLINE_BODY_GAP
-        body_bottom = HEIGHT - 112
-        body_font, paragraphs = _fit_top5_body(
-            body,
-            language,
-            max_height=max(1, body_bottom - body_top),
-        )
-        if body_font:
-            cursor_y = body_top
-            line_box = draw.textbbox((0, 0), "Ag", font=body_font)
-            line_height = line_box[3] - line_box[1]
-            for paragraph_index, lines in enumerate(paragraphs):
-                for line_words in lines:
-                    line = " ".join(line_words)
-                    box = draw.textbbox((0, 0), line, font=body_font)
-                    draw.text(
-                        (
-                            TOP5_MARGIN - box[0],
-                            cursor_y - box[1],
-                        ),
-                        line,
-                        font=body_font,
-                        fill=(86, 91, 100, 255),
-                    )
-                    cursor_y += line_height + TOP5_BODY_LINE_GAP
-                if paragraph_index < len(paragraphs) - 1:
-                    cursor_y += 24
+    if body_paragraphs and body_font:
+        body_y = headline_y + headline_height + TOP5_HEADLINE_BODY_GAP
+        line_box = draw.textbbox((0, 0), "Ag", font=body_font)
+        line_height = line_box[3] - line_box[1]
+
+        for paragraph_index, paragraph in enumerate(body_paragraphs):
+            for line_words in paragraph:
+                line = " ".join(line_words)
+                box = draw.textbbox((0, 0), line, font=body_font)
+                draw.text(
+                    (
+                        TOP5_MARGIN_X + 8 - box[0],
+                        body_y - box[1],
+                    ),
+                    line,
+                    font=body_font,
+                    fill=(86, 91, 100, 255),
+                )
+                body_y += line_height + TOP5_BODY_LINE_GAP
+            if paragraph_index < len(body_paragraphs) - 1:
+                body_y += 24
 
     return canvas
 
@@ -632,7 +445,7 @@ def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
     box = draw.textbbox((0, 0), label, font=font)
     draw.text(
         (
-            WIDTH - TOP5_MARGIN - (box[2] - box[0]),
+            WIDTH - TOP5_MARGIN_X - (box[2] - box[0]),
             HEIGHT - 48,
         ),
         label,
@@ -649,10 +462,10 @@ def build_top5_card_preview(
     total_stories: int = 5,
     source_label: str | None = None,
 ) -> bytes:
-    "Render one static Top-5 slide using the same full-frame visual language as the approved Cricket Stats Card."
+    "Render one static Top-5 slide using the full manually-cropped 9:16 image and a content-sized light panel."
     frame = _draw_top5_card(_fit_visual_to_frame(source_image), {
         "headline": headline,
-        "body": body,
+        "body": body if story_number else "",
         "story_number": story_number,
         "total_stories": total_stories,
     })
@@ -661,6 +474,8 @@ def build_top5_card_preview(
     buffer = BytesIO()
     frame.convert("RGB").save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
+
+
 def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
     primary_font, clean, lines = _fit_headline_font(text, language)
     fonts = _headline_font_stack(primary_font.size, language)
