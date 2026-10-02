@@ -98,7 +98,6 @@ def test_top5_headline_can_use_two_lines_and_shrinks_when_needed():
     )
     long_font, long_lines = renderer._fit_top5_headline(
         "India reshuffles the squad after a late selection change before the next series",
-        story_number=0,
     )
 
     assert short_font.size >= long_font.size
