@@ -373,7 +373,10 @@ def test_cricsheet_registry_loads_canonical_names_and_variants(monkeypatch):
     stats_card._cricsheet_registry.cache_clear()
 
     people, aliases = stats_card._cricsheet_registry(123456)
+    cached_people, cached_aliases = stats_card._cricsheet_registry(123456)
 
+    assert people is cached_people
+    assert aliases is cached_aliases
     assert people["vk1"]["unique_name"] == "V Kohli"
     assert aliases[stats_card._name_key("Virat Kohli")] == {"vk1"}
     assert aliases[stats_card._name_key("V. Kohli")] == {"vk1"}
@@ -459,6 +462,28 @@ def test_duplicate_name_uses_requested_format_to_disambiguate(monkeypatch):
 
     assert player["identifier"] == "p1"
     assert player["unique_name"] == "AB Smith"
+
+
+def test_same_name_across_genders_uses_requested_gender(monkeypatch):
+    people, aliases = _registry_fixture(
+        ("male1", "A Lee", "AB Lee"),
+        ("female1", "A Lee", "AC Lee"),
+    )
+    monkeypatch.setattr(stats_card, "_cricsheet_registry", lambda _: (people, aliases))
+
+    def fake_query(sql):
+        if "FROM ball_by_ball_odi_women" in sql:
+            return [{"striker": "AC Lee"}]
+        raise AssertionError(f"Unexpected SQL: {sql}")
+
+    monkeypatch.setattr(stats_card, "_query", fake_query)
+
+    player = stats_card._resolve_player(
+        stats_card._parse_query("A Lee women's ODI stats")
+    )
+
+    assert player["identifier"] == "female1"
+    assert player["unique_name"] == "AC Lee"
 
 
 def test_duplicate_name_remains_ambiguous_when_format_cannot_disambiguate(monkeypatch):
