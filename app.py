@@ -4281,9 +4281,8 @@ elif st.session_state.app_mode == "test":
                     existing = list(topics) if more else []
                     exclude = existing
                     with st.spinner("Fetching current cricket stories…"):
-                        from topic_fetcher import fetch_topics
-                        new_topics = fetch_topics(
-                            "cricket_india_asia",
+                        from topic_fetcher import fetch_top5_topics
+                        new_topics = fetch_top5_topics(
                             more=more,
                             exclude_topics=exclude,
                             limit=20,
