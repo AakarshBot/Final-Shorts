@@ -5,12 +5,15 @@ from PIL import Image
 import renderer
 
 
-def test_top5_preview_is_vertical_and_uses_full_width_image():
-    source = BytesIO()
-    Image.new("RGB", (1600, 900), (12, 34, 56)).save(source, format="PNG")
+def _solid_png(size, color):
+    buffer = BytesIO()
+    Image.new("RGB", size, color).save(buffer, format="PNG")
+    return buffer.getvalue()
 
+
+def test_top5_preview_is_vertical_and_preserves_full_9x16_crop():
     preview = renderer.build_top5_card_preview(
-        source.getvalue(),
+        _solid_png((1080, 1920), (12, 34, 56)),
         "India name a major change today",
         "The decision follows a recent development. The board confirmed the change after reviewing the latest result.",
         story_number=1,
@@ -19,31 +22,37 @@ def test_top5_preview_is_vertical_and_uses_full_width_image():
     image = Image.open(BytesIO(preview)).convert("RGB")
 
     assert image.size == (1080, 1920)
-    assert image.getpixel((60, 400)) == (12, 34, 56)
-
-    font, lines = renderer._fit_top5_headline("India name a major change today")
-    headline_box = font.getbbox("Ag")
-    headline_height = (headline_box[3] - headline_box[1]) * len(lines)
-    panel_top, _, content_top = renderer._top5_panel_geometry(
-        headline_height,
-        0,
-        False,
-    )
-    assert content_top > panel_top
-    assert image.getpixel((60, content_top)) == (249, 250, 252)
+    assert image.getpixel((12, 180)) == (12, 34, 56)
 
 
-def test_top5_preview_handles_long_story_headline():
-    source = BytesIO()
-    Image.new("RGB", (1600, 900), "white").save(source, format="JPEG")
-
+def test_top5_preview_keeps_a_9x16_crop_instead_of_recropping_it():
+    source = Image.new("RGB", (900, 1600), (80, 20, 120))
     preview = renderer.build_top5_card_preview(
-        source.getvalue(),
-        "India reshuffles the squad after a late selection change",
-        "The move changes the lineup and follows the latest selection update.",
-        story_number=3,
+        source,
+        "Five cricket stories shaping today",
+        story_number=0,
     )
-    assert Image.open(BytesIO(preview)).size == (1080, 1920)
+    image = Image.open(BytesIO(preview)).convert("RGB")
+
+    assert image.size == (1080, 1920)
+    corner = image.getpixel((12, 300))
+    assert corner != (249, 250, 252)
+
+
+def test_top5_preview_uses_localized_readability_treatment_not_a_full_width_panel():
+    preview = renderer.build_top5_card_preview(
+        _solid_png((1080, 1920), (236, 236, 236)),
+        "India confirm the latest squad change",
+        "The board confirmed the move. The decision changes the lineup.",
+        story_number=1,
+    )
+    image = Image.open(BytesIO(preview)).convert("RGB")
+
+    assert image.size == (1080, 1920)
+    edge_pixel = image.getpixel((20, 1180))
+    center_pixel = image.getpixel((430, 1300))
+    assert edge_pixel != (249, 250, 252)
+    assert center_pixel != edge_pixel
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
@@ -102,7 +111,7 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
     assert seen and seen[0]["story_number"] == 2
 
 
-def test_top5_headline_can_use_two_lines_and_shrinks_when_needed():
+def test_top5_headline_layout_is_dynamic():
     short_font, short_lines = renderer._fit_top5_headline(
         "India make a major change",
     )
@@ -119,13 +128,13 @@ def test_top5_body_layout_is_dynamic():
     short_body_font, short_paragraphs = renderer._fit_top5_body(
         "The board confirmed the move. The decision changes the lineup.",
         "english",
-        max_height=650,
+        max_height=400,
     )
     long_body_font, long_paragraphs = renderer._fit_top5_body(
         "The board confirmed the move after reviewing the latest result and the selection options. "
         "The decision changes the lineup ahead of the next series and follows the latest update from officials.",
         "english",
-        max_height=650,
+        max_height=400,
     )
 
     assert short_body_font.size >= long_body_font.size
@@ -134,7 +143,7 @@ def test_top5_body_layout_is_dynamic():
     )
 
 
-def test_top5_body_is_read_as_two_editorial_paragraphs():
+def test_top5_body_is_two_editorial_sentences():
     font, paragraphs = renderer._fit_top5_body(
         "The board confirmed the move after the latest result. The decision changes the lineup for the next series.",
         "english",
@@ -146,11 +155,8 @@ def test_top5_body_is_read_as_two_editorial_paragraphs():
 
 
 def test_top5_opener_has_no_body_copy():
-    source = BytesIO()
-    Image.new("RGB", (900, 1600), "white").save(source, format="JPEG")
-
     preview = renderer.build_top5_card_preview(
-        source.getvalue(),
+        _solid_png((900, 1600), "white"),
         "Five cricket stories shaping today",
         story_number=0,
     )
@@ -164,41 +170,27 @@ def test_top5_opener_has_no_body_copy():
     assert renderer._fit_top5_body("", "english") == (None, [])
 
 
-def test_top5_panel_shrinks_for_shorter_copy():
+def test_top5_text_geometry_respects_bottom_safe_boundary():
     headline_font, headline_lines = renderer._fit_top5_headline(
         "India confirm the latest squad change",
     )
-    short_body_font, short_body = renderer._fit_top5_body(
+    body_font, body = renderer._fit_top5_body(
         "The board confirmed the move. The decision changes the lineup.",
         "english",
     )
-    long_body_font, long_body = renderer._fit_top5_body(
-        "The board confirmed the move after reviewing the latest result and the selection options. "
-        "The decision changes the lineup ahead of the next series and follows the latest update from officials.",
-        "english",
+    headline_height, body_height = renderer._top5_text_metrics(
+        headline_font,
+        headline_lines,
+        body_font,
+        body,
     )
 
-    headline_height, short_height = renderer._top5_text_metrics(
-        headline_font,
-        headline_lines,
-        short_body_font,
-        short_body,
-    )
-    _, long_height = renderer._top5_text_metrics(
-        headline_font,
-        headline_lines,
-        long_body_font,
-        long_body,
-    )
-    short_top, short_bottom, _ = renderer._top5_panel_geometry(
+    content_top, content_bottom, content_height = renderer._top5_text_geometry(
         headline_height,
-        short_height,
-        True,
-    )
-    long_top, long_bottom, _ = renderer._top5_panel_geometry(
-        headline_height,
-        long_height,
+        body_height,
         True,
     )
 
-    assert (short_bottom - short_top) <= (long_bottom - long_top)
+    assert content_top < content_bottom
+    assert content_height == content_bottom - content_top
+    assert content_bottom <= renderer.HEIGHT - renderer.TOP5_TEXT_SAFE_BOTTOM
