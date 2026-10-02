@@ -55,9 +55,9 @@ TOP5_CARD_TOP = 32
 TOP5_IMAGE_BOTTOM = 980
 TOP5_CARD_BOTTOM = 1880
 TOP5_CARD_RADIUS = 30
-TOP5_CARD_PADDING_X = 58
-TOP5_HEADLINE_MAX_SIZE = 82
-TOP5_HEADLINE_MIN_SIZE = 30
+TOP5_CARD_PADDING_X = 44
+TOP5_HEADLINE_MAX_SIZE = 72
+TOP5_HEADLINE_MIN_SIZE = 28
 TOP5_BODY_MAX_SIZE = 34
 TOP5_BODY_MIN_SIZE = 22
 TOP5_BODY_MAX_WIDTH = 760
@@ -457,7 +457,7 @@ def _fit_top5_headline(text: str):
             clean,
             font,
             max_width,
-            8,
+            5,
         )
         if len(lines) == 1:
             return font, lines
@@ -638,7 +638,18 @@ def _draw_top5_card(
     )
 
     image = _fit_visual_to_card_image(base, image_bottom - card_top)
-    base.paste(image, (card_left, card_top))
+    image_mask = Image.new("L", image.size, 255)
+    mask_draw = ImageDraw.Draw(image_mask)
+    mask_draw.rounded_rectangle(
+        (0, 0, image.width, image.height),
+        radius=TOP5_CARD_RADIUS,
+        fill=255,
+    )
+    mask_draw.rectangle(
+        (0, image.height - TOP5_CARD_RADIUS, image.width, image.height),
+        fill=255,
+    )
+    base.paste(image, (card_left, card_top), image_mask)
 
     headline_box = draw.textbbox((0, 0), "Ag", font=headline_font)
     headline_h = headline_box[3] - headline_box[1]
