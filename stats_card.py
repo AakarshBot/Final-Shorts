@@ -572,6 +572,16 @@ def _resolve_player(intent: StatsIntent) -> dict[str, Any]:
         raise StatsCardError("The matched player has no usable database identifier.")
 
     display_name = _normalise(candidate.get("name") or unique_name)
+    matched_aliases = sorted(
+        (
+            _normalise(alias)
+            for alias in (candidate.get("aliases") or ())
+            if _name_key(alias) == query_key
+        ),
+        key=lambda value: (bool(re.search(r"[^A-Za-z0-9 ]", value)), -len(value), value.casefold()),
+    )
+    if matched_aliases:
+        display_name = matched_aliases[0]
     return {
         "identifier": _normalise(candidate.get("identifier") or ""),
         "name": display_name,
