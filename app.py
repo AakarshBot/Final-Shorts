@@ -4686,11 +4686,33 @@ elif st.session_state.app_mode == "test":
             slide_type = st.pills(
                 "Slide type",
                 ["Slide 1 · Package opener", "Story slide"],
-                default=st.session_state.get("test_top5_visual_slide_type", "Slide 1 · Package opener"),
+                default=st.session_state.get(
+                    "test_top5_visual_slide_type",
+                    "Slide 1 · Package opener",
+                ),
                 key="test-top5-standalone-slide-type",
                 label_visibility="collapsed",
             ) or "Slide 1 · Package opener"
             st.session_state.test_top5_visual_slide_type = slide_type
+
+            animation_options = {
+                "Heart": "heart",
+                "Comment": "comment",
+                "Share": "share",
+                "Tap": "tap",
+            }
+            animation_label = st.pills(
+                "Micro interaction",
+                list(animation_options),
+                default=st.session_state.get(
+                    "test_top5_standalone_animation",
+                    "Heart",
+                ),
+                key="test-top5-standalone-animation",
+                label_visibility="collapsed",
+            ) or "Heart"
+            interaction_animation = animation_options[animation_label]
+            st.session_state.test_top5_standalone_animation = animation_label
 
             headline = st.text_area(
                 "Headline",
@@ -4713,7 +4735,7 @@ elif st.session_state.app_mode == "test":
                     value=st.session_state.get("test_top5_standalone_body", ""),
                     height=105,
                     max_chars=500,
-                    placeholder="Optional supporting facts shown on the visual only; they are not narrated.",
+                    placeholder="Two concise factual sentences shown on the visual only; they are not narrated.",
                     key="test-top5-standalone-body",
                 )
                 st.session_state.test_top5_standalone_body = body
@@ -4747,11 +4769,13 @@ elif st.session_state.app_mode == "test":
                     ("test_top5_standalone_query", ""),
                     ("test_top5_standalone_headline", ""),
                     ("test_top5_standalone_body", ""),
+                    ("test_top5_standalone_animation", "Heart"),
                 ):
                     st.session_state[key] = value
                 st.session_state.test_top5_standalone_result = None
                 st.session_state.test_top5_standalone_selected = None
                 st.session_state.test_top5_standalone_preview = None
+                st.session_state.test_top5_standalone_motion_preview = None
                 st.session_state.test_top5_visual_crops.pop("top5-standalone", None)
                 st.rerun()
 
@@ -4843,24 +4867,41 @@ elif st.session_state.app_mode == "test":
                     )
 
                 if render:
-                    from renderer import build_top5_card_preview
+                    from renderer import (
+                        build_top5_card_motion_preview,
+                        build_top5_card_preview,
+                    )
+                    story_number = 0 if slide_type.startswith("Slide 1") else 1
                     preview = build_top5_card_preview(
                         working_bytes,
                         headline,
                         body,
-                        story_number=0 if slide_type.startswith("Slide 1") else 1,
+                        story_number=story_number,
                         total_stories=5,
                         source_label="Commons",
+                        interaction_animation=interaction_animation,
+                    )
+                    motion_preview = build_top5_card_motion_preview(
+                        working_bytes,
+                        headline,
+                        body,
+                        story_number=story_number,
+                        total_stories=5,
+                        source_label="Commons",
+                        interaction_animation=interaction_animation,
                     )
                     st.session_state.test_top5_standalone_preview = preview
+                    st.session_state.test_top5_standalone_motion_preview = motion_preview
 
                 preview = st.session_state.get("test_top5_standalone_preview")
+                motion_preview = st.session_state.get("test_top5_standalone_motion_preview")
                 if preview:
                     st.markdown('<div class="mini-label" style="margin-top:1rem;">RENDERED SLIDE</div>', unsafe_allow_html=True)
                     st.image(preview, width="stretch")
+                    if motion_preview:
+                        st.video(motion_preview)
                     st.caption(
-                        "This is the actual Top-5 renderer treatment using the selected/cropped image. "
-                        "The source image remains unchanged."
+                        "Still preview above; motion preview below. The source image remains unchanged."
                     )
         else:
             stage_labels = {
