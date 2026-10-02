@@ -22,7 +22,6 @@ MAX_RELATED_ARTICLES = 2
 MAX_SLIDE_ONE_WORDS = 13
 MAX_SCRIPT_SECONDS = 32.0
 WORDS_PER_SECOND = 2.5
-HOOK_MAX_SECONDS = 3.0  # Shared by the separately implemented Niche Sports writer.
 
 LANGUAGE_INSTRUCTIONS = {
     "english": "Write all narration and publish metadata in punchy, natural spoken English.",
@@ -301,7 +300,7 @@ def _research_story(story) -> str:
     return "\n\n".join(sections)[:MAX_SOURCE_CHARS]
 
 
-def _request(model: str, prompt: str, story: str, schema: dict | None = None) -> dict:
+def _request(model: str, prompt: str, story: str) -> dict:
     key = _clean(os.getenv("GROQ_API_KEY"))
     if not key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
@@ -320,7 +319,7 @@ def _request(model: str, prompt: str, story: str, schema: dict | None = None) ->
                 "json_schema": {
                     "name": "cricket_shorts_script",
                     "strict": True,
-                    "schema": schema or CRICKET_SCHEMA,
+                    "schema": CRICKET_SCHEMA,
                 },
             },
             "include_reasoning": False,
@@ -380,7 +379,7 @@ def validate_script(result: dict, source: str) -> tuple[bool, str]:
     return True, ""
 
 
-def validate_cricket_script(result: dict, source: str) -> tuple[bool, str]:
+def validate_cricket_script(result: dict) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
 
@@ -454,12 +453,12 @@ def write_script(story, language: str = "english") -> dict:
     )
 
     try:
-        result = _request(MODELS[0], instruction, source, schema=CRICKET_SCHEMA)
+        result = _request(MODELS[0], instruction, source)
     except Exception as first_error:
         result = None
         first_reason = f"{type(first_error).__name__}: {first_error}"
     else:
-        valid, reason = validate_cricket_script(result, source)
+        valid, reason = validate_cricket_script(result)
         if valid:
             return _finish_result(result, story, source, MODELS[0], language_key)
         first_reason = reason
@@ -474,14 +473,14 @@ def write_script(story, language: str = "english") -> dict:
     )
 
     try:
-        rewritten = _request(MODELS[1], rewrite_instruction, source, schema=CRICKET_SCHEMA)
+        rewritten = _request(MODELS[1], rewrite_instruction, source)
     except Exception as second_error:
         raise RuntimeError(
             "Script generation failed after one hidden rewrite: "
             + f"{first_reason} | {type(second_error).__name__}: {second_error}"
         ) from second_error
 
-    valid, reason = validate_cricket_script(rewritten, source)
+    valid, reason = validate_cricket_script(rewritten)
     if not valid:
         raise RuntimeError("Script generation failed after one hidden rewrite: " + reason)
 
@@ -498,7 +497,7 @@ def apply_script_edits(script: dict, voiceovers: list[str], headline: str | None
     if headline is not None:
         result["headline"] = _clean(headline)
     if validate:
-        valid, reason = validate_cricket_script(result, _clean(result.get("source_evidence")))
+        valid, reason = validate_cricket_script(result)
         if not valid:
             raise ValueError(f"Edited script failed local validation: {reason}")
     result["human_script_edited"] = any(
