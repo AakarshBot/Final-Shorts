@@ -52,7 +52,6 @@ DARK = (5, 7, 10)
 
 TOP5_IMAGE_HEIGHT = 860
 TOP5_PANEL_TOP = TOP5_IMAGE_HEIGHT
-TOP5_PANEL_BACKGROUND = (246, 247, 249)
 TOP5_PANEL_WHITE = (249, 250, 252)
 TOP5_MARGIN_X = 64
 TOP5_SAFE_RIGHT = 250
@@ -70,7 +69,6 @@ TOP5_BODY_LINE_GAP = 12
 TOP5_HEADLINE_BODY_GAP = 42
 TOP5_PANEL_BOTTOM_GAP = 56
 TOP5_IMAGE_FADE_HEIGHT = 230
-TOP5_PANEL_CORNER_RADIUS = 30
 TOP5_SOURCE_COLOR = (86, 91, 100)
 
 PREVIEW_SUBTITLE_DATA = {
@@ -358,7 +356,7 @@ def _draw_top5_image_fade(
         )
 
     draw.rectangle(
-        (0, panel_top, WIDTH, panel_bottom),
+        (0, fade_end, WIDTH, panel_bottom),
         fill=(*TOP5_PANEL_WHITE, 255),
     )
     canvas.alpha_composite(overlay)
