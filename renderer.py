@@ -660,7 +660,10 @@ def render_frame(
             t,
             str(subtitle_data.get("language") or "english"),
         )
-    _draw_subtitles(frame, subtitle_data, t, subtitle_y)
+    if subtitle_y is None:
+        _draw_subtitles(frame, subtitle_data, t)
+    else:
+        _draw_subtitles(frame, subtitle_data, t, subtitle_y)
 
     _paste_logo(frame)
     if source_label is None:
