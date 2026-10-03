@@ -473,7 +473,7 @@ def approve_top5_audio(audio: dict[str, Any]) -> dict[str, Any]:
                 f"Top-5 Audio file for scene {expected_number} is missing or invalid."
             )
 
-    result = json.loads(json.dumps(audio, ensure_ascii=False))
+    result = dict(audio)
     result["approved_for_visuals"] = True
     return result
 
@@ -491,6 +491,6 @@ def approve_audio(audio: dict[str, Any]) -> dict[str, Any]:
             raise ValueError(
                 f"Audio file for scene {scene.get('scene')} is missing or invalid."
             )
-    result = json.loads(json.dumps(audio, ensure_ascii=False))
+    result = dict(audio)
     result["approved_for_visuals"] = True
     return result
