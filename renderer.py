@@ -1113,8 +1113,8 @@ def render_frame(
     source_label: str | None = None,
     subtitle_y: int | None = None,
     top5_card: dict | None = None,
-    quote_card: dict | None = None,
     validate_handoff: bool = True,
+    quote_card: dict | None = None,
 ) -> Image.Image:
     if validate_handoff and not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
