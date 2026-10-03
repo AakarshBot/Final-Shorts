@@ -72,41 +72,6 @@ TOP5_HAZE_MAX_ALPHA = 188
 TOP5_LIGHT_TEXT_THRESHOLD = 146
 TOP5_SOURCE_COLOR = (86, 91, 100)
 
-PREVIEW_SUBTITLE_DATA = {
-    "schema": "final-shorts.subtitles.v1",
-    "language": "english",
-    "cues": [
-        {
-            "start": 0.30,
-            "end": 1.28,
-            "words": [
-                {"text": "India", "start": 0.30, "end": 0.52},
-                {"text": "started", "start": 0.52, "end": 0.75},
-                {"text": "strongly,", "start": 0.75, "end": 0.98},
-                {"text": "but", "start": 0.98, "end": 1.28},
-            ],
-        },
-        {
-            "start": 1.28,
-            "end": 2.27,
-            "words": [
-                {"text": "the", "start": 1.28, "end": 1.44},
-                {"text": "momentum", "start": 1.44, "end": 1.70},
-                {"text": "shifted", "start": 1.70, "end": 1.96},
-                {"text": "when", "start": 1.96, "end": 2.27},
-            ],
-        },
-        {
-            "start": 2.27,
-            "end": 2.85,
-            "words": [
-                {"text": "pressure", "start": 2.27, "end": 2.51},
-                {"text": "finally", "start": 2.51, "end": 2.68},
-                {"text": "arrived.", "start": 2.68, "end": 2.85},
-            ],
-        },
-    ],
-}
 
 @lru_cache(maxsize=256)
 def _font(candidates: tuple[Path, ...], size: int):
@@ -325,23 +290,6 @@ def _fit_headline_font(
         return fonts[0], clean, lines
 
     raise ValueError("Headline is too long to fit on screen.")
-def make_sample_background() -> Image.Image:
-    image = Image.new("RGB", (WIDTH, HEIGHT))
-    draw = ImageDraw.Draw(image)
-    top = (24, 28, 36)
-    bottom = (8, 10, 14)
-
-    for y in range(HEIGHT):
-        mix = y / max(1, HEIGHT - 1)
-        color = tuple(
-            int(top[i] * (1 - mix) + bottom[i] * mix)
-            for i in range(3)
-        )
-        draw.line((0, y, WIDTH, y), fill=color)
-
-    return image
-
-
 @lru_cache(maxsize=1)
 def _load_logo():
     path = Path(__file__).resolve().parent / "logo.png"
@@ -1226,54 +1174,6 @@ def write_preview_video(frames, path: Path) -> Path:
     if code != 0:
         raise RuntimeError(stderr.strip() or "ffmpeg failed to create the preview.")
     return path
-
-
-def build_preview_bundle(
-    output_dir: str | Path | None = None,
-    headline_enabled: bool = True,
-    headline_text: str = HEADLINE_TEXT,
-) -> dict[str, Path]:
-    root = Path(__file__).resolve().parent
-    output = Path(output_dir) if output_dir else root / "output" / "renderer_previews"
-    output.mkdir(parents=True, exist_ok=True)
-
-    base = make_sample_background()
-
-    opening_count = max(1, int(HEADLINE_SECONDS * FPS))
-    videos = {
-        "opening": write_preview_video(
-            (
-                render_frame(
-                    base,
-                    index / FPS,
-                    PREVIEW_SUBTITLE_DATA,
-                    headline_text,
-                    headline_enabled,
-                )
-                for index in range(opening_count)
-            ),
-            output / "opening_headline.mp4",
-        )
-    }
-
-    frame_count = max(1, int(2.85 * FPS))
-    videos["final"] = write_preview_video(
-        (
-            render_frame(
-                base,
-                index / FPS,
-                PREVIEW_SUBTITLE_DATA,
-                headline_text,
-                headline_enabled,
-            )
-            for index in range(frame_count)
-        ),
-        output / "final_editorial_highlight.mp4",
-    )
-
-    return videos
-
-
 
 
 def _fit_visual_to_frame(value: bytes | bytearray | Image.Image) -> Image.Image:
