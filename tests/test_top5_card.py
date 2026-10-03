@@ -218,15 +218,6 @@ def test_top5_headline_layout_is_dynamic():
     short_fonts, short_display, short_lines = renderer._fit_top5_editorial_headline(
         "India make a major change",
     )
-    
-def test_top5_editorial_headline_handles_long_manual_headlines():
-    fonts, display, lines = renderer._fit_top5_editorial_headline(
-        "India announce a major selection change after the latest international cricket result",
-    )
-    assert display
-    assert len(lines) <= renderer.TOP5_EDITORIAL_HEADLINE_MAX_LINES
-    assert fonts[0].size >= renderer.TOP5_EDITORIAL_HEADLINE_MIN_SIZE
-
     long_fonts, long_display, long_lines = renderer._fit_top5_editorial_headline(
         "India reshuffles squad after a late selection change",
     )
@@ -237,6 +228,15 @@ def test_top5_editorial_headline_handles_long_manual_headlines():
     assert short_fonts[0].size >= long_fonts[0].size
     assert len(short_lines) <= 2
     assert len(long_lines) <= 2
+
+
+def test_top5_editorial_headline_handles_long_manual_headlines():
+    fonts, display, lines = renderer._fit_top5_editorial_headline(
+        "India announce a major selection change after the latest international cricket result",
+    )
+    assert display
+    assert len(lines) <= renderer.TOP5_EDITORIAL_HEADLINE_MAX_LINES
+    assert fonts[0].size >= renderer.TOP5_EDITORIAL_HEADLINE_MIN_SIZE
 
 
 def test_top5_body_layout_is_dynamic():

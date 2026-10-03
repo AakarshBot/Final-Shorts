@@ -90,8 +90,6 @@ def test_exactly_six_slides_required():
     assert "exactly six" in reason
 
 
-def test_slide_one_rejects_viewer_facing_filler():
-    result = valid_result()
 def test_slide_one_requires_visual_body():
     result = valid_result()
     result["slides"][0]["body"] = ""
@@ -100,11 +98,13 @@ def test_slide_one_requires_visual_body():
     assert "body" in reason
 
 
-
+def test_slide_one_rejects_viewer_facing_filler():
+    result = valid_result()
     result["slides"][0]["headline"] = "5 cricket stories you need to see right now"
     valid, reason = validate_top5_script(result, stories())
     assert not valid
     assert "filler language" in reason
+
 
 
 def test_slide_one_rejects_unprecedented_hype_filler():
