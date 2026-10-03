@@ -87,6 +87,35 @@ def test_top5_audio_uses_six_spoken_headlines_only(monkeypatch, tmp_path):
     assert result["total_duration"] == 12.0
 
 
+def test_top5_audio_corrects_total_duration(monkeypatch, tmp_path):
+    import audio
+
+    rates = []
+
+    async def fake_generate(scenes, language, rate_percent, output_dir):
+        rates.append(rate_percent)
+        total = 31.0 if len(rates) == 1 else 24.0
+        duration = total / 6
+        return [
+            {
+                "scene": index,
+                "path": str(tmp_path / f"voiceover_{index}.mp3"),
+                "duration": duration,
+                "timings": [{"word": "Story", "start": 0.0, "end": 0.5}],
+                "from_cache": False,
+            }
+            for index in range(1, 7)
+        ]
+
+    monkeypatch.setattr(audio, "_generate_at_rate", fake_generate)
+    result = generate_top5_audio(approved_top5_script(), tmp_path)
+
+    assert result["duration_corrected"] is True
+    assert len(rates) == 2
+    assert rates[1] > rates[0]
+    assert result["total_duration"] == 24.0
+
+
 def test_top5_audio_requires_exactly_six_slides(monkeypatch, tmp_path):
     script = approved_top5_script()
     script["slides"] = script["slides"][:5]
