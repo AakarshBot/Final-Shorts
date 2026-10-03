@@ -256,24 +256,30 @@ Top-5 Visuals:
 - Existing Manual Scraper, Manual Real Image Search/Commons and Manual AI Generation options remain available.
 - Existing 9:16 crop workflow remains in place.
 
-Top-5 visual treatment:
-- The previous white-panel and image-to-white fade treatment has been removed.
-- The selected Top-5 visual is a manually cropped 9:16 image. The renderer preserves that crop and does not recrop it.
-- The image remains full-bleed across the entire 1080 × 1920 frame.
-- Headline/body typography is placed from the bottom safe boundary upward, so short copy naturally occupies less vertical space while longer copy grows upward.
-- Story slides use the Scriptwriter's two factual silent sentences, dynamically wrapped and fitted within the same safe content column.
-- Instead of a visible card or full-width strip, the renderer creates a soft localized readability haze around the actual text block. The haze adapts to the local image luminance and uses the minimum treatment needed for text contrast.
-- No hard horizontal gradient edge, rounded card, fake platform UI, progress indicator or fact kicker is used.
-- The Test Visuals page continues to expose the existing image selection and 9:16 crop/reposition workflow, followed by a rendered 1080 × 1920 preview.
-- Rendered Test previews are shown larger so the full composition can be inspected before any Live migration.
+Top-5 visual treatment — next redesign checkpoint (2026-10-03):
+- User currently rates the latest Top-5 visual treatment **4/10** and wants further improvement before approval.
+- The actual factory implementation was reviewed before defining this redesign.
+- Top-5 is a **static editorial composition**. Do **not** add headline-then-body motion, slide-ins, fades, word animations, blur-in animation, bounce, or any other headline/body motion.
+- The current Top-5 path uses build_top5_card_preview() with the manually selected/cropped 9:16 image; that crop must remain authoritative and must not be recropped.
+- The image should remain full-bleed across the entire 1080 × 1920 frame.
+- Delete/rewrite the current Top-5 haze/card-style treatment rather than layering another visual effect over it.
+- Remove the soft oval/localized haze currently produced by _draw_top5_haze(); do not replace it with a visible white strip, hard gradient edge, rounded card, border, fake platform UI, progress indicator, fact kicker, or other template-like panel.
+- New target: **premium editorial sports-news composition** — full-bleed photograph, typography integrated directly into the image, and only a subtle/local readability darkening or lightening immediately behind the actual text when the photograph requires it.
+- Headline should be the dominant typographic element, dynamically sized/wrapped to a maximum of two lines and positioned naturally from the safe composition rather than being trapped in a rigid bottom-anchored card.
+- Test display-font candidates before locking the font: **Oswald Bold, Anton, and Bebas Neue** are the initial comparison set. Preserve appropriate language fallbacks and Unicode/emoji handling.
+- Supporting body copy should use a clean, highly legible sans-serif, remain clearly subordinate to the headline, and avoid becoming a large caption block. It should dynamically fit the two factual silent sentences without shrinking to an unreadable size.
+- Calculate the complete headline + body composition first, then position it inside a conservative text safe area. The background image itself may extend through UI-danger areas; important typography must not.
+- Preserve the existing logo top-right and source-label bottom-right behavior unless the redesign proves a concrete safe-area conflict.
+- Preserve the existing Manual Scraper, Manual Real Image Search/Commons, AI Generation, manual selection and 9:16 crop/reposition workflow.
+- Preserve the existing Test preview path and make the redesigned static 1080 × 1920 preview available in Test before any Live migration.
+- The generic/non-Top-5 renderer path must not be changed by this redesign. The approved Cricket Visual Fetcher remains locked and untouchable.
 
 Top-5 Visual status:
-- **Pending user approval.**
-- The previous card/white-panel visual implementation has been deleted; this localized editorial treatment is the current Test candidate.
-- Production renderer support remains implemented.
-- The dedicated Top-5 Live production line itself is still WIP; the existing Live shell has not yet been migrated through the full Top-5 Topic → Script → Audio → Visual flow.
-- Do not alter the approved Cricket Visual Fetcher or its existing QC behaviour.
-
+- **Pending user approval — current visual candidate is 4/10.**
+- The next work item is the isolated Top-5 renderer redesign described above; no code has been approved from this redesign yet.
+- Do not mark Top-5 Visuals complete until the user manually reviews the new Test preview.
+- The dedicated Top-5 Live production line remains WIP.
+- Do not alter the approved Cricket Visual Fetcher or its existing QC behavior.
 
 ## Future hardening — mobile-complete dashboard and fully online factory
 
