@@ -2,6 +2,7 @@
 import json
 import os
 import re
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -224,7 +225,7 @@ def _extract_article(url: str) -> tuple[str, str]:
             url=resolved_url,
             favor_recall=True,
             include_comments=False,
-            include_tables=True,
+            include_tables=False,
             output_format="txt",
         )
     )
@@ -305,16 +306,26 @@ def _research_story(story) -> str:
         if primary:
             sections.append(f"[PRIMARY ARTICLE — {resolved or original_url}]\n{primary[:10000]}")
 
-    for number, (related_title, related_url) in enumerate(_related_article_urls(title, original_url), 1):
-        try:
-            article, resolved_url = _extract_article(related_url)
-        except (requests.RequestException, OSError, ValueError):
-            continue
-        if article:
-            sections.append(
-                f"[RELATED REPORT {number} — {related_title} — {resolved_url or related_url}]\n"
-                + article[:7000]
-            )
+    related = _related_article_urls(title, original_url)
+    if related:
+        with ThreadPoolExecutor(max_workers=min(2, len(related))) as pool:
+            futures = [
+                pool.submit(_extract_article, related_url)
+                for _, related_url in related
+            ]
+            for number, ((related_title, related_url), future) in enumerate(
+                zip(related, futures),
+                1,
+            ):
+                try:
+                    article, resolved_url = future.result()
+                except (requests.RequestException, OSError, ValueError):
+                    continue
+                if article:
+                    sections.append(
+                        f"[RELATED REPORT {number} — {related_title} — {resolved_url or related_url}]\n"
+                        + article[:7000]
+                    )
 
     return "\n\n".join(sections)[:MAX_SOURCE_CHARS]
 
