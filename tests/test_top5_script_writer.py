@@ -143,6 +143,13 @@ def test_story_headline_has_no_unrequested_word_minimum():
     assert valid, reason
 
 
+def test_story_headline_need_not_share_title_keywords():
+    result = valid_result()
+    result["slides"][2]["headline"] = "The board confirms the new eligibility decision"
+    valid, reason = validate_top5_script(result, stories())
+    assert valid, reason
+
+
 def test_story_body_requires_two_sentences():
     result = valid_result()
     result["slides"][1]["body"] = "Only one sentence."
