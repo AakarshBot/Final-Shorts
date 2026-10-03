@@ -4509,7 +4509,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
                                 st.session_state.test_top5_visual_card_results = {}
-                st.session_state.test_top5_visual_handoff = None
+                                st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
                                 st.session_state.test_top5_upload_qc = None
@@ -4532,7 +4532,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
                                 st.session_state.test_top5_visual_card_results = {}
-                st.session_state.test_top5_visual_handoff = None
+                                st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
                                 st.session_state.test_top5_upload_qc = None
@@ -4555,7 +4555,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
                                 st.session_state.test_top5_visual_card_results = {}
-                st.session_state.test_top5_visual_handoff = None
+                                st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
                                 st.session_state.test_top5_upload_qc = None
@@ -5109,7 +5109,7 @@ elif st.session_state.app_mode == "test":
                         st.session_state.test_top5_visual_previews[active_slide] = bytes(preview_bytes or b"")
                         st.session_state.test_top5_visual_handoff = None
                         st.session_state.test_top5_rendered_video_path = None
-                        st.session_state.test_top5_card_results.pop(active_slide, None) if "test_top5_card_results" in st.session_state else None
+                        st.session_state.test_top5_visual_card_results.pop(active_slide, None)
 
                     def _top5_render_asset_pool(assets, result_key):
                         if not assets:
