@@ -24,6 +24,9 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
         "seo_description": "Shubman Gill's injury status ahead of India's next ODI.",
         "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
         "comment": "Should India risk Gill in the next ODI?",
+        "quote": "Gill could be back soon.",
+        "quote_attribution": "Aakash Chopra",
+        "quote_slide": 1,
         "script": [
             {
                 "voiceover": scene1,
@@ -65,6 +68,9 @@ def test_prompt_contains_generation_rules():
     assert "13 words or fewer" in script_writer.SYSTEM_PROMPT
     assert "exact `subject_name` must appear in the spoken narration" in script_writer.SYSTEM_PROMPT
     assert "all important factual information" in script_writer.SYSTEM_PROMPT.casefold()
+    assert "fit within 30 seconds" in script_writer.SYSTEM_PROMPT
+    assert "direct quote" in script_writer.SYSTEM_PROMPT
+    assert "Do not create an extra slide for a quote" in script_writer.SYSTEM_PROMPT
 
 
 def test_schema_requires_four_slides_and_subject():
@@ -73,6 +79,10 @@ def test_schema_requires_four_slides_and_subject():
     assert "subject_name" in script_writer.CRICKET_SCHEMA["required"]
     assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["minItems"] == 5
     assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["maxItems"] == 5
+    assert script_writer.CRICKET_SCHEMA["properties"]["quote"]["type"] == "string"
+    assert script_writer.CRICKET_SCHEMA["properties"]["quote_attribution"]["type"] == "string"
+    assert script_writer.CRICKET_SCHEMA["properties"]["quote_slide"]["minimum"] == 0
+    assert script_writer.CRICKET_SCHEMA["properties"]["quote_slide"]["maximum"] == 4
 
 
 def test_prompt_contains_five_title_angles():
