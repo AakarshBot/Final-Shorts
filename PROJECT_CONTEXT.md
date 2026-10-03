@@ -280,8 +280,9 @@ Top-5 Scriptwriter:
 - Generates exactly six slides from five selected cricket stories.
 - Slide 1 is the Top-5 package opener: a smart way of communicating today's top five cricket news/headlines while incorporating concrete details from a few selected stories; it must not be a bare generic label.
 - Slides 2–6 use the five selected story headlines as spoken narration.
-- Slides 2–6 also carry separate visual-only body copy, plus visual metadata/search prompts.
-- No additional headline word-count target or hard word-count ceiling is used for Slides 2–6; the 15-second spoken-time limit is the only length constraint there.
+- Slides 2–6 also carry separate visual-only body copy, plus visual metadata/search prompts. The body is displayed on the card but is not narrated.
+- Body copy should remain reasonably compact for the 9:16 editorial card, but there is no fixed sentence or word count.
+- The six spoken headlines together must remain within the 30-second total narration budget; there is no separate per-headline 15-second script rule.
 
 Top-5 Visuals:
 - **Implemented and manually approved by the user on 2026-10-03.**
