@@ -51,6 +51,22 @@ def valid_result():
     }
 
 
+def test_niche_writer_has_its_own_output_schema_and_editor():
+    assert niche.NICHE_SCHEMA["properties"]["titles"]["minItems"] == 3
+    assert niche.NICHE_SCHEMA["properties"]["titles"]["maxItems"] == 3
+    assert niche.NICHE_SCHEMA["properties"]["script"]["minItems"] == 4
+    assert niche.NICHE_SCHEMA["properties"]["script"]["maxItems"] == 5
+
+    result = valid_result()
+    edited = niche.apply_niche_script_edits(
+        result,
+        [scene["voiceover"] for scene in result["script"]],
+        headline="Tokyo Title Win",
+    )
+    assert edited["headline"] == "Tokyo Title Win"
+    assert edited["approved_for_audio"] is True
+
+
 def test_niche_writer_uses_niche_prompt_and_profile(monkeypatch):
     story = {
         "title": "Carlos Alcaraz wins Tokyo title",

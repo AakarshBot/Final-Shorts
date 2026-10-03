@@ -324,6 +324,40 @@ KNOWN_PLAYER_ALIASES = KNOWN_PLAYER_NAMES | {
 }
 
 
+NICHE_TILE_STOPWORDS = {
+    *TITLE_STOPWORDS,
+    "sport", "sports", "player", "players", "team", "teams", "coach", "coaches",
+    "manager", "managers", "star", "stars", "championship", "championships",
+    "champion", "champions", "final", "finals", "match", "matches", "game", "games",
+    "series", "round", "rounds", "season", "seasons", "title", "titles", "win", "wins",
+    "won", "beat", "beats", "defeat", "defeats", "victory", "victories", "event",
+    "events", "world", "international", "open", "cup", "league", "leagues",
+}
+
+@lru_cache(maxsize=4096)
+def _niche_entity(title: str) -> str:
+    clean = _clean(title)
+    for phrase in sorted(
+        _named_phrases(clean),
+        key=lambda value: (-len(value.split()), clean.index(value)),
+    ):
+        parts = phrase.casefold().split()
+        if parts and not all(part in NICHE_TILE_STOPWORDS for part in parts):
+            return phrase.casefold()
+
+    candidates = [
+        token.casefold()
+        for token in re.findall(r"\b[A-Z][A-Za-z0-9'-]{2,}\b", clean)
+        if token.casefold() not in NICHE_TILE_STOPWORDS
+    ]
+    if candidates:
+        return candidates[0]
+
+    meaningful = _tokens(clean) - NICHE_TILE_STOPWORDS
+    return max(meaningful, key=lambda value: (len(value), value), default="")
+
+
+
 @lru_cache(maxsize=4096)
 def _player_entity(title: str) -> str:
     text = _clean(title).casefold()
@@ -350,6 +384,13 @@ def _player_entity(title: str) -> str:
 def _entity_group_key(topic: Topic) -> str:
     player = _player_entity(topic.title)
     return f"player:{player}" if player else f"story:{_canonical_url(topic.url)}"
+
+
+def _tile_group_key(topic: Topic, profile: str) -> str:
+    if profile == "niche_sports":
+        keyword = _niche_entity(topic.title)
+        return f"keyword:{keyword}" if keyword else f"story:{_canonical_url(topic.url)}"
+    return _entity_group_key(topic)
 
 
 def _profile_relevant(title: str, description: str, profile: str | None) -> bool:
@@ -536,9 +577,9 @@ def _select(
     ]
     seen = {_canonical_url(url) for url in seen_urls}
     blocked_groups = {
-        _entity_group_key(topic)
+        _tile_group_key(topic, profile)
         for topic in blocked
-    } if cricket else set()
+    }
 
     ranked = sorted(
         (
@@ -589,26 +630,21 @@ def _select(
             source_counts[source] = source_counts.get(source, 0) + 1
 
     group_keys = {
-        _entity_group_key(row)
+        _tile_group_key(row, profile)
         for row in event_representatives
-    } if cricket else set()
+    }
 
     for row in candidates:
         if not any(same_event(row, old) for old in blocked + event_representatives):
             event_representatives.append(row)
-            if cricket:
-                group_keys.add(_entity_group_key(row))
-                if len(group_keys) >= limit:
-                    break
-            elif len(event_representatives) >= limit:
+            group_key = _tile_group_key(row, profile)
+            group_keys.add(group_key)
+            if len(group_keys) >= limit:
                 break
-
-    if not cricket:
-        return event_representatives[:limit]
 
     groups: dict[str, list[Topic]] = {}
     for row in event_representatives:
-        groups.setdefault(_entity_group_key(row), []).append(row)
+        groups.setdefault(_tile_group_key(row, profile), []).append(row)
 
     ordered_groups = sorted(
         groups.items(),

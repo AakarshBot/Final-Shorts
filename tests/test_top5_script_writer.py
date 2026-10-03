@@ -40,8 +40,8 @@ def valid_result():
                 "slide_number": index + 1,
                 "story_index": index,
                 "headline": (
-                    f"Story {index} confirmed the cricket record after the match, "
-                    "with the board publishing the result"
+                    f"Story {index} confirmed the record after the match, "
+                    "and results were published"
                 ),
                 "body": (
                     f"Player {index} made the record official after the match. "
@@ -135,10 +135,26 @@ def test_story_headline_is_rejected_only_when_over_fifteen_seconds():
     assert "15 seconds" in reason
 
 
+def test_top5_spoken_headlines_have_a_thirty_second_total_cap():
+    result = valid_result()
+    for index in range(1, 6):
+        result["slides"][index]["headline"] = " ".join(["word"] * 30)
+    valid, reason = validate_top5_script(result, stories())
+    assert not valid
+    assert "30 seconds" in reason
+
+
 def test_story_headline_has_no_unrequested_word_minimum():
     result = valid_result()
     result["slides"][1]["headline"] = "Story 1 confirmed record"
     result["slides"][1]["body"] = "Board published result. The change affects the next series."
+    valid, reason = validate_top5_script(result, stories())
+    assert valid, reason
+
+
+def test_story_headline_need_not_share_title_keywords():
+    result = valid_result()
+    result["slides"][2]["headline"] = "The board confirms the new eligibility decision"
     valid, reason = validate_top5_script(result, stories())
     assert valid, reason
 
