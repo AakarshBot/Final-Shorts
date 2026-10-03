@@ -2413,7 +2413,7 @@ def _render_live_visuals(slide_count: int):
         default=st.session_state.get("live_visual_option", VISUAL_OPTIONS[0]),
         key="live_visual_option",
         label_visibility="collapsed",
-    ) or visual_options[0]
+    ) or VISUAL_OPTIONS[0]
 
     _render_visual_board(slide_count, live=True)
 
@@ -2454,10 +2454,11 @@ def _render_live_visuals(slide_count: int):
                 f'{len(result.get("assets") or [])} images · '
                 f'{int(result.get("pages_scraped") or 0)} pages'
             )
-            _render_live_asset_pool(
+            _render_visual_asset_pool(
                 list(result.get("assets") or []),
                 "auto",
                 slide_count,
+                live=True,
             )
 
     if visual_option == "Option 2 · Manual Scraper":
@@ -2494,7 +2495,7 @@ def _render_live_visuals(slide_count: int):
                 f'{len(result.get("assets") or [])} images · '
                 f'{int(result.get("pages_scraped") or 0)} pages'
             )
-            _render_live_asset_pool(
+            _render_visual_asset_pool(
                 list(result.get("assets") or []),
                 "manual",
                 slide_count,
@@ -2531,7 +2532,7 @@ def _render_live_visuals(slide_count: int):
             st.error(result["error"])
         elif result:
             st.caption(f'{len(result.get("assets") or [])} images')
-            _render_live_asset_pool(
+            _render_visual_asset_pool(
                 list(result.get("assets") or []),
                 "real",
                 slide_count,
@@ -2568,7 +2569,7 @@ def _render_live_visuals(slide_count: int):
             st.error(result["error"])
         elif result:
             st.caption(f'{len(result.get("assets") or [])} images')
-            _render_live_asset_pool(
+            _render_visual_asset_pool(
                 list(result.get("assets") or []),
                 "ai",
                 slide_count,
@@ -2620,10 +2621,11 @@ def _render_live_visuals(slide_count: int):
                         f'{len(result.get("assets") or [])} unique images · '
                         f'{int(result.get("pages_scraped") or 0)} pages'
                     )
-                    _render_live_asset_pool(
+                    _render_visual_asset_pool(
                         list(result.get("assets") or []),
                         "ranked",
                         slide_count,
+                        live=True,
                     )
 
     if visual_option == "Option 6 · Stats Card":
