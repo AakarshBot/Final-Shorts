@@ -135,6 +135,15 @@ def test_story_headline_is_rejected_only_when_over_fifteen_seconds():
     assert "15 seconds" in reason
 
 
+def test_top5_spoken_headlines_have_a_thirty_second_total_cap():
+    result = valid_result()
+    for index in range(1, 6):
+        result["slides"][index]["headline"] = " ".join(["word"] * 30)
+    valid, reason = validate_top5_script(result, stories())
+    assert not valid
+    assert "30 seconds" in reason
+
+
 def test_story_headline_has_no_unrequested_word_minimum():
     result = valid_result()
     result["slides"][1]["headline"] = "Story 1 confirmed record"
