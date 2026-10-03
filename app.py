@@ -2390,7 +2390,7 @@ def _render_live_upload():
     for index, title in enumerate(titles, 1):
         edited_titles.append(
             st.text_input(
-                f"Title {index}",
+                f"Title {index} · {TITLE_OPTION_STYLES[index - 1]}",
                 value=str(title),
                 max_chars=100,
                 key=f"live-upload-title-{story_id}-{index}",
@@ -3242,7 +3242,7 @@ def render_scriptwriter():
                     st.session_state.upload_result=None
                     st.session_state.rendered_video_path=None
                     st.session_state.upload_qc=None
-                    for index in range(1,4):
+                    for index in range(1,6):
                         st.session_state.pop(f"upload-title-{index}",None)
                     st.session_state.pop("upload_video_file",None)
                     st.session_state.upload_title_options=list(approved.get("titles") or [])
@@ -3707,6 +3707,15 @@ def render_renderer_test():
             if previews:
                 st.markdown('<div style="margin-top:.8rem;color:var(--muted);font-size:.72rem;">Preview bundle ready.</div>',unsafe_allow_html=True)
             st.markdown('</div>',unsafe_allow_html=True)
+TITLE_OPTION_STYLES = (
+    "SEO / Search",
+    "Curiosity / Baity",
+    "Trend / Format",
+    "Consequence / Why It Matters",
+    "Fan / Emotion",
+)
+
+
 def render_upload_qc():
     st.header("07 · Upload QC")
     script = st.session_state.get("approved_script")
@@ -3757,7 +3766,7 @@ def render_upload_qc():
         for index, title in enumerate(titles, 1):
             edited_titles.append(
                 st.text_input(
-                    f"Title {index}",
+                    f"Title {index} · {TITLE_OPTION_STYLES[index - 1]}",
                     value=title,
                     key=f"upload-title-{index}",
                     max_chars=100,
