@@ -36,6 +36,9 @@ CRICKET_SCHEMA = {
         "seo_description": {"type": "string"},
         "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 1},
         "comment": {"type": "string"},
+        "quote": {"type": "string"},
+        "quote_attribution": {"type": "string"},
+        "quote_slide": {"type": "integer", "minimum": 0, "maximum": 4},
         "script": {
             "type": "array",
             "minItems": 4,
@@ -69,6 +72,9 @@ CRICKET_SCHEMA = {
         "seo_description",
         "hashtags",
         "comment",
+        "quote",
+        "quote_attribution",
+        "quote_slide",
         "script",
     ],
     "additionalProperties": False,
@@ -104,6 +110,7 @@ FOUR SLIDES
 - Slide 1 is the hook: the strongest specific fact from the story.
 - Slide 1 MUST contain 13 words or fewer. This is a generation rule, not a post-generation target.
 - Slides 2–4 must add new information and should carry the important remaining facts.
+- The complete four-slide narration MUST fit within 30 seconds at the channel's normal spoken delivery pace. Treat this as a generation requirement; keep wording tight and do not pad.
 - Do not pad the script to hit a word count.
 
 STYLE
@@ -130,6 +137,11 @@ METADATA
   - Include the specific competition, tournament, match, series or development when available.
   - Avoid generic growth tags such as #viral, #fyp or #trending unless directly relevant to the story.
 - `comment`: one concise discussion-oriented comment grounded in the story.
+- `quote`: the strongest meaningful direct quote from the research, copied faithfully, when one materially adds to the story. Return an empty string when there is no worthwhile quote.
+- `quote_attribution`: the exact speaker/source of `quote`, or an empty string when there is no quote.
+- `quote_slide`: the existing slide number (1–4) where the quote most naturally supports the narration, or 0 when there is no quote. Do not create an extra slide for a quote.
+- A quote is a visual treatment for an existing story beat, not a separate narration beat. Do not repeat the quote as a second slide.
+- Never invent, reconstruct, or shorten a quote in a way that changes its wording.
 
 VISUAL HANDOFF
 Every slide must include useful metadata matching the narrated fact:
@@ -146,6 +158,7 @@ Before returning JSON, silently verify:
 4. All important factual information is compressed into the four slides.
 5. No unsupported claim has been added.
 6. The metadata is complete.
+7. Any quote is copied faithfully from the research packet and points to an existing slide; never create an extra slide for it.
 
 Return only JSON matching the supplied schema.
 """
