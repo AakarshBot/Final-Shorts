@@ -571,6 +571,18 @@ Cleanup rules for this work:
 
 Status: **Architecture cleanup in progress.**
 
+Current cleanup baseline after the first passes:
+- Shared Topic tile UI, story payload construction, Scriptwriter selection, visual context construction, upload metadata extraction and the seven Visual QC options now have single shared implementations in app.py.
+- The redundant Live asset-key wrapper was removed.
+- Five unused Test Top-5 visual session-state entries were deleted.
+- The duplicate Live Final Title field was removed; Live now uses the selected one of the five editable title options directly, matching Test semantics.
+- Test and Live Automatic Visuals now receive the same story + approved Scriptwriter visual context. The underlying visual fetcher itself was not changed by this cleanup.
+- Test and Live still intentionally have different orchestration where the production workflow requires it: Test exposes manual stage controls/QC, while Live can automate approved transitions.
+- Remaining major intentional UI/orchestration differences are Live Audio + Subtitles being one automatic production stage, Test Audio and Subtitles being separately reviewed stages, Live visual attachment/assignment controls, and Test renderer preview vs Live production render.
+- A Live Scriptwriter language state exists, but the current Live UI does not expose a language selector. This must be resolved before removing or restoring that state; do not guess the intended workflow.
+- The current codebase has 57 Test-side and 49 Live-side session-state keys, with 33 mirrored pairs. These counts should decrease only when a state is proven unnecessary; do not create a generic state framework just to reduce the number.
+
+
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
