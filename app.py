@@ -1064,7 +1064,7 @@ def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, st
         result = st.session_state.get(state_key) or {}
         for index, asset in enumerate(result.get("assets") or []):
             asset_key = (
-                _live_asset_key(result_key, index, asset)
+                _visual_asset_key(f"live-{result_key}", index, asset)
                 if live
                 else _visual_asset_key(result_key, index, asset)
             )
@@ -2128,12 +2128,8 @@ def _live_fit_preview(value, width=360, height=640):
     return image.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def _live_asset_key(result_key: str, index: int, asset: dict) -> str:
-    return _visual_asset_key(f"live-{result_key}", index, asset)
-
-
 def _live_delete_asset(result_key: str, index: int, asset: dict):
-    asset_key = _live_asset_key(result_key, index, asset)
+    asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
     st.session_state.live_visual_deleted.add(asset_key)
     for slide, assignment in list(st.session_state.live_visual_assignments.items()):
         if assignment.get("asset_key") == asset_key:
@@ -2147,7 +2143,7 @@ def _live_attach_asset(result_key: str, index: int, asset: dict, slide: int):
         st.warning("This visual has no usable image payload.")
         return
 
-    asset_key = _live_asset_key(result_key, index, asset)
+    asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
     cropped = st.session_state.live_visual_crops.get(asset_key)
     selected_bytes = bytes(cropped) if cropped else bytes(raw)
     st.session_state.live_visual_assignments[slide] = {
@@ -2173,7 +2169,7 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
     visible_assets = [
         (index, asset)
         for index, asset in enumerate(assets)
-        if _live_asset_key(result_key, index, asset)
+        if _visual_asset_key(f"live-{result_key}", index, asset)
         not in st.session_state.live_visual_deleted
     ]
 
@@ -2185,7 +2181,7 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
         cols = st.columns(3, gap="medium")
         for col, (index, asset) in zip(cols, visible_assets[start:start + 3]):
             with col:
-                asset_key = _live_asset_key(result_key, index, asset)
+                asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
                 source = str(
                     asset.get("publisher")
                     or asset.get("source")
