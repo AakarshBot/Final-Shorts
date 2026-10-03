@@ -30,7 +30,7 @@ MAX_STORY_EVIDENCE_CHARS = 5000
 MAX_EVIDENCE_CHARS = 6500
 MAX_PACKAGE_STORY_CHARS = 1200
 MIN_ARTICLE_CHARS = 500
-SLIDE_1_MAX_WORDS = 14
+SLIDE_1_MAX_WORDS = 8
 SPEECH_WORDS_PER_MINUTE = 150.0
 MAX_TOP5_TOTAL_SPEECH_SECONDS = 30.0
 MIN_HASHTAGS = 3
@@ -70,13 +70,10 @@ SLIDE_1_FILLER_PATTERNS = (
     r"\bfind out\b",
 )
 
-GENERIC_PATTERNS = (
-    r"^\s*top five cricket stories(?: of the day)?\s*$",
-    r"^\s*five cricket stories(?: of the day)?\s*$",
-    r"^\s*cricket news today\s*$",
-    r"^\s*latest cricket news\s*$",
-    r"^\s*today(?:'|’)?s cricket roundup\s*$",
-    r"^\s*the biggest cricket stories(?: today)?\s*$",
+PACKAGE_OPENER_PATTERNS = (
+    r"\btop\s*[- ]?(?:5|five)\b",
+    r"\bcricket\b",
+    r"\b(?:news|headlines?|stories|roundup)\b",
 )
 
 LANGUAGE_PROMPT = (
@@ -156,21 +153,23 @@ EDITORIAL STANDARD
 - Do not use phrases such as "changing the conversation", "everyone is talking",
   "the cricket world is buzzing", "sending shockwaves", "game changer",
   "what you need to know", "here's what happened", or similar synthetic framing.
-- Slide 1 is the package opener for the Top-5 Short. It should smartly communicate
-  “today's top five cricket news/headlines” while incorporating concrete details from a few
-  of the five selected stories.
-- Make Slide 1 feel like a smart human-written front-page or scoreboard headline: concise,
-  informative and varied. It can weave together two or three notable names, teams, events,
-  results or headline developments from the selected stories.
-- The wording may use a natural roundup frame such as “Gill returns, India reshuffle and
-  three more cricket headlines today”, but it should never be a bare label such as
-  “Top 5 Cricket Stories” or “Cricket News Today”.
+- Slide 1 is the package opener. Its headline is a short section label, always a variation of
+  “Top-5 Cricket News Of The Day”, “Top 5 Cricket News Today”, “Top-5 Cricket Headlines Today”
+  or similar. Keep it at eight words or fewer. Do not put story-specific facts, names or results
+  into the Slide 1 headline.
+- Slide 1 body is visual-only. It carries the factual roundup script that would otherwise have
+  been compressed into the spoken opener: mention the most useful selected developments,
+  names, teams or results in concise, natural sports-desk copy. It may use more than one
+  sentence when needed, but must stay focused and factual.
+- Make Slide 1 feel like a clean sports-news front page: a clear package label above a useful
+  factual summary, with no viewer-facing teaser language.
 - Write Slide 1 yourself rather than copying any source headline verbatim. Do not invent
   a common theme or connect unrelated stories as though they are one event.
 
 SLIDE STRUCTURE
 - Return exactly six slides.
-- Slide 1 is the Top-5 package opener. It has ONE spoken headline, a maximum of 14 words, and no body copy.
+- Slide 1 is the Top-5 package opener. It has one short spoken package label (maximum eight words)
+  plus visual-only body copy containing the factual roundup summary.
 - Slides 2–6 correspond exactly, in order, to selected stories 1–5.
 - Set story_index exactly as follows: Slide 1 = 0, Slide 2 = 1, Slide 3 = 2, Slide 4 = 3, Slide 5 = 4, Slide 6 = 5.
 - For Slides 2–6, the headline IS the spoken narration for that slide.
@@ -180,7 +179,8 @@ SLIDE STRUCTURE
   that makes the story understandable on its own.
 - The body is visual-only supporting copy. Keep it concise enough to fit comfortably in the
   9:16 editorial card, using a reasonable amount of factual supporting detail without a fixed
-  sentence or word count. Do not pad it with filler.
+  sentence or word count. Use body copy when it adds context; keep it empty when the spoken
+  headline already carries the necessary information. Never pad it with filler.
 - For every slide, provide a concrete visual entity, visual intent and a specific search prompt.
   Slide 1 should describe a factual cricket-package visual, not an invented mood or theme.
 - `seo_description`: concise and story-specific, covering the Top-5 package without inventing a common theme.
@@ -384,22 +384,17 @@ def _contains_forbidden_editorial_language(text: str) -> bool:
     return any(re.search(pattern, text, re.IGNORECASE) for pattern in AI_EDITORIAL_PATTERNS)
 
 
-def _is_generic_package_headline(headline: str) -> bool:
+def _is_package_opener_headline(headline: str) -> bool:
     clean = _clean(headline)
-    return any(re.search(pattern, clean, re.IGNORECASE) for pattern in GENERIC_PATTERNS)
+    return all(
+        re.search(pattern, clean, re.IGNORECASE)
+        for pattern in PACKAGE_OPENER_PATTERNS
+    )
 
 
 def _contains_slide_1_filler(headline: str) -> bool:
     clean = _clean(headline)
     return any(re.search(pattern, clean, re.IGNORECASE) for pattern in SLIDE_1_FILLER_PATTERNS)
-
-
-def _references_any_selected_story(headline: str, stories: list[dict]) -> bool:
-    headline_words = set(_normalise(headline).split())
-    selected_keywords = set()
-    for story in stories:
-        selected_keywords.update(_title_keywords(_story_value(story, "title")))
-    return bool(headline_words & selected_keywords)
 
 
 def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
@@ -435,20 +430,18 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
         if expected_number == 1:
             if _words(headline) > SLIDE_1_MAX_WORDS:
                 return False, f"Slide 1 exceeds {SLIDE_1_MAX_WORDS} words."
-            if _is_generic_package_headline(headline):
-                return False, "Slide 1 is a generic Top-5 headline."
-            if not _references_any_selected_story(headline, stories):
-                return False, "Slide 1 must incorporate a concrete detail from the selected stories."
+            if not _is_package_opener_headline(headline):
+                return False, "Slide 1 must be a Top-5 Cricket News package headline."
             if any(
                 _clean(other.get("headline")).casefold() == headline.casefold()
                 for other in slides[1:]
             ):
                 return False, "Slide 1 cannot duplicate a story headline."
             body = _clean(slide.get("body"))
+            if not body:
+                return False, "Slide 1 must contain visual-only body copy."
         else:
             body = _clean(slide.get("body"))
-            if not body:
-                return False, f"Slide {expected_number} is missing body copy."
 
     if total_estimated_speech > MAX_TOP5_TOTAL_SPEECH_SECONDS:
         return False, (

@@ -27,8 +27,8 @@ def valid_result():
         {
             "slide_number": 1,
             "story_index": 0,
-            "headline": "Five cricket updates, one new record",
-            "body": "",
+            "headline": "Top 5 Cricket News Today",
+            "body": "India confirmed a squad change while the other selected stories brought major developments across the day.",
             "primary_entity": "India cricket",
             "visual_intent": "five selected cricket stories",
             "specific_search_prompt": "selected cricket stories montage",
@@ -92,6 +92,15 @@ def test_exactly_six_slides_required():
 
 def test_slide_one_rejects_viewer_facing_filler():
     result = valid_result()
+def test_slide_one_requires_visual_body():
+    result = valid_result()
+    result["slides"][0]["body"] = ""
+    valid, reason = validate_top5_script(result, stories())
+    assert not valid
+    assert "body" in reason
+
+
+
     result["slides"][0]["headline"] = "5 cricket stories you need to see right now"
     valid, reason = validate_top5_script(result, stories())
     assert not valid
@@ -106,18 +115,16 @@ def test_slide_one_rejects_unprecedented_hype_filler():
     assert "filler language" in reason
 
 
-def test_slide_one_accepts_smart_package_roundup_headline():
+def test_slide_one_accepts_standard_package_headline():
     result = valid_result()
-    result["slides"][0]["headline"] = (
-        "Story 1 returns, record confirmed and three more cricket headlines today"
-    )
+    result["slides"][0]["headline"] = "Top-5 Cricket Headlines Of The Day"
     valid, reason = validate_top5_script(result, stories())
     assert valid, reason
 
 
-def test_slide_one_has_fourteen_word_cap():
+def test_slide_one_has_eight_word_cap():
     result = valid_result()
-    result["slides"][0]["headline"] = "One two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen"
+    result["slides"][0]["headline"] = "Top five cricket news headlines of the day today now"
     valid, reason = validate_top5_script(result, stories())
     assert not valid
     assert "Slide 1" in reason
