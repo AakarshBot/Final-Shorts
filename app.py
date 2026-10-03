@@ -1243,7 +1243,10 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
     if not isinstance(selected, dict):
         return
 
-    source_bytes = st.session_state.get(crop_key) or selected.get("bytes")
+    crop_store = st.session_state.get(
+        "live_visual_crops" if live else "visual_crops"
+    ) or {}
+    source_bytes = crop_store.get(selected.get("asset_key")) or selected.get("bytes")
     if not isinstance(source_bytes, (bytes, bytearray)):
         st.error("The selected image is missing.")
         return
