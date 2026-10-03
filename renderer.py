@@ -1479,8 +1479,8 @@ def render_production_video(
                     source_label,
                     None,
                     None,
-                    visual["quote_card"],
                     False,
+                    visual["quote_card"],
                 )
             else:
                 yield render_frame(
