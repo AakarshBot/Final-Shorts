@@ -597,7 +597,7 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
     padding:11px 12px;
   }
   .topic-title{font-size:.92rem;-webkit-line-clamp:3;}
-  [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"] [data-testid="stButton"]>button{
+  [data-testid="stVerticalBlock"] [class*="topic-tile-header-"] [data-testid="stButton"]>button{
     min-height:56px!important;
     padding:.75rem .82rem!important;
   }
@@ -757,6 +757,8 @@ if "live_topics" not in st.session_state:
     st.session_state.live_topics = []
 if "live_topic_keyword" not in st.session_state:
     st.session_state.live_topic_keyword = ""
+if "live_topic_open_tile" not in st.session_state:
+    st.session_state.live_topic_open_tile = None
 if "live_selected_topic" not in st.session_state:
     st.session_state.live_selected_topic = None
 if "live_stage" not in st.session_state:
@@ -1909,7 +1911,7 @@ def _live_reset_downstream():
         st.session_state[key] = value
 
 
-def _live_story(topic) -> dict:
+def _story_payload(topic) -> dict:
     return {
         "title": topic.title,
         "description": topic.description,
@@ -1917,6 +1919,106 @@ def _live_story(topic) -> dict:
         "source": topic.source,
         "published_at": topic.published_at.isoformat(),
     }
+
+
+def _script_for_topic(topic, profile: str, language: str) -> dict:
+    from niche_sports_script_writer import write_niche_sports_script
+    from script_writer import write_script
+
+    writer = write_niche_sports_script if profile == "niche_sports" else write_script
+    return writer(
+        _story_payload(topic),
+        language=language,
+    )
+
+
+def _visual_story_for_topic(topic, script: dict | None = None) -> dict:
+    story = _story_payload(topic)
+    if isinstance(script, dict):
+        scenes = script.get("script") or []
+        first_scene = scenes[0] if scenes and isinstance(scenes[0], dict) else {}
+        story["primary_entity"] = str(first_scene.get("primary_entity") or "").strip()
+        story["specific_search_prompt"] = str(
+            first_scene.get("specific_search_prompt") or ""
+        ).strip()
+        story["visual_intent"] = str(
+            first_scene.get("visual_intent") or ""
+        ).strip()
+    return story
+
+
+def _render_topic_tiles(
+    topics,
+    selected_index,
+    *,
+    columns: int,
+    open_state_key: str,
+    key_prefix: str,
+):
+    selection = None
+    for start in range(0, len(topics), columns):
+        row = st.columns(columns, gap="small")
+        for col, (index, tile) in zip(
+            row,
+            enumerate(topics[start:start + columns], start=start),
+        ):
+            members = tuple(sorted(
+                tile.group_members or (tile,),
+                key=lambda item: item.score,
+                reverse=True,
+            ))
+            if tile.group_key.startswith("keyword:"):
+                tile_title = f'Keyword: "{tile.group_key.split(":", 1)[1]}"'
+            elif tile.group_key.startswith("player:"):
+                tile_title = tile.group_key.split(":", 1)[1].title()
+            else:
+                tile_title = tile.title
+
+            with col:
+                with st.container(key=f"{key_prefix}topic-tile-{index}"):
+                    if len(members) > 1:
+                        is_open = st.session_state.get(open_state_key) == index
+                        if st.button(
+                            f'{"▾" if is_open else "▸"}  {tile_title} · {len(members)} headlines',
+                            key=f"{key_prefix}topic-tile-header-{index}",
+                            width="stretch",
+                            type="primary" if is_open else "secondary",
+                        ):
+                            st.session_state[open_state_key] = None if is_open else index
+                            st.rerun()
+
+                        st.markdown(
+                            f'<div class="topic-tile-meta"><span class="topic-rank">TILE {index + 1:02d}</span>'
+                            f'<span>{len(members)} headlines</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                        if not is_open:
+                            continue
+
+                    for headline_index, member in enumerate(members):
+                        is_selected = (
+                            selected_index == index
+                            and topics[index].url == member.url
+                        )
+                        with st.container(
+                            horizontal=True,
+                            vertical_alignment="center",
+                            horizontal_alignment="distribute",
+                            gap="small",
+                        ):
+                            st.markdown(
+                                f'<div class="topic-title">{member.title}</div>'
+                                f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b}</div>',
+                                unsafe_allow_html=True,
+                            )
+                            if st.button(
+                                "Selected" if is_selected else "Choose",
+                                key=f"{key_prefix}topic-select-{index}-{headline_index}",
+                                width="content",
+                                type="primary" if is_selected else "secondary",
+                            ):
+                                selection = (index, member, members)
+    return selection
 
 
 def _live_start_story(index: int):
@@ -1977,12 +2079,10 @@ def _live_scrape_automatic_visuals():
     if not isinstance(script, dict):
         raise ValueError("Generate the Live Scriptwriter result before scraping visuals.")
 
-    story = _live_story(topics[selected_index])
-    scenes = script.get("script") or []
-    first_scene = scenes[0] if scenes and isinstance(scenes[0], dict) else {}
-    story["primary_entity"] = str(first_scene.get("primary_entity") or "").strip()
-    story["specific_search_prompt"] = str(first_scene.get("specific_search_prompt") or "").strip()
-    story["visual_intent"] = str(first_scene.get("visual_intent") or "").strip()
+    story = _visual_story_for_topic(
+        topics[selected_index],
+        script,
+    )
     from visual_fetcher import crawl_visuals
 
     st.session_state.live_visual_result = crawl_visuals(story)
@@ -3062,47 +3162,22 @@ def render_live_dashboard():
             keyword = ""
             keyword_search = False
 
-        for start in range(0, len(topics), 2):
-            row = st.columns(2, gap="medium")
-            for col, (index, tile) in zip(
-                row,
-                enumerate(topics[start:start + 2], start=start),
-            ):
-                members = tile.group_members or (tile,)
-                members = tuple(sorted(members, key=lambda item: item.score, reverse=True))
-                with col:
-                    with st.container(key=f"live-topic-{index}"):
-                        tile_label = f'<span class="topic-rank">TILE {index + 1:02d}</span>'
-                        if tile.group_key.startswith("keyword:"):
-                            tile_label += f'<span class="topic-meta">Keyword: {tile.group_key.split(":", 1)[1]}</span>'
-                        elif tile.group_key.startswith("player:"):
-                            tile_label += f'<span class="topic-meta">{tile.group_key.split(":", 1)[1].title()}</span>'
-                        st.markdown(
-                            f'<div class="topic-top">{tile_label}</div>',
-                            unsafe_allow_html=True,
-                        )
-                        for headline_index, member in enumerate(members):
-                            st.markdown(
-                                f'<div class="topic-title">{member.title}</div>'
-                                f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b · %H:%M UTC}</div>',
-                                unsafe_allow_html=True,
-                            )
-                            is_selected = (
-                                st.session_state.live_selected_topic == index
-                                and st.session_state.live_topics[index].url == member.url
-                            )
-                            if st.button(
-                                "Selected" if is_selected else "Select story →",
-                                width="stretch",
-                                key=f"live-select-story-{index}-{headline_index}",
-                            ):
-                                st.session_state.live_topics[index] = replace(
-                                    member,
-                                    group_key=tile.group_key,
-                                    group_members=members,
-                                )
-                                _live_start_story(index)
-                                st.rerun()
+        selection = _render_topic_tiles(
+            topics,
+            st.session_state.live_selected_topic,
+            columns=2,
+            open_state_key="live_topic_open_tile",
+            key_prefix="live-",
+        )
+        if selection:
+            index, member, members = selection
+            st.session_state.live_topics[index] = replace(
+                member,
+                group_key=topics[index].group_key,
+                group_members=members,
+            )
+            _live_start_story(index)
+            st.rerun()
 
         more_clicked = st.button("Find 20 more unique stories", width="stretch", key="live-find-more")
         if keyword_search or more_clicked:
@@ -3352,112 +3427,59 @@ def render_topic_fetcher():
         )
         return
 
-    for start in range(0, len(topics), 3):
-        row = st.columns(3, gap="small")
-        for col, (index, tile) in zip(
-            row,
-            enumerate(topics[start:start + 3], start=start),
-        ):
-            members = tuple(sorted(
-                tile.group_members or (tile,),
-                key=lambda item: item.score,
-                reverse=True,
-            ))
-            if tile.group_key.startswith("keyword:"):
-                tile_title = f'Keyword: "{tile.group_key.split(":", 1)[1]}"'
-            elif tile.group_key.startswith("player:"):
-                tile_title = tile.group_key.split(":", 1)[1].title()
-            else:
-                tile_title = tile.title
-            multi_headline = len(members) > 1
-
-            with col:
-                with st.container(key=f"topic-tile-{index}"):
-                    if multi_headline:
-                        is_open = st.session_state.get("topic_open_tile") == index
-                        if st.button(
-                            f'{"▾" if is_open else "▸"}  {tile_title} · {len(members)} headlines',
-                            key=f"topic-tile-header-{index}",
-                            width="stretch",
-                            type="primary" if is_open else "secondary",
-                        ):
-                            st.session_state.topic_open_tile = None if is_open else index
-                            st.rerun()
-
-                        st.markdown(
-                            f'<div class="topic-tile-meta"><span class="topic-rank">TILE {index + 1:02d}</span>'
-                            f'<span>{len(members)} headlines</span></div>',
-                            unsafe_allow_html=True,
-                        )
-                        if not is_open:
-                            continue
-
-                    for headline_index, member in enumerate(members):
-                        is_selected = (
-                            st.session_state.selected_topic == index
-                            and st.session_state.topics[index].url == member.url
-                        )
-                        with st.container(
-                            horizontal=True,
-                            vertical_alignment="center",
-                            horizontal_alignment="distribute",
-                            gap="small",
-                        ):
-                            st.markdown(
-                                f'<div class="topic-title">{member.title}</div>'
-                                f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b}</div>',
-                                unsafe_allow_html=True,
-                            )
-                            if st.button(
-                                "Selected" if is_selected else "Choose",
-                                key=f"topic-select-{index}-{headline_index}",
-                                width="content",
-                                type="primary" if is_selected else "secondary",
-                            ):
-                                st.session_state.topics[index] = replace(
-                                    member,
-                                    group_key=tile.group_key,
-                                    group_members=members,
-                                )
-                                st.session_state.selected_topic = index
-                                st.session_state.topic_open_tile = None
-                                st.session_state.test_stage = "02 · Scriptwriter"
-                                st.session_state.test_pipeline_notice = {
-                                    "confirmed": "Story confirmed",
-                                    "next": "Moving to Script.",
-                                }
-                                st.session_state.script_data = None
-                                st.session_state.approved_script = None
-                                st.session_state.audio_data = None
-                                st.session_state.approved_audio = None
-                                st.session_state.subtitle_data = None
-                                st.session_state.approved_subtitles = None
-                                st.session_state.renderer_previews = None
-                                st.session_state.rendered_video_path = None
-                                st.session_state.upload_qc_approved = False
-                                st.session_state.upload_result = None
-                                st.session_state.upload_qc = None
-                                st.session_state.upload_title_options = []
-                                st.session_state.upload_title_choice = 0
-                                st.session_state.upload_description = ""
-                                st.session_state.upload_hashtags = ""
-                                st.session_state.upload_comment = ""
-                                st.session_state.manual_visual_result = None
-                                st.session_state.real_image_result = None
-                                st.session_state.ai_image_result = None
-                                st.session_state.ranked_visual_result = None
-                                st.session_state.stats_card_result = None
-                                st.session_state.stats_card_image_selection = None
-                                st.session_state.quote_card_image_selection = None
-                                st.session_state.quote_card_image_crop = None
-                                st.session_state.quote_card_preview = None
-                                st.session_state.quote_card_quote = ""
-                                st.session_state.quote_card_attribution = ""
-                                st.session_state.quote_card_slide = 1
-                                st.session_state.visual_result = None
-                                st.session_state.visual_loaded_story = None
-                                st.session_state.visual_crops = {}
-                                st.rerun()
+    selection = _render_topic_tiles(
+        topics,
+        st.session_state.selected_topic,
+        columns=3,
+        open_state_key="topic_open_tile",
+        key_prefix="",
+    )
+    if selection:
+        index, member, members = selection
+        st.session_state.topics[index] = replace(
+            member,
+            group_key=topics[index].group_key,
+            group_members=members,
+        )
+        st.session_state.selected_topic = index
+        st.session_state.topic_open_tile = None
+        st.session_state.test_stage = "02 · Scriptwriter"
+        st.session_state.test_pipeline_notice = {
+            "confirmed": "Story confirmed",
+            "next": "Moving to Script.",
+        }
+        st.session_state.script_data = None
+        st.session_state.approved_script = None
+        st.session_state.audio_data = None
+        st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
+        st.session_state.renderer_previews = None
+        st.session_state.rendered_video_path = None
+        st.session_state.upload_qc_approved = False
+        st.session_state.upload_result = None
+        st.session_state.upload_qc = None
+        st.session_state.upload_title_options = []
+        st.session_state.upload_title_choice = 0
+        st.session_state.upload_description = ""
+        st.session_state.upload_hashtags = ""
+        st.session_state.upload_comment = ""
+        st.session_state.manual_visual_result = None
+        st.session_state.real_image_result = None
+        st.session_state.ai_image_result = None
+        st.session_state.ranked_visual_result = None
+        st.session_state.stats_card_result = None
+        st.session_state.stats_card_image_selection = None
+        st.session_state.quote_card_image_selection = None
+        st.session_state.quote_card_image_crop = None
+        st.session_state.quote_card_preview = None
+        st.session_state.quote_card_quote = ""
+        st.session_state.quote_card_attribution = ""
+        st.session_state.quote_card_slide = 1
+        st.session_state.visual_result = None
+        st.session_state.visual_loaded_story = None
+        st.session_state.visual_crops = {}
+        st.rerun()
 
     if st.session_state.selected_topic is not None:
         index = st.session_state.selected_topic
@@ -3595,23 +3617,16 @@ def render_visuals_crawler():
         return
     topic = st.session_state.topics[selected_index]
 
-    story = {
-        "title": topic.title,
-        "description": topic.description,
-        "url": topic.url,
-        "source": topic.source,
-        "published_at": topic.published_at.isoformat(),
-    }
     approved_script = st.session_state.get("approved_script")
-    if (
-        isinstance(approved_script, dict)
-        and str(approved_script.get("source_title") or "").strip() == topic.title.strip()
-    ):
-        scenes = approved_script.get("script") or []
-        if scenes and isinstance(scenes[0], dict):
-            story["primary_entity"] = str(
-                scenes[0].get("primary_entity") or ""
-            ).strip()
+    story = _visual_story_for_topic(
+        topic,
+        approved_script
+        if (
+            isinstance(approved_script, dict)
+            and str(approved_script.get("source_title") or "").strip() == topic.title.strip()
+        )
+        else None,
+    )
 
     story_key = f"{selected_index}:{story['url']}:{story['title']}"
 
