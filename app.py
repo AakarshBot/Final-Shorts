@@ -866,15 +866,6 @@ def _asset_to_image(value):
     return None
 
 
-def _preview_image(asset):
-    from PIL import Image
-    image = _asset_to_image(asset.get("bytes"))
-    if image is None:
-        return None
-    image.thumbnail((960, 960), Image.Resampling.LANCZOS)
-    return image
-
-
 def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
     aspect = 9 / 16
     width = min(image.width, max(1, int(image.height * aspect)))
@@ -967,90 +958,6 @@ def _crop_visual_dialog(
                 if assignment.get("asset_key") == asset_key:
                     assignment["bytes"] = crop_bytes
             st.rerun()
-
-
-def _render_visual_asset_grid(assets: list[dict], result_key: str):
-    approved_script = st.session_state.get("approved_script")
-    if isinstance(approved_script, dict) and st.session_state.get("topics") and st.session_state.get("selected_topic") is not None:
-        topic = st.session_state.topics[st.session_state.selected_topic]
-        if str(approved_script.get("source_title") or "").strip() == str(topic.title).strip():
-            scenes = [scene for scene in (approved_script.get("script") or []) if isinstance(scene, dict)]
-            if scenes:
-                st.markdown(
-                    '<div class="section-head"><div><div class="eyebrow">SCRIPT CONTEXT</div>'
-                    '<div class="section-title">Use the approved script to judge each visual</div></div>'
-                    '<div class="section-count">scene by scene</div></div>',
-                    unsafe_allow_html=True,
-                )
-                for number, scene in enumerate(scenes, 1):
-                    voiceover = str(scene.get("voiceover") or "").strip()
-                    intent = str(scene.get("visual_intent") or "").strip()
-                    if not voiceover and not intent:
-                        continue
-                    intent_html = (
-                        f'<div style="font-size:.66rem;color:var(--muted);line-height:1.35;margin-top:.22rem;">'
-                        f'{intent}</div>'
-                        if intent else ""
-                    )
-                    st.markdown(
-                        f'<div style="padding:.62rem .78rem;margin:0 0 .5rem;border:1px solid var(--line);'
-                        f'border-radius:10px;background:var(--surface);">'
-                        f'<div class="mini-label">SCENE {number}</div>'
-                        f'<div style="font-size:.78rem;font-weight:760;line-height:1.35;color:var(--ink);margin-top:.18rem;">'
-                        f'{voiceover}</div>{intent_html}</div>',
-                        unsafe_allow_html=True,
-                    )
-    for start in range(0, len(assets), 3):
-        cols = st.columns(3, gap="medium")
-        for index, (col, asset) in enumerate(zip(cols, assets[start:start + 3]), start=start):
-            with col:
-                asset_key = _visual_asset_key(result_key, index, asset)
-                with st.container(key=f"visual-card-{result_key}-{index}"):
-                    preview = _preview_image(asset)
-                    if preview is not None:
-                        st.image(preview, width="stretch")
-                    source = str(
-                        asset.get("publisher")
-                        or asset.get("source")
-                        or asset.get("model")
-                        or "Web source"
-                    )
-                    detail = str(
-                        asset.get("article_title")
-                        or asset.get("dimensions")
-                        or (
-                            f'{asset.get("width")}×{asset.get("height")}px'
-                            if asset.get("width") and asset.get("height")
-                            else ""
-                        )
-                    )
-                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
-                    if detail:
-                        st.markdown(f'<div class="visual-detail">{detail}</div>', unsafe_allow_html=True)
-
-                    cropped = st.session_state.visual_crops.get(asset_key)
-                    if cropped:
-                        st.markdown('<div class="visual-crop-label">CROP PREVIEW</div>', unsafe_allow_html=True)
-                        crop_preview = _asset_to_image(cropped)
-                        if crop_preview is not None:
-                            st.image(crop_preview, width="stretch")
-
-                    action_cols = st.columns(2, gap="small")
-                    with action_cols[0]:
-                        if st.button("Crop", key=f"crop-button-{asset_key}", width="stretch"):
-                            raw = asset.get("bytes")
-                            if isinstance(raw, (bytes, bytearray)):
-                                _crop_visual_dialog(asset_key, bytes(raw), source)
-                            else:
-                                st.warning("This visual does not have a crop-ready image payload.")
-                    with action_cols[1]:
-                        source_url = str(asset.get("source_page_url") or "").strip()
-                        if source_url:
-                            st.link_button("Source ↗", source_url, width="stretch")
-                        else:
-                            st.markdown('<div class="visual-detail">No source link</div>', unsafe_allow_html=True)
-
-
 
 
 def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
