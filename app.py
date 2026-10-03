@@ -3843,10 +3843,8 @@ def render_renderer_test():
 
 TITLE_OPTION_STYLES = (
     "SEO / Search",
-    "Curiosity / Baity",
-    "Trend / Format",
     "Consequence / Why It Matters",
-    "Fan / Emotion",
+    "Curiosity",
 )
 
 
