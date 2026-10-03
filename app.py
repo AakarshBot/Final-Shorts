@@ -4675,7 +4675,7 @@ elif st.session_state.app_mode == "test":
 
                 if st.session_state.test_top5_handoff:
                     st.success("Top-5 selection approved. The five story URLs, titles and available article content are ready for the next stage.")
-                    st.caption("Article scraping is the next enrichment step and has not been added yet.")
+                    st.caption("The Scriptwriter will research and enrich each selected story URL when you generate the package.")
                     for number, article in enumerate(st.session_state.test_top5_handoff, 1):
                         st.markdown(
                             f'**#{number} · {article["title"]}**<br><span class="topic-meta">{article["url"]}</span>',
