@@ -2401,10 +2401,6 @@ def _render_visual_board(slide_count: int, live: bool = False):
                     )
 
 
-def _render_live_visual_board(slide_count: int):
-    _render_visual_board(slide_count, live=True)
-
-
 def _render_live_visuals(slide_count: int):
     if st.session_state.live_visuals_approved:
         st.success("Visuals approved and final render completed.")
@@ -2419,7 +2415,7 @@ def _render_live_visuals(slide_count: int):
         label_visibility="collapsed",
     ) or visual_options[0]
 
-    _render_live_visual_board(slide_count)
+    _render_visual_board(slide_count, live=True)
 
     assigned = len(st.session_state.live_visual_assignments)
     st.caption(
