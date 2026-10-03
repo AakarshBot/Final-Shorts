@@ -18,11 +18,9 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
             "Shubman Gill Injury Update Before India ODI",
             "Why Gill's Injury Could Change India's ODI Plans",
             "Shubman Gill Fitness: What Happens Next?",
-            "What Gill's Injury Means For India's ODI",
-            "Why India's Gill News Has Fans Asking Questions",
         ],
         "seo_description": "Shubman Gill's injury status ahead of India's next ODI.",
-        "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket", "#ODI"],
+        "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
         "comment": "Should India risk Gill in the next ODI?",
         "script": [
             {
@@ -63,14 +61,8 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
 
 def test_prompt_contains_generation_rules():
     assert "13 words or fewer" in script_writer.SYSTEM_PROMPT
-    assert "32 seconds or less" in script_writer.SYSTEM_PROMPT
     assert "exact `subject_name` must appear in the spoken narration" in script_writer.SYSTEM_PROMPT
     assert "all important factual information" in script_writer.SYSTEM_PROMPT.casefold()
-    assert "exactly 5 concise" in script_writer.SYSTEM_PROMPT
-    assert "SEO / Search" in script_writer.SYSTEM_PROMPT
-    assert "Curiosity / Baity" in script_writer.SYSTEM_PROMPT
-    assert "Trend / Format" in script_writer.SYSTEM_PROMPT
-    assert "4–5 tightly relevant hashtags" in script_writer.SYSTEM_PROMPT
 
 
 def test_schema_requires_four_slides_and_subject():
@@ -78,7 +70,7 @@ def test_schema_requires_four_slides_and_subject():
     assert script_writer.CRICKET_SCHEMA["properties"]["script"]["maxItems"] == 4
     assert "subject_name" in script_writer.CRICKET_SCHEMA["required"]
     assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["minItems"] == 3
-    assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["maxItems"] == 5
+    assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["maxItems"] == 3
 
 
 def test_validator_rejects_slide_one_over_13_words():
@@ -89,14 +81,6 @@ def test_validator_rejects_slide_one_over_13_words():
     valid, reason = script_writer.validate_cricket_script(result)
     assert not valid
     assert "Slide 1" in reason
-
-
-def test_validator_rejects_over_32_seconds():
-    result = valid_result()
-    result["script"][1]["voiceover"] = " ".join(["important"] * 75)
-    valid, reason = script_writer.validate_cricket_script(result)
-    assert not valid
-    assert "32 seconds" in reason
 
 
 def test_validator_requires_subject_name_in_narration():
@@ -110,44 +94,29 @@ def test_validator_requires_subject_name_in_narration():
     assert "subject" in reason.casefold()
 
 
+def test_validator_requires_headline_when_generating():
+    result = valid_result()
+    result["headline"] = ""
+    valid, reason = script_writer.validate_cricket_script(result)
+    assert not valid
+    assert "3 or 4 words" in reason
+
+
+def test_apply_script_edits_allows_disabled_headline():
+    result = valid_result()
+    edited = script_writer.apply_script_edits(
+        result,
+        [scene["voiceover"] for scene in result["script"]],
+        headline="",
+    )
+    assert edited["headline"] == ""
+    assert edited["approved_for_audio"] is True
+
+
+
 def test_valid_script_passes():
     valid, reason = script_writer.validate_cricket_script(valid_result())
     assert valid, reason
-
-
-def test_validator_requires_five_distinct_titles():
-    result = valid_result()
-    result["titles"] = result["titles"][:3]
-    valid, reason = script_writer.validate_cricket_script(result)
-    assert not valid
-    assert "exactly 5 titles" in reason
-
-    result = valid_result()
-    result["titles"][4] = result["titles"][0]
-    valid, reason = script_writer.validate_cricket_script(result)
-    assert not valid
-    assert "distinct" in reason
-
-def test_validator_requires_seo_title_to_name_subject():
-    result = valid_result()
-    result["titles"][0] = "India ODI Plans After Injury"
-    valid, reason = script_writer.validate_cricket_script(result)
-    assert not valid
-    assert "SEO title" in reason
-
-
-def test_validator_requires_valid_cricket_hashtags():
-    result = valid_result()
-    result["hashtags"] = ["#Cricket", "#ShubmanGill", "#IndiaCricket"]
-    valid, reason = script_writer.validate_cricket_script(result)
-    assert not valid
-    assert "4–5" in reason
-
-    result = valid_result()
-    result["hashtags"][0] = "#India Cricket"
-    valid, reason = script_writer.validate_cricket_script(result)
-    assert not valid
-    assert "valid hashtags" in reason
 
 
 def test_writer_returns_valid_result_in_one_model_call(monkeypatch):

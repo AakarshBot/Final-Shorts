@@ -7,6 +7,7 @@ from pathlib import Path
 import math
 import shutil
 import subprocess
+from functools import lru_cache
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -107,6 +108,7 @@ PREVIEW_SUBTITLE_DATA = {
     ],
 }
 
+@lru_cache(maxsize=256)
 def _font(candidates: tuple[Path, ...], size: int):
     for path in candidates:
         if path.exists():
@@ -124,6 +126,7 @@ def _font(candidates: tuple[Path, ...], size: int):
     return ImageFont.load_default()
 
 
+@lru_cache(maxsize=64)
 def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
     root = Path(__file__).resolve().parent / "fonts"
     language = str(language or "english").casefold()
@@ -157,6 +160,7 @@ def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
     )
 
 
+@lru_cache(maxsize=64)
 def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
     candidates = list(_font_candidates("headline", language))
     candidates.extend(
@@ -304,6 +308,7 @@ def _headline_lines(
     return lines
 
 
+@lru_cache(maxsize=256)
 def _fit_headline_font(
     text: str,
     language: str = "english",
@@ -319,7 +324,7 @@ def _fit_headline_font(
             continue
         return fonts[0], clean, lines
 
-    raise ValueError("Headline is too long to fit in two lines.")
+    raise ValueError("Headline is too long to fit on screen.")
 def make_sample_background() -> Image.Image:
     image = Image.new("RGB", (WIDTH, HEIGHT))
     draw = ImageDraw.Draw(image)
@@ -337,6 +342,7 @@ def make_sample_background() -> Image.Image:
     return image
 
 
+@lru_cache(maxsize=1)
 def _load_logo():
     path = Path(__file__).resolve().parent / "logo.png"
     if not path.exists():
@@ -375,6 +381,7 @@ def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
 
 
 
+@lru_cache(maxsize=64)
 def _top5_body_font(size: int, language: str = "english"):
     root = Path(__file__).resolve().parent / "fonts"
     language = str(language or "english").casefold()
@@ -402,6 +409,7 @@ def _top5_body_font(size: int, language: str = "english"):
     return ImageFont.load_default()
 
 
+@lru_cache(maxsize=64)
 def _top5_headline_font(size: int):
     root = Path(__file__).resolve().parent / "fonts"
     for path in (
@@ -951,10 +959,12 @@ def _subtitle_lines(
     return [words[:split], words[split:]]
 
 
-def _fit_subtitle_layout(
-    words: list[dict],
+@lru_cache(maxsize=256)
+def _fit_subtitle_layout_cached(
+    word_texts: tuple[str, ...],
     language: str,
 ):
+    words = [{"text": text} for text in word_texts]
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     for size in range(SUBTITLE_MAX_SIZE, SUBTITLE_MIN_SIZE - 1, -1):
         font = _font(_font_candidates("subtitle", language), size)
@@ -962,9 +972,24 @@ def _fit_subtitle_layout(
             lines = _subtitle_lines(words, probe, font)
         except ValueError:
             continue
-        return font, lines
+        return font, tuple(len(line) for line in lines)
 
     raise ValueError("Subtitle cue is too wide to fit in two lines.")
+
+def _fit_subtitle_layout(
+    words: list[dict],
+    language: str,
+):
+    font, line_lengths = _fit_subtitle_layout_cached(
+        tuple(str(word.get("text") or "") for word in words),
+        language,
+    )
+    lines = []
+    offset = 0
+    for length in line_lengths:
+        lines.append(words[offset:offset + length])
+        offset += length
+    return font, lines
 
 
 def _draw_subtitles(
@@ -1049,8 +1074,9 @@ def render_frame(
     source_label: str | None = None,
     subtitle_y: int | None = None,
     top5_card: dict | None = None,
+    validate_handoff: bool = True,
 ) -> Image.Image:
-    if not validate_subtitle_handoff(subtitle_data):
+    if validate_handoff and not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
 
     frame = base_image.convert("RGBA").resize(
@@ -1389,6 +1415,7 @@ def render_production_video(
                     source_label,
                     subtitle_y,
                     top5_card=visual["top5_card"],
+                    validate_handoff=False,
                 )
             else:
                 yield render_frame(
@@ -1399,6 +1426,7 @@ def render_production_video(
                     headline_enabled,
                     source_label,
                     subtitle_y,
+                    validate_handoff=False,
                 )
 
     try:

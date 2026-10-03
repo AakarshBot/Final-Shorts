@@ -1,3 +1,4 @@
+from __future__ import annotations
 import hashlib
 import json
 from io import BytesIO
@@ -5,7 +6,6 @@ from dataclasses import replace
 from pathlib import Path
 
 from dotenv import load_dotenv
-from PIL import Image, ImageFilter, ImageOps
 import streamlit as st
 
 load_dotenv()
@@ -814,6 +814,7 @@ if "live_upload_comment" not in st.session_state:
 if "live_pipeline_notice" not in st.session_state:
     st.session_state.live_pipeline_notice = None
 def _asset_to_image(value):
+    from PIL import Image
     try:
         if isinstance(value, Image.Image):
             return value.convert("RGB")
@@ -826,6 +827,7 @@ def _asset_to_image(value):
 
 
 def _preview_image(asset):
+    from PIL import Image
     image = _asset_to_image(asset.get("bytes"))
     if image is None:
         return None
@@ -861,6 +863,8 @@ def _crop_visual_dialog(
     label: str,
     crop_store: str = "visual_crops",
 ):
+    from PIL import Image, ImageFilter, ImageOps
+
     image = _asset_to_image(image_bytes)
     if image is None:
         st.error("This visual could not be opened for cropping.")
@@ -1061,6 +1065,7 @@ def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, st
 
 @st.dialog("Crop image for Stats Card", width="large")
 def _stats_card_crop_dialog(image_bytes: bytes, live: bool):
+    from PIL import Image, ImageFilter, ImageOps
     from stats_card import IMAGE_HEIGHT, WIDTH
 
     image = _asset_to_image(image_bytes)
@@ -1381,6 +1386,7 @@ def _top5_visual_asset_key(result_key: str, index: int, asset: dict) -> str:
 
 
 def _top5_fit_preview(value, width=300, height=533):
+    from PIL import Image
     image = _asset_to_image(value)
     if image is None:
         return None
@@ -1440,6 +1446,7 @@ def _top5_attach_asset(result_key: str, index: int, asset: dict, slide: int):
 
 @st.dialog("Crop visual", width="large")
 def _top5_crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
+    from PIL import Image, ImageFilter, ImageOps
     image = _asset_to_image(image_bytes)
     if image is None:
         st.error("This visual could not be opened for cropping.")
@@ -1503,162 +1510,6 @@ def _top5_crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
                 if assignment.get("asset_key") == asset_key:
                     assignment["bytes"] = crop_bytes
             st.rerun()
-
-
-def _render_top5_asset_pool(
-    assets: list[dict],
-    result_key: str,
-    allowed_slides: list[int],
-):
-    visible_assets = [
-        (index, asset)
-        for index, asset in enumerate(assets)
-        if _top5_visual_asset_key(result_key, index, asset)
-        not in st.session_state.test_top5_visual_deleted
-    ]
-    if not visible_assets:
-        st.caption("No images are currently available from this option.")
-        return
-
-    for start in range(0, len(visible_assets), 3):
-        cols = st.columns(3, gap="medium")
-        for col, (index, asset) in zip(cols, visible_assets[start:start + 3]):
-            with col:
-                asset_key = _top5_visual_asset_key(result_key, index, asset)
-                crop = st.session_state.test_top5_visual_crops.get(asset_key)
-                preview = _top5_fit_preview(crop or asset.get("bytes"))
-                with st.container(key=f"top5-visual-card-{result_key}-{index}"):
-                    if preview is not None:
-                        st.image(preview, width="stretch")
-
-                    source = str(
-                        asset.get("publisher")
-                        or asset.get("source")
-                        or asset.get("model")
-                        or "Web source"
-                    )
-                    label = str(
-                        asset.get("article_title")
-                        or asset.get("model")
-                        or "Selected visual"
-                    )
-                    st.markdown(
-                        f'<div class="visual-source">{source}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if label:
-                        st.markdown(
-                            f'<div class="visual-detail">{label}</div>',
-                            unsafe_allow_html=True,
-                        )
-                    if crop:
-                        st.markdown(
-                            '<div class="visual-crop-label">CROP APPLIED</div>',
-                            unsafe_allow_html=True,
-                        )
-
-                    choose_col, crop_col, delete_col = st.columns(3, gap="small")
-                    with choose_col:
-                        with st.popover("Choose"):
-                            selected_slide = st.selectbox(
-                                "Slide",
-                                allowed_slides,
-                                index=0,
-                                key=f"top5-attach-slide-{asset_key}",
-                            )
-                            if st.button(
-                                "Attach",
-                                type="primary",
-                                width="stretch",
-                                key=f"top5-attach-{asset_key}",
-                            ):
-                                _top5_attach_asset(
-                                    result_key,
-                                    index,
-                                    asset,
-                                    selected_slide,
-                                )
-                                st.rerun()
-                    with crop_col:
-                        raw = asset.get("bytes")
-                        if st.button(
-                            "Crop",
-                            width="stretch",
-                            key=f"top5-crop-{asset_key}",
-                        ):
-                            if isinstance(raw, (bytes, bytearray)):
-                                _top5_crop_visual_dialog(
-                                    asset_key,
-                                    bytes(raw),
-                                    source,
-                                )
-                            else:
-                                st.warning("This visual does not have a crop-ready image payload.")
-                    with delete_col:
-                        if st.button(
-                            "Delete",
-                            width="stretch",
-                            key=f"top5-delete-{asset_key}",
-                        ):
-                            _top5_delete_asset(result_key, index, asset)
-                            st.rerun()
-
-
-def _render_top5_visual_board():
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">VISUAL BOARD</div>'
-        '<div class="section-title">Attach one visual to every slide</div></div>'
-        '<div class="section-count">6 slides required</div>',
-        unsafe_allow_html=True,
-    )
-
-    script_handoff = st.session_state.get("test_top5_script_handoff") or {}
-    script_data = st.session_state.get("test_top5_script_data") or {}
-    script_slides = script_handoff.get("slides") or script_data.get("slides") or []
-
-    cols = st.columns(6, gap="small")
-    for slide in range(1, 7):
-        with cols[slide - 1]:
-            assignment = st.session_state.test_top5_visual_assignments.get(slide)
-            script = script_slides[slide - 1] if slide <= len(script_slides) else {}
-            spoken_line = str(
-                script.get("headline")
-                or script.get("voiceover")
-                or ""
-            ).strip()
-            body = str(script.get("body") or "").strip()
-            with st.container(key=f"test-top5-slide-{slide}"):
-                st.markdown(
-                    f'<div class="eyebrow">SLIDE {slide}</div>',
-                    unsafe_allow_html=True,
-                )
-                if spoken_line:
-                    st.markdown(
-                        '<div class="mini-label" style="margin-top:.45rem;">SCRIPT</div>',
-                        unsafe_allow_html=True,
-                    )
-                    st.text(spoken_line)
-                if body:
-                    st.text(body)
-                if assignment and assignment.get("bytes"):
-                    from renderer import build_top5_card_preview
-                    card_preview = build_top5_card_preview(
-                        assignment["bytes"],
-                        spoken_line,
-                        body,
-                        story_number=0 if slide == 1 else slide - 1,
-                        total_stories=5,
-                        source_label=assignment.get("source") or "Sports desk",
-                    )
-                    st.image(card_preview, width="stretch")
-                    st.caption("Full Top-5 card preview")
-                    if assignment.get("label"):
-                        st.caption(assignment["label"])
-                else:
-                    st.markdown(
-                        '<div class="empty-slot">EMPTY</div>',
-                        unsafe_allow_html=True,
-                    )
 
 
 def _render_home():
@@ -1959,6 +1810,7 @@ def _live_generate_audio_and_subtitles():
 
 
 def _live_fit_preview(value, width=360, height=640):
+    from PIL import Image
     image = _asset_to_image(value)
     if image is None:
         return None
@@ -2411,7 +2263,12 @@ def _render_live_visuals(slide_count: int):
                             assigned,
                             output_path=output,
                             headline_text=st.session_state.live_approved_script.get("headline", ""),
-                            headline_enabled=st.session_state.live_headline_enabled,
+                            headline_enabled=bool(
+                                st.session_state.live_approved_script.get(
+                                    "headline_enabled",
+                                    st.session_state.live_headline_enabled,
+                                )
+                            ),
                             source_label=story.source or "SPORTS DESK",
                         )
                     st.session_state.live_rendered_video_path = str(output)
@@ -2528,11 +2385,7 @@ def _render_live_script():
                 headline=edited_headline if st.session_state.live_headline_enabled else "",
                 validate=True,
             )
-            approved["headline"] = (
-                str(edited_headline or "").strip()
-                if st.session_state.live_headline_enabled
-                else ""
-            )
+            approved["headline_enabled"] = bool(st.session_state.live_headline_enabled)
         except ValueError as exc:
             st.session_state.live_script_error = str(exc)
             st.rerun()
@@ -2590,10 +2443,9 @@ def _render_live_upload():
     st.caption("Edit the title candidates, choose the one to publish, then approve the metadata once.")
     edited_titles = []
     for index, title in enumerate(titles, 1):
-        style = TITLE_OPTION_STYLES[index - 1] if index <= len(TITLE_OPTION_STYLES) else "Alternative"
         edited_titles.append(
             st.text_input(
-                f"Title {index} · {style}",
+                f"Title {index}",
                 value=str(title),
                 max_chars=100,
                 key=f"live-upload-title-{story_id}-{index}",
@@ -3445,7 +3297,7 @@ def render_scriptwriter():
                     st.session_state.upload_result=None
                     st.session_state.rendered_video_path=None
                     st.session_state.upload_qc=None
-                    for index in range(1,6):
+                    for index in range(1,4):
                         st.session_state.pop(f"upload-title-{index}",None)
                     st.session_state.pop("upload_video_file",None)
                     st.session_state.upload_title_options=list(approved.get("titles") or [])
@@ -3910,14 +3762,6 @@ def render_renderer_test():
             if previews:
                 st.markdown('<div style="margin-top:.8rem;color:var(--muted);font-size:.72rem;">Preview bundle ready.</div>',unsafe_allow_html=True)
             st.markdown('</div>',unsafe_allow_html=True)
-TITLE_OPTION_STYLES = (
-    "SEO / Search",
-    "Curiosity / Baity",
-    "Trend / Format",
-    "Consequence / Why It Matters",
-    "Fan / Emotion",
-)
-
 def render_upload_qc():
     st.header("07 · Upload QC")
     script = st.session_state.get("approved_script")
@@ -3966,10 +3810,9 @@ def render_upload_qc():
 
         edited_titles = []
         for index, title in enumerate(titles, 1):
-            style = TITLE_OPTION_STYLES[index - 1] if index <= len(TITLE_OPTION_STYLES) else "Alternative"
             edited_titles.append(
                 st.text_input(
-                    f"Title {index} · {style}",
+                    f"Title {index}",
                     value=title,
                     key=f"upload-title-{index}",
                     max_chars=100,

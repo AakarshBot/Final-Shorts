@@ -60,6 +60,22 @@ def test_renderer_uses_supplied_headline(monkeypatch):
     assert seen == ["Gill Injury Scare"]
 
 
+def test_renderer_skips_headline_when_disabled(monkeypatch):
+    seen = []
+    monkeypatch.setattr(renderer, "_draw_headline", lambda *args: seen.append("headline"))
+    base = renderer.make_sample_background()
+
+    renderer.render_frame(
+        base,
+        0.50,
+        headline_text="Gill Injury Scare",
+        headline_enabled=False,
+    )
+
+    assert seen == []
+
+
+
 def test_renderer_shows_headline_and_subtitles_together(monkeypatch):
     calls = []
     monkeypatch.setattr(renderer, "_draw_headline", lambda *args: calls.append("headline"))
