@@ -106,7 +106,8 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
     seen = []
 
     def fake_card(*args, **kwargs):
-        seen.append(kwargs.get("story_number") if isinstance(kwargs, dict) else None)
+        card = args[1] if len(args) > 1 else kwargs.get("card")
+        seen.append(card)
         return args[0] if args else Image.new("RGBA", (1080, 1920))
 
     def fake_preview(frames, path):
@@ -131,6 +132,7 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
         output,
     )
     assert len(seen) == 1
+    assert seen[0]["story_number"] == 2
 
 
 def test_top5_headline_layout_is_dynamic():
