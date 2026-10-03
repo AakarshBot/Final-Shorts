@@ -158,7 +158,6 @@ def test_top5_body_layout_is_dynamic():
         "The board confirmed the move after reviewing the latest result and the selection options. "
         "The decision changes the lineup ahead of the next series and follows the latest update from officials.",
         "english",
-        max_height=400,
     )
 
     assert short_body_font.size >= long_body_font.size
