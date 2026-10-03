@@ -3532,11 +3532,6 @@ def render_scriptwriter():
                     st.session_state.get("topic_desk_profile") or "",
                     language.casefold(),
                 )
-                else:
-                    st.session_state.script_data=write_script(
-                        {"title":topic.title,"description":topic.description,"url":topic.url,"source":topic.source},
-                        language=language.casefold(),
-                    )
             st.session_state.approved_script=None
             st.session_state.audio_data=None
             st.session_state.approved_audio=None
