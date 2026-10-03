@@ -9,6 +9,7 @@ from html import unescape
 import json
 import os
 from pathlib import Path
+from functools import lru_cache
 import re
 from urllib.parse import urlparse
 
@@ -198,6 +199,7 @@ def _story_value(story, key: str) -> str:
     return _clean(dict(story or {}).get(key))
 
 
+@lru_cache(maxsize=2048)
 def _source_domain(url: str) -> str:
     try:
         return urlparse(str(url or "")).netloc.casefold().removeprefix("www.")
@@ -262,6 +264,7 @@ def _extract_article(url: str) -> tuple[str, str]:
     return "", resolved_url
 
 
+@lru_cache(maxsize=2048)
 def _title_keywords(title: str) -> set[str]:
     words = re.findall(r"\b[\w]+\b", title.casefold(), flags=re.UNICODE)
     stop = {
