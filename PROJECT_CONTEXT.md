@@ -16,6 +16,24 @@ This is the governing workflow for the entire factory.
 
 This rule takes precedence over convenience in implementation and should guide future architecture decisions throughout Final-Shorts.
 
+## Test-first factory operating model
+
+Test is a modular laboratory; Live is the approved production line.
+
+- Topic selection hands the selected story's URL and story payload to the relevant function.
+- Test Scriptwriter can generate a script, and Manual QC can edit and approve it. The Scriptwriter handoff is the canonical package for every later function that needs script data.
+- The Scriptwriter Test view must expose the complete editorial handoff: opening headline when enabled, quote/attribution when available, and the slide scripts. For Top-5, this means each slide's spoken headline plus its visual-only body copy.
+- Audio consumes the Scriptwriter handoff and returns audio/timing data. Test lets the user listen and approve it.
+- Visuals are a modular function. Automatic scraping starts from the selected story URL, while manual scraper/search/AI options can be run independently. Manual inputs may deliberately bypass upstream approvals when the visual function does not actually require that approval.
+- Test Visuals must show the script context above the slide board, let the user attach/crop/reposition visuals per slide, and create an explicit approved visual handoff. Standard Cricket production uses four visual slides; do not change Top-5's separate six-slide workflow.
+- Stats Card, Quote Card, Top-5 card/visual experiments, and other visual sub-functions are independently testable in Test. They must not be blocked merely because an earlier pipeline stage is unapproved. They still receive whatever concrete input they genuinely need, such as an image pool or manually entered quote.
+- Subtitles consume approved Audio + Scriptwriter handoffs and produce the subtitle handoff used by Renderer. No visual subtitle preview is required in Test or Live.
+- Test Renderer is the integration check. It consumes only the exact approved handoffs it needs—Scriptwriter, Audio, Subtitles and Visuals. When one is missing, Test explicitly identifies the missing approval instead of silently substituting demo data. Once all required handoffs exist, it builds the real Short.
+- Live never needs a separate experimental implementation just because Test is modular. Once a Test component is approved, its same logic/handoff is promoted into the Live production line.
+- Test stage navigation may intentionally jump directly to any stage so individual functions can be tested out of order. Live stage navigation must continue to enforce the approved production sequence.
+
+The existing `live_script_language` state is intentional: language support is currently a Test-first experiment that has not yet been promoted to Live. Keep it available for an eventual direct promotion rather than deleting it as dead state.
+
 # Final Shorts — Project Context
 
 ## Project status
