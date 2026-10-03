@@ -536,5 +536,5 @@ def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path)
     )
 
     assert seen
-    assert seen[0][8] == quote_card
-    assert seen[0][9] is False
+    assert seen[0][8] is False
+    assert seen[0][9] == quote_card
