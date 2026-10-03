@@ -5597,9 +5597,7 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_stage = "06 · Renderer"
                             st.session_state.test_pipeline_notice = {
                                 "confirmed": "Top-5 Visual QC confirmed",
-                                "next": "Moving to Renderer.",
-                            }
-                            st.rerun()
+                         
        "next": "Moving to Renderer.",
                             }
                             st.rerun()
