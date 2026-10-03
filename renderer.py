@@ -1258,22 +1258,6 @@ def _fit_subtitle_layout_cached(
 
     raise ValueError("Subtitle cue is too wide to fit in two lines.")
 
-def _fit_subtitle_layout(
-    words: list[dict],
-    language: str,
-):
-    font, line_lengths = _fit_subtitle_layout_cached(
-        tuple(str(word.get("text") or "") for word in words),
-        language,
-    )
-    lines = []
-    offset = 0
-    for length in line_lengths:
-        lines.append(words[offset:offset + length])
-        offset += length
-    return font, lines
-
-
 @lru_cache(maxsize=512)
 def _subtitle_render_geometry_cached(
     word_texts: tuple[str, ...],
