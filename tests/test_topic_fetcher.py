@@ -326,8 +326,8 @@ def test_niche_sports_path_remains_available():
 
 def test_niche_sports_groups_headlines_by_shared_named_keyword():
     rows = [
-        make_topic("Carlos Alcaraz wins after dramatic comeback", url="https://example.com/alcaraz-1"),
-        make_topic("Carlos Alcaraz targets another title after comeback", url="https://example.com/alcaraz-2"),
+        make_topic("Carlos Alcaraz returns after knee injury", url="https://example.com/alcaraz-1"),
+        make_topic("Carlos Alcaraz signs major endorsement deal", url="https://example.com/alcaraz-2"),
         make_topic("Lando Norris takes surprise Formula 1 podium", url="https://example.com/norris"),
     ]
     chosen = topic_fetcher._select(rows, 2, set(), profile="niche_sports")
