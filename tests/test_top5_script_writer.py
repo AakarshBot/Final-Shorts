@@ -41,7 +41,7 @@ def valid_result():
                 "story_index": index,
                 "headline": (
                     f"Story {index} confirmed the record after the match, "
-                    "and the board published results"
+                    "and results were published"
                 ),
                 "body": (
                     f"Player {index} made the record official after the match. "
