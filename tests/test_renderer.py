@@ -259,9 +259,14 @@ def test_headline_marker_and_subtitle_style_are_brand_consistent():
 def test_subtitle_layout_uses_second_line_only_when_needed():
     words = TEST_SUBTITLE_DATA["cues"][0]["words"]
 
-    font, lines = renderer._fit_subtitle_layout(words, "english")
+    font, line_lengths, _, line_heights, total_height = renderer._subtitle_render_geometry_cached(
+        tuple(word["text"] for word in words),
+        "english",
+    )
     assert font.size >= renderer.SUBTITLE_MIN_SIZE
-    assert 1 <= len(lines) <= 2
+    assert 1 <= len(line_lengths) <= 2
+    assert line_heights
+    assert total_height > 0
 
     long_words = [
         {"text": "This", "start": 0.0, "end": 0.2},
@@ -273,9 +278,12 @@ def test_subtitle_layout_uses_second_line_only_when_needed():
         {"text": "update", "start": 1.2, "end": 1.4},
         {"text": "today", "start": 1.4, "end": 1.6},
     ]
-    font, two_lines = renderer._fit_subtitle_layout(long_words, "english")
-    assert len(two_lines) == 2
-    assert sum(len(line) for line in two_lines) == len(long_words)
+    _, long_line_lengths, _, _, _ = renderer._subtitle_render_geometry_cached(
+        tuple(word["text"] for word in long_words),
+        "english",
+    )
+    assert len(long_line_lengths) == 2
+    assert sum(long_line_lengths) == len(long_words)
 
 
 def test_subtitle_dash_variants_are_normalised():
@@ -546,8 +554,8 @@ def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path)
     }
     seen = []
 
-    def fake_frame(*args):
-        seen.append(args)
+    def fake_quote(*args, **kwargs):
+        seen.append(args[1] if len(args) > 1 else kwargs.get("card"))
         return args[0]
 
     def fake_preview(frames, path):
@@ -559,7 +567,7 @@ def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path)
         output.write_bytes(b"final")
         return output
 
-    monkeypatch.setattr(renderer, "render_frame", fake_frame)
+    monkeypatch.setattr(renderer, "_draw_quote_card", fake_quote)
     monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
     monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
 
@@ -576,6 +584,4 @@ def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path)
         output,
     )
 
-    assert seen
-    assert seen[0][8] is False
-    assert seen[0][9] == quote_card
+    assert seen == [quote_card]

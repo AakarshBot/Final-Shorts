@@ -53,7 +53,26 @@ def valid_result():
                 "sport_or_topic_category": "Cricket",
             }
         )
-    return {"slides": slides, "hashtags": ["#Cricket", "#Top5", "#Shorts"]}
+    return {
+        "slides": slides,
+        "seo_description": "A concise Top-5 cricket news roundup grounded in today's selected stories.",
+        "hashtags": ["#Cricket", "#Top5", "#Shorts"],
+        "comment": "Which of these cricket developments matters most today?",
+    }
+
+
+def test_top5_script_requires_publish_metadata():
+    result = valid_result()
+    result.pop("seo_description")
+    valid, reason = validate_top5_script(result, stories())
+    assert valid is False
+    assert "description" in reason
+
+    result = valid_result()
+    result.pop("comment")
+    valid, reason = validate_top5_script(result, stories())
+    assert valid is False
+    assert "comment" in reason
 
 
 def test_valid_top5_script_contract():

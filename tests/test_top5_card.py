@@ -52,9 +52,10 @@ def test_top5_preview_keeps_a_9x16_crop_instead_of_recropping_it():
     assert corner != (249, 250, 252)
 
 
-def test_top5_preview_uses_localized_readability_treatment_not_a_full_width_panel():
+def test_top5_preview_uses_text_only_readability_treatment_not_a_full_width_panel():
+    background = (236, 236, 236)
     preview = renderer.build_top5_card_preview(
-        _solid_png((1080, 1920), (236, 236, 236)),
+        _solid_png((1080, 1920), background),
         "India confirm the latest squad change",
         "The board confirmed the move. The decision changes the lineup.",
         story_number=1,
@@ -62,10 +63,18 @@ def test_top5_preview_uses_localized_readability_treatment_not_a_full_width_pane
     image = Image.open(BytesIO(preview)).convert("RGB")
 
     assert image.size == (1080, 1920)
-    edge_pixel = image.getpixel((20, 1180))
-    center_pixel = image.getpixel((430, 1300))
-    assert edge_pixel != (249, 250, 252)
-    assert center_pixel != edge_pixel
+    assert image.getpixel((20, 1180)) == background
+    assert image.getpixel((1050, 1180)) == background
+    assert image.getpixel((540, 600)) == background
+
+    text_region = image.crop((72, 500, 1008, 1640))
+    changed = sum(
+        1
+        for pixel in text_region.getdata()
+        if pixel != background
+    )
+    assert changed > 1_000
+    assert changed < text_region.width * text_region.height // 3
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
@@ -96,9 +105,10 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
 
     seen = []
 
-    def fake_frame(*args, **kwargs):
-        seen.append(kwargs.get("top5_card"))
-        return args[0]
+    def fake_card(*args, **kwargs):
+        card = args[1] if len(args) > 1 else kwargs.get("card")
+        seen.append(card)
+        return args[0] if args else Image.new("RGBA", (1080, 1920))
 
     def fake_preview(frames, path):
         next(iter(frames))
@@ -109,7 +119,7 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
         output.write_bytes(b"final")
         return output
 
-    monkeypatch.setattr(renderer, "render_frame", fake_frame)
+    monkeypatch.setattr(renderer, "_draw_top5_editorial_card", fake_card)
     monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
     monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
 
@@ -121,33 +131,111 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
         visuals,
         output,
     )
-    assert seen and seen[0]["story_number"] == 2
+    assert len(seen) == 1
+    assert seen[0]["story_number"] == 2
+
+
+def test_top5_production_accepts_six_slides_without_subtitles(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene.mp3"
+    audio_file.write_bytes(b"audio")
+    image_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(image_buffer, format="PNG")
+    image_bytes = image_buffer.getvalue()
+
+    script = {
+        "schema": "final-shorts.top5-script.v1",
+        "approved_for_audio": True,
+        "slides": [
+            {
+                "slide_number": number,
+                "story_index": number - 1,
+                "headline": (
+                    "Gill returns with India reshuffling their squad"
+                    if number == 1
+                    else f"India confirm the selected cricket development number {number}"
+                ),
+                "body": "" if number == 1 else "The board confirmed the move. The decision changes the lineup.",
+            }
+            for number in range(1, 7)
+        ],
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [
+            {
+                "scene": number,
+                "duration": 0.5,
+                "path": str(audio_file),
+            }
+            for number in range(1, 7)
+        ],
+    }
+    visuals = [
+        {
+            "bytes": image_bytes,
+            "source": "Commons",
+            "top5_card": {
+                "headline": slide["headline"],
+                "body": slide["body"],
+                "story_number": 0 if number == 1 else number - 1,
+                "total_stories": 5,
+            },
+        }
+        for number, slide in enumerate(script["slides"], 1)
+    ]
+
+    seen = []
+    monkeypatch.setattr(
+        renderer,
+        "_draw_top5_editorial_card",
+        lambda base, card: (seen.append(card) or base),
+    )
+    monkeypatch.setattr(
+        renderer,
+        "write_preview_video",
+        lambda frames, path: (
+            list(frames),
+            path.write_bytes(b"silent"),
+            path,
+        )[-1],
+    )
+    monkeypatch.setattr(
+        renderer,
+        "_mux_audio",
+        lambda silent, scenes, output: (output.write_bytes(b"final") or output),
+    )
+
+    output = tmp_path / "top5.mp4"
+    renderer.render_production_video(script, audio, None, visuals, output)
+    assert len(seen) == 6
+    assert [card["story_number"] for card in seen] == [0, 1, 2, 3, 4, 5]
 
 
 def test_top5_headline_layout_is_dynamic():
-    short_font, short_lines = renderer._fit_top5_headline(
+    short_fonts, short_display, short_lines = renderer._fit_top5_editorial_headline(
         "India make a major change",
     )
-    long_font, long_lines = renderer._fit_top5_headline(
+    long_fonts, long_display, long_lines = renderer._fit_top5_editorial_headline(
         "India reshuffles squad after a late selection change",
     )
 
-    assert short_font.size >= long_font.size
+    assert short_display == "INDIA MAKE A MAJOR CHANGE"
+    assert long_display == "INDIA RESHUFFLES SQUAD AFTER A LATE SELECTION CHANGE"
+
+    assert short_fonts[0].size >= long_fonts[0].size
     assert len(short_lines) <= 2
     assert len(long_lines) <= 2
 
 
 def test_top5_body_layout_is_dynamic():
-    short_body_font, short_paragraphs = renderer._fit_top5_body(
+    short_body_font, short_paragraphs = renderer._fit_top5_editorial_body(
         "The board confirmed the move. The decision changes the lineup.",
         "english",
-        max_height=400,
     )
-    long_body_font, long_paragraphs = renderer._fit_top5_body(
+    long_body_font, long_paragraphs = renderer._fit_top5_editorial_body(
         "The board confirmed the move after reviewing the latest result and the selection options. "
         "The decision changes the lineup ahead of the next series and follows the latest update from officials.",
         "english",
-        max_height=400,
     )
 
     assert short_body_font.size >= long_body_font.size
@@ -176,7 +264,7 @@ def test_top5_opener_has_no_body_copy():
     image = Image.open(BytesIO(preview))
 
     assert image.size == (1080, 1920)
-    _, lines = renderer._fit_top5_headline(
+    _, _, lines = renderer._fit_top5_editorial_headline(
         "Five cricket stories shaping today",
     )
     assert len(lines) <= 2
