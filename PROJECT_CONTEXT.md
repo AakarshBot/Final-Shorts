@@ -1,3 +1,21 @@
+# FINAL-SHORTS BIGGEST RULE
+
+**TEST FIRST → USER APPROVAL → PUSH TO LIVE.**
+
+This is the governing workflow for the entire factory.
+
+- New functionality, UI changes, pipeline behavior, language options, and other improvements are developed and tested in **Test** first.
+- **Test is the proving ground.** The user decides what they like, what they dislike, and what is approved.
+- Once the user approves a tested component, moving it to **Live must be easy and direct**. The approved Test behavior should become the Live behavior without rebuilding or re-implementing the component from scratch.
+- Test and Live may differ in presentation or in whether a transition is manual versus automatic, but they must share the same approved component logic, inputs, outputs, and handoff contract.
+- Do not make Live-only versions of a component when the component is supposed to graduate from Test.
+- Do not force experimental features into Live before the user approves them in Test.
+- Language support is explicitly part of this model: language options can be introduced and refined in Test first, then promoted to Live once the user approves the result.
+- Architecture must make promotion from Test → Live **simple, predictable, and low-risk**. Prefer shared direct implementations over duplicated Test/Live code.
+- When cleaning up the factory, aggressively delete unnecessary code, duplicate logic, dead state, obsolete wrappers, and abandoned implementations—but never delete active experimental Test functionality merely because it has not yet been promoted to Live.
+
+This rule takes precedence over convenience in implementation and should guide future architecture decisions throughout Final-Shorts.
+
 # Final Shorts — Project Context
 
 ## Project status
