@@ -284,12 +284,12 @@ Top-5 Scriptwriter:
 - No additional headline word-count target or hard word-count ceiling is used for Slides 2–6; the 15-second spoken-time limit is the only length constraint there.
 
 Top-5 Visuals:
-- Uses a dedicated Top-5 visual fetcher; the completed Cricket visual fetcher remains locked and untouchable.
-- Scrapes each of the five selected story URLs independently and builds a small 4–6 image pool per story.
-- If a story has fewer than four usable images, related current publisher URLs are searched until the pool is filled or no suitable fallback remains.
-- Human selection remains authoritative: one final visual is chosen for each of the five story slides, plus one separate Slide 1 opener visual.
-- Existing Manual Scraper, Manual Real Image Search/Commons and Manual AI Generation options remain available.
-- Existing 9:16 crop workflow remains in place.
+- The unconnected experimental `top5_visual_fetcher.py` implementation was removed as scaffolding because the active Test path had zero production callers for it.
+- The completed Cricket Visual Fetcher remains locked and untouchable.
+- The active Top-5 Test visual function is the standalone manual image/renderer test: manual source search, image selection, 9:16 crop/reposition, and static 1080 × 1920 composition preview.
+- Human selection remains authoritative.
+- The current Test visual stage deliberately bypasses Scriptwriter and Audio approvals because the visual function is independently testable.
+- When URL-based automatic Top-5 image retrieval is actually wired into the factory, rebuild that function directly rather than retaining an uncalled parallel module.
 
 Top-5 visual treatment — next redesign checkpoint (2026-10-03):
 - User currently rates the latest Top-5 visual treatment **4/10** and wants further improvement before approval.
@@ -784,6 +784,17 @@ Cleanup applied:
 There is no separate hook-scoring layer, retention-scoring layer, metadata stage, wrapper runtime or manual AI-rewrite layer in the Cricket Scriptwriter.
 
 Status: **Approved / cleaned.**
+
+### Cricket + Top-5 runtime audit checkpoint
+- Startup: `app.py` now loads the project `.env` explicitly instead of performing a directory search on every Streamlit rerun.
+- Test Scriptwriter widget state is scoped to the selected story; stale headline/narration widget state is cleared on regeneration.
+- Topic Fetcher hot pure-string/entity normalization functions use bounded LRU caches to reduce repeated tokenization, URL canonicalization and entity parsing during ranking/clustering.
+- Cricket Scriptwriter fetches its up-to-two related reports concurrently after the selected story is researched.
+- Audio approval handoffs use shallow copies because they only add one top-level approval flag.
+- Renderer avoids re-resizing already-normalized frames, caches subtitle geometry per cue, and pre-renders static Top-5/Quote frames once per slide instead of rebuilding them for every video frame.
+- Top-5 Test image previews use a bounded cache across Streamlit reruns.
+- The audit deliberately did not modify the locked `visual_fetcher.py` implementation or its approved Cricket retrieval behavior.
+- Full CI is the acceptance check for cleanup changes; no runtime claim is treated as final without validating the actual production/Test path.
 
 ### Test baseline after cleanup
 
