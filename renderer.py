@@ -1414,8 +1414,8 @@ def render_production_video(
                     headline_enabled,
                     source_label,
                     subtitle_y,
-                    top5_card=visual["top5_card"],
-                    validate_handoff=False,
+                    visual["top5_card"],
+                    False,
                 )
             else:
                 yield render_frame(
@@ -1426,7 +1426,8 @@ def render_production_video(
                     headline_enabled,
                     source_label,
                     subtitle_y,
-                    validate_handoff=False,
+                    None,
+                    False,
                 )
 
     try:

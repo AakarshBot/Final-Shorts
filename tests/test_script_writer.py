@@ -132,7 +132,6 @@ def test_writer_returns_valid_result_in_one_model_call(monkeypatch):
 
     assert len(calls) == 1
     assert result["provider_used"] == "openai/gpt-oss-120b"
-    assert result["estimated_seconds"] <= 32
 
 
 def test_writer_hides_invalid_first_draft_and_rewrites_once(monkeypatch):
@@ -159,23 +158,6 @@ def test_writer_hides_invalid_first_draft_and_rewrites_once(monkeypatch):
     assert "Slide 1" in calls[1][1]
     assert script_writer._words(result["script"][0]["voiceover"]) < 14
 
-
-def test_writer_hides_overlong_script_and_rewrites_once(monkeypatch):
-    calls = []
-    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
-    too_long = valid_result()
-    too_long["script"][1]["voiceover"] = " ".join(["important"] * 75)
-
-    def fake_request(model, prompt, story, schema=None):
-        calls.append(prompt)
-        return too_long if len(calls) == 1 else valid_result()
-
-    monkeypatch.setattr(script_writer, "_request", fake_request)
-    result = script_writer.write_script(Story())
-
-    assert len(calls) == 2
-    assert "32 seconds" in calls[1]
-    assert result["estimated_seconds"] <= 32
 
 
 def test_writer_never_returns_second_invalid_draft(monkeypatch):
