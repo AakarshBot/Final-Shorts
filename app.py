@@ -3481,6 +3481,10 @@ def render_topic_fetcher():
             st.session_state.approved_subtitles = None
             st.session_state.visual_result = None
             st.session_state.visual_loaded_story = None
+            st.session_state.visual_deleted = set()
+            st.session_state.visual_assignments = {}
+            st.session_state.approved_visuals = None
+            st.session_state.visuals_approved = False
 
     topics = st.session_state.topics
     if not topics:
@@ -3543,6 +3547,10 @@ def render_topic_fetcher():
         st.session_state.visual_result = None
         st.session_state.visual_loaded_story = None
         st.session_state.visual_crops = {}
+        st.session_state.visual_deleted = set()
+        st.session_state.visual_assignments = {}
+        st.session_state.approved_visuals = None
+        st.session_state.visuals_approved = False
         st.rerun()
 
     if st.session_state.selected_topic is not None:
