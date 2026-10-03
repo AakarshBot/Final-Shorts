@@ -124,6 +124,21 @@ def test_validator_requires_headline_when_generating():
     assert "3 or 4 words" in reason
 
 
+def test_quote_handoff_survives_script_edits():
+    result = valid_result()
+    result["quote"] = "I think Virat Kohli will finish on 98 centuries."
+    result["quote_attribution"] = "Aakash Chopra"
+    result["quote_slide"] = 1
+    edited = script_writer.apply_script_edits(
+        result,
+        [scene["voiceover"] for scene in result["script"]],
+        headline=result["headline"],
+    )
+    assert edited["quote"] == result["quote"]
+    assert edited["quote_attribution"] == "Aakash Chopra"
+    assert edited["quote_slide"] == 1
+
+
 def test_apply_script_edits_allows_disabled_headline():
     result = valid_result()
     edited = script_writer.apply_script_edits(
