@@ -5202,7 +5202,7 @@ elif st.session_state.app_mode == "test":
                                             from visual_fetcher import crawl_visuals
                                             auto = crawl_visuals(story_payload)
                                             st.session_state.test_top5_visual_card_results.pop(active_slide, None)
-st.session_state.test_top5_visual_results[active_slide] = {
+                                            st.session_state.test_top5_visual_results[active_slide] = {
                                                 "source": "automatic",
                                                 "query": specific_prompt,
                                                 "assets": list(auto.get("assets") or []),
