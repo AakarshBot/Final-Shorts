@@ -20,8 +20,6 @@ MIN_ARTICLE_CHARS = 500
 MAX_SOURCE_CHARS = 28000
 MAX_RELATED_ARTICLES = 2
 MAX_SLIDE_ONE_WORDS = 13
-MAX_SCRIPT_SECONDS = 32.0
-WORDS_PER_SECOND = 2.5
 
 LANGUAGE_INSTRUCTIONS = {
     "english": "Write all narration and publish metadata in punchy, natural spoken English.",
@@ -34,9 +32,9 @@ CRICKET_SCHEMA = {
     "properties": {
         "subject_name": {"type": "string"},
         "headline": {"type": "string"},
-        "titles": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 5},
+        "titles": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
         "seo_description": {"type": "string"},
-        "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 1, "maxItems": 5},
+        "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 1},
         "comment": {"type": "string"},
         "script": {
             "type": "array",
@@ -105,8 +103,6 @@ FOUR SLIDES
 - Return exactly four spoken slides.
 - Slide 1 is the hook: the strongest specific fact from the story.
 - Slide 1 MUST contain 13 words or fewer. This is a generation rule, not a post-generation target.
-- The complete four-slide narration MUST be 32 seconds or less at roughly 150 spoken words per minute. This is a generation rule, not a post-generation target.
-- Draft, count and rewrite internally before returning JSON if either limit is exceeded.
 - Slides 2–4 must add new information and should carry the important remaining facts.
 - Do not pad the script to hit a word count.
 
@@ -119,21 +115,14 @@ STYLE
 
 METADATA
 - `headline`: exactly 3 or 4 words.
-- `titles`: exactly 5 concise, clearly different YouTube Shorts title candidates.
-  1. SEO / Search: put the exact main subject or event keyword near the beginning and make the story immediately understandable.
-  2. Curiosity / Baity: create a strong information gap from a confirmed fact without misleading, exaggerating or hiding what the Short is about.
-  3. Trend / Format: use a current-feeling Shorts/news title pattern and natural audience language, but never invent or imply a real trend that the research does not support.
-  4. Consequence / Why it matters: foreground the concrete impact on the player, team, match, series, tournament or status.
-  5. Fan / Emotion: use a vivid, player- or team-centered angle that feels natural to cricket viewers while staying factual.
-- Every title must be accurate, concise and distinct from the other four.
-- Aim for around 50 characters per title where the wording allows. Treat this as a generation preference, not a hard constraint.
+- `titles`: exactly 3 concise YouTube Shorts title candidates.
+- Keep the three titles accurate, concise and clearly different in wording.
 - Put the most important words first; avoid generic filler such as "latest update", "breaking news", "big update" or "sports update".
 - Do not use fake urgency, unsupported superlatives, misleading open loops, excessive ALL CAPS, or excessive emoji. Do not add #Shorts unless it genuinely fits the title.
 - `seo_description`: concise and story-specific.
-- `hashtags`: generate 4–5 tightly relevant hashtags.
+- `hashtags`: generate relevant story-specific hashtags.
   - Include the main player/person/team or event when suitable.
   - Include the specific competition, tournament, match, series or development when available.
-  - Include a relevant cricket category hashtag when useful.
   - Avoid generic growth tags such as #viral, #fyp or #trending unless directly relevant to the story.
 - `comment`: one concise discussion-oriented comment grounded in the story.
 
@@ -148,11 +137,10 @@ FINAL SELF-CHECK
 Before returning JSON, silently verify:
 1. Exactly four slides.
 2. Slide 1 is 13 words or fewer.
-3. Total narration is 32 seconds or less at 150 wpm.
-4. The main subject is named in the narration.
-5. All important factual information is compressed into the four slides.
-6. No unsupported claim has been added.
-7. The metadata is complete.
+3. The main subject is named in the narration.
+4. All important factual information is compressed into the four slides.
+5. No unsupported claim has been added.
+6. The metadata is complete.
 
 Return only JSON matching the supplied schema.
 """
@@ -347,12 +335,7 @@ def _request(model: str, prompt: str, story: str) -> dict:
     return content if isinstance(content, dict) else json.loads(content)
 
 
-def _estimated_seconds(result: dict) -> float:
-    narration = " ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or [])
-    return _words(narration) / WORDS_PER_SECOND
-
-
-def validate_cricket_script(result: dict) -> tuple[bool, str]:
+def validate_cricket_script(result: dict, *, headline_required: bool = True) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
 
@@ -368,40 +351,27 @@ def validate_cricket_script(result: dict) -> tuple[bool, str]:
     if first_words > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
 
-    total_seconds = _estimated_seconds(result)
-    if total_seconds > MAX_SCRIPT_SECONDS:
-        return False, f"The script exceeds 32 seconds ({total_seconds:.1f}s estimated)."
-
     narration = _normalise(" ".join(_clean(scene.get("voiceover")) for scene in scenes))
     subject_normalised = _normalise(subject)
     if subject_normalised and subject_normalised not in narration:
         return False, "The main subject is not named in the spoken narration."
 
-    headline_words = _words(result.get("headline"))
-    if headline_words < 3 or headline_words > 4:
+    headline = _clean(result.get("headline"))
+    if headline and not 3 <= _words(headline) <= 4:
+        return False, "The opening headline must contain 3 or 4 words."
+    if headline_required and not headline:
         return False, "The opening headline must contain 3 or 4 words."
 
     titles = result.get("titles")
-    if not isinstance(titles, list) or len(titles) != 5 or not all(_clean(item) for item in titles):
-        return False, "The Cricket Scriptwriter must produce exactly 5 titles."
-
-
-    normalised_titles = [_normalise(_clean(title)) for title in titles]
-    if len(set(normalised_titles)) != len(normalised_titles):
-        return False, "The five YouTube titles must be distinct."
-
-    subject_normalised = _normalise(subject)
-    if subject_normalised and subject_normalised not in normalised_titles[0]:
-        return False, "The SEO title must contain the main subject name."
+    if not isinstance(titles, list) or len(titles) != 3 or not all(_clean(item) for item in titles):
+        return False, "The Cricket Scriptwriter must produce exactly 3 titles."
 
     if not _clean(result.get("seo_description")):
         return False, "The Scriptwriter must produce a description."
 
     hashtags = result.get("hashtags")
-    if not isinstance(hashtags, list) or not 4 <= len(hashtags) <= 5 or not all(
-        re.fullmatch(r"#[\w]+", _clean(item), flags=re.UNICODE) for item in hashtags
-    ):
-        return False, "The Cricket Scriptwriter must produce 4–5 valid hashtags."
+    if not isinstance(hashtags, list) or not hashtags or not all(_clean(item) for item in hashtags):
+        return False, "The Scriptwriter must produce hashtags."
 
     if not _clean(result.get("comment")):
         return False, "The Scriptwriter must produce the upload comment."
@@ -415,14 +385,11 @@ def validate_cricket_script(result: dict) -> tuple[bool, str]:
 
     return True, ""
 
-
 def _finish_result(result: dict, story, source: str, model: str, language_key: str) -> dict:
     result["provider_used"] = model
     result["language_used"] = language_key
     result["word_count"] = _words(" ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or []))
-    result["estimated_seconds"] = round(_estimated_seconds(result), 2)
     result["source_title"] = _story_value(story, "title")
-    result["source_evidence"] = source
     return result
 
 
@@ -481,7 +448,10 @@ def apply_script_edits(script: dict, voiceovers: list[str], headline: str | None
     if headline is not None:
         result["headline"] = _clean(headline)
     if validate:
-        valid, reason = validate_cricket_script(result)
+        valid, reason = validate_cricket_script(
+            result,
+            headline_required=False,
+        )
         if not valid:
             raise ValueError(f"Edited script failed local validation: {reason}")
     result["human_script_edited"] = any(
