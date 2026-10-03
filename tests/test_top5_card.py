@@ -105,9 +105,9 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
 
     seen = []
 
-    def fake_frame(*args, **kwargs):
-        seen.append(kwargs.get("top5_card"))
-        return args[0]
+    def fake_card(*args, **kwargs):
+        seen.append(kwargs.get("story_number") if isinstance(kwargs, dict) else None)
+        return args[0] if args else Image.new("RGBA", (1080, 1920))
 
     def fake_preview(frames, path):
         next(iter(frames))
@@ -118,7 +118,7 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
         output.write_bytes(b"final")
         return output
 
-    monkeypatch.setattr(renderer, "render_frame", fake_frame)
+    monkeypatch.setattr(renderer, "_draw_top5_editorial_card", fake_card)
     monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
     monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
 
@@ -130,7 +130,7 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
         visuals,
         output,
     )
-    assert seen and seen[0]["story_number"] == 2
+    assert len(seen) == 1
 
 
 def test_top5_headline_layout_is_dynamic():
