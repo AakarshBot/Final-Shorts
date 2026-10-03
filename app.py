@@ -330,24 +330,32 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
   border-radius:14px;
   margin-bottom:9px;
   box-shadow:0 1px 2px rgba(21,23,19,.025);
+  overflow:hidden;
 }
 [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"]:hover{
   border-color:var(--line-strong);
   box-shadow:var(--shadow);
 }
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stExpander"]{
-  border:0;
-  border-radius:14px;
-  background:transparent;
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"]{
+  margin:0;
 }
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stExpander"] summary{
-  min-height:62px;
-  padding:.85rem 1rem;
-  font-size:.84rem;
-  line-height:1.25;
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"] [data-testid="stButton"]>button{
+  min-height:62px!important;
+  justify-content:flex-start!important;
+  text-align:left!important;
+  padding:.85rem 1rem!important;
+  border:0!important;
+  border-radius:0!important;
+  background:transparent!important;
+  color:var(--ink)!important;
+  font-size:.84rem!important;
+  line-height:1.25!important;
+  font-weight:780!important;
 }
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stExpander"] summary:hover{
-  background:var(--surface-soft);
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"] [data-testid="stButton"]>button:hover{
+  background:var(--surface-soft)!important;
+  border-color:transparent!important;
+  box-shadow:none!important;
 }
 .topic-tile-meta{
   display:flex;
@@ -589,9 +597,9 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
     padding:11px 12px;
   }
   .topic-title{font-size:.92rem;-webkit-line-clamp:3;}
-  [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stExpander"] summary{
-    min-height:56px;
-    padding:.75rem .82rem;
+  [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"] [data-testid="stButton"]>button{
+    min-height:56px!important;
+    padding:.75rem .82rem!important;
   }
   [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stButton"]>button{
     min-height:42px!important;
@@ -676,6 +684,8 @@ if "topic_keyword" not in st.session_state:
     st.session_state.topic_keyword = ""
 if "selected_topic" not in st.session_state:
     st.session_state.selected_topic = None
+if "topic_open_tile" not in st.session_state:
+    st.session_state.topic_open_tile = None
 if "script_data" not in st.session_state:
     st.session_state.script_data = None
 if "approved_script" not in st.session_state:
@@ -3231,7 +3241,7 @@ def render_topic_fetcher():
     previous_desk = st.session_state.get("topic_desk_profile")
     if previous_desk and previous_desk != profiles[desk]:
         for key, value in {
-            "topics": [], "topic_keyword": "", "selected_topic": None, "script_data": None, "approved_script": None,
+            "topics": [], "topic_keyword": "", "selected_topic": None, "topic_open_tile": None, "script_data": None, "approved_script": None,
             "audio_data": None, "approved_audio": None, "subtitle_data": None, "approved_subtitles": None,
             "visual_result": None, "visual_loaded_story": None, "renderer_previews": None,
             "rendered_video_path": None, "upload_qc_approved": False, "upload_result": None,
@@ -3324,6 +3334,7 @@ def render_topic_fetcher():
                     st.session_state.topics = new_topics
 
             st.session_state.selected_topic = None
+            st.session_state.topic_open_tile = None
             st.session_state.script_data = None
             st.session_state.approved_script = None
             st.session_state.audio_data = None
@@ -3358,19 +3369,29 @@ def render_topic_fetcher():
                 tile_title = tile.group_key.split(":", 1)[1].title()
             else:
                 tile_title = tile.title
-            headline_label = "headline" if len(members) == 1 else "headlines"
+            multi_headline = len(members) > 1
 
             with col:
-                with st.expander(
-                    f"**{tile_title}** · {len(members)} {headline_label}",
-                    expanded=False,
-                    key=f"topic-tile-{index}",
-                ):
-                    st.markdown(
-                        f'<div class="topic-tile-meta"><span class="topic-rank">TILE {index + 1:02d}</span>'
-                        f'<span>{len(members)} {headline_label}</span></div>',
-                        unsafe_allow_html=True,
-                    )
+                with st.container(key=f"topic-tile-{index}"):
+                    if multi_headline:
+                        is_open = st.session_state.get("topic_open_tile") == index
+                        if st.button(
+                            f'{"▾" if is_open else "▸"}  {tile_title} · {len(members)} headlines',
+                            key=f"topic-tile-header-{index}",
+                            width="stretch",
+                            type="primary" if is_open else "secondary",
+                        ):
+                            st.session_state.topic_open_tile = None if is_open else index
+                            st.rerun()
+
+                        st.markdown(
+                            f'<div class="topic-tile-meta"><span class="topic-rank">TILE {index + 1:02d}</span>'
+                            f'<span>{len(members)} headlines</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                        if not is_open:
+                            continue
+
                     for headline_index, member in enumerate(members):
                         is_selected = (
                             st.session_state.selected_topic == index
@@ -3399,6 +3420,7 @@ def render_topic_fetcher():
                                     group_members=members,
                                 )
                                 st.session_state.selected_topic = index
+                                st.session_state.topic_open_tile = None
                                 st.session_state.test_stage = "02 · Scriptwriter"
                                 st.session_state.test_pipeline_notice = {
                                     "confirmed": "Story confirmed",
