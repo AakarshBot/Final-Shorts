@@ -2218,7 +2218,6 @@ def _render_live_visuals(slide_count: int):
         st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
         return
 
-    _render_live_visual_board(slide_count)
     visual_options = [
         "Option 1 · Automatic Scraper",
         "Option 2 · Manual Scraper",
@@ -2235,6 +2234,8 @@ def _render_live_visuals(slide_count: int):
         key="live_visual_option",
         label_visibility="collapsed",
     ) or visual_options[0]
+
+    _render_live_visual_board(slide_count)
 
     assigned = len(st.session_state.live_visual_assignments)
     st.caption(
