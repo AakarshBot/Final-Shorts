@@ -2,6 +2,7 @@ from top5_script_writer import (
     SLIDE_1_MAX_WORDS,
     MAX_EVIDENCE_CHARS,
     _evidence_packet,
+    SCHEMA,
     estimate_speech_seconds,
     validate_top5_script,
 )
@@ -122,17 +123,19 @@ def test_slide_one_has_fourteen_word_cap():
     assert "Slide 1" in reason
 
 
-def test_story_headline_is_rejected_only_when_over_fifteen_seconds():
+def test_story_headline_can_exceed_fifteen_seconds_when_total_stays_under_thirty():
     result = valid_result()
-    result["slides"][1]["headline"] = (
-        "Story 1 confirmed the cricket record after the match, with the board publishing the result "
-        "and explaining the decision to selectors this morning while officials reviewed the wider "
-        "context before the next game and discussed the eligibility question with the coaching staff "
-        "ahead of the following fixture for the team immediately"
-    )
+    result["slides"][1]["headline"] = " ".join(["word"] * 38)
+    for index in range(2, 6):
+        result["slides"][index]["headline"] = "Okay"
     valid, reason = validate_top5_script(result, stories())
-    assert not valid
-    assert "15 seconds" in reason
+    assert valid, reason
+
+
+def test_schema_requires_exactly_six_slides():
+    slides = SCHEMA["properties"]["slides"]
+    assert slides["minItems"] == 6
+    assert slides["maxItems"] == 6
 
 
 def test_top5_spoken_headlines_have_a_thirty_second_total_cap():
@@ -159,12 +162,11 @@ def test_story_headline_need_not_share_title_keywords():
     assert valid, reason
 
 
-def test_story_body_requires_two_sentences():
+def test_story_body_has_no_fixed_sentence_count():
     result = valid_result()
     result["slides"][1]["body"] = "Only one sentence."
     valid, reason = validate_top5_script(result, stories())
-    assert not valid
-    assert "exactly two sentences" in reason
+    assert valid, reason
 
 
 def test_story_headline_rejects_hype_filler():
