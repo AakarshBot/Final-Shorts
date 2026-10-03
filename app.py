@@ -4428,6 +4428,7 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_visual_selected = {}
                 st.session_state.test_top5_visual_previews = {}
                 st.session_state.test_top5_visual_assignments = {}
+                st.session_state.test_top5_visual_card_results = {}
                 st.session_state.test_top5_visual_handoff = None
                 st.session_state.test_top5_rendered_video_path = None
                 st.session_state.test_top5_upload_qc_approved = False
@@ -4507,7 +4508,8 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                                st.session_state.test_top5_visual_handoff = None
+                                st.session_state.test_top5_visual_card_results = {}
+                st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
                                 st.session_state.test_top5_upload_qc = None
@@ -4529,7 +4531,8 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                                st.session_state.test_top5_visual_handoff = None
+                                st.session_state.test_top5_visual_card_results = {}
+                st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
                                 st.session_state.test_top5_upload_qc = None
@@ -4551,7 +4554,8 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                                st.session_state.test_top5_visual_handoff = None
+                                st.session_state.test_top5_visual_card_results = {}
+                st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
                                 st.session_state.test_top5_upload_qc = None
@@ -4850,7 +4854,8 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_top5_visual_selected = {}
                             st.session_state.test_top5_visual_previews = {}
                             st.session_state.test_top5_visual_assignments = {}
-                            st.session_state.test_top5_visual_handoff = None
+                            st.session_state.test_top5_visual_card_results = {}
+                st.session_state.test_top5_visual_handoff = None
                             st.session_state.test_top5_rendered_video_path = None
                             st.session_state.test_top5_upload_qc_approved = False
                             st.session_state.test_top5_upload_qc = None
@@ -4958,7 +4963,7 @@ elif st.session_state.app_mode == "test":
 
                 if st.session_state.get("test_top5_audio_handoff"):
                     st.success("Top-5 Audio approved. All six spoken lines are ready for the next stage.")
-                    stelif line_name == "Top-5" and stage == "04 · Visuals":
+                    elif line_name == "Top-5" and stage == "04 · Visuals":
             from renderer import build_top5_card_preview, build_quote_card_preview
 
             script = st.session_state.get("test_top5_script_handoff")
@@ -5196,7 +5201,8 @@ elif st.session_state.app_mode == "test":
                                         try:
                                             from visual_fetcher import crawl_visuals
                                             auto = crawl_visuals(story_payload)
-                                            st.session_state.test_top5_visual_results[active_slide] = {
+                                            st.session_state.test_top5_visual_card_results.pop(active_slide, None)
+st.session_state.test_top5_visual_results[active_slide] = {
                                                 "source": "automatic",
                                                 "query": specific_prompt,
                                                 "assets": list(auto.get("assets") or []),
