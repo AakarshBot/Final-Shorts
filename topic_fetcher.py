@@ -7,6 +7,7 @@ requested number of story/entity groups without changing the Topic handoff.
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
+from functools import lru_cache
 from email.utils import parsedate_to_datetime
 import html
 import re
@@ -197,12 +198,14 @@ class Topic:
 def _clean(value) -> str:
     return re.sub(r"\s+", " ", html.unescape(str(value or ""))).strip()
 
+@lru_cache(maxsize=4096)
 def _tokens(value: str) -> set[str]:
     return {
         token for token in re.findall(r"[a-z0-9]+(?:['-][a-z0-9]+)?", _clean(value).casefold())
         if len(token) > 2 and token not in TITLE_STOPWORDS
     }
 
+@lru_cache(maxsize=4096)
 def _canonical_url(url: str) -> str:
     try:
         parsed = urlparse(_clean(url))
@@ -212,6 +215,7 @@ def _canonical_url(url: str) -> str:
         return _clean(url).casefold().rstrip("/")
     return parsed._replace(query="", fragment="").geturl().rstrip("/").casefold()
 
+@lru_cache(maxsize=4096)
 def _source_key(source: str) -> str:
     return _clean(source).casefold().removeprefix("www.").split("/")[0]
 
@@ -229,6 +233,7 @@ def _clean_title(title: str, source: str = "") -> str:
 def _utility(title: str) -> bool:
     return any(re.search(pattern, _clean(title).casefold()) for pattern in UTILITY_PATTERNS)
 
+@lru_cache(maxsize=4096)
 def _event_groups(title: str) -> set[str]:
     tokens = _tokens(title)
     return {group for group, terms in EVENT_GROUPS.items() if tokens & terms}
@@ -239,12 +244,14 @@ TEAM_ENTITIES = {
 }
 
 
+@lru_cache(maxsize=4096)
 def _known_entities(text: str) -> set[str]:
     value = _clean(text).casefold()
     known = INDIA_ASIA_TERMS | CRICKET_COMPETITIONS | TEAM_ENTITIES
     return {entity for entity in known if len(entity) > 3 and entity in value}
 
 
+@lru_cache(maxsize=4096)
 def _named_phrases(title: str) -> set[str]:
     return {
         _clean(match)
@@ -269,6 +276,7 @@ def _same_event_general(a: Topic, b: Topic) -> bool:
     return len(entities) >= 2 and len(shared) >= 3
 
 
+@lru_cache(maxsize=4096)
 def _cricket_core_tokens(title: str) -> set[str]:
     generic = CRICKET_TERMS | set().union(*EVENT_GROUPS.values()) | TITLE_STOPWORDS
     return _tokens(title) - generic
@@ -314,6 +322,7 @@ KNOWN_PLAYER_ALIASES = KNOWN_PLAYER_NAMES | {
 }
 
 
+@lru_cache(maxsize=4096)
 def _player_entity(title: str) -> str:
     text = _clean(title).casefold()
     known = [
@@ -543,7 +552,7 @@ def _select(
     candidates = [
         row
         for row in ranked
-        if _canonical_url(row.url) not in seen
+        if row.url not in seen
         and not any(same_event(row, old) for old in blocked)
         and (not cricket or _entity_group_key(row) not in blocked_groups)
     ]
@@ -635,6 +644,7 @@ def fetch_top5_topics(
     }
     queries = TOP5_MORE_QUERIES if more else TOP5_QUERIES
     rows = []
+    chosen = []
     selection_existing = existing if more else []
 
     for start in range(0, len(queries), TOP5_QUERY_BATCH_SIZE):
@@ -661,7 +671,7 @@ def fetch_top5_topics(
         if len(chosen) >= limit:
             return chosen[:limit]
 
-    return chosen[:limit] if "chosen" in locals() else []
+    return chosen[:limit]
 
 
 def fetch_topics(
