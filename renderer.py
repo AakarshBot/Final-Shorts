@@ -890,10 +890,7 @@ def _draw_top5_editorial_fade(
         else:
             progress = min(1.0, (y - fade_start) / total)
             eased = progress * progress * (3 - 2 * progress)
-            alpha = int(
-                TOP5_EDITORIAL_FADE_MAX_ALPHA
-                * (0.18 + 0.82 * eased)
-            )
+            alpha = int(TOP5_EDITORIAL_FADE_MAX_ALPHA * eased)
         pixels.append(alpha)
     vertical_mask.putdata(pixels)
     vertical_mask = vertical_mask.resize(
