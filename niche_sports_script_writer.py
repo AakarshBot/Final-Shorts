@@ -394,7 +394,7 @@ def write_niche_sports_script(story, language: str = "english") -> dict:
         try:
             model_instruction = instruction
             if recovery_reason:
-                    model_instruction += (
+                model_instruction += (
                     "\nRECOVERY:\n"
                     "The previous draft failed local validation. Regenerate the complete JSON "
                     "while fixing this exact failure and preserving every other hard rule. "
