@@ -550,55 +550,6 @@ def test_quote_card_suppresses_headline_and_subtitles(monkeypatch):
 def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path):
     audio_file = tmp_path / "scene1.mp3"
     audio_file.write_bytes(b"audio")
-    visual = BytesIO()
-    Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
-    quote_card = {
-        "quote": "A concise quoted line from the speaker.",
-        "attribution": "Speaker Name",
-        "language": "english",
-        "source_label": "Quote Source",
-    }
-    audio = {
-        "approved_for_visuals": True,
-        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
-    }
-    script = {
-        "approved_for_audio": True,
-        "script": [{"voiceover": "A spoken line."}],
-        "headline": "Quote headline",
-    }
-    seen = []
-    monkeypatch.setattr(renderer, "_draw_quote_card", lambda base, card: base)
-    monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
-    monkeypatch.setattr(renderer, "_paste_source", lambda base, label=None: seen.append(label))
-    monkeypatch.setattr(
-        renderer,
-        "write_preview_video",
-        lambda frames, path: (next(iter(frames)), path.write_bytes(b"silent"), path)[-1],
-    )
-    monkeypatch.setattr(
-        renderer,
-        "_mux_audio",
-        lambda silent, scenes, output: (output.write_bytes(b"final") or output),
-    )
-
-    output = tmp_path / "quote-source.mp4"
-    renderer.render_production_video(
-        script,
-        audio,
-        TEST_SUBTITLE_DATA,
-        [{
-            "bytes": visual.getvalue(),
-            "source": "Quote Card · Speaker Name",
-            "quote_card": quote_card,
-        }],
-        output,
-    )
-    assert seen == ["Quote Source"]
-
-
-    audio_file = tmp_path / "scene1.mp3"
-    audio_file.write_bytes(b"audio")
     visual = Image.new("RGB", (1080, 1920), "white")
     visual_buffer = BytesIO()
     visual.save(visual_buffer, format="PNG")
@@ -652,11 +603,13 @@ def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path)
 
     assert seen == [quote_card]
 
+
 def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     audio_file = tmp_path / "scene1.mp3"
     audio_file.write_bytes(b"audio")
     visual = BytesIO()
     Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
+
     quote_card = {
         "quote": "A concise quoted line from the speaker.",
         "attribution": "Speaker Name",
@@ -673,6 +626,7 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
         "headline": "Quote headline",
     }
     seen = []
+
     monkeypatch.setattr(renderer, "_draw_quote_card", lambda base, card: base)
     monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
     monkeypatch.setattr(renderer, "_paste_source", lambda base, label=None: seen.append(label))
@@ -699,5 +653,5 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
         }],
         output,
     )
-    assert seen == ["Quote Source"]
 
+    assert seen == ["Quote Source"]
