@@ -21,7 +21,9 @@ MAX_DURATION_SECONDS = 30.0
 CORRECTION_TARGET_SECONDS = 29.6
 TOP5_SCENE_COUNT = 6
 TOP5_MAX_SCENE_DURATION_SECONDS = 15.0
+TOP5_MAX_TOTAL_DURATION_SECONDS = 30.0
 TOP5_CORRECTION_TARGET_SECONDS = 14.6
+TOP5_TOTAL_CORRECTION_TARGET_SECONDS = 29.6
 
 VOICES = {
     "english": "en-IN-NeerjaNeural",
@@ -411,9 +413,15 @@ def generate_top5_audio(
     )
     corrected = False
 
+    total_duration = sum(float(scene["duration"]) for scene in results)
     max_duration = max(float(scene["duration"]) for scene in results)
-    if max_duration >= TOP5_MAX_SCENE_DURATION_SECONDS:
-        multiplier = max_duration / TOP5_CORRECTION_TARGET_SECONDS
+    if (
+        max_duration >= TOP5_MAX_SCENE_DURATION_SECONDS
+        or total_duration > TOP5_MAX_TOTAL_DURATION_SECONDS
+    ):
+        scene_multiplier = max_duration / TOP5_CORRECTION_TARGET_SECONDS
+        total_multiplier = total_duration / TOP5_TOTAL_CORRECTION_TARGET_SECONDS
+        multiplier = max(scene_multiplier, total_multiplier)
         adjusted = (
             (1.0 + rate_percent / 100.0) * multiplier - 1.0
         ) * 100.0
@@ -421,17 +429,22 @@ def generate_top5_audio(
         results = asyncio.run(
             _generate_at_rate(scenes, language, adjusted, output_path)
         )
+        total_duration = sum(float(scene["duration"]) for scene in results)
         max_duration = max(float(scene["duration"]) for scene in results)
         rate_percent = round(adjusted, 2)
         corrected = True
 
-    if any(
-        float(scene["duration"]) >= TOP5_MAX_SCENE_DURATION_SECONDS
-        for scene in results
+    if (
+        any(
+            float(scene["duration"]) >= TOP5_MAX_SCENE_DURATION_SECONDS
+            for scene in results
+        )
+        or total_duration > TOP5_MAX_TOTAL_DURATION_SECONDS
     ):
         raise RuntimeError(
-            "Top-5 audio contains a spoken headline at or above 15 seconds "
-            f"after one measured speed correction ({max_duration:.2f}s)."
+            "Top-5 audio remains outside the Shorts duration limits after one "
+            f"measured speed correction (max line {max_duration:.2f}s, "
+            f"total {total_duration:.2f}s)."
         )
 
     return {
@@ -442,10 +455,7 @@ def generate_top5_audio(
         "rate_percent": rate_percent,
         "pitch": PITCH,
         "scenes": results,
-        "total_duration": round(
-            sum(float(item["duration"]) for item in results),
-            3,
-        ),
+        "total_duration": round(total_duration, 3),
         "max_scene_duration": round(max_duration, 3),
         "duration_corrected": corrected,
     }
