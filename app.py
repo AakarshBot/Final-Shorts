@@ -667,6 +667,8 @@ if "test_top5_visual_assignments" not in st.session_state:
     st.session_state.test_top5_visual_assignments = {}
 if "test_top5_visual_handoff" not in st.session_state:
     st.session_state.test_top5_visual_handoff = None
+if "test_top5_visual_card_results" not in st.session_state:
+    st.session_state.test_top5_visual_card_results = {}
 if "test_top5_rendered_video_path" not in st.session_state:
     st.session_state.test_top5_rendered_video_path = None
 if "test_top5_upload_qc_approved" not in st.session_state:
@@ -4426,6 +4428,7 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_visual_selected = {}
                 st.session_state.test_top5_visual_previews = {}
                 st.session_state.test_top5_visual_assignments = {}
+                st.session_state.test_top5_visual_card_results = {}
                 st.session_state.test_top5_visual_handoff = None
                 st.session_state.test_top5_rendered_video_path = None
                 st.session_state.test_top5_upload_qc_approved = False
@@ -4505,6 +4508,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
+                                st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
@@ -4527,6 +4531,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
+                                st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
@@ -4549,6 +4554,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
+                                st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
@@ -4848,6 +4854,7 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_top5_visual_selected = {}
                             st.session_state.test_top5_visual_previews = {}
                             st.session_state.test_top5_visual_assignments = {}
+                            st.session_state.test_top5_visual_card_results = {}
                             st.session_state.test_top5_visual_handoff = None
                             st.session_state.test_top5_rendered_video_path = None
                             st.session_state.test_top5_upload_qc_approved = False
@@ -4956,25 +4963,29 @@ elif st.session_state.app_mode == "test":
 
                 if st.session_state.get("test_top5_audio_handoff"):
                     st.success("Top-5 Audio approved. All six spoken lines are ready for the next stage.")
-                    st.caption("Each audio scene maps to the corresponding spoken headline; visual story bodies remain silent.")
-
         elif line_name == "Top-5" and stage == "04 · Visuals":
-            from renderer import build_top5_card_preview
+            from renderer import build_top5_card_preview, build_quote_card_preview
 
             script = st.session_state.get("test_top5_script_handoff")
             if not isinstance(script, dict) or script.get("schema") != "final-shorts.top5-script.v1":
                 st.info("Approve the Top-5 Scriptwriter result before reviewing its six visuals.")
             else:
                 slides = list(script.get("slides") or [])
+                stories = list(script.get("stories") or [])
                 if len(slides) != 6:
                     st.error("Top-5 Visuals requires exactly six approved script slides.")
                 else:
                     st.markdown(
                         '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
-                        '<div class="section-title">Review all six slides</div>'
-                        '<div class="canvas-copy">Use each approved slide headline and visual-only body. Select one Commons image, crop/reposition it manually, review the static rendered slide, then approve all six together.</div></div>'
-                        '<div class="section-count">6 slides · manual selection</div></div>',
+                        '<div class="section-title">Build and review all six slides</div>'
+                        '<div class="canvas-copy">Every slide uses the approved Scriptwriter handoff. Choose from the same visual options available to Cricket, crop/reposition when needed, review the actual rendered slide, then approve all six for Renderer.</div></div>'
+                        '<div class="section-count">6 slides · full visual QC</div></div>',
                         unsafe_allow_html=True,
+                    )
+
+                    assignments = st.session_state.test_top5_visual_assignments
+                    st.caption(
+                        f"{len(assignments)}/6 slides attached. The preview shown for each attached slide is the actual static 1080 × 1920 frame handed to Renderer."
                     )
 
                     slide_labels = [f"Slide {number}" for number in range(1, 7)]
@@ -4989,15 +5000,15 @@ elif st.session_state.app_mode == "test":
                     slide = slides[active_slide - 1]
                     headline = str(slide.get("headline") or "").strip()
                     body = "" if active_slide == 1 else str(slide.get("body") or "").strip()
-                    asset_key = f"top5-slide-{active_slide}"
+                    visual_intent = str(slide.get("visual_intent") or "").strip()
+                    specific_prompt = str(slide.get("specific_search_prompt") or "").strip()
 
                     st.markdown(
                         f'<div class="mini-label">SLIDE {active_slide} · '
-                        f'{"PACKAGE OPENER" if active_slide == 1 else f"STORY {active_slide - 1}"} · SPOKEN</div>',
+                        f'{"PACKAGE OPENER" if active_slide == 1 else f"STORY {active_slide - 1}"} · APPROVED SCRIPT</div>',
                         unsafe_allow_html=True,
                     )
                     if active_slide > 1:
-                        stories = list(script.get("stories") or [])
                         story = stories[active_slide - 2] if len(stories) >= active_slide - 1 else {}
                         st.markdown(
                             f'<div class="topic-meta">{story.get("title") or "Selected story"}</div>',
@@ -5005,244 +5016,568 @@ elif st.session_state.app_mode == "test":
                         )
                     st.markdown(f"**{headline}**")
                     if body:
-                        st.caption(f"Visual-only body: {body}")
+                        st.caption(f"Visual body: {body}")
+                    if visual_intent:
+                        st.caption(f"Visual intent: {visual_intent}")
+                    if specific_prompt:
+                        st.caption(f"Script visual search prompt: {specific_prompt}")
 
-                    query = st.text_input(
-                        "Commons search",
-                        placeholder="e.g. Shubman Gill India cricket",
-                        key=f"test-top5-query-{active_slide}",
-                    )
-                    search_col, clear_col = st.columns([1, .22], gap="small")
-                    ai_prompt = ""
-                    if active_slide == 1:
-                        st.markdown(
-                            '<div class="mini-label" style="margin-top:.9rem;">AI IMAGE OPTION · SLIDE 1</div>',
-                            unsafe_allow_html=True,
-                        )
-                        ai_prompt = st.text_input(
-                            "AI prompt",
-                            placeholder="e.g. cricket news desk with five selected stories",
-                            key="test-top5-ai-prompt",
-                        ).strip()
-                        ai_generate = st.button(
-                            "Generate AI image",
-                            width="stretch",
-                            key="test-top5-ai-generate",
-                        )
-                        if ai_generate:
-                            if not ai_prompt:
-                                st.warning("Enter an AI image prompt first.")
-                            else:
-                                with st.spinner("Generating AI image options…"):
-                                    try:
-                                        from visual_generator import generate_images
-                                        result = generate_images(ai_prompt)
-                                        st.session_state.test_top5_visual_results[active_slide] = {
-                                            "query": ai_prompt,
-                                            "assets": result.get("assets") or [],
-                                            "error": "",
-                                            "source": "ai",
-                                        }
-                                        st.session_state.test_top5_visual_selected.pop(active_slide, None)
-                                        st.session_state.test_top5_visual_previews.pop(active_slide, None)
-                                        st.session_state.test_top5_visual_assignments.pop(active_slide, None)
-                                        st.session_state.test_top5_visual_crops.pop(asset_key, None)
-                                    except Exception as exc:
-                                        st.session_state.test_top5_visual_results[active_slide] = {
-                                            "query": ai_prompt,
-                                            "assets": [],
-                                            "error": f"{type(exc).__name__}: {exc}",
-                                            "source": "ai",
-                                        }
-                    with search_col:
-                        search = st.button(
-                            "Search Commons",
-                            type="primary",
-                            width="stretch",
-                            key=f"test-top5-search-{active_slide}",
-                        )
-                    with clear_col:
-                        clear = st.button(
-                            "Clear slide",
-                            width="stretch",
-                            key=f"test-top5-clear-{active_slide}",
-                        )
+                    visual_option = st.pills(
+                        "Visual source",
+                        VISUAL_OPTIONS,
+                        default=st.session_state.get("test_top5_visual_option", VISUAL_OPTIONS[0]),
+                        key="test_top5_visual_option",
+                        label_visibility="collapsed",
+                    ) or VISUAL_OPTIONS[0]
 
-                    if clear:
-                        st.session_state.test_top5_visual_results.pop(active_slide, None)
-                        st.session_state.test_top5_visual_selected.pop(active_slide, None)
-                        st.session_state.test_top5_visual_previews.pop(active_slide, None)
-                        st.session_state.test_top5_visual_assignments.pop(active_slide, None)
-                        st.session_state.test_top5_visual_crops.pop(asset_key, None)
-                        st.rerun()
+                    def _top5_asset_source(asset):
+                        return str(
+                            asset.get("publisher")
+                            or asset.get("source")
+                            or asset.get("model")
+                            or "Web source"
+                        ).strip() or "Web source"
 
-                    if search:
-                        query = query.strip()
-                        if not query:
-                            st.warning("Enter a Commons search query first.")
-                        else:
-                            with st.spinner("Searching Wikimedia Commons…"):
-                                try:
-                                    from visual_search import _commons
-                                    assets = _commons(query)
-                                    st.session_state.test_top5_visual_results[active_slide] = {
-                                        "query": query,
-                                        "assets": assets,
-                                        "error": "",
-                                    }
-                                    st.session_state.test_top5_visual_selected.pop(active_slide, None)
-                                    st.session_state.test_top5_visual_previews.pop(active_slide, None)
-                                    st.session_state.test_top5_visual_assignments.pop(active_slide, None)
-                                    st.session_state.test_top5_visual_crops.pop(asset_key, None)
-                                    st.rerun()
-                                except Exception as exc:
-                                    st.session_state.test_top5_visual_results[active_slide] = {
-                                        "query": query,
-                                        "assets": [],
-                                        "error": f"{type(exc).__name__}: {exc}",
-                                    }
+                    def _top5_asset_label(asset):
+                        return str(
+                            asset.get("article_title")
+                            or asset.get("title")
+                            or asset.get("model")
+                            or "Selected visual"
+                        ).strip() or "Selected visual"
 
-                    result = st.session_state.test_top5_visual_results.get(active_slide) or {}
-                    if result.get("error"):
-                        st.error(result["error"])
-                    else:
-                        assets = list(result.get("assets") or [])
-                        if result:
-                            st.caption(
-                                f'{len(assets)} Commons images returned for “{result.get("query") or ""}”.'
-                            )
+                    def _top5_store_assignment(
+                        source_asset,
+                        source_bytes,
+                        result_key,
+                        source,
+                        label,
+                        *,
+                        card_type="editorial",
+                        card_data=None,
+                        preview_bytes=None,
+                    ):
+                        if not isinstance(source_bytes, (bytes, bytearray)) or not source_bytes:
+                            st.warning("This visual does not have a usable image payload.")
+                            return
+                        selected_bytes = bytes(source_bytes)
+                        story_number = 0 if active_slide == 1 else active_slide - 1
+                        assignment = {
+                            "asset_key": str(
+                                source_asset.get("asset_key")
+                                if isinstance(source_asset, dict) and source_asset.get("asset_key")
+                                else f"top5-{active_slide}-{hashlib.sha1((label + source).encode('utf-8')).hexdigest()[:12]}"
+                            ),
+                            "result_key": result_key,
+                            "source": source,
+                            "label": label,
+                            "bytes": selected_bytes,
+                        }
 
-                        if assets:
-                            for start_index in range(0, len(assets), 3):
-                                cols = st.columns(3, gap="medium")
-                                for offset, (col, asset) in enumerate(
-                                    zip(cols, assets[start_index:start_index + 3])
-                                ):
-                                    index = start_index + offset
-                                    with col:
-                                        preview = _top5_fit_preview(asset.get("bytes"))
-                                        if preview is not None:
-                                            st.image(preview, width=300)
-                                        else:
-                                            st.image(asset.get("bytes"), width=300)
-                                        st.caption(str(asset.get("title") or "Commons image"))
+                        if card_type == "quote" and isinstance(card_data, dict):
+                            assignment["quote_card"] = dict(card_data)
+                        elif card_type == "editorial":
+                            assignment["top5_card"] = {
+                                "headline": headline,
+                                "body": body,
+                                "story_number": story_number,
+                                "total_stories": 5,
+                            }
+
+                        if preview_bytes is None:
+                            if card_type == "editorial":
+                                preview_bytes = build_top5_card_preview(
+                                    selected_bytes,
+                                    headline,
+                                    body,
+                                    story_number=story_number,
+                                    total_stories=5,
+                                    source_label=source,
+                                )
+                            elif card_type == "quote" and isinstance(card_data, dict):
+                                preview_bytes = build_quote_card_preview(
+                                    selected_bytes,
+                                    str(card_data.get("quote") or ""),
+                                    str(card_data.get("attribution") or ""),
+                                    source_label=source,
+                                )
+
+                        if preview_bytes:
+                            assignment["preview_bytes"] = bytes(preview_bytes)
+
+                        st.session_state.test_top5_visual_assignments[active_slide] = assignment
+                        st.session_state.test_top5_visual_previews[active_slide] = bytes(preview_bytes or b"")
+                        st.session_state.test_top5_visual_handoff = None
+                        st.session_state.test_top5_rendered_video_path = None
+                        st.session_state.test_top5_visual_card_results.pop(active_slide, None)
+
+                    def _top5_render_asset_pool(assets, result_key):
+                        if not assets:
+                            st.info("No images are currently available from this option.")
+                            return
+                        for start_index in range(0, len(assets), 3):
+                            cols = st.columns(3, gap="medium")
+                            for offset, (col, asset) in enumerate(zip(cols, assets[start_index:start_index + 3])):
+                                index = start_index + offset
+                                with col:
+                                    raw = asset.get("bytes")
+                                    source = _top5_asset_source(asset)
+                                    label = _top5_asset_label(asset)
+                                    asset_key = _visual_asset_key(result_key, index, asset)
+                                    cropped = st.session_state.test_top5_visual_crops.get(asset_key)
+                                    preview_bytes = cropped if cropped else raw
+                                    preview = _top5_fit_preview(preview_bytes)
+                                    if preview is not None:
+                                        st.image(preview, width="stretch")
+                                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
+                                    st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
+                                    if cropped:
+                                        st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
+
+                                    choose_col, crop_col = st.columns(2, gap="small")
+                                    with choose_col:
                                         if st.button(
                                             "Use this image",
                                             type="primary",
                                             width="stretch",
-                                            key=f"test-top5-use-{active_slide}-{index}",
+                                            key=f"test-top5-use-{active_slide}-{result_key}-{index}",
                                         ):
-                                            st.session_state.test_top5_visual_selected[active_slide] = index
-                                            st.session_state.test_top5_visual_assignments.pop(active_slide, None)
-                                            st.session_state.test_top5_visual_previews.pop(active_slide, None)
-                                            st.session_state.test_top5_visual_crops.pop(asset_key, None)
+                                            working_bytes = bytes(cropped) if cropped else bytes(raw or b"")
+                                            _top5_store_assignment(
+                                                asset,
+                                                working_bytes,
+                                                result_key,
+                                                source,
+                                                label,
+                                            )
                                             st.rerun()
-                        elif result:
-                            st.info("No Commons images were returned for that query.")
+                                    with crop_col:
+                                        if st.button(
+                                            "Crop / reposition",
+                                            width="stretch",
+                                            key=f"test-top5-crop-{active_slide}-{result_key}-{index}",
+                                        ):
+                                            if isinstance(raw, (bytes, bytearray)):
+                                                _top5_crop_visual_dialog(asset_key, bytes(raw), label)
+                                            else:
+                                                st.warning("This image is not crop-ready.")
 
-                    selected_index = st.session_state.test_top5_visual_selected.get(active_slide)
-                    if isinstance(selected_index, int) and 0 <= selected_index < len(assets):
-                        selected_asset = assets[selected_index]
-                        crop = st.session_state.test_top5_visual_crops.get(asset_key)
-                        working_bytes = crop or selected_asset.get("bytes")
+                    def _top5_active_story_payload():
+                        story_index = active_slide - 2
+                        source_story = (
+                            stories[story_index]
+                            if 0 <= story_index < len(stories)
+                            else (stories[0] if stories else {})
+                        )
+                        return {
+                            "title": str(source_story.get("title") or "").strip(),
+                            "description": str(source_story.get("description") or "").strip(),
+                            "url": str(source_story.get("url") or "").strip(),
+                            "source": str(source_story.get("source") or "").strip(),
+                            "published_at": str(source_story.get("published_at") or "").strip(),
+                            "primary_entity": str(slide.get("primary_entity") or "").strip(),
+                            "specific_search_prompt": specific_prompt,
+                            "visual_intent": visual_intent,
+                        }
 
-                        st.divider()
-                        st.markdown('<div class="mini-label">SELECTED IMAGE</div>', unsafe_allow_html=True)
-                        selected_preview = _top5_fit_preview(working_bytes)
-                        if selected_preview is not None:
-                            st.image(selected_preview, width=300)
-                        else:
-                            st.image(working_bytes, width=300)
-
-                        action_cols = st.columns([1, 1], gap="small")
-                        with action_cols[0]:
+                    if visual_option == "Option 1 · Automatic Scraper":
+                        result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        if not result or result.get("source") != "automatic":
+                            st.caption(
+                                "Automatic Scraper uses the approved story URL and the Scriptwriter's visual prompt. "
+                                "For Slide 1, the first selected story is used as the crawl source because the opener has no single article URL."
+                            )
                             if st.button(
-                                "Crop / reposition",
-                                width="stretch",
-                                key=f"test-top5-crop-{active_slide}",
-                            ):
-                                raw = selected_asset.get("bytes")
-                                if isinstance(raw, (bytes, bytearray)):
-                                    _top5_crop_visual_dialog(
-                                        asset_key,
-                                        bytes(raw),
-                                        str(selected_asset.get("title") or "Commons image"),
-                                    )
-                                else:
-                                    st.warning("This image is not crop-ready.")
-                        with action_cols[1]:
-                            attach = st.button(
-                                "Attach slide",
+                                "Run automatic scrape",
                                 type="primary",
                                 width="stretch",
-                                key=f"test-top5-attach-{active_slide}",
-                            )
+                                key=f"test-top5-auto-run-{active_slide}",
+                            ):
+                                story_payload = _top5_active_story_payload()
+                                if not story_payload.get("url"):
+                                    st.warning("The selected story has no usable source URL for automatic scraping.")
+                                else:
+                                    with st.spinner("Scraping the approved story and related publisher pages…"):
+                                        try:
+                                            from visual_fetcher import crawl_visuals
+                                            auto = crawl_visuals(story_payload)
+                                            st.session_state.test_top5_visual_card_results.pop(active_slide, None)
+                                            st.session_state.test_top5_visual_results[active_slide] = {
+                                                "source": "automatic",
+                                                "query": specific_prompt,
+                                                "assets": list(auto.get("assets") or []),
+                                                "error": str(auto.get("error") or ""),
+                                            }
+                                        except Exception as exc:
+                                            st.session_state.test_top5_visual_results[active_slide] = {
+                                                "source": "automatic",
+                                                "query": specific_prompt,
+                                                "assets": [],
+                                                "error": f"{type(exc).__name__}: {exc}",
+                                            }
+                                    st.rerun()
+                        if result.get("error"):
+                            st.error(result["error"])
+                        elif result:
+                            st.caption(f'{len(result.get("assets") or [])} images returned by the automatic scraper.')
+                            _top5_render_asset_pool(list(result.get("assets") or []), "auto")
 
-                        if attach:
-                            source = str(
-                                selected_asset.get("source")
-                                or selected_asset.get("publisher")
-                                or "Commons"
-                            ).strip() or "Commons"
-                            card = {
-                                "headline": headline,
-                                "body": body,
-                                "story_number": 0 if active_slide == 1 else active_slide - 1,
-                                "total_stories": 5,
-                            }
-                            st.session_state.test_top5_visual_assignments[active_slide] = {
-                                "asset_key": asset_key,
-                                "result_key": "top5",
-                                "source": source,
-                                "label": str(selected_asset.get("title") or "Commons image"),
-                                "bytes": bytes(working_bytes),
-                                "top5_card": card,
-                            }
-                            st.session_state.test_top5_visual_previews[active_slide] = build_top5_card_preview(
-                                working_bytes,
-                                headline,
-                                body,
-                                story_number=card["story_number"],
-                                total_stories=5,
-                                source_label=source,
-                            )
-                            st.rerun()
+                    if visual_option == "Option 2 · Manual Scraper":
+                        st.caption("Same Manual Scraper used by Cricket: manual query → publisher-page search → scraped image pool.")
+                        query = st.text_input(
+                            "Manual query",
+                            value=specific_prompt,
+                            key=f"test-top5-manual-query-{active_slide}",
+                        )
+                        if st.button(
+                            "Run manual scrape",
+                            type="primary",
+                            width="stretch",
+                            key=f"test-top5-manual-run-{active_slide}",
+                        ):
+                            query = query.strip()
+                            if not query:
+                                st.warning("Enter a query first.")
+                            else:
+                                with st.spinner("Searching and scraping publisher pages…"):
+                                    try:
+                                        from visual_fetcher import manual_crawl_visuals
+                                        result = manual_crawl_visuals(query)
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "source": "manual",
+                                            "query": query,
+                                            "assets": list(result.get("assets") or []),
+                                            "error": str(result.get("error") or ""),
+                                        }
+                                    except Exception as exc:
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "source": "manual",
+                                            "query": query,
+                                            "assets": [],
+                                            "error": f"{type(exc).__name__}: {exc}",
+                                        }
+                                    st.rerun()
+                        result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        if result.get("source") == "manual":
+                            if result.get("error"):
+                                st.error(result["error"])
+                            else:
+                                st.caption(f'{len(result.get("assets") or [])} images returned by the Manual Scraper.')
+                                _top5_render_asset_pool(list(result.get("assets") or []), "manual")
 
-                        preview = st.session_state.test_top5_visual_previews.get(active_slide)
-                        if preview:
+                    if visual_option == "Option 3 · Real Image Search":
+                        st.caption("Same Real Image Search used by Cricket: manual query across the configured real-image providers.")
+                        query = st.text_input(
+                            "Real-image query",
+                            value=specific_prompt,
+                            key=f"test-top5-real-query-{active_slide}",
+                        )
+                        if st.button(
+                            "Search real images",
+                            type="primary",
+                            width="stretch",
+                            key=f"test-top5-real-run-{active_slide}",
+                        ):
+                            query = query.strip()
+                            if not query:
+                                st.warning("Enter a query first.")
+                            else:
+                                with st.spinner("Searching real-image sources…"):
+                                    try:
+                                        from visual_search import search_images
+                                        result = search_images(query)
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "source": "real",
+                                            "query": query,
+                                            "assets": list(result.get("assets") or []),
+                                            "error": str(result.get("error") or ""),
+                                        }
+                                    except Exception as exc:
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "source": "real",
+                                            "query": query,
+                                            "assets": [],
+                                            "error": f"{type(exc).__name__}: {exc}",
+                                        }
+                                    st.rerun()
+                        result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        if result.get("source") == "real":
+                            if result.get("error"):
+                                st.error(result["error"])
+                            else:
+                                st.caption(f'{len(result.get("assets") or [])} images returned by Real Image Search.')
+                                _top5_render_asset_pool(list(result.get("assets") or []), "real")
+
+                    if visual_option == "Option 4 · AI Generation":
+                        st.caption("Same AI Generation used by Cricket: manual prompt across the configured AI image providers.")
+                        query = st.text_input(
+                            "AI prompt",
+                            value=specific_prompt,
+                            key=f"test-top5-ai-query-{active_slide}",
+                        )
+                        if st.button(
+                            "Generate images",
+                            type="primary",
+                            width="stretch",
+                            key=f"test-top5-ai-run-{active_slide}",
+                        ):
+                            query = query.strip()
+                            if not query:
+                                st.warning("Enter an AI prompt first.")
+                            else:
+                                with st.spinner("Generating AI image options…"):
+                                    try:
+                                        from visual_generator import generate_images
+                                        result = generate_images(query)
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "source": "ai",
+                                            "query": query,
+                                            "assets": list(result.get("assets") or []),
+                                            "error": str(result.get("error") or ""),
+                                        }
+                                    except Exception as exc:
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "source": "ai",
+                                            "query": query,
+                                            "assets": [],
+                                            "error": f"{type(exc).__name__}: {exc}",
+                                        }
+                                    st.rerun()
+                        result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        if result.get("source") == "ai":
+                            if result.get("error"):
+                                st.error(result["error"])
+                            else:
+                                st.caption(f'{len(result.get("assets") or [])} AI images returned.')
+                                _top5_render_asset_pool(list(result.get("assets") or []), "ai")
+
+                    if visual_option in {"Option 5 · Stats Card", "Option 6 · Quote Card"}:
+                        image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        image_assets = list(image_result.get("assets") or [])
+                        if not image_assets:
+                            st.info(
+                                "Run one of Options 1–4 for this slide first. Stats Card and Quote Card reuse the existing image pool and do not run another image search."
+                            )
+                        else:
                             st.markdown(
-                                '<div class="mini-label" style="margin-top:1rem;">RENDERED SLIDE</div>',
+                                '<div class="section-head"><div><div class="eyebrow">EXISTING IMAGE POOL</div>'
+                                '<div class="section-title">Choose the image for this card</div></div>'
+                                '<div class="section-count">reuse this slide pool</div></div>',
                                 unsafe_allow_html=True,
                             )
-                            st.image(preview, width=420)
-                            st.caption("Static 1080 × 1920 render preview. The selected 9:16 crop is used as-is.")
+                            choices = []
+                            for index, asset in enumerate(image_assets):
+                                asset_key = _visual_asset_key(f"top5-card-{active_slide}", index, asset)
+                                source = _top5_asset_source(asset)
+                                label = _top5_asset_label(asset)
+                                choices.append((index, asset, asset_key, source, label))
 
-                    assigned = st.session_state.test_top5_visual_assignments
+                            card_choice_key = f"test-top5-card-choice-{active_slide}"
+                            card_index = st.selectbox(
+                                "Card image",
+                                list(range(len(choices))),
+                                index=min(int(st.session_state.get(card_choice_key) or 0), len(choices) - 1),
+                                key=card_choice_key,
+                                format_func=lambda i: choices[i][4][:80],
+                            )
+                            _, card_asset, card_asset_key, card_source, card_label = choices[card_index]
+                            cropped = st.session_state.test_top5_visual_crops.get(card_asset_key)
+                            card_source_bytes = bytes(cropped) if cropped else bytes(card_asset.get("bytes") or b"")
+                            card_preview = _top5_fit_preview(card_source_bytes)
+                            if card_preview is not None:
+                                st.image(card_preview, width=300)
+                            st.caption(f"{card_source} · {card_label}")
+
+                            if st.button(
+                                "Crop / reposition image",
+                                width="stretch",
+                                key=f"test-top5-card-crop-{active_slide}",
+                            ):
+                                _top5_crop_visual_dialog(card_asset_key, bytes(card_asset.get("bytes") or b""), card_label)
+
+                            if visual_option == "Option 5 · Stats Card":
+                                from stats_card import StatsCardError, build_stats_card
+
+                                query = st.text_input(
+                                    "Stats query",
+                                    placeholder="e.g. Virat Kohli ODI stats · India vs Pakistan H2H stats",
+                                    key=f"test-top5-stats-query-{active_slide}",
+                                )
+                                if st.button(
+                                    "Build Stats Card",
+                                    type="primary",
+                                    width="stretch",
+                                    key=f"test-top5-stats-build-{active_slide}",
+                                ):
+                                    query = query.strip()
+                                    if not query:
+                                        st.warning("Enter a stats query first.")
+                                    else:
+                                        with st.spinner("Building the Stats Card…"):
+                                            try:
+                                                result = build_stats_card(query, card_source_bytes)
+                                                st.session_state.test_top5_visual_card_results[active_slide] = {
+                                                    "type": "stats",
+                                                    "result": result,
+                                                }
+                                            except (StatsCardError, OSError, RuntimeError) as exc:
+                                                st.session_state.test_top5_visual_card_results[active_slide] = {
+                                                    "type": "stats",
+                                                    "error": str(exc),
+                                                }
+                                        st.rerun()
+                                card_result = st.session_state.test_top5_visual_card_results.get(active_slide) or {}
+                                if card_result.get("error"):
+                                    st.error(card_result["error"])
+                                elif card_result.get("type") == "stats" and isinstance(card_result.get("result"), dict):
+                                    result = card_result["result"]
+                                    st.markdown('<div class="mini-label">RENDERED STATS CARD</div>', unsafe_allow_html=True)
+                                    st.image(result["bytes"], width=420)
+                                    st.caption(f'{result.get("label") or "Stats Card"} · {result.get("source") or "Cricket data"}')
+                                    if st.button(
+                                        f"Use Stats Card for slide {active_slide}",
+                                        type="primary",
+                                        width="stretch",
+                                        key=f"test-top5-stats-use-{active_slide}",
+                                    ):
+                                        _top5_store_assignment(
+                                            {"asset_key": f"stats-card-{active_slide}"},
+                                            result["bytes"],
+                                            "stats-card",
+                                            f"Stats Card · {result.get('source') or 'Cricket data'}",
+                                            str(result.get("label") or "Stats Card"),
+                                            card_type="stats",
+                                            preview_bytes=result["bytes"],
+                                        )
+                                        st.rerun()
+
+                            else:
+                                quote = st.text_area(
+                                    "Quote",
+                                    key=f"test-top5-quote-{active_slide}",
+                                    height=105,
+                                    max_chars=500,
+                                )
+                                attribution = st.text_input(
+                                    "Attribution",
+                                    key=f"test-top5-quote-attribution-{active_slide}",
+                                    max_chars=120,
+                                )
+                                if st.button(
+                                    "Preview Quote Card",
+                                    type="primary",
+                                    width="stretch",
+                                    key=f"test-top5-quote-preview-{active_slide}",
+                                ):
+                                    quote = quote.strip()
+                                    attribution = attribution.strip()
+                                    if not quote or not attribution:
+                                        st.warning("Quote and attribution are required.")
+                                    else:
+                                        try:
+                                            preview = build_quote_card_preview(
+                                                card_source_bytes,
+                                                quote,
+                                                attribution,
+                                                source_label=card_source,
+                                            )
+                                            st.session_state.test_top5_visual_card_results[active_slide] = {
+                                                "type": "quote",
+                                                "quote": quote,
+                                                "attribution": attribution,
+                                                "source": card_source,
+                                                "label": card_label,
+                                                "preview": preview,
+                                                "bytes": card_source_bytes,
+                                            }
+                                            st.rerun()
+                                        except (ValueError, OSError) as exc:
+                                            st.error(str(exc))
+                                card_result = st.session_state.test_top5_visual_card_results.get(active_slide) or {}
+                                if card_result.get("type") == "quote" and card_result.get("preview"):
+                                    st.markdown('<div class="mini-label">RENDERED QUOTE CARD</div>', unsafe_allow_html=True)
+                                    st.image(card_result["preview"], width=420)
+                                    st.caption("Quote Card uses the approved image and replaces the normal Top-5 editorial text with the selected quote.")
+                                    if st.button(
+                                        f"Use Quote Card for slide {active_slide}",
+                                        type="primary",
+                                        width="stretch",
+                                        key=f"test-top5-quote-use-{active_slide}",
+                                    ):
+                                        _top5_store_assignment(
+                                            {"asset_key": f"quote-card-{active_slide}"},
+                                            card_result["bytes"],
+                                            "quote-card",
+                                            f"Quote Card · {card_result['attribution']}",
+                                            card_result["quote"],
+                                            card_type="quote",
+                                            card_data={
+                                                "quote": card_result["quote"],
+                                                "attribution": card_result["attribution"],
+                                                "language": "english",
+                                            },
+                                            preview_bytes=card_result["preview"],
+                                        )
+                                        st.rerun()
+
+                    current_assignment = assignments.get(active_slide)
+                    if current_assignment:
+                        preview_bytes = current_assignment.get("preview_bytes") or current_assignment.get("bytes")
+                        st.divider()
+                        st.markdown('<div class="mini-label">CURRENT ATTACHMENT · ACTUAL RENDER</div>', unsafe_allow_html=True)
+                        if preview_bytes:
+                            st.image(preview_bytes, width=420)
+                        st.caption(
+                            f'{current_assignment.get("source") or "Visual"} · '
+                            f'{current_assignment.get("label") or "Selected"}'
+                        )
+                        st.caption("This exact rendered frame will be handed to Renderer.")
+                        if st.button(
+                            f"Clear attached slide {active_slide}",
+                            width="stretch",
+                            key=f"test-top5-clear-attached-{active_slide}",
+                        ):
+                            st.session_state.test_top5_visual_assignments.pop(active_slide, None)
+                            st.session_state.test_top5_visual_previews.pop(active_slide, None)
+                            st.session_state.test_top5_visual_handoff = None
+                            st.session_state.test_top5_rendered_video_path = None
+                            st.rerun()
+
                     st.divider()
                     st.markdown(
                         f'<div class="section-head"><div><div class="eyebrow">VISUAL HANDOFF</div>'
-                        f'<div class="section-title">{len(assigned)}/6 slides attached</div></div>'
-                        f'<div class="section-count">approve together</div></div>',
+                        f'<div class="section-title">{len(assignments)}/6 slides ready</div></div>'
+                        f'<div class="section-count">actual render previews</div></div>',
                         unsafe_allow_html=True,
                     )
-                    for number in range(1, 7):
-                        item = assigned.get(number)
-                        if item:
-                            cols = st.columns([.18, 1, .8], gap="small")
-                            with cols[0]:
-                                st.markdown(f'<div class="topic-rank">#{number}</div>', unsafe_allow_html=True)
-                            with cols[1]:
-                                st.markdown(
-                                    f'**{item.get("label") or "Selected image"}**<br>'
-                                    f'<span class="topic-meta">{item.get("source") or "Commons"}</span>',
-                                    unsafe_allow_html=True,
-                                )
-                            with cols[2]:
-                                st.image(item["bytes"], width=180)
-                        else:
-                            st.info(f"Slide {number} is not attached.")
 
-                    if len(assigned) == 6:
+                    board_cols = st.columns(3, gap="medium")
+                    for number in range(1, 7):
+                        with board_cols[(number - 1) % 3]:
+                            item = assignments.get(number)
+                            board_preview = item.get("preview_bytes") if item else None
+                            with st.container(key=f"test-top5-final-board-{number}"):
+                                st.markdown(f'<div class="eyebrow">SLIDE {number}</div>', unsafe_allow_html=True)
+                                board_slide = slides[number - 1]
+                                board_headline = str(board_slide.get("headline") or "").strip()
+                                st.markdown(f"**{board_headline}**")
+                                board_body = "" if number == 1 else str(board_slide.get("body") or "").strip()
+                                if board_body:
+                                    st.caption(board_body)
+                                if board_preview:
+                                    st.image(board_preview, width="stretch")
+                                    st.caption(item.get("source") or "Attached visual")
+                                    if st.button(
+                                        "Edit this slide",
+                                        width="stretch",
+                                        key=f"test-top5-final-board-edit-{number}",
+                                    ):
+                                        st.session_state["test-top5-active-visual-slide"] = f"Slide {number}"
+                                        st.rerun()
+                                else:
+                                    st.markdown('<div class="empty-slot">NOT ATTACHED</div>', unsafe_allow_html=True)
+
+                    if len(assignments) == 6:
                         if st.button(
                             "Approve Top-5 visuals",
                             type="primary",
@@ -5250,7 +5585,7 @@ elif st.session_state.app_mode == "test":
                             key="test-top5-approve-visuals",
                         ):
                             st.session_state.test_top5_visual_handoff = [
-                                assigned[number] for number in range(1, 7)
+                                assignments[number] for number in range(1, 7)
                             ]
                             st.session_state.test_top5_rendered_video_path = None
                             st.session_state.test_top5_upload_qc_approved = False
@@ -5262,7 +5597,8 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_stage = "06 · Renderer"
                             st.session_state.test_pipeline_notice = {
                                 "confirmed": "Top-5 Visual QC confirmed",
-                                "next": "Moving to Renderer.",
+                         
+       "next": "Moving to Renderer.",
                             }
                             st.rerun()
 
