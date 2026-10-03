@@ -13,6 +13,16 @@ load_dotenv()
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 
+VISUAL_OPTIONS = (
+    "Option 1 · Automatic Scraper",
+    "Option 2 · Manual Scraper",
+    "Option 3 · Real Image Search",
+    "Option 4 · AI Generation",
+    "Option 5 · Ranked Scene Search",
+    "Option 6 · Stats Card",
+    "Option 7 · Quote Card",
+)
+
 STAGES = [
     {"key": "01 · Topic Fetcher", "number": "01", "label": "Topics", "desc": "Find the story"},
     {"key": "02 · Scriptwriter", "number": "02", "label": "Script", "desc": "Write the Short"},
@@ -2318,19 +2328,10 @@ def _render_live_visuals(slide_count: int):
         st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
         return
 
-    visual_options = [
-        "Option 1 · Automatic Scraper",
-        "Option 2 · Manual Scraper",
-        "Option 3 · Real Image Search",
-        "Option 4 · AI Generation",
-        "Option 5 · Ranked Scene Search",
-        "Option 6 · Stats Card",
-        "Option 7 · Quote Card",
-    ]
     visual_option = st.pills(
         "Visual source",
-        visual_options,
-        default=st.session_state.get("live_visual_option", visual_options[0]),
+        VISUAL_OPTIONS,
+        default=st.session_state.get("live_visual_option", VISUAL_OPTIONS[0]),
         key="live_visual_option",
         label_visibility="collapsed",
     ) or visual_options[0]
@@ -3255,7 +3256,7 @@ def render_live_dashboard():
 
         visual_result = st.session_state.get("live_visual_result")
         if visual_result is None:
-            with st.spinner("Scraping automatic visuals from the approved Scriptwriter context…"):
+            with st.spinner("Scraping the selected story and related publisher pages…"):
                 try:
                     _live_scrape_automatic_visuals()
                     st.rerun()
@@ -3912,16 +3913,8 @@ def render_visuals():
     st.header("04 · Visuals")
     mode = st.pills(
         "Visual test",
-        [
-            "Option 1 · Automatic Scraper",
-            "Option 2 · Manual Scraper",
-            "Option 3 · Real Image Search",
-            "Option 4 · AI Generation",
-            "Option 5 · Ranked Scene Search",
-            "Option 6 · Stats Card",
-            "Option 7 · Quote Card",
-        ],
-        default="Option 1 · Automatic Scraper",
+        VISUAL_OPTIONS,
+        default=VISUAL_OPTIONS[0],
         key="visual_test_mode",
         label_visibility="collapsed",
     ) or "Option 1 · Automatic Scraper"
