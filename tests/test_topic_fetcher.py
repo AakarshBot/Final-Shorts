@@ -324,6 +324,21 @@ def test_niche_sports_path_remains_available():
     assert [row.title for row in prepared] == ["Tennis title upset"]
 
 
+def test_niche_sports_groups_headlines_by_shared_named_keyword():
+    rows = [
+        make_topic("Carlos Alcaraz wins after dramatic comeback", url="https://example.com/alcaraz-1"),
+        make_topic("Carlos Alcaraz targets another title after comeback", url="https://example.com/alcaraz-2"),
+        make_topic("Lando Norris takes surprise Formula 1 podium", url="https://example.com/norris"),
+    ]
+    chosen = topic_fetcher._select(rows, 2, set(), profile="niche_sports")
+    alcaraz = next(item for item in chosen if item.group_key == "keyword:carlos alcaraz")
+    assert len(alcaraz.group_members) == 2
+    assert {item.url for item in alcaraz.group_members} == {
+        "https://example.com/alcaraz-1",
+        "https://example.com/alcaraz-2",
+    }
+
+
 def test_top5_fetcher_uses_smaller_query_plan(monkeypatch):
     queries = []
     rows = [
