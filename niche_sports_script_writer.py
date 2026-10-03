@@ -1,13 +1,67 @@
 """Function 02B: niche-sports Shorts script writing."""
 
+import json
+import os
+
+import requests
+
 from script_writer import (
+    GROQ_URL,
     LANGUAGE_INSTRUCTIONS,
     MODELS,
+    TIMEOUT,
     _research_story,
-    _request,
     _source_text,
     _story_value,
 )
+
+NICHE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "headline": {"type": "string"},
+        "titles": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {"type": "string"},
+        },
+        "seo_description": {"type": "string"},
+        "hashtags": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 5,
+            "items": {"type": "string"},
+        },
+        "comment": {"type": "string"},
+        "script": {
+            "type": "array",
+            "minItems": 4,
+            "maxItems": 5,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "voiceover": {"type": "string"},
+                    "narrative_role": {"type": "string"},
+                    "primary_entity": {"type": "string"},
+                    "visual_intent": {"type": "string"},
+                    "specific_search_prompt": {"type": "string"},
+                    "sport_or_topic_category": {"type": "string"},
+                },
+                "required": [
+                    "voiceover",
+                    "narrative_role",
+                    "primary_entity",
+                    "visual_intent",
+                    "specific_search_prompt",
+                    "sport_or_topic_category",
+                ],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["headline", "titles", "seo_description", "hashtags", "comment", "script"],
+    "additionalProperties": False,
+}
 
 GENERIC_OPENERS = (
     "welcome to",
@@ -34,12 +88,60 @@ RETENTION_BAIT = (
 def _validate_script(result: dict) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
+
+    headline = " ".join(str(result.get("headline") or "").split())
+    if not 3 <= len(headline.split()) <= 4:
+        return False, "The opening headline must contain 3 or 4 words."
+
+    titles = result.get("titles")
+    if not isinstance(titles, list) or len(titles) != 3 or not all(str(item or "").strip() for item in titles):
+        return False, "The Niche Sports Scriptwriter must produce exactly 3 titles."
+
+    description = " ".join(str(result.get("seo_description") or "").split())
+    if not 15 <= len(description.split()) <= 30:
+        return False, "The Niche Sports SEO description must contain 15–30 words."
+
+    hashtags = result.get("hashtags")
+    if (
+        not isinstance(hashtags, list)
+        or not 3 <= len(hashtags) <= 5
+        or any(
+            not str(tag or "").strip().startswith("#")
+            or " " in str(tag or "").strip()
+            for tag in hashtags
+        )
+    ):
+        return False, "The Niche Sports Scriptwriter must produce 3–5 valid hashtags."
+
+    if not str(result.get("comment") or "").strip():
+        return False, "The Niche Sports Scriptwriter must produce a public comment."
+
     scenes = result.get("script")
-    if not isinstance(scenes, list) or not scenes:
-        return False, "The provider did not return a script."
+    if not isinstance(scenes, list) or not 4 <= len(scenes) <= 5:
+        return False, "Niche Sports Scriptwriter must return 4 or 5 scenes."
+
+    for number, scene in enumerate(scenes, 1):
+        if not isinstance(scene, dict) or not str(scene.get("voiceover") or "").strip():
+            return False, f"Scene {number} is empty or malformed."
+        for key in (
+            "primary_entity",
+            "visual_intent",
+            "specific_search_prompt",
+            "sport_or_topic_category",
+        ):
+            if not str(scene.get(key) or "").strip():
+                return False, f"Scene {number} is missing {key}."
+
+    total_words = sum(len(str(scene.get("voiceover") or "").split()) for scene in scenes)
+    if total_words > 75:
+        return False, "Niche Sports narration exceeds the 75-word hard cap."
+
     first = " ".join(str((scenes[0] or {}).get("voiceover") or "").split()).casefold()
+    if len(first.split()) > 14:
+        return False, "Scene 1 exceeds 14 words."
     if any(first.startswith(opener) for opener in GENERIC_OPENERS):
         return False, "Scene 1 starts with a generic opener."
+
     narration = " ".join(
         " ".join(str(scene.get("voiceover") or "").split()).casefold()
         for scene in scenes
@@ -47,7 +149,72 @@ def _validate_script(result: dict) -> tuple[bool, str]:
     )
     if any(phrase in narration for phrase in RETENTION_BAIT):
         return False, "The narration contains retention bait."
+
     return True, ""
+
+
+def _request(model: str, prompt: str, source: str) -> dict:
+    key = str(os.getenv("GROQ_API_KEY") or "").strip()
+    if not key:
+        raise RuntimeError("GROQ_API_KEY is not configured.")
+
+    response = requests.post(
+        GROQ_URL,
+        headers={
+            "Authorization": f"Bearer {key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": model,
+            "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": "RESEARCH PACKET:\n" + source},
+            ],
+            "response_format": {
+                "type": "json_schema",
+                "json_schema": {
+                    "name": "niche_sports_shorts_script",
+                    "strict": True,
+                    "schema": NICHE_SCHEMA,
+                },
+            },
+            "include_reasoning": False,
+            "reasoning_effort": "low",
+            "temperature": 0.35,
+            "max_completion_tokens": 1800,
+        },
+        timeout=TIMEOUT,
+    )
+    response.raise_for_status()
+    content = response.json()["choices"][0]["message"]["content"]
+    return content if isinstance(content, dict) else json.loads(content)
+
+
+def apply_niche_script_edits(
+    script: dict,
+    voiceovers: list[str],
+    headline: str | None = None,
+) -> dict:
+    result = json.loads(json.dumps(script, ensure_ascii=False))
+    scenes = result.get("script") or []
+    if len(voiceovers) != len(scenes):
+        raise ValueError("The number of edited slides does not match the generated Niche Sports script.")
+    for scene, voiceover in zip(scenes, voiceovers):
+        scene["voiceover"] = " ".join(str(voiceover or "").split())
+    if headline is not None:
+        result["headline"] = " ".join(str(headline or "").split())
+
+    valid, reason = _validate_script(result)
+    if not valid:
+        raise ValueError(f"Edited Niche Sports script failed local validation: {reason}")
+
+    result["human_script_edited"] = any(
+        " ".join(str(scene.get("voiceover") or "").split())
+        != " ".join(str(original.get("voiceover") or "").split())
+        for scene, original in zip(scenes, script.get("script") or [])
+    )
+    result["approved_for_audio"] = True
+    return result
 
 
 NICHE_SYSTEM_PROMPT = """You are the original editorial writer for a human-reviewed niche-sports YouTube Shorts channel.
@@ -227,7 +394,7 @@ def write_niche_sports_script(story, language: str = "english") -> dict:
         try:
             model_instruction = instruction
             if recovery_reason:
-                model_instruction += (
+                    model_instruction += (
                     "\nRECOVERY:\n"
                     "The previous draft failed local validation. Regenerate the complete JSON "
                     "while fixing this exact failure and preserving every other hard rule. "
