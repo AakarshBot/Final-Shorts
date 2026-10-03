@@ -177,7 +177,9 @@ SLIDE STRUCTURE
   fully stated in the headline. Do not pad them with filler.
 - For every slide, provide a concrete visual entity, visual intent and a specific search prompt.
   Slide 1 should describe a factual cricket-package visual, not an invented mood or theme.
-- Generate 3–5 relevant hashtags. No spaces inside hashtags.
+- `seo_description`: concise and story-specific, covering the Top-5 package without inventing a common theme.
+- `hashtags`: generate 3–5 relevant story/package-specific hashtags. Include the main teams, players, events, competitions or developments when suitable. Avoid generic growth tags such as #viral, #fyp or #trending unless directly relevant.
+- `comment`: one concise discussion-oriented public comment grounded in the selected stories. Do not invent facts or ask a generic engagement question disconnected from the package.
 - Return JSON only.
 """
 
@@ -462,6 +464,10 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
             if _sentence_count(body) != BODY_SENTENCE_COUNT:
                 return False, f"Slide {expected_number} body must contain exactly two sentences."
 
+    description = _clean(result.get("seo_description"))
+    if not description:
+        return False, "Top-5 Scriptwriter must return a non-empty description."
+
     hashtags = result.get("hashtags")
     if (
         not isinstance(hashtags, list)
@@ -469,6 +475,9 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
         or any(not _clean(tag).startswith("#") or " " in _clean(tag) for tag in hashtags)
     ):
         return False, "Top-5 Scriptwriter must return 3–5 valid hashtags."
+
+    if not _clean(result.get("comment")):
+        return False, "Top-5 Scriptwriter must return a non-empty public comment."
 
     return True, ""
 
