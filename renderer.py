@@ -1570,14 +1570,14 @@ def _mux_audio(
 def render_production_video(
     approved_script: dict,
     approved_audio: dict,
-    subtitle_data: dict,
+    subtitle_data: dict | None,
     visuals: list[dict],
     output_path: str | Path,
     headline_text: str | None = None,
     headline_enabled: bool = True,
     source_label: str | None = None,
 ) -> Path:
-    """Render the approved production handoff with supplied slide visuals and audio."""
+    """Render an approved Cricket or Top-5 production handoff."""
     if (
         not isinstance(approved_script, dict)
         or approved_script.get("approved_for_audio") is not True
@@ -1590,10 +1590,15 @@ def render_production_video(
     ):
         raise ValueError("Renderer requires the approved Audio handoff.")
 
-    if not validate_subtitle_handoff(subtitle_data):
+    is_top5 = approved_script.get("schema") == "final-shorts.top5-script.v1"
+    if not is_top5 and not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Renderer requires a valid subtitle handoff.")
 
-    script_scenes = approved_script.get("script")
+    script_scenes = (
+        approved_script.get("slides")
+        if is_top5
+        else approved_script.get("script")
+    )
     audio_scenes = approved_audio.get("scenes")
     if (
         not isinstance(script_scenes, list)
@@ -1626,7 +1631,10 @@ def render_production_video(
         if isinstance(top5_card, dict):
             static_frame = _draw_top5_editorial_card(image, top5_card)
             _paste_logo(static_frame)
-            _paste_source(static_frame, source_label)
+            _paste_source(
+                static_frame,
+                str(visual.get("source") or source_label or "Commons").strip() or "Commons",
+            )
             static_frame = static_frame.convert("RGB")
         elif isinstance(quote_card, dict):
             static_frame = _draw_quote_card(image, quote_card)

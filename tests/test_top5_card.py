@@ -135,6 +135,82 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
     assert seen[0]["story_number"] == 2
 
 
+def test_top5_production_accepts_six_slides_without_subtitles(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene.mp3"
+    audio_file.write_bytes(b"audio")
+    image_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(image_buffer, format="PNG")
+    image_bytes = image_buffer.getvalue()
+
+    script = {
+        "schema": "final-shorts.top5-script.v1",
+        "approved_for_audio": True,
+        "slides": [
+            {
+                "slide_number": number,
+                "story_index": number - 1,
+                "headline": (
+                    "Gill returns with India reshuffling their squad"
+                    if number == 1
+                    else f"India confirm the selected cricket development number {number}"
+                ),
+                "body": "" if number == 1 else "The board confirmed the move. The decision changes the lineup.",
+            }
+            for number in range(1, 7)
+        ],
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [
+            {
+                "scene": number,
+                "duration": 0.5,
+                "path": str(audio_file),
+            }
+            for number in range(1, 7)
+        ],
+    }
+    visuals = [
+        {
+            "bytes": image_bytes,
+            "source": "Commons",
+            "top5_card": {
+                "headline": slide["headline"],
+                "body": slide["body"],
+                "story_number": 0 if number == 1 else number - 1,
+                "total_stories": 5,
+            },
+        }
+        for number, slide in enumerate(script["slides"], 1)
+    ]
+
+    seen = []
+    monkeypatch.setattr(
+        renderer,
+        "_draw_top5_editorial_card",
+        lambda base, card: (seen.append(card) or base),
+    )
+    monkeypatch.setattr(
+        renderer,
+        "write_preview_video",
+        lambda frames, path: (
+            list(frames),
+            path.write_bytes(b"silent"),
+            path,
+        )[-1],
+    )
+    monkeypatch.setattr(
+        renderer,
+        "_mux_audio",
+        lambda silent, scenes, output: (output.write_bytes(b"final") or output),
+    )
+
+    output = tmp_path / "top5.mp4"
+    renderer.render_production_video(script, audio, None, visuals, output)
+    assert len(seen) == 6
+    assert [card["story_number"] for card in seen] == [0, 1, 2, 3, 4, 5]
+
+
 def test_top5_headline_layout_is_dynamic():
     short_fonts, short_display, short_lines = renderer._fit_top5_editorial_headline(
         "India make a major change",

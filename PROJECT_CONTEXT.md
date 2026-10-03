@@ -286,7 +286,7 @@ Top-5 Scriptwriter:
 Top-5 Visuals:
 - The unconnected experimental `top5_visual_fetcher.py` implementation was removed as scaffolding because the active Test path had zero production callers for it.
 - The completed Cricket Visual Fetcher remains locked and untouchable.
-- The active Top-5 Test visual function is the standalone manual image/renderer test: manual source search, image selection, 9:16 crop/reposition, and static 1080 × 1920 composition preview.
+- The active Top-5 Test Visuals path is a direct six-slide manual image/renderer QC stage: one Commons search and manual image choice per slide, authoritative 9:16 crop/reposition, static 1080 × 1920 composition preview, then all-six approval.
 - Human selection remains authoritative.
 - The current Test visual stage deliberately bypasses Scriptwriter and Audio approvals because the visual function is independently testable.
 - When URL-based automatic Top-5 image retrieval is actually wired into the factory, rebuild that function directly rather than retaining an uncalled parallel module.
@@ -541,7 +541,7 @@ Top-5 Test Stage 2 — Scriptwriter:
 - Slides 2–6 spoken headlines remain governed by the existing below-15-second speech estimate; no additional numeric word target is imposed.
 - Slides 2–6 also contain separate visual-only body copy. The body is exactly two concise factual sentences that add useful detail/context from the same story rather than restating the spoken headline.
 - Every slide also returns visual handoff metadata: primary entity, visual intent, specific search prompt and sport/topic category.
-- The writer does not generate the old Scriptwriter title candidates, SEO description or upload comment. It generates 3–5 relevant hashtags.
+- The writer does not generate the old five-title candidate set. It generates the package SEO description, 3–5 relevant hashtags and one public-upload comment in the same generation call.
 - Slide 1 is not allowed to manufacture a generic or unsupported “AI roundup” theme such as changing the conversation, everyone is talking, sending shockwaves, game changer, or similar language.
 - Test Stage 2 exposes all six headlines and the five body fields as editable manual-QC fields, plus editable hashtags.
 - Approval creates `final-shorts.top5-script.v1` with the six edited slides, hashtags, the five selected story references and provider information for downstream stages.
@@ -554,20 +554,12 @@ Top-5 Test Stage 3 — Audio:
 
 Top-5 Test Stage 4 — Visuals:
 - **Implemented, pending manual approval.**
-- Test Visuals is a standalone one-slide sandbox and does not require Scriptwriter or Audio approval.
-- The renderer card uses a top image zone with a single-line headline hugging the image's bottom edge and a lower information zone for the silent body.
-- Slides 2–6 use the two-sentence visual body; Slide 1 remains a package opener with no body.
-- The lower zone stays intentionally sparse and uses at most one small icon-only UI-inspired motion element; no slider, fact kicker or extra progress text is used.
-- The Test sandbox can preview Heart, Comment, Share and Tap motion variants.
-- Implemented as a separate `top5_visual_fetcher.py`; the approved regular `visual_fetcher.py` is untouched.
-- The five approved story URLs are scraped concurrently, one story at a time, with a 4–6 image review pool targeted per story.
-- The original source URL is always scraped first. A related publisher URL is searched only when that story remains under four usable images.
-- Each related URL is scraped only as needed to bring that story to four usable images; unrelated or same-domain fallback results are rejected.
-- Browser extraction plus same-URL static fallback handles article image markup, lazy images, metadata, JSON-LD, responsive image sources and loaded network images.
-- Test UI provides per-story pools for Slides 2–6, plus Manual Scraper, Manual Image Search/Commons and AI Generation options.
-- Slide 1 is the manually selected/generated opener; Slides 2–6 map directly to the five selected stories.
-- User manually chooses, crops, deletes and replaces visuals. Automatic visual selection is not performed.
-- Visual approval requires all six slide assignments and creates `final-shorts.top5-visuals.v1` for the Renderer.
+- Test Visuals is a six-slide manual QC stage. It consumes the approved Top-5 Scriptwriter slide text, searches Wikimedia Commons per slide, lets the user manually choose and crop/reposition one image per slide, previews the exact static renderer composition, and approves all six together.
+- The six approved visual assignments become `final-shorts.top5-visuals.v1` for the Renderer.
+- Top-5 Slide 1 has no body copy; Slides 2–6 use their approved two-sentence visual-only bodies. None of the body copy is narrated.
+- Top-5 does not use Subtitles. After Visual approval, Test moves directly to Renderer.
+- Renderer accepts the approved Top-5 Scriptwriter, Audio and Visual handoffs and produces the six-slide Short only when those handoffs are approved.
+- Upload QC uses the rendered video, the approved Slide 1 spoken headline as the YouTube title, and the Scriptwriter-generated description, hashtags and public comment. Description/hashtags/comment remain editable during Upload QC.
 - **Do not mark Top-5 Visuals complete until the user has manually tested and approved this Stage 4 flow.**
 
 ### Production Line 03 — On This Day
