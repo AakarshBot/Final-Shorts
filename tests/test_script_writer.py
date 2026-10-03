@@ -17,7 +17,9 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
         "titles": [
             "Shubman Gill Injury Update Before India ODI",
             "Why Gill's Injury Could Change India's ODI Plans",
-            "Shubman Gill Fitness: What Happens Next?",
+            "Gill Injury Could Change India's ODI Plans",
+            "What Gill's Injury Means For India's ODI",
+            "Why Gill Fans Are Waiting On His Return",
         ],
         "seo_description": "Shubman Gill's injury status ahead of India's next ODI.",
         "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
@@ -69,8 +71,18 @@ def test_schema_requires_four_slides_and_subject():
     assert script_writer.CRICKET_SCHEMA["properties"]["script"]["minItems"] == 4
     assert script_writer.CRICKET_SCHEMA["properties"]["script"]["maxItems"] == 4
     assert "subject_name" in script_writer.CRICKET_SCHEMA["required"]
-    assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["minItems"] == 3
-    assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["maxItems"] == 3
+    assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["minItems"] == 5
+    assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["maxItems"] == 5
+
+
+def test_prompt_contains_five_title_angles():
+    prompt = script_writer.SYSTEM_PROMPT
+    assert "SEO / Search" in prompt
+    assert "Curiosity / Baity" in prompt
+    assert "Trend / Format" in prompt
+    assert "Consequence / Why It Matters" in prompt
+    assert "Fan / Emotion" in prompt
+
 
 
 def test_validator_rejects_slide_one_over_13_words():
