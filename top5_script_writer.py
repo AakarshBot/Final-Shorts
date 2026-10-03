@@ -32,6 +32,7 @@ MAX_PACKAGE_STORY_CHARS = 1200
 MIN_ARTICLE_CHARS = 500
 SLIDE_1_MAX_WORDS = 14
 SPEECH_WORDS_PER_MINUTE = 150.0
+MAX_TOP5_TOTAL_SPEECH_SECONDS = 30.0
 MIN_HASHTAGS = 3
 MAX_HASHTAGS = 5
 BODY_SENTENCE_COUNT = 2
@@ -173,6 +174,7 @@ SLIDE STRUCTURE
 - For Slides 2–6, the headline IS the spoken narration for that slide.
 - Each story headline must tell the complete important development in ONE clean sentence.
 - Each story headline must remain under 15 seconds of estimated natural speech.
+- The six spoken headlines together must remain at or below 30 seconds of estimated natural speech.
 - Do not merely repeat the source title. Add the key development, context or consequence
   that makes the story understandable on its own.
 - The body is visual-only supporting copy. Write exactly two concise factual sentences.
@@ -416,6 +418,7 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
     if not isinstance(slides, list) or len(slides) != 6:
         return False, "Top-5 Scriptwriter must return exactly six slides."
 
+    total_estimated_speech = 0.0
     for expected_number, slide in enumerate(slides, 1):
         if not isinstance(slide, dict):
             return False, f"Slide {expected_number} is malformed."
@@ -451,11 +454,18 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
             story = stories[expected_number - 2]
             if estimate_speech_seconds(headline) >= 15.0:
                 return False, f"Slide {expected_number} is not below 15 seconds at the speech-rate estimate."
+            total_estimated_speech += estimate_speech_seconds(headline)
             body = _clean(slide.get("body"))
             if not body:
                 return False, f"Slide {expected_number} is missing body copy."
             if _sentence_count(body) != BODY_SENTENCE_COUNT:
                 return False, f"Slide {expected_number} body must contain exactly two sentences."
+
+    if total_estimated_speech > MAX_TOP5_TOTAL_SPEECH_SECONDS:
+        return False, (
+            f"Top-5 spoken headlines exceed {MAX_TOP5_TOTAL_SPEECH_SECONDS:.0f} seconds "
+            "at the speech-rate estimate."
+        )
 
     description = _clean(result.get("seo_description"))
     if not description:
