@@ -430,6 +430,7 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
         headline = _clean(slide.get("headline"))
         if not headline:
             return False, f"Slide {expected_number} has no headline."
+        total_estimated_speech += estimate_speech_seconds(headline)
         if _contains_forbidden_editorial_language(headline) or _contains_slide_1_filler(headline):
             return False, f"Slide {expected_number} contains audience-facing or synthetic filler language."
 
@@ -454,7 +455,6 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
             story = stories[expected_number - 2]
             if estimate_speech_seconds(headline) >= 15.0:
                 return False, f"Slide {expected_number} is not below 15 seconds at the speech-rate estimate."
-            total_estimated_speech += estimate_speech_seconds(headline)
             body = _clean(slide.get("body"))
             if not body:
                 return False, f"Slide {expected_number} is missing body copy."
