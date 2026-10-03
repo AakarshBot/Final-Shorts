@@ -4572,7 +4572,7 @@ elif st.session_state.app_mode == "test":
                                 reverse=True,
                             ))
                             if tile.group_key.startswith("keyword:"):
-                                tile_title = f'Keyword: "{tile.group_key.split(":", 1)[1]}"'
+                                tile_title = tile.group_key.split(":", 1)[1].title()
                             elif tile.group_key.startswith("player:"):
                                 tile_title = tile.group_key.split(":", 1)[1].title()
                             else:
@@ -4850,9 +4850,9 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_top5_script_handoff = {
                                 "schema": "final-shorts.top5-script.v1",
                                 "slides": edited["slides"],
-                                "seo_description": str(result.get("seo_description") or "").strip(),
+                                "seo_description": edited["seo_description"],
                                 "hashtags": edited["hashtags"],
-                                "comment": str(result.get("comment") or "").strip(),
+                                "comment": edited["comment"],
                                 "stories": stories,
                                 "provider_used": result.get("provider_used"),
                                 "approved_for_audio": True,
@@ -4931,9 +4931,10 @@ elif st.session_state.app_mode == "test":
                     ):
                         try:
                             st.session_state.test_top5_audio_handoff = approve_top5_audio(audio)
+                            st.session_state.test_stage = "04 · Visuals"
                             st.session_state.test_pipeline_notice = {
                                 "confirmed": "Top-5 Audio QC confirmed",
-                                "next": "Ready for Visuals.",
+                                "next": "Moving to Visuals.",
                             }
                             st.rerun()
                         except ValueError as exc:
@@ -4997,7 +4998,50 @@ elif st.session_state.app_mode == "test":
                         placeholder="e.g. Shubman Gill India cricket",
                         key=f"test-top5-query-{active_slide}",
                     )
-                    search_col, clear_col = st.columns([1, .22], gap="small")
+                    ai_prompt = ""
+                    ai_generated = False
+                    if active_slide == 1:
+                        st.markdown(
+                            '<div class="mini-label" style="margin-top:.9rem;">AI IMAGE OPTION · SLIDE 1</div>',
+                            unsafe_allow_html=True,
+                        )
+                        ai_prompt = st.text_input(
+                            "AI prompt",
+                            placeholder="e.g. cricket news desk with five selected stories",
+                            key="test-top5-ai-prompt",
+                        ).strip()
+                        ai_generate = st.button(
+                            "Generate AI image",
+                            width="stretch",
+                            key="test-top5-ai-generate",
+                        )
+                        if ai_generate:
+                            if not ai_prompt:
+                                st.warning("Enter an AI image prompt first.")
+                            else:
+                                with st.spinner("Generating AI image options…"):
+                                    try:
+                                        from visual_generator import generate_images
+                                        result = generate_images(ai_prompt)
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "query": ai_prompt,
+                                            "assets": result.get("assets") or [],
+                                            "error": "",
+                                            "source": "ai",
+                                        }
+                                        st.session_state.test_top5_visual_selected.pop(active_slide, None)
+                                        st.session_state.test_top5_visual_previews.pop(active_slide, None)
+                                        st.session_state.test_top5_visual_assignments.pop(active_slide, None)
+                                        st.session_state.test_top5_visual_crops.pop(asset_key, None)
+                                        ai_generated = True
+                                    except Exception as exc:
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "query": ai_prompt,
+                                            "assets": [],
+                                            "error": f"{type(exc).__name__}: {exc}",
+                                            "source": "ai",
+                                        }
+                                        search_col, clear_col = st.columns([1, .22], gap="small")
                     with search_col:
                         search = st.button(
                             "Search Commons",
