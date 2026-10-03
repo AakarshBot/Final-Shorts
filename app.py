@@ -1338,34 +1338,36 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
         else:
             st.success("Stats Card approved.")
 
-        if not live or not st.session_state.get(approved_key):
+        if not st.session_state.get(approved_key):
             return
-
         if slide_count <= 0:
             return
-        st.download_button(
-            "Save Stats Card PNG",
-            data=result["bytes"],
-            file_name="stats-card.png",
-            mime="image/png",
-            width="stretch",
-            key=f"{build_key}-download",
-        )
+
+        if live:
+            st.download_button(
+                "Save Stats Card PNG",
+                data=result["bytes"],
+                file_name="stats-card.png",
+                mime="image/png",
+                width="stretch",
+                key=f"{build_key}-download",
+            )
+
         slide = st.selectbox(
             "Use Stats Card for slide",
             list(range(1, slide_count + 1)),
-            key="live-stats-card-slide",
+            key=f"{build_key}-slide",
         )
         if st.button(
             "Use Stats Card for this slide",
             type="primary",
             width="stretch",
-            key="live-stats-card-attach",
+            key=f"{build_key}-attach",
         ):
             card_key = hashlib.sha1(
                 (str(result.get("path") or "") + str(result.get("query") or "")).encode("utf-8")
             ).hexdigest()[:12]
-            st.session_state.live_visual_assignments[slide] = {
+            assignment = {
                 "asset_key": f"stats-card-{card_key}",
                 "result_key": "stats-card",
                 "card_layout": dict(result.get("layout") or {}),
@@ -1373,7 +1375,13 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
                 "label": str(result.get("label") or "Stats Card"),
                 "bytes": bytes(result["bytes"]),
             }
-            st.session_state.live_visuals_approved = False
+            assignments_key = "live_visual_assignments" if live else "visual_assignments"
+            st.session_state[assignments_key][slide] = assignment
+            if live:
+                st.session_state.live_visuals_approved = False
+            else:
+                st.session_state.visuals_approved = False
+                st.session_state.approved_visuals = None
             st.rerun()
         return
 
@@ -1436,6 +1444,8 @@ def _render_quote_card(live: bool = False, slide_count: int = 0):
     slide_key = f"{prefix}quote_card_slide"
 
     script = st.session_state.get(script_key)
+    if not isinstance(script, dict) and not live:
+        script = st.session_state.get("script_data") or {}
     if not isinstance(script, dict):
         st.info("Approve the Scriptwriter result first.")
         return
@@ -1608,28 +1618,33 @@ def _render_quote_card(live: bool = False, slide_count: int = 0):
         "The selected quote is visual-only on this slide; normal subtitles are suppressed for the Quote Card."
     )
 
-    if live:
-        if st.button(
-            f"Use Quote Card for slide {selected_slide}",
-            type="primary",
-            width="stretch",
-            key="live-quote-card-attach",
-        ):
-            st.session_state.live_visual_assignments[selected_slide] = {
-                "asset_key": f"quote-card-{selected.get('asset_key')}",
-                "result_key": "quote-card",
-                "source": f"Quote Card · {attribution}",
-                "label": quote,
-                "bytes": bytes(source_bytes),
-                "preview_bytes": bytes(preview_bytes),
-                "quote_card": {
-                    "quote": quote,
-                    "attribution": attribution,
-                    "language": str(script.get("language_used") or "english"),
-                },
-            }
+    if st.button(
+        f"Use Quote Card for slide {selected_slide}",
+        type="primary",
+        width="stretch",
+        key=f"{prefix}quote-card-attach",
+    ):
+        assignment = {
+            "asset_key": f"quote-card-{selected.get('asset_key')}",
+            "result_key": "quote-card",
+            "source": f"Quote Card · {attribution}",
+            "label": quote,
+            "bytes": bytes(source_bytes),
+            "preview_bytes": bytes(preview_bytes),
+            "quote_card": {
+                "quote": quote,
+                "attribution": attribution,
+                "language": str(script.get("language_used") or "english"),
+            },
+        }
+        assignments_key = "live_visual_assignments" if live else "visual_assignments"
+        st.session_state[assignments_key][selected_slide] = assignment
+        if live:
             st.session_state.live_visuals_approved = False
-            st.rerun()
+        else:
+            st.session_state.visuals_approved = False
+            st.session_state.approved_visuals = None
+        st.rerun()
 
 def _top5_fit_preview(value, width=300, height=533):
     from PIL import Image
