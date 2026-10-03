@@ -1935,6 +1935,15 @@ def _script_for_topic(topic, profile: str, language: str) -> dict:
     )
 
 
+def _upload_metadata(script: dict) -> dict:
+    return {
+        "titles": list(script.get("titles") or []),
+        "description": str(script.get("seo_description") or ""),
+        "hashtags": " ".join(str(item) for item in (script.get("hashtags") or [])),
+        "comment": str(script.get("comment") or ""),
+    }
+
+
 def _visual_story_for_topic(topic, script: dict | None = None) -> dict:
     story = _story_payload(topic)
     if isinstance(script, dict):
@@ -2048,12 +2057,11 @@ def _live_generate_script():
     )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
-    st.session_state.live_upload_titles = list(script.get("titles") or [])
-    st.session_state.live_upload_description = str(script.get("seo_description") or "")
-    st.session_state.live_upload_hashtags = " ".join(
-        str(item) for item in (script.get("hashtags") or [])
-    )
-    st.session_state.live_upload_comment = str(script.get("comment") or "")
+    metadata = _upload_metadata(script)
+    st.session_state.live_upload_titles = metadata["titles"]
+    st.session_state.live_upload_description = metadata["description"]
+    st.session_state.live_upload_hashtags = metadata["hashtags"]
+    st.session_state.live_upload_comment = metadata["comment"]
     st.session_state.live_quote_card_quote = str(script.get("quote") or "")
     st.session_state.live_quote_card_attribution = str(
         script.get("quote_attribution") or ""
@@ -3496,8 +3504,7 @@ def render_topic_fetcher():
                         st.link_button("Source ↗", topic.url, width="stretch")
 
 def render_scriptwriter():
-    from niche_sports_script_writer import write_niche_sports_script
-    from script_writer import apply_script_edits, write_script
+    from script_writer import apply_script_edits
 
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first.")
@@ -4105,12 +4112,13 @@ def render_upload_qc():
         st.error("No Scriptwriter title candidates are available.")
         return
 
+    metadata = _upload_metadata(script)
     if not str(st.session_state.get("upload_description") or "").strip():
-        st.session_state.upload_description = str(script.get("seo_description") or "")
+        st.session_state.upload_description = metadata["description"]
     if not str(st.session_state.get("upload_hashtags") or "").strip():
-        st.session_state.upload_hashtags = " ".join(str(x) for x in (script.get("hashtags") or []))
+        st.session_state.upload_hashtags = metadata["hashtags"]
     if not str(st.session_state.get("upload_comment") or "").strip():
-        st.session_state.upload_comment = str(script.get("comment") or "")
+        st.session_state.upload_comment = metadata["comment"]
 
     if video_path and video_path.is_file():
         st.video(str(video_path), width=520)
