@@ -5012,6 +5012,7 @@ elif st.session_state.app_mode == "test":
                         placeholder="e.g. Shubman Gill India cricket",
                         key=f"test-top5-query-{active_slide}",
                     )
+                    search_col, clear_col = st.columns([1, .22], gap="small")
                     ai_prompt = ""
                     if active_slide == 1:
                         st.markdown(
@@ -5053,7 +5054,6 @@ elif st.session_state.app_mode == "test":
                                             "error": f"{type(exc).__name__}: {exc}",
                                             "source": "ai",
                                         }
-                                        search_col, clear_col = st.columns([1, .22], gap="small")
                     with search_col:
                         search = st.button(
                             "Search Commons",
