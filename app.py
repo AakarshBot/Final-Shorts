@@ -3552,6 +3552,13 @@ def render_scriptwriter():
                 label_visibility="collapsed",
             )
             st.markdown('<div style="height:.7rem"></div>',unsafe_allow_html=True)
+            quote = str(script.get("quote") or "").strip()
+            quote_attribution = str(script.get("quote_attribution") or "").strip()
+            if quote:
+                st.markdown('<div class="mini-label">Quote</div>',unsafe_allow_html=True)
+                st.text(quote)
+                if quote_attribution:
+                    st.caption(f"— {quote_attribution}")
             edited_voiceovers=[]
             for index,scene in enumerate(script.get("script",[]),1):
                 st.markdown(f'<div class="scene-label">Scene {index}</div>',unsafe_allow_html=True)
@@ -3574,7 +3581,7 @@ def render_scriptwriter():
                     }
                     st.session_state.audio_data=None
                     st.session_state.approved_audio=None
-                     st.session_state.upload_qc_approved=False
+                    st.session_state.upload_qc_approved=False
                     st.session_state.upload_result=None
                     st.session_state.rendered_video_path=None
                     st.session_state.upload_qc=None
