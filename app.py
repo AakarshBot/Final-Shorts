@@ -3565,6 +3565,8 @@ def render_scriptwriter():
                     )
                     approved["headline_enabled"] = bool(st.session_state.headline_enabled)
                     st.session_state.approved_script=approved
+                    st.session_state.visuals_approved = False
+                    st.session_state.approved_visuals = None
                     st.session_state.test_stage = "03 · Audio"
                     st.session_state.test_pipeline_notice = {
                         "confirmed": "Script QC confirmed",
@@ -3606,6 +3608,12 @@ def render_scriptwriter():
         if st.session_state.approved_script:
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
+def _test_visual_slide_count() -> int:
+    script = st.session_state.get("approved_script") or st.session_state.get("script_data")
+    count = len(script.get("script") or []) if isinstance(script, dict) else 4
+    return max(1, count)
+
+
 def render_visuals_crawler():
     from visual_fetcher import crawl_visuals
 
@@ -3687,7 +3695,7 @@ def render_visuals_crawler():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_pool(assets, "auto-crawler", 4)
+    _render_visual_asset_pool(assets, "auto-crawler", _test_visual_slide_count())
 
 
 def _render_ranked_visual_search():
@@ -3760,7 +3768,7 @@ def _render_ranked_visual_search():
 
     if assets:
         st.markdown('<div class="section-head"><div><div class="eyebrow">RANKED MEDIA BOARD</div><div class="section-title">Combined visual candidates</div></div><div class="section-count">highest-scoring first</div></div>', unsafe_allow_html=True)
-        _render_visual_asset_pool(assets, "ranked-search", 4)
+        _render_visual_asset_pool(assets, "ranked-search", _test_visual_slide_count())
     else:
         st.warning("The ranked search returned no usable images.")
 
@@ -3823,7 +3831,7 @@ def _render_manual_crawler():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_pool(assets, "manual-crawler", 4)
+    _render_visual_asset_pool(assets, "manual-crawler", _test_visual_slide_count())
 
 
 def _render_manual_real_images():
@@ -3872,7 +3880,7 @@ def _render_manual_real_images():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Real images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_pool(assets, "real-search", 4)
+    _render_visual_asset_pool(assets, "real-search", _test_visual_slide_count())
 
 
 def _render_manual_ai_images():
@@ -3919,7 +3927,7 @@ def _render_manual_ai_images():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Generated images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_pool(assets, "ai-generation", 4)
+    _render_visual_asset_pool(assets, "ai-generation", _test_visual_slide_count())
 
 
 def render_visuals():
