@@ -643,18 +643,8 @@ if "test_top5_audio_data" not in st.session_state:
     st.session_state.test_top5_audio_data = None
 if "test_top5_audio_handoff" not in st.session_state:
     st.session_state.test_top5_audio_handoff = None
-if "test_top5_visual_result" not in st.session_state:
-    st.session_state.test_top5_visual_result = None
-if "test_top5_visual_loaded_key" not in st.session_state:
-    st.session_state.test_top5_visual_loaded_key = None
 if "test_top5_visual_crops" not in st.session_state:
     st.session_state.test_top5_visual_crops = {}
-if "test_top5_manual_visual_result" not in st.session_state:
-    st.session_state.test_top5_manual_visual_result = None
-if "test_top5_real_image_result" not in st.session_state:
-    st.session_state.test_top5_real_image_result = None
-if "test_top5_ai_image_result" not in st.session_state:
-    st.session_state.test_top5_ai_image_result = None
 if "test_top5_visual_slide_type" not in st.session_state:
     st.session_state.test_top5_visual_slide_type = "Story slide"
 if "test_top5_standalone_headline" not in st.session_state:
@@ -1074,7 +1064,7 @@ def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, st
         result = st.session_state.get(state_key) or {}
         for index, asset in enumerate(result.get("assets") or []):
             asset_key = (
-                _live_asset_key(result_key, index, asset)
+                _visual_asset_key(f"live-{result_key}", index, asset)
                 if live
                 else _visual_asset_key(result_key, index, asset)
             )
@@ -2138,12 +2128,8 @@ def _live_fit_preview(value, width=360, height=640):
     return image.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def _live_asset_key(result_key: str, index: int, asset: dict) -> str:
-    return _visual_asset_key(f"live-{result_key}", index, asset)
-
-
 def _live_delete_asset(result_key: str, index: int, asset: dict):
-    asset_key = _live_asset_key(result_key, index, asset)
+    asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
     st.session_state.live_visual_deleted.add(asset_key)
     for slide, assignment in list(st.session_state.live_visual_assignments.items()):
         if assignment.get("asset_key") == asset_key:
@@ -2157,7 +2143,7 @@ def _live_attach_asset(result_key: str, index: int, asset: dict, slide: int):
         st.warning("This visual has no usable image payload.")
         return
 
-    asset_key = _live_asset_key(result_key, index, asset)
+    asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
     cropped = st.session_state.live_visual_crops.get(asset_key)
     selected_bytes = bytes(cropped) if cropped else bytes(raw)
     st.session_state.live_visual_assignments[slide] = {
@@ -2183,7 +2169,7 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
     visible_assets = [
         (index, asset)
         for index, asset in enumerate(assets)
-        if _live_asset_key(result_key, index, asset)
+        if _visual_asset_key(f"live-{result_key}", index, asset)
         not in st.session_state.live_visual_deleted
     ]
 
@@ -2195,7 +2181,7 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
         cols = st.columns(3, gap="medium")
         for col, (index, asset) in zip(cols, visible_assets[start:start + 3]):
             with col:
-                asset_key = _live_asset_key(result_key, index, asset)
+                asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
                 source = str(
                     asset.get("publisher")
                     or asset.get("source")
@@ -2788,31 +2774,19 @@ def _render_live_upload():
         )
     st.session_state.live_upload_titles = edited_titles
 
-    choice = st.selectbox(
+    choice = st.pills(
         "Title to publish",
         list(range(len(edited_titles))),
-        index=min(
+        default=min(
             int(st.session_state.live_upload_title_choice),
             len(edited_titles) - 1,
         ),
         format_func=lambda index: edited_titles[index] or f"Title option {index + 1}",
         key=f"live-upload-choice-{story_id}",
     )
-    final_title_key = f"live-upload-final-title-{story_id}"
-    if (
-        choice != st.session_state.live_upload_title_choice
-        or not str(st.session_state.get(final_title_key) or "").strip()
-    ):
-        st.session_state.live_upload_title_choice = choice
-        st.session_state[final_title_key] = edited_titles[choice]
-
-    st.text_input(
-        "Final title",
-        key=final_title_key,
-        max_chars=100,
-        help="Edit the selected title here. The exact value in this field becomes the YouTube title when you approve.",
-    )
-    st.caption("The Final title field is the value that will be published after Manual QC approval.")
+    if choice is None:
+        choice = 0
+    st.session_state.live_upload_title_choice = choice
 
     st.text_area(
         "Description",
@@ -2849,7 +2823,7 @@ def _render_live_upload():
                 f"live-upload-comment-{story_id}"
             ]
             st.session_state.live_upload_qc = {
-                "title": st.session_state[final_title_key].strip(),
+                "title": edited_titles[choice].strip(),
                 "description": st.session_state.live_upload_description,
                 "hashtags": st.session_state.live_upload_hashtags,
                 "comment": st.session_state.live_upload_comment,
