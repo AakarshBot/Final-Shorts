@@ -1034,7 +1034,7 @@ def build_top5_card_preview(
     source_label: str | None = None,
 ) -> bytes:
     "Render one static Top-5 slide with the full manually-cropped 9:16 image and an adaptive local readability treatment."
-    frame = _draw_top5_editorial_card(_top5_full_frame_image(source_image), {
+    frame = _draw_top5_editorial_card(source_image, {
         "headline": headline,
         "body": body if story_number else "",
         "story_number": story_number,
@@ -1274,6 +1274,40 @@ def _fit_subtitle_layout(
     return font, lines
 
 
+@lru_cache(maxsize=512)
+def _subtitle_render_geometry_cached(
+    word_texts: tuple[str, ...],
+    language: str,
+):
+    words = [{"text": text} for text in word_texts]
+    font, line_lengths = _fit_subtitle_layout_cached(word_texts, language)
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    measurements = tuple(
+        probe.textbbox(
+            (0, 0),
+            str(word.get("text") or ""),
+            font=font,
+            stroke_width=SUBTITLE_STROKE_WIDTH,
+        )
+        for word in words
+    )
+    line_heights = []
+    offset = 0
+    for length in line_lengths:
+        indices = range(offset, offset + length)
+        line_heights.append(
+            max(
+                measurements[index][3] - measurements[index][1]
+                for index in indices
+            )
+        )
+        offset += length
+    total_height = sum(line_heights) + SUBTITLE_LINE_GAP * max(
+        0, len(line_heights) - 1
+    )
+    return font, line_lengths, measurements, tuple(line_heights), total_height
+
+
 def _draw_subtitles(
     base: Image.Image,
     subtitle_data: dict,
@@ -1287,30 +1321,16 @@ def _draw_subtitles(
     words = cue["words"]
     language = subtitle_data.get("language") or "english"
     draw = ImageDraw.Draw(base)
-    font, lines = _fit_subtitle_layout(words, language)
+    font, line_lengths, measurements, line_heights, total_height = _subtitle_render_geometry_cached(
+        tuple(str(word.get("text") or "") for word in words),
+        language,
+    )
+    lines = []
+    offset = 0
+    for length in line_lengths:
+        lines.append(words[offset:offset + length])
+        offset += length
 
-    measurements = {
-        index: draw.textbbox(
-            (0, 0),
-            str(word["text"]),
-            font=font,
-            stroke_width=SUBTITLE_STROKE_WIDTH,
-        )
-        for index, word in enumerate(words)
-    }
-
-    line_heights = []
-    line_start = 0
-    for line in lines:
-        line_end = line_start + len(line)
-        line_heights.append(
-            max(
-                measurements[index][3] - measurements[index][1]
-                for index in range(line_start, line_end)
-            )
-        )
-        line_start = line_end
-    total_height = sum(line_heights) + SUBTITLE_LINE_GAP * max(0, len(lines) - 1)
     y = (int(y_position) if y_position is not None else SUBTITLE_Y) - total_height // 2
 
     word_index = 0
@@ -1364,10 +1384,15 @@ def render_frame(
     elif validate_handoff and not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
 
-    frame = base_image.convert("RGBA").resize(
-        (WIDTH, HEIGHT),
-        Image.Resampling.LANCZOS,
-    )
+    if base_image.size == (WIDTH, HEIGHT) and base_image.mode == "RGBA":
+        frame = base_image.copy()
+    else:
+        frame = base_image.convert("RGBA")
+        if frame.size != (WIDTH, HEIGHT):
+            frame = frame.resize(
+                (WIDTH, HEIGHT),
+                Image.Resampling.LANCZOS,
+            )
 
     if top5_card is not None:
         _draw_top5_editorial_card(frame, top5_card)
@@ -1612,8 +1637,22 @@ def render_production_video(
                 quote_card.get("attribution") or ""
             ).strip():
                 raise ValueError(f"Visual {index} has incomplete Quote Card data.")
+        image = _fit_visual_to_frame(visual.get("bytes")).convert("RGBA")
+        static_frame = None
+        if isinstance(top5_card, dict):
+            static_frame = _draw_top5_editorial_card(image, top5_card)
+            _paste_logo(static_frame)
+            _paste_source(static_frame, source_label)
+            static_frame = static_frame.convert("RGB")
+        elif isinstance(quote_card, dict):
+            static_frame = _draw_quote_card(image, quote_card)
+            _paste_logo(static_frame)
+            _paste_source(static_frame, source_label)
+            static_frame = static_frame.convert("RGB")
+
         prepared_visuals.append({
-            "image": _fit_visual_to_frame(visual.get("bytes")),
+            "image": image,
+            "static_frame": static_frame,
             "is_stats_card": result_key == "stats-card",
             "is_top5_card": isinstance(top5_card, dict),
             "top5_card": top5_card,
@@ -1654,31 +1693,8 @@ def render_production_video(
             if visual["is_stats_card"]:
                 image_height = visual["image_height"] or 860
                 subtitle_y = max(64, image_height - 96)
-            if visual.get("is_top5_card"):
-                yield render_frame(
-                    visual["image"],
-                    t,
-                    subtitle_data,
-                    headline_text or HEADLINE_TEXT,
-                    headline_enabled,
-                    source_label,
-                    subtitle_y,
-                    top5_card=visual["top5_card"],
-                    validate_handoff=False,
-                )
-            elif visual.get("is_quote_card"):
-                yield render_frame(
-                    visual["image"],
-                    t,
-                    subtitle_data,
-                    headline_text or HEADLINE_TEXT,
-                    headline_enabled,
-                    source_label,
-                    None,
-                    None,
-                    False,
-                    visual["quote_card"],
-                )
+            if visual.get("static_frame") is not None:
+                yield visual["static_frame"]
             else:
                 yield render_frame(
                     visual["image"],
