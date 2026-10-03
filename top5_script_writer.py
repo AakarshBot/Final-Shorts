@@ -35,7 +35,6 @@ SPEECH_WORDS_PER_MINUTE = 150.0
 MAX_TOP5_TOTAL_SPEECH_SECONDS = 30.0
 MIN_HASHTAGS = 3
 MAX_HASHTAGS = 5
-BODY_SENTENCE_COUNT = 2
 
 AI_EDITORIAL_PATTERNS = (
     r"\bchanging the conversation\b",
@@ -90,7 +89,9 @@ SCHEMA = {
     "properties": {
         "slides": {
             "type": "array",
-                        "items": {
+            "minItems": 6,
+            "maxItems": 6,
+            "items": {
                 "type": "object",
                 "properties": {
                     "slide_number": {"type": "integer", "minimum": 1, "maximum": 6},
@@ -137,9 +138,10 @@ EDITORIAL STANDARD
 - Use only facts explicitly supported by the supplied evidence.
 - Research evidence is provided for each selected story. Stay inside that story's evidence.
 - A headline must tell the important development, not simply rephrase the source headline.
-- The body is visual-only supporting copy. Write exactly two concise factual sentences.
-  Together they should add useful facts, context, timing, consequence or supporting detail
-  from the same story. Never make them a restatement of the headline.
+- The body is visual-only supporting copy: it appears on the editorial card but is not narrated.
+  Keep it concise enough to fit comfortably in the 9:16 card. Use a reasonable amount of
+  supporting factual detail without forcing a fixed sentence or word count. Never turn it
+  into a mini article or restate the headline.
 - Never invent quotes, numbers, motives, reactions, implications, predictions or outcomes.
 - Do not imply public reaction, global importance or a wider trend unless the evidence
   explicitly establishes it.
@@ -173,13 +175,12 @@ SLIDE STRUCTURE
 - Set story_index exactly as follows: Slide 1 = 0, Slide 2 = 1, Slide 3 = 2, Slide 4 = 3, Slide 5 = 4, Slide 6 = 5.
 - For Slides 2–6, the headline IS the spoken narration for that slide.
 - Each story headline must tell the complete important development in ONE clean sentence.
-- Each story headline must remain under 15 seconds of estimated natural speech.
 - The six spoken headlines together must remain at or below 30 seconds of estimated natural speech.
 - Do not merely repeat the source title. Add the key development, context or consequence
   that makes the story understandable on its own.
-- The body is visual-only supporting copy. Write exactly two concise factual sentences.
-  Together they should add useful detail or context from the same story that is not already
-  fully stated in the headline. Do not pad them with filler.
+- The body is visual-only supporting copy. Keep it concise enough to fit comfortably in the
+  9:16 editorial card, using a reasonable amount of factual supporting detail without a fixed
+  sentence or word count. Do not pad it with filler.
 - For every slide, provide a concrete visual entity, visual intent and a specific search prompt.
   Slide 1 should describe a factual cricket-package visual, not an invented mood or theme.
 - `seo_description`: concise and story-specific, covering the Top-5 package without inventing a common theme.
@@ -401,13 +402,6 @@ def _references_any_selected_story(headline: str, stories: list[dict]) -> bool:
     return bool(headline_words & selected_keywords)
 
 
-def _sentence_count(text: str) -> int:
-    clean = _clean(text)
-    if not clean:
-        return 0
-    return len(re.findall(r"[^.!?]+[.!?](?=\s|$)", clean))
-
-
 def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no Top-5 script object."
@@ -452,14 +446,9 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
                 return False, "Slide 1 cannot duplicate a story headline."
             body = _clean(slide.get("body"))
         else:
-            story = stories[expected_number - 2]
-            if estimate_speech_seconds(headline) >= 15.0:
-                return False, f"Slide {expected_number} is not below 15 seconds at the speech-rate estimate."
             body = _clean(slide.get("body"))
             if not body:
                 return False, f"Slide {expected_number} is missing body copy."
-            if _sentence_count(body) != BODY_SENTENCE_COUNT:
-                return False, f"Slide {expected_number} body must contain exactly two sentences."
 
     if total_estimated_speech > MAX_TOP5_TOTAL_SPEECH_SECONDS:
         return False, (
