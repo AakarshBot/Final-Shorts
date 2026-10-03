@@ -52,9 +52,10 @@ def test_top5_preview_keeps_a_9x16_crop_instead_of_recropping_it():
     assert corner != (249, 250, 252)
 
 
-def test_top5_preview_uses_localized_readability_treatment_not_a_full_width_panel():
+def test_top5_preview_uses_text_only_readability_treatment_not_a_full_width_panel():
+    background = (236, 236, 236)
     preview = renderer.build_top5_card_preview(
-        _solid_png((1080, 1920), (236, 236, 236)),
+        _solid_png((1080, 1920), background),
         "India confirm the latest squad change",
         "The board confirmed the move. The decision changes the lineup.",
         story_number=1,
@@ -62,10 +63,18 @@ def test_top5_preview_uses_localized_readability_treatment_not_a_full_width_pane
     image = Image.open(BytesIO(preview)).convert("RGB")
 
     assert image.size == (1080, 1920)
-    edge_pixel = image.getpixel((20, 1180))
-    center_pixel = image.getpixel((430, 1300))
-    assert edge_pixel != (249, 250, 252)
-    assert center_pixel != edge_pixel
+    assert image.getpixel((20, 1180)) == background
+    assert image.getpixel((1050, 1180)) == background
+    assert image.getpixel((540, 600)) == background
+
+    text_region = image.crop((72, 500, 1008, 1640))
+    changed = sum(
+        1
+        for pixel in text_region.getdata()
+        if pixel != background
+    )
+    assert changed > 1_000
+    assert changed < text_region.width * text_region.height // 3
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
@@ -125,12 +134,15 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
 
 
 def test_top5_headline_layout_is_dynamic():
-    short_font, short_lines = renderer._fit_top5_headline(
+    short_font, short_display, short_lines = renderer._fit_top5_editorial_headline(
         "India make a major change",
     )
-    long_font, long_lines = renderer._fit_top5_headline(
+    long_font, long_display, long_lines = renderer._fit_top5_editorial_headline(
         "India reshuffles squad after a late selection change",
     )
+
+    assert short_display == "INDIA MAKE A MAJOR CHANGE"
+    assert long_display == "INDIA RESHUFFLES SQUAD AFTER A LATE SELECTION CHANGE"
 
     assert short_font.size >= long_font.size
     assert len(short_lines) <= 2
@@ -138,12 +150,11 @@ def test_top5_headline_layout_is_dynamic():
 
 
 def test_top5_body_layout_is_dynamic():
-    short_body_font, short_paragraphs = renderer._fit_top5_body(
+    short_body_font, short_paragraphs = renderer._fit_top5_editorial_body(
         "The board confirmed the move. The decision changes the lineup.",
         "english",
-        max_height=400,
     )
-    long_body_font, long_paragraphs = renderer._fit_top5_body(
+    long_body_font, long_paragraphs = renderer._fit_top5_editorial_body(
         "The board confirmed the move after reviewing the latest result and the selection options. "
         "The decision changes the lineup ahead of the next series and follows the latest update from officials.",
         "english",
@@ -176,7 +187,7 @@ def test_top5_opener_has_no_body_copy():
     image = Image.open(BytesIO(preview))
 
     assert image.size == (1080, 1920)
-    _, lines = renderer._fit_top5_headline(
+    _, _, lines = renderer._fit_top5_editorial_headline(
         "Five cricket stories shaping today",
     )
     assert len(lines) <= 2
