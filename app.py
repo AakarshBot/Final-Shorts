@@ -2647,14 +2647,22 @@ def _render_live_script():
         width="stretch",
         key="live-approve-script",
     ):
-        from script_writer import apply_script_edits
         try:
-            approved = apply_script_edits(
-                script,
-                edited_voiceovers,
-                headline=edited_headline if st.session_state.live_headline_enabled else "",
-                validate=True,
-            )
+            if st.session_state.get("live_topics_profile") == "niche_sports":
+                from niche_sports_script_writer import apply_niche_script_edits
+                approved = apply_niche_script_edits(
+                    script,
+                    edited_voiceovers,
+                    headline=edited_headline if st.session_state.live_headline_enabled else "",
+                )
+            else:
+                from script_writer import apply_script_edits
+                approved = apply_script_edits(
+                    script,
+                    edited_voiceovers,
+                    headline=edited_headline if st.session_state.live_headline_enabled else "",
+                    validate=True,
+                )
             approved["headline_enabled"] = bool(st.session_state.live_headline_enabled)
         except ValueError as exc:
             st.session_state.live_script_error = str(exc)
@@ -3516,11 +3524,19 @@ def render_scriptwriter():
                 edited_voiceovers.append(st.text_area("Narration",value=scene.get("voiceover",""),height=105,key=f"script-slide-{story_key}-{index}",label_visibility="collapsed"))
             if st.button("Approve script",type="primary",width="stretch"):
                 try:
-                    approved=apply_script_edits(
-                        script,
-                        edited_voiceovers,
-                        headline=edited_headline if headline_enabled else "",
-                    )
+                    if st.session_state.get("topic_desk_profile") == "niche_sports":
+                        from niche_sports_script_writer import apply_niche_script_edits
+                        approved = apply_niche_script_edits(
+                            script,
+                            edited_voiceovers,
+                            headline=edited_headline if headline_enabled else "",
+                        )
+                    else:
+                        approved = apply_script_edits(
+                            script,
+                            edited_voiceovers,
+                            headline=edited_headline if headline_enabled else "",
+                        )
                     approved["headline_enabled"] = bool(headline_enabled)
                     st.session_state.approved_script=approved
                     st.session_state.visuals_approved = False
@@ -4997,7 +5013,6 @@ elif st.session_state.app_mode == "test":
                         key=f"test-top5-query-{active_slide}",
                     )
                     ai_prompt = ""
-                    ai_generated = False
                     if active_slide == 1:
                         st.markdown(
                             '<div class="mini-label" style="margin-top:.9rem;">AI IMAGE OPTION · SLIDE 1</div>',
@@ -5031,7 +5046,6 @@ elif st.session_state.app_mode == "test":
                                         st.session_state.test_top5_visual_previews.pop(active_slide, None)
                                         st.session_state.test_top5_visual_assignments.pop(active_slide, None)
                                         st.session_state.test_top5_visual_crops.pop(asset_key, None)
-                                        ai_generated = True
                                     except Exception as exc:
                                         st.session_state.test_top5_visual_results[active_slide] = {
                                             "query": ai_prompt,
