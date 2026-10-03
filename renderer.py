@@ -1055,7 +1055,7 @@ def _draw_subtitles(
 def render_frame(
     base_image: Image.Image,
     t: float,
-    subtitle_data: dict = PREVIEW_SUBTITLE_DATA,
+    subtitle_data: dict | None = None,
     headline_text: str = HEADLINE_TEXT,
     headline_enabled: bool = True,
     source_label: str | None = None,
@@ -1064,6 +1064,11 @@ def render_frame(
     validate_handoff: bool = True,
     quote_card: dict | None = None,
 ) -> Image.Image:
+    subtitle_data = subtitle_data or {
+        "schema": "final-shorts.subtitles.v1",
+        "language": "english",
+        "cues": [],
+    }
     if validate_handoff and not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
 
