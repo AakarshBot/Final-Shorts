@@ -674,10 +674,16 @@ if "test_top5_standalone_preview" not in st.session_state:
     st.session_state.test_top5_standalone_preview = None
 if "test_pipeline_notice" not in st.session_state:
     st.session_state.test_pipeline_notice = None
-if "renderer_previews" not in st.session_state:
-    st.session_state.renderer_previews = None
 if "visual_crops" not in st.session_state:
     st.session_state.visual_crops = {}
+if "visual_deleted" not in st.session_state:
+    st.session_state.visual_deleted = set()
+if "visual_assignments" not in st.session_state:
+    st.session_state.visual_assignments = {}
+if "approved_visuals" not in st.session_state:
+    st.session_state.approved_visuals = None
+if "visuals_approved" not in st.session_state:
+    st.session_state.visuals_approved = False
 if "topics" not in st.session_state:
     st.session_state.topics = []
 if "topic_keyword" not in st.session_state:
@@ -860,15 +866,6 @@ def _asset_to_image(value):
     return None
 
 
-def _preview_image(asset):
-    from PIL import Image
-    image = _asset_to_image(asset.get("bytes"))
-    if image is None:
-        return None
-    image.thumbnail((960, 960), Image.Resampling.LANCZOS)
-    return image
-
-
 def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
     aspect = 9 / 16
     width = min(image.width, max(1, int(image.height * aspect)))
@@ -961,90 +958,6 @@ def _crop_visual_dialog(
                 if assignment.get("asset_key") == asset_key:
                     assignment["bytes"] = crop_bytes
             st.rerun()
-
-
-def _render_visual_asset_grid(assets: list[dict], result_key: str):
-    approved_script = st.session_state.get("approved_script")
-    if isinstance(approved_script, dict) and st.session_state.get("topics") and st.session_state.get("selected_topic") is not None:
-        topic = st.session_state.topics[st.session_state.selected_topic]
-        if str(approved_script.get("source_title") or "").strip() == str(topic.title).strip():
-            scenes = [scene for scene in (approved_script.get("script") or []) if isinstance(scene, dict)]
-            if scenes:
-                st.markdown(
-                    '<div class="section-head"><div><div class="eyebrow">SCRIPT CONTEXT</div>'
-                    '<div class="section-title">Use the approved script to judge each visual</div></div>'
-                    '<div class="section-count">scene by scene</div></div>',
-                    unsafe_allow_html=True,
-                )
-                for number, scene in enumerate(scenes, 1):
-                    voiceover = str(scene.get("voiceover") or "").strip()
-                    intent = str(scene.get("visual_intent") or "").strip()
-                    if not voiceover and not intent:
-                        continue
-                    intent_html = (
-                        f'<div style="font-size:.66rem;color:var(--muted);line-height:1.35;margin-top:.22rem;">'
-                        f'{intent}</div>'
-                        if intent else ""
-                    )
-                    st.markdown(
-                        f'<div style="padding:.62rem .78rem;margin:0 0 .5rem;border:1px solid var(--line);'
-                        f'border-radius:10px;background:var(--surface);">'
-                        f'<div class="mini-label">SCENE {number}</div>'
-                        f'<div style="font-size:.78rem;font-weight:760;line-height:1.35;color:var(--ink);margin-top:.18rem;">'
-                        f'{voiceover}</div>{intent_html}</div>',
-                        unsafe_allow_html=True,
-                    )
-    for start in range(0, len(assets), 3):
-        cols = st.columns(3, gap="medium")
-        for index, (col, asset) in enumerate(zip(cols, assets[start:start + 3]), start=start):
-            with col:
-                asset_key = _visual_asset_key(result_key, index, asset)
-                with st.container(key=f"visual-card-{result_key}-{index}"):
-                    preview = _preview_image(asset)
-                    if preview is not None:
-                        st.image(preview, width="stretch")
-                    source = str(
-                        asset.get("publisher")
-                        or asset.get("source")
-                        or asset.get("model")
-                        or "Web source"
-                    )
-                    detail = str(
-                        asset.get("article_title")
-                        or asset.get("dimensions")
-                        or (
-                            f'{asset.get("width")}×{asset.get("height")}px'
-                            if asset.get("width") and asset.get("height")
-                            else ""
-                        )
-                    )
-                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
-                    if detail:
-                        st.markdown(f'<div class="visual-detail">{detail}</div>', unsafe_allow_html=True)
-
-                    cropped = st.session_state.visual_crops.get(asset_key)
-                    if cropped:
-                        st.markdown('<div class="visual-crop-label">CROP PREVIEW</div>', unsafe_allow_html=True)
-                        crop_preview = _asset_to_image(cropped)
-                        if crop_preview is not None:
-                            st.image(crop_preview, width="stretch")
-
-                    action_cols = st.columns(2, gap="small")
-                    with action_cols[0]:
-                        if st.button("Crop", key=f"crop-button-{asset_key}", width="stretch"):
-                            raw = asset.get("bytes")
-                            if isinstance(raw, (bytes, bytearray)):
-                                _crop_visual_dialog(asset_key, bytes(raw), source)
-                            else:
-                                st.warning("This visual does not have a crop-ready image payload.")
-                    with action_cols[1]:
-                        source_url = str(asset.get("source_page_url") or "").strip()
-                        if source_url:
-                            st.link_button("Source ↗", source_url, width="stretch")
-                        else:
-                            st.markdown('<div class="visual-detail">No source link</div>', unsafe_allow_html=True)
-
-
 
 
 def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
@@ -1330,34 +1243,36 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
         else:
             st.success("Stats Card approved.")
 
-        if not live or not st.session_state.get(approved_key):
+        if not st.session_state.get(approved_key):
             return
-
         if slide_count <= 0:
             return
-        st.download_button(
-            "Save Stats Card PNG",
-            data=result["bytes"],
-            file_name="stats-card.png",
-            mime="image/png",
-            width="stretch",
-            key=f"{build_key}-download",
-        )
+
+        if live:
+            st.download_button(
+                "Save Stats Card PNG",
+                data=result["bytes"],
+                file_name="stats-card.png",
+                mime="image/png",
+                width="stretch",
+                key=f"{build_key}-download",
+            )
+
         slide = st.selectbox(
             "Use Stats Card for slide",
             list(range(1, slide_count + 1)),
-            key="live-stats-card-slide",
+            key=f"{build_key}-slide",
         )
         if st.button(
             "Use Stats Card for this slide",
             type="primary",
             width="stretch",
-            key="live-stats-card-attach",
+            key=f"{build_key}-attach",
         ):
             card_key = hashlib.sha1(
                 (str(result.get("path") or "") + str(result.get("query") or "")).encode("utf-8")
             ).hexdigest()[:12]
-            st.session_state.live_visual_assignments[slide] = {
+            assignment = {
                 "asset_key": f"stats-card-{card_key}",
                 "result_key": "stats-card",
                 "card_layout": dict(result.get("layout") or {}),
@@ -1365,7 +1280,13 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
                 "label": str(result.get("label") or "Stats Card"),
                 "bytes": bytes(result["bytes"]),
             }
-            st.session_state.live_visuals_approved = False
+            assignments_key = "live_visual_assignments" if live else "visual_assignments"
+            st.session_state[assignments_key][slide] = assignment
+            if live:
+                st.session_state.live_visuals_approved = False
+            else:
+                st.session_state.visuals_approved = False
+                st.session_state.approved_visuals = None
             st.rerun()
         return
 
@@ -1428,6 +1349,8 @@ def _render_quote_card(live: bool = False, slide_count: int = 0):
     slide_key = f"{prefix}quote_card_slide"
 
     script = st.session_state.get(script_key)
+    if not isinstance(script, dict) and not live:
+        script = st.session_state.get("script_data") or {}
     if not isinstance(script, dict):
         st.info("Approve the Scriptwriter result first.")
         return
@@ -1600,28 +1523,33 @@ def _render_quote_card(live: bool = False, slide_count: int = 0):
         "The selected quote is visual-only on this slide; normal subtitles are suppressed for the Quote Card."
     )
 
-    if live:
-        if st.button(
-            f"Use Quote Card for slide {selected_slide}",
-            type="primary",
-            width="stretch",
-            key="live-quote-card-attach",
-        ):
-            st.session_state.live_visual_assignments[selected_slide] = {
-                "asset_key": f"quote-card-{selected.get('asset_key')}",
-                "result_key": "quote-card",
-                "source": f"Quote Card · {attribution}",
-                "label": quote,
-                "bytes": bytes(source_bytes),
-                "preview_bytes": bytes(preview_bytes),
-                "quote_card": {
-                    "quote": quote,
-                    "attribution": attribution,
-                    "language": str(script.get("language_used") or "english"),
-                },
-            }
+    if st.button(
+        f"Use Quote Card for slide {selected_slide}",
+        type="primary",
+        width="stretch",
+        key=f"{prefix}quote-card-attach",
+    ):
+        assignment = {
+            "asset_key": f"quote-card-{selected.get('asset_key')}",
+            "result_key": "quote-card",
+            "source": f"Quote Card · {attribution}",
+            "label": quote,
+            "bytes": bytes(source_bytes),
+            "preview_bytes": bytes(preview_bytes),
+            "quote_card": {
+                "quote": quote,
+                "attribution": attribution,
+                "language": str(script.get("language_used") or "english"),
+            },
+        }
+        assignments_key = "live_visual_assignments" if live else "visual_assignments"
+        st.session_state[assignments_key][selected_slide] = assignment
+        if live:
             st.session_state.live_visuals_approved = False
-            st.rerun()
+        else:
+            st.session_state.visuals_approved = False
+            st.session_state.approved_visuals = None
+        st.rerun()
 
 def _top5_fit_preview(value, width=300, height=533):
     from PIL import Image
@@ -2118,7 +2046,7 @@ def _live_generate_audio_and_subtitles():
     st.session_state.live_subtitle_data = subtitles
 
 
-def _live_fit_preview(value, width=360, height=640):
+def _fit_visual_preview(value, width=360, height=640):
     from PIL import Image
     image = _asset_to_image(value)
     if image is None:
@@ -2138,25 +2066,49 @@ def _live_fit_preview(value, width=360, height=640):
     return image.resize((width, height), Image.Resampling.LANCZOS)
 
 
-def _live_delete_asset(result_key: str, index: int, asset: dict):
-    asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
-    st.session_state.live_visual_deleted.add(asset_key)
-    for slide, assignment in list(st.session_state.live_visual_assignments.items()):
+def _delete_visual_asset(result_key: str, index: int, asset: dict, live: bool = False):
+    asset_key = _visual_asset_key(
+        f"live-{result_key}" if live else result_key,
+        index,
+        asset,
+    )
+    deleted_key = "live_visual_deleted" if live else "visual_deleted"
+    assignments_key = "live_visual_assignments" if live else "visual_assignments"
+    crops_key = "live_visual_crops" if live else "visual_crops"
+    st.session_state[deleted_key].add(asset_key)
+    for slide, assignment in list(st.session_state[assignments_key].items()):
         if assignment.get("asset_key") == asset_key:
-            del st.session_state.live_visual_assignments[slide]
-    st.session_state.live_visual_crops.pop(asset_key, None)
+            del st.session_state[assignments_key][slide]
+    st.session_state[crops_key].pop(asset_key, None)
+    if live:
+        st.session_state.live_visuals_approved = False
+    else:
+        st.session_state.visuals_approved = False
+        st.session_state.approved_visuals = None
 
 
-def _live_attach_asset(result_key: str, index: int, asset: dict, slide: int):
+def _attach_visual_asset(
+    result_key: str,
+    index: int,
+    asset: dict,
+    slide: int,
+    live: bool = False,
+):
     raw = asset.get("bytes")
     if not isinstance(raw, (bytes, bytearray)):
         st.warning("This visual has no usable image payload.")
         return
 
-    asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
-    cropped = st.session_state.live_visual_crops.get(asset_key)
+    asset_key = _visual_asset_key(
+        f"live-{result_key}" if live else result_key,
+        index,
+        asset,
+    )
+    crops_key = "live_visual_crops" if live else "visual_crops"
+    assignments_key = "live_visual_assignments" if live else "visual_assignments"
+    cropped = st.session_state[crops_key].get(asset_key)
     selected_bytes = bytes(cropped) if cropped else bytes(raw)
-    st.session_state.live_visual_assignments[slide] = {
+    st.session_state[assignments_key][slide] = {
         "asset_key": asset_key,
         "result_key": result_key,
         "source": str(
@@ -2172,17 +2124,31 @@ def _live_attach_asset(result_key: str, index: int, asset: dict, slide: int):
         ),
         "bytes": selected_bytes,
     }
-    st.session_state.live_visuals_approved = False
+    if live:
+        st.session_state.live_visuals_approved = False
+    else:
+        st.session_state.visuals_approved = False
+        st.session_state.approved_visuals = None
 
 
-def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: int):
+def _render_visual_asset_pool(
+    assets: list[dict],
+    result_key: str,
+    slide_count: int,
+    live: bool = False,
+):
+    prefix = "live-" if live else "test-"
+    asset_result_key = f"live-{result_key}" if live else result_key
+    crops_key = "live_visual_crops" if live else "visual_crops"
+    deleted = st.session_state.get(
+        "live_visual_deleted" if live else "visual_deleted"
+    ) or set()
+
     visible_assets = [
         (index, asset)
         for index, asset in enumerate(assets)
-        if _visual_asset_key(f"live-{result_key}", index, asset)
-        not in st.session_state.live_visual_deleted
+        if _visual_asset_key(asset_result_key, index, asset) not in deleted
     ]
-
     if not visible_assets:
         st.caption("No images are currently available from this option.")
         return
@@ -2191,7 +2157,7 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
         cols = st.columns(3, gap="medium")
         for col, (index, asset) in zip(cols, visible_assets[start:start + 3]):
             with col:
-                asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
+                asset_key = _visual_asset_key(asset_result_key, index, asset)
                 source = str(
                     asset.get("publisher")
                     or asset.get("source")
@@ -2203,9 +2169,9 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
                     or asset.get("model")
                     or "Selected visual"
                 )
-                with st.container(key=f"live-visual-card-{result_key}-{index}"):
-                    preview_bytes = st.session_state.live_visual_crops.get(asset_key)
-                    preview = _live_fit_preview(
+                with st.container(key=f"{prefix}visual-card-{result_key}-{index}"):
+                    preview_bytes = st.session_state[crops_key].get(asset_key)
+                    preview = _fit_visual_preview(
                         preview_bytes if preview_bytes else asset.get("bytes")
                     )
                     if preview is not None:
@@ -2232,19 +2198,20 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
                                 "Slide",
                                 list(range(1, slide_count + 1)),
                                 index=0,
-                                key=f"live-attach-slide-{asset_key}",
+                                key=f"{prefix}attach-slide-{asset_key}",
                             )
                             if st.button(
                                 "Attach",
                                 type="primary",
                                 width="stretch",
-                                key=f"live-attach-{asset_key}",
+                                key=f"{prefix}attach-{asset_key}",
                             ):
-                                _live_attach_asset(
+                                _attach_visual_asset(
                                     result_key,
                                     index,
                                     asset,
                                     selected_slide,
+                                    live=live,
                                 )
                                 st.rerun()
                     with crop_col:
@@ -2252,14 +2219,14 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
                         if st.button(
                             "Crop",
                             width="stretch",
-                            key=f"live-crop-{asset_key}",
+                            key=f"{prefix}crop-{asset_key}",
                         ):
                             if isinstance(raw, (bytes, bytearray)):
                                 _crop_visual_dialog(
                                     asset_key,
                                     bytes(raw),
                                     source,
-                                    crop_store="live_visual_crops",
+                                    crop_store=crops_key,
                                 )
                             else:
                                 st.warning("This visual does not have a crop-ready payload.")
@@ -2267,51 +2234,83 @@ def _render_live_asset_pool(assets: list[dict], result_key: str, slide_count: in
                         if st.button(
                             "Delete",
                             width="stretch",
-                            key=f"live-delete-{asset_key}",
+                            key=f"{prefix}delete-{asset_key}",
                         ):
-                            _live_delete_asset(result_key, index, asset)
+                            _delete_visual_asset(
+                                result_key,
+                                index,
+                                asset,
+                                live=live,
+                            )
                             st.rerun()
 
 
-def _render_live_visual_board(slide_count: int):
+def _render_visual_board(slide_count: int, live: bool = False):
+    prefix = "live_" if live else ""
+    assignments = st.session_state.get(
+        "live_visual_assignments" if live else "visual_assignments"
+    ) or {}
+    script = st.session_state.get(
+        f"{prefix}approved_script"
+        if live
+        else "approved_script"
+    )
+    if not live and not isinstance(script, dict):
+        script = st.session_state.get("script_data")
+    scenes = script.get("script") if isinstance(script, dict) else []
+    scenes = scenes if isinstance(scenes, list) else []
+
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">VISUAL BOARD</div>'
         '<div class="section-title">Attach one visual to every slide</div></div>'
-        f'<div class="section-count">{slide_count} slides required</div>',
+        f'<div class="section-count">{slide_count} slides required</div></div>',
         unsafe_allow_html=True,
     )
-
-    script = st.session_state.get("live_approved_script") or {}
-    scenes = script.get("script") if isinstance(script, dict) else []
-    scenes = scenes if isinstance(scenes, list) else []
 
     cols = st.columns(slide_count, gap="small")
     for slide in range(1, slide_count + 1):
         with cols[slide - 1]:
-            assignment = st.session_state.live_visual_assignments.get(slide)
+            assignment = assignments.get(slide)
             scene = scenes[slide - 1] if slide <= len(scenes) and isinstance(scenes[slide - 1], dict) else {}
             voiceover = str(scene.get("voiceover") or "").strip()
-            with st.container(key=f"live-slide-{slide}"):
-                st.markdown(
-                    f'<div class="eyebrow">SLIDE {slide}</div>',
-                    unsafe_allow_html=True,
-                )
-                if voiceover:
+            body = str(scene.get("body") or "").strip() if not live else ""
+            visual_headline = str(scene.get("headline") or "").strip() if not live else ""
+            if voiceover or body or visual_headline:
+                with st.container(key=f"{prefix}visual-slide-{slide}"):
                     st.markdown(
-                        '<div class="mini-label" style="margin-top:.45rem;">SCRIPT</div>',
+                        f'<div class="eyebrow">SLIDE {slide}</div>',
                         unsafe_allow_html=True,
                     )
-                    st.text(voiceover)
-                preview_source = (
-                    assignment.get("preview_bytes")
-                    if assignment and assignment.get("preview_bytes")
-                    else assignment.get("bytes") if assignment else None
-                )
-                preview = (
-                    _live_fit_preview(preview_source, 300, 533)
-                    if preview_source is not None
-                    else None
-                )
+                    if visual_headline:
+                        st.markdown(
+                            '<div class="mini-label" style="margin-top:.45rem;">HEADLINE</div>',
+                            unsafe_allow_html=True,
+                        )
+                        st.markdown(f"**{visual_headline}**")
+                    if voiceover:
+                        st.markdown(
+                            '<div class="mini-label" style="margin-top:.45rem;">SCRIPT</div>',
+                            unsafe_allow_html=True,
+                        )
+                        st.text(voiceover)
+                    if body:
+                        st.markdown(
+                            '<div class="mini-label" style="margin-top:.45rem;">VISUAL BODY</div>',
+                            unsafe_allow_html=True,
+                        )
+                        st.text(body)
+
+            preview_source = (
+                assignment.get("preview_bytes")
+                if assignment and assignment.get("preview_bytes")
+                else assignment.get("bytes") if assignment else None
+            )
+            preview = (
+                _fit_visual_preview(preview_source, 300, 533)
+                if preview_source is not None
+                else None
+            )
+            with st.container(key=f"{prefix}visual-slide-preview-{slide}"):
                 if preview is not None:
                     st.image(preview, width="stretch")
                     st.caption(assignment.get("source") or "Attached visual")
@@ -2334,9 +2333,9 @@ def _render_live_visuals(slide_count: int):
         default=st.session_state.get("live_visual_option", VISUAL_OPTIONS[0]),
         key="live_visual_option",
         label_visibility="collapsed",
-    ) or visual_options[0]
+    ) or VISUAL_OPTIONS[0]
 
-    _render_live_visual_board(slide_count)
+    _render_visual_board(slide_count, live=True)
 
     assigned = len(st.session_state.live_visual_assignments)
     st.caption(
@@ -2375,10 +2374,11 @@ def _render_live_visuals(slide_count: int):
                 f'{len(result.get("assets") or [])} images · '
                 f'{int(result.get("pages_scraped") or 0)} pages'
             )
-            _render_live_asset_pool(
+            _render_visual_asset_pool(
                 list(result.get("assets") or []),
                 "auto",
                 slide_count,
+                live=True,
             )
 
     if visual_option == "Option 2 · Manual Scraper":
@@ -2415,10 +2415,11 @@ def _render_live_visuals(slide_count: int):
                 f'{len(result.get("assets") or [])} images · '
                 f'{int(result.get("pages_scraped") or 0)} pages'
             )
-            _render_live_asset_pool(
+            _render_visual_asset_pool(
                 list(result.get("assets") or []),
                 "manual",
                 slide_count,
+                live=True,
             )
 
     if visual_option == "Option 3 · Real Image Search":
@@ -2452,10 +2453,11 @@ def _render_live_visuals(slide_count: int):
             st.error(result["error"])
         elif result:
             st.caption(f'{len(result.get("assets") or [])} images')
-            _render_live_asset_pool(
+            _render_visual_asset_pool(
                 list(result.get("assets") or []),
                 "real",
                 slide_count,
+                live=True,
             )
 
     if visual_option == "Option 4 · AI Generation":
@@ -2489,10 +2491,11 @@ def _render_live_visuals(slide_count: int):
             st.error(result["error"])
         elif result:
             st.caption(f'{len(result.get("assets") or [])} images')
-            _render_live_asset_pool(
+            _render_visual_asset_pool(
                 list(result.get("assets") or []),
                 "ai",
                 slide_count,
+                live=True,
             )
 
     if visual_option == "Option 5 · Ranked Scene Search":
@@ -2541,10 +2544,11 @@ def _render_live_visuals(slide_count: int):
                         f'{len(result.get("assets") or [])} unique images · '
                         f'{int(result.get("pages_scraped") or 0)} pages'
                     )
-                    _render_live_asset_pool(
+                    _render_visual_asset_pool(
                         list(result.get("assets") or []),
                         "ranked",
                         slide_count,
+                        live=True,
                     )
 
     if visual_option == "Option 6 · Stats Card":
@@ -3397,6 +3401,10 @@ def render_topic_fetcher():
             st.session_state.approved_subtitles = None
             st.session_state.visual_result = None
             st.session_state.visual_loaded_story = None
+            st.session_state.visual_deleted = set()
+            st.session_state.visual_assignments = {}
+            st.session_state.approved_visuals = None
+            st.session_state.visuals_approved = False
 
     topics = st.session_state.topics
     if not topics:
@@ -3459,6 +3467,10 @@ def render_topic_fetcher():
         st.session_state.visual_result = None
         st.session_state.visual_loaded_story = None
         st.session_state.visual_crops = {}
+        st.session_state.visual_deleted = set()
+        st.session_state.visual_assignments = {}
+        st.session_state.approved_visuals = None
+        st.session_state.visuals_approved = False
         st.rerun()
 
     if st.session_state.selected_topic is not None:
@@ -3540,6 +3552,13 @@ def render_scriptwriter():
                 label_visibility="collapsed",
             )
             st.markdown('<div style="height:.7rem"></div>',unsafe_allow_html=True)
+            quote = str(script.get("quote") or "").strip()
+            quote_attribution = str(script.get("quote_attribution") or "").strip()
+            if quote:
+                st.markdown('<div class="mini-label">Quote</div>',unsafe_allow_html=True)
+                st.text(quote)
+                if quote_attribution:
+                    st.caption(f"— {quote_attribution}")
             edited_voiceovers=[]
             for index,scene in enumerate(script.get("script",[]),1):
                 st.markdown(f'<div class="scene-label">Scene {index}</div>',unsafe_allow_html=True)
@@ -3553,6 +3572,8 @@ def render_scriptwriter():
                     )
                     approved["headline_enabled"] = bool(st.session_state.headline_enabled)
                     st.session_state.approved_script=approved
+                    st.session_state.visuals_approved = False
+                    st.session_state.approved_visuals = None
                     st.session_state.test_stage = "03 · Audio"
                     st.session_state.test_pipeline_notice = {
                         "confirmed": "Script QC confirmed",
@@ -3560,7 +3581,8 @@ def render_scriptwriter():
                     }
                     st.session_state.audio_data=None
                     st.session_state.approved_audio=None
-                    st.session_state.renderer_previews=None
+                    st.session_state.subtitle_data=None
+                    st.session_state.approved_subtitles=None
                     st.session_state.upload_qc_approved=False
                     st.session_state.upload_result=None
                     st.session_state.rendered_video_path=None
@@ -3595,6 +3617,12 @@ def render_scriptwriter():
         if st.session_state.approved_script:
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
+def _test_visual_slide_count() -> int:
+    script = st.session_state.get("approved_script") or st.session_state.get("script_data")
+    count = len(script.get("script") or []) if isinstance(script, dict) else 4
+    return max(1, count)
+
+
 def render_visuals_crawler():
     from visual_fetcher import crawl_visuals
 
@@ -3676,18 +3704,20 @@ def render_visuals_crawler():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_grid(assets, "auto-crawler")
+    _render_visual_asset_pool(assets, "auto-crawler", _test_visual_slide_count())
 
 
 def _render_ranked_visual_search():
     from visual_fetcher import ranked_visual_search
 
     st.subheader("Ranked Scene Search")
-    st.caption("Runs the approved Scriptwriter visual searches together. The existing scrapers remain unchanged.")
+    st.caption("Runs the Scriptwriter scene searches. This visual option can use generated Test script data without waiting for Script approval.")
 
     approved_script = st.session_state.get("approved_script")
     if not isinstance(approved_script, dict):
-        st.info("Approve the Scriptwriter first so each scene has a specific visual search prompt.")
+        approved_script = st.session_state.get("script_data")
+    if not isinstance(approved_script, dict):
+        st.info("Generate the Scriptwriter first so each scene has a specific visual search prompt.")
         return
     if not st.session_state.topics or st.session_state.selected_topic is None:
         st.info("Select a story first.")
@@ -3747,7 +3777,7 @@ def _render_ranked_visual_search():
 
     if assets:
         st.markdown('<div class="section-head"><div><div class="eyebrow">RANKED MEDIA BOARD</div><div class="section-title">Combined visual candidates</div></div><div class="section-count">highest-scoring first</div></div>', unsafe_allow_html=True)
-        _render_visual_asset_grid(assets, "ranked-search")
+        _render_visual_asset_pool(assets, "ranked-search", _test_visual_slide_count())
     else:
         st.warning("The ranked search returned no usable images.")
 
@@ -3810,7 +3840,7 @@ def _render_manual_crawler():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_grid(assets, "manual-crawler")
+    _render_visual_asset_pool(assets, "manual-crawler", _test_visual_slide_count())
 
 
 def _render_manual_real_images():
@@ -3859,7 +3889,7 @@ def _render_manual_real_images():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Real images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_grid(assets, "real-search")
+    _render_visual_asset_pool(assets, "real-search", _test_visual_slide_count())
 
 
 def _render_manual_ai_images():
@@ -3906,7 +3936,7 @@ def _render_manual_ai_images():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Generated images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_grid(assets, "ai-generation")
+    _render_visual_asset_pool(assets, "ai-generation", _test_visual_slide_count())
 
 
 def render_visuals():
@@ -3917,7 +3947,12 @@ def render_visuals():
         default=VISUAL_OPTIONS[0],
         key="visual_test_mode",
         label_visibility="collapsed",
-    ) or "Option 1 · Automatic Scraper"
+    ) or VISUAL_OPTIONS[0]
+
+    script = st.session_state.get("approved_script") or st.session_state.get("script_data")
+    slide_count = len(script.get("script") or []) if isinstance(script, dict) else 4
+    slide_count = max(1, slide_count)
+
     if mode.startswith("Option 1"):
         render_visuals_crawler()
     elif mode.startswith("Option 2"):
@@ -3929,9 +3964,40 @@ def render_visuals():
     elif mode.startswith("Option 5"):
         _render_ranked_visual_search()
     elif mode.startswith("Option 6"):
-        _render_stats_card()
+        _render_stats_card(live=False, slide_count=slide_count)
     else:
-        _render_quote_card()
+        _render_quote_card(live=False, slide_count=slide_count)
+
+    _render_visual_board(slide_count)
+
+    assignments = st.session_state.get("visual_assignments") or {}
+    ready = all(slide in assignments for slide in range(1, slide_count + 1))
+    if st.session_state.visuals_approved:
+        st.success("Visuals approved. The exact visual handoff is ready for Renderer.")
+    elif ready:
+        if st.button(
+            f"Approve {slide_count} visuals",
+            type="primary",
+            width="stretch",
+            key="test-approve-visuals",
+        ):
+            st.session_state.approved_visuals = [
+                assignments[slide]
+                for slide in range(1, slide_count + 1)
+            ]
+            st.session_state.visuals_approved = True
+            st.session_state.test_stage = "05 · Subtitles"
+            st.session_state.test_pipeline_notice = {
+                "confirmed": "Visual QC confirmed",
+                "next": "Moving to Subtitles.",
+            }
+            st.rerun()
+    else:
+        st.info(
+            f"{len(assignments)}/{slide_count} visuals attached. "
+            "Choose visuals above to build the Renderer handoff."
+        )
+
 
 
 def render_subtitles():
@@ -3985,56 +4051,79 @@ def render_subtitles():
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
 def render_renderer_test():
-    from renderer import FINAL_STYLE_NAME, HEADLINE_TEXT, build_preview_bundle
+    from renderer import render_production_video
 
-    approved_script=st.session_state.get("approved_script")
-    headline_enabled = (
-        bool(approved_script.get("headline_enabled", st.session_state.get("headline_enabled", True)))
-        if isinstance(approved_script, dict)
-        else st.session_state.get("headline_enabled", True)
-    )
-    headline_text=(str(approved_script.get("headline") or "").strip() if isinstance(approved_script,dict) else "") or HEADLINE_TEXT
+    script = st.session_state.get("approved_script")
+    audio = st.session_state.get("approved_audio")
+    subtitles = st.session_state.get("approved_subtitles")
+    visuals = st.session_state.get("approved_visuals")
 
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">06 · RENDER</div>'
-        '<div class="canvas-title">Preview the finished treatment</div>'
-        '<div class="canvas-copy">Check the opening headline and final caption treatment before the production render.</div></div></div>',
+        '<div class="canvas-title">Build the finished Short</div>'
+        '<div class="canvas-copy">Renderer consumes the exact approved Scriptwriter, Audio, Subtitles and Visual handoffs.</div></div></div>',
         unsafe_allow_html=True,
     )
-    left,right=st.columns([1.15,.85],gap="large")
-    with left:
-        st.markdown('<div class="media-surface">',unsafe_allow_html=True)
-        previews=st.session_state.get("renderer_previews") or {}
-        if previews.get("final") and Path(previews["final"]).exists():
-            st.video(str(previews["final"]),width=380)
-        elif previews.get("opening") and Path(previews["opening"]).exists():
-            st.video(str(previews["opening"]),width=380)
-        else:
-            st.caption("Build a preview to see the video treatment.")
-        st.markdown('</div>',unsafe_allow_html=True)
-    with right:
-        with st.container(key="renderer-inspector"):
-            st.markdown('<div class="inspector">',unsafe_allow_html=True)
-            st.markdown('<div class="mini-label">Treatment</div>',unsafe_allow_html=True)
-            st.markdown(f'<div class="inspector-line"><span>Opening</span><span class="inspector-value">{headline_text}</span></div>',unsafe_allow_html=True)
-            st.markdown(f'<div class="inspector-line"><span>Style</span><span class="inspector-value">{FINAL_STYLE_NAME}</span></div>',unsafe_allow_html=True)
-            st.markdown('<div class="inspector-line"><span>Captions</span><span class="inspector-value">Word highlight</span></div>',unsafe_allow_html=True)
-            st.markdown(
-                f'<div class="inspector-line"><span>Headline</span><span class="inspector-value">{"Enabled" if headline_enabled else "Off"}</span></div>',
-                unsafe_allow_html=True,
-            )
-            if st.button("Build preview",type="primary",width="stretch"):
-                with st.spinner("Rendering preview…"):
-                    try:
-                        st.session_state.renderer_previews=build_preview_bundle(
-                            headline_enabled=headline_enabled,
-                            headline_text=headline_text.strip() if headline_enabled else "",
-                        )
-                    except (RuntimeError,ValueError) as exc:
-                        st.error(str(exc))
-            if previews:
-                st.markdown('<div style="margin-top:.8rem;color:var(--muted);font-size:.72rem;">Preview bundle ready.</div>',unsafe_allow_html=True)
-            st.markdown('</div>',unsafe_allow_html=True)
+
+    missing = []
+    if not isinstance(script, dict):
+        missing.append("Scriptwriter")
+    if not isinstance(audio, dict):
+        missing.append("Audio")
+    if not isinstance(subtitles, dict):
+        missing.append("Subtitles")
+    if not isinstance(visuals, list):
+        missing.append("Visuals")
+
+    if missing:
+        st.info("Renderer is waiting for approval of: " + ", ".join(missing) + ".")
+        return
+
+    headline_enabled = bool(script.get("headline_enabled", st.session_state.get("headline_enabled", True)))
+    headline_text = str(script.get("headline") or "").strip()
+    selected_topic = st.session_state.get("selected_topic")
+    topics = st.session_state.get("topics") or []
+    source_label = "SPORTS DESK"
+    if isinstance(selected_topic, int) and 0 <= selected_topic < len(topics):
+        source_label = str(topics[selected_topic].source or "SPORTS DESK")
+
+    video_path = st.session_state.get("rendered_video_path")
+    if video_path and Path(str(video_path)).is_file():
+        st.video(str(video_path), width=520)
+        st.caption("This is the current rendered Test handoff. Rebuild it after changing an approved upstream stage.")
+    else:
+        st.caption("All required handoffs are approved. Build the Short below.")
+
+    if st.button(
+        "Build final Short",
+        type="primary",
+        width="stretch",
+        key="test-build-final-short",
+    ):
+        output = Path("output/test") / "rendered_short.mp4"
+        try:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with st.spinner("Rendering the final Short…"):
+                render_production_video(
+                    script,
+                    audio,
+                    subtitles,
+                    visuals,
+                    output_path=output,
+                    headline_text=headline_text,
+                    headline_enabled=headline_enabled,
+                    source_label=source_label,
+                )
+            st.session_state.rendered_video_path = str(output)
+            st.session_state.upload_qc_approved = False
+            st.session_state.upload_result = None
+            st.session_state.upload_qc = None
+            st.rerun()
+        except (RuntimeError, ValueError, OSError) as exc:
+            st.error(str(exc))
+
+
+
 TITLE_OPTION_STYLES = (
     "SEO / Search",
     "Curiosity / Baity",

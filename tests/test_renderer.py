@@ -6,13 +6,54 @@ from PIL import Image, ImageChops, ImageDraw
 import renderer
 
 
+TEST_SUBTITLE_DATA = {
+    "schema": "final-shorts.subtitles.v1",
+    "language": "english",
+    "cues": [
+        {
+            "start": 0.30,
+            "end": 1.28,
+            "words": [
+                {"text": "India", "start": 0.30, "end": 0.52},
+                {"text": "started", "start": 0.52, "end": 0.75},
+                {"text": "strongly,", "start": 0.75, "end": 0.98},
+                {"text": "but", "start": 0.98, "end": 1.28},
+            ],
+        },
+        {
+            "start": 1.28,
+            "end": 2.27,
+            "words": [
+                {"text": "the", "start": 1.28, "end": 1.44},
+                {"text": "momentum", "start": 1.44, "end": 1.70},
+                {"text": "shifted", "start": 1.70, "end": 1.96},
+                {"text": "when", "start": 1.96, "end": 2.27},
+            ],
+        },
+        {
+            "start": 2.27,
+            "end": 2.85,
+            "words": [
+                {"text": "pressure", "start": 2.27, "end": 2.51},
+                {"text": "finally", "start": 2.51, "end": 2.68},
+                {"text": "arrived.", "start": 2.68, "end": 2.85},
+            ],
+        },
+    ],
+}
+
+
+def _test_base():
+    return Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), "white")
+
+
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 24
     assert renderer.HEADLINE_SECONDS == 1.35
 
 
 def test_renderer_frame_is_vertical_and_independent():
-    base = renderer.make_sample_background()
+    base = _test_base()
     frame = renderer.render_frame(base, 0.9)
 
     assert frame.size == (1080, 1920)
@@ -48,7 +89,7 @@ def test_renderer_uses_supplied_headline(monkeypatch):
         seen.append(text)
 
     monkeypatch.setattr(renderer, "_draw_headline", fake_draw)
-    base = renderer.make_sample_background()
+    base = _test_base()
 
     renderer.render_frame(
         base,
@@ -63,7 +104,7 @@ def test_renderer_uses_supplied_headline(monkeypatch):
 def test_renderer_skips_headline_when_disabled(monkeypatch):
     seen = []
     monkeypatch.setattr(renderer, "_draw_headline", lambda *args: seen.append("headline"))
-    base = renderer.make_sample_background()
+    base = _test_base()
 
     renderer.render_frame(
         base,
@@ -80,7 +121,7 @@ def test_renderer_shows_headline_and_subtitles_together(monkeypatch):
     calls = []
     monkeypatch.setattr(renderer, "_draw_headline", lambda *args: calls.append("headline"))
     monkeypatch.setattr(renderer, "_draw_subtitles", lambda *args: calls.append("subtitles"))
-    base = renderer.make_sample_background()
+    base = _test_base()
 
     renderer.render_frame(
         base,
@@ -119,7 +160,7 @@ def test_headline_wraps_three_and_six_word_inputs_without_overflow():
 def test_headline_render_stays_inside_canvas_bounds(monkeypatch):
     monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
     monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
-    base = renderer.make_sample_background()
+    base = _test_base()
 
     frame = renderer.render_frame(
         base,
@@ -137,7 +178,7 @@ def test_headline_render_stays_inside_canvas_bounds(monkeypatch):
 def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
     monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
     monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
-    base = renderer.make_sample_background()
+    base = _test_base()
     subtitle_data = {
         "schema": "final-shorts.subtitles.v1",
         "language": "english",
@@ -169,7 +210,7 @@ def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
 
 
 def test_headline_and_subtitles_do_not_overlap():
-    base = renderer.make_sample_background()
+    base = _test_base()
 
     headline_frame = renderer.render_frame(
         base,
@@ -192,7 +233,7 @@ def test_subtitles_remain_visible_during_headline(monkeypatch):
         seen.append(t)
 
     monkeypatch.setattr(renderer, "_draw_subtitles", fake_draw)
-    base = renderer.make_sample_background()
+    base = _test_base()
 
     renderer.render_frame(base, 0.30, headline_enabled=True)
     renderer.render_frame(
@@ -216,7 +257,7 @@ def test_headline_marker_and_subtitle_style_are_brand_consistent():
 
 
 def test_subtitle_layout_uses_second_line_only_when_needed():
-    words = renderer.PREVIEW_SUBTITLE_DATA["cues"][0]["words"]
+    words = TEST_SUBTITLE_DATA["cues"][0]["words"]
 
     font, lines = renderer._fit_subtitle_layout(words, "english")
     assert font.size >= renderer.SUBTITLE_MIN_SIZE
@@ -246,7 +287,7 @@ def test_subtitle_dash_variants_are_normalised():
 
 
 def test_subtitle_handoff_contract():
-    assert renderer.validate_subtitle_handoff(renderer.PREVIEW_SUBTITLE_DATA)
+    assert renderer.validate_subtitle_handoff(TEST_SUBTITLE_DATA)
 
 
 def test_invalid_subtitle_handoff_is_rejected():
@@ -384,7 +425,7 @@ def test_production_renderer_uses_stats_card_image_height_for_subtitles(monkeypa
     renderer.render_production_video(
         script,
         audio,
-        renderer.PREVIEW_SUBTITLE_DATA,
+        TEST_SUBTITLE_DATA,
         visuals,
         output,
         headline_text="Gill Injury Scare",
@@ -434,7 +475,7 @@ def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(m
     renderer.render_production_video(
         script,
         audio,
-        renderer.PREVIEW_SUBTITLE_DATA,
+        TEST_SUBTITLE_DATA,
         [{"bytes": visual_buffer.getvalue(), "result_key": "real"}],
         output,
     )
@@ -467,7 +508,7 @@ def test_quote_card_suppresses_headline_and_subtitles(monkeypatch):
     monkeypatch.setattr(renderer, "_paste_logo", lambda *args: None)
     monkeypatch.setattr(renderer, "_paste_source", lambda *args: None)
 
-    base = renderer.make_sample_background()
+    base = _test_base()
     renderer.render_frame(
         base,
         0.5,
@@ -497,7 +538,7 @@ def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path)
         "approved_for_visuals": True,
         "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
     }
-    subtitles = renderer.PREVIEW_SUBTITLE_DATA
+    subtitles = TEST_SUBTITLE_DATA
     quote_card = {
         "quote": "I think Virat Kohli will finish on 98 centuries.",
         "attribution": "Aakash Chopra",
