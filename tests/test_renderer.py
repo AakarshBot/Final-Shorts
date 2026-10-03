@@ -412,8 +412,8 @@ def test_production_renderer_uses_stats_card_image_height_for_subtitles(monkeypa
 
     seen = []
 
-    def fake_quote(*args, **kwargs):
-        seen.append(args[1] if len(args) > 1 else kwargs.get("card"))
+    def fake_frame(*args):
+        seen.append(args)
         return args[0]
 
     def fake_preview(frames, path):
@@ -425,7 +425,7 @@ def test_production_renderer_uses_stats_card_image_height_for_subtitles(monkeypa
         output.write_bytes(b"final")
         return output
 
-    monkeypatch.setattr(renderer, "_draw_quote_card", fake_quote)
+    monkeypatch.setattr(renderer, "render_frame", fake_frame)
     monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
     monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
 
@@ -554,8 +554,8 @@ def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path)
     }
     seen = []
 
-    def fake_frame(*args):
-        seen.append(args)
+    def fake_quote(*args, **kwargs):
+        seen.append(args[1] if len(args) > 1 else kwargs.get("card"))
         return args[0]
 
     def fake_preview(frames, path):
@@ -567,7 +567,7 @@ def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path)
         output.write_bytes(b"final")
         return output
 
-    monkeypatch.setattr(renderer, "render_frame", fake_frame)
+    monkeypatch.setattr(renderer, "_draw_quote_card", fake_quote)
     monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
     monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
 
