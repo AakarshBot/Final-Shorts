@@ -260,6 +260,7 @@ def _named_phrases(title: str) -> set[str]:
     }
 
 
+@lru_cache(maxsize=8192)
 def _same_event_general(a: Topic, b: Topic) -> bool:
     shared = _tokens(a.title) & _tokens(b.title)
     if len(shared) < 2:
@@ -282,6 +283,7 @@ def _cricket_core_tokens(title: str) -> set[str]:
     return _tokens(title) - generic
 
 
+@lru_cache(maxsize=8192)
 def _cricket_same_event(a: Topic, b: Topic) -> bool:
     if _canonical_url(a.url) == _canonical_url(b.url):
         return True
