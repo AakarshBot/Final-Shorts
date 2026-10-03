@@ -1911,7 +1911,7 @@ def _render_topic_tiles(
                 reverse=True,
             ))
             if tile.group_key.startswith("keyword:"):
-                tile_title = f'Keyword: "{tile.group_key.split(":", 1)[1]}"'
+                tile_title = tile.group_key.split(":", 1)[1].title()
             elif tile.group_key.startswith("player:"):
                 tile_title = tile.group_key.split(":", 1)[1].title()
             else:
