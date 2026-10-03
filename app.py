@@ -3581,6 +3581,8 @@ def render_scriptwriter():
                     }
                     st.session_state.audio_data=None
                     st.session_state.approved_audio=None
+                    st.session_state.subtitle_data=None
+                    st.session_state.approved_subtitles=None
                     st.session_state.upload_qc_approved=False
                     st.session_state.upload_result=None
                     st.session_state.rendered_video_path=None
