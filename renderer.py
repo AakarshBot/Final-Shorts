@@ -727,6 +727,45 @@ def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
     return canvas
 
 
+def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
+    quote = " ".join(str(card.get("quote") or "").split())
+    attribution = " ".join(str(card.get("attribution") or "").split())
+    if not quote:
+        raise ValueError("Quote Card requires quote text.")
+    if not attribution:
+        raise ValueError("Quote Card requires an attribution.")
+
+    return _draw_top5_card(
+        base,
+        {
+            "headline": quote,
+            "body": f"— {attribution}",
+            "language": str(card.get("language") or "english"),
+        },
+    )
+
+
+def build_quote_card_preview(
+    source_image: bytes | bytearray | Image.Image,
+    quote: str,
+    attribution: str,
+    source_label: str | None = None,
+) -> bytes:
+    """Render a static Quote Card using the existing Top-5 full-frame text treatment."""
+    frame = _draw_quote_card(
+        _top5_full_frame_image(source_image),
+        {
+            "quote": quote,
+            "attribution": attribution,
+        },
+    )
+    _paste_logo(frame)
+    _paste_top5_source(frame, source_label)
+    buffer = BytesIO()
+    frame.convert("RGB").save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
 def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
     label = str(source_label or "Commons").strip() or "Commons"
     draw = ImageDraw.Draw(base)
@@ -1074,6 +1113,7 @@ def render_frame(
     source_label: str | None = None,
     subtitle_y: int | None = None,
     top5_card: dict | None = None,
+    quote_card: dict | None = None,
     validate_handoff: bool = True,
 ) -> Image.Image:
     if validate_handoff and not validate_subtitle_handoff(subtitle_data):
@@ -1086,6 +1126,8 @@ def render_frame(
 
     if top5_card is not None:
         _draw_top5_card(frame, top5_card)
+    elif quote_card is not None:
+        _draw_quote_card(frame, quote_card)
     else:
         if headline_enabled and t < HEADLINE_SECONDS:
             _draw_headline(
@@ -1365,11 +1407,21 @@ def render_production_video(
         top5_card = visual.get("top5_card")
         if top5_card is not None and not isinstance(top5_card, dict):
             raise ValueError(f"Visual {index} has malformed Top-5 card data.")
+        quote_card = visual.get("quote_card")
+        if quote_card is not None:
+            if not isinstance(quote_card, dict):
+                raise ValueError(f"Visual {index} has malformed Quote Card data.")
+            if not str(quote_card.get("quote") or "").strip() or not str(
+                quote_card.get("attribution") or ""
+            ).strip():
+                raise ValueError(f"Visual {index} has incomplete Quote Card data.")
         prepared_visuals.append({
             "image": _fit_visual_to_frame(visual.get("bytes")),
             "is_stats_card": result_key == "stats-card",
             "is_top5_card": isinstance(top5_card, dict),
             "top5_card": top5_card,
+            "is_quote_card": isinstance(quote_card, dict),
+            "quote_card": quote_card,
             "image_height": int(layout.get("image_height") or 0),
         })
 
@@ -1416,6 +1468,19 @@ def render_production_video(
                     subtitle_y,
                     top5_card=visual["top5_card"],
                     validate_handoff=False,
+                )
+            elif visual.get("is_quote_card"):
+                yield render_frame(
+                    visual["image"],
+                    t,
+                    subtitle_data,
+                    headline_text or HEADLINE_TEXT,
+                    headline_enabled,
+                    source_label,
+                    None,
+                    None,
+                    visual["quote_card"],
+                    False,
                 )
             else:
                 yield render_frame(
