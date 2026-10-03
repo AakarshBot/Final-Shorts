@@ -643,18 +643,8 @@ if "test_top5_audio_data" not in st.session_state:
     st.session_state.test_top5_audio_data = None
 if "test_top5_audio_handoff" not in st.session_state:
     st.session_state.test_top5_audio_handoff = None
-if "test_top5_visual_result" not in st.session_state:
-    st.session_state.test_top5_visual_result = None
-if "test_top5_visual_loaded_key" not in st.session_state:
-    st.session_state.test_top5_visual_loaded_key = None
 if "test_top5_visual_crops" not in st.session_state:
     st.session_state.test_top5_visual_crops = {}
-if "test_top5_manual_visual_result" not in st.session_state:
-    st.session_state.test_top5_manual_visual_result = None
-if "test_top5_real_image_result" not in st.session_state:
-    st.session_state.test_top5_real_image_result = None
-if "test_top5_ai_image_result" not in st.session_state:
-    st.session_state.test_top5_ai_image_result = None
 if "test_top5_visual_slide_type" not in st.session_state:
     st.session_state.test_top5_visual_slide_type = "Story slide"
 if "test_top5_standalone_headline" not in st.session_state:
