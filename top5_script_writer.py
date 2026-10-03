@@ -116,10 +116,12 @@ SCHEMA = {
         },
         "hashtags": {
             "type": "array",
-                        "items": {"type": "string"},
+            "items": {"type": "string"},
         },
+        "seo_description": {"type": "string"},
+        "comment": {"type": "string"},
     },
-    "required": ["slides", "hashtags"],
+    "required": ["slides", "hashtags", "seo_description", "comment"],
     "additionalProperties": False,
 }
 
@@ -167,6 +169,7 @@ SLIDE STRUCTURE
 - Return exactly six slides.
 - Slide 1 is the Top-5 package opener. It has ONE spoken headline, a maximum of 14 words, and no body copy.
 - Slides 2–6 correspond exactly, in order, to selected stories 1–5.
+- Set story_index exactly as follows: Slide 1 = 0, Slide 2 = 1, Slide 3 = 2, Slide 4 = 3, Slide 5 = 4, Slide 6 = 5.
 - For Slides 2–6, the headline IS the spoken narration for that slide.
 - Each story headline must tell the complete important development in ONE clean sentence.
 - Each story headline must remain under 15 seconds of estimated natural speech.
@@ -403,14 +406,6 @@ def _sentence_count(text: str) -> int:
     return len(re.findall(r"[^.!?]+[.!?](?=\s|$)", clean))
 
 
-def _story_references_headline(headline: str, story: dict) -> bool:
-    headline_words = set(_normalise(headline).split())
-    title_words = _title_keywords(_story_value(story, "title"))
-    if not title_words:
-        return True
-    return bool(headline_words & title_words)
-
-
 def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no Top-5 script object."
@@ -454,8 +449,6 @@ def validate_top5_script(result: dict, stories: list[dict]) -> tuple[bool, str]:
             body = _clean(slide.get("body"))
         else:
             story = stories[expected_number - 2]
-            if not _story_references_headline(headline, story):
-                return False, f"Slide {expected_number} does not reference its selected story."
             if estimate_speech_seconds(headline) >= 15.0:
                 return False, f"Slide {expected_number} is not below 15 seconds at the speech-rate estimate."
             body = _clean(slide.get("body"))
