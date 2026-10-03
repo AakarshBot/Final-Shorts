@@ -1064,12 +1064,9 @@ def render_frame(
     validate_handoff: bool = True,
     quote_card: dict | None = None,
 ) -> Image.Image:
-    subtitle_data = subtitle_data or {
-        "schema": "final-shorts.subtitles.v1",
-        "language": "english",
-        "cues": [],
-    }
-    if validate_handoff and not validate_subtitle_handoff(subtitle_data):
+    if subtitle_data is None:
+        subtitle_data = {"language": "english", "cues": []}
+    elif validate_handoff and not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
 
     frame = base_image.convert("RGBA").resize(
