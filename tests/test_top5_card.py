@@ -134,17 +134,17 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
 
 
 def test_top5_headline_layout_is_dynamic():
-    short_font, short_display, short_lines = renderer._fit_top5_editorial_headline(
+    short_fonts, short_display, short_lines = renderer._fit_top5_editorial_headline(
         "India make a major change",
     )
-    long_font, long_display, long_lines = renderer._fit_top5_editorial_headline(
+    long_fonts, long_display, long_lines = renderer._fit_top5_editorial_headline(
         "India reshuffles squad after a late selection change",
     )
 
     assert short_display == "INDIA MAKE A MAJOR CHANGE"
     assert long_display == "INDIA RESHUFFLES SQUAD AFTER A LATE SELECTION CHANGE"
 
-    assert short_font.size >= long_font.size
+    assert short_fonts[0].size >= long_fonts[0].size
     assert len(short_lines) <= 2
     assert len(long_lines) <= 2
 
