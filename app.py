@@ -643,6 +643,8 @@ if "test_top5_topics" not in st.session_state:
     st.session_state.test_top5_topics = []
 if "test_top5_selected" not in st.session_state:
     st.session_state.test_top5_selected = []
+if "test_top5_topic_open_tile" not in st.session_state:
+    st.session_state.test_top5_topic_open_tile = None
 if "test_top5_handoff" not in st.session_state:
     st.session_state.test_top5_handoff = None
 if "test_top5_script_data" not in st.session_state:
@@ -1917,24 +1919,18 @@ def _render_topic_tiles(
 
             with col:
                 with st.container(key=f"{key_prefix}topic-tile-{index}"):
-                    if len(members) > 1:
-                        is_open = st.session_state.get(open_state_key) == index
-                        if st.button(
-                            f'{"▾" if is_open else "▸"}  {tile_title} · {len(members)} headlines',
-                            key=f"{key_prefix}topic-tile-header-{index}",
-                            width="stretch",
-                            type="primary" if is_open else "secondary",
-                        ):
-                            st.session_state[open_state_key] = None if is_open else index
-                            st.rerun()
+                    is_open = st.session_state.get(open_state_key) == index
+                    if st.button(
+                        f'{"▾" if is_open else "▸"}  {tile_title}',
+                        key=f"{key_prefix}topic-tile-header-{index}",
+                        width="stretch",
+                        type="primary" if is_open else "secondary",
+                    ):
+                        st.session_state[open_state_key] = None if is_open else index
+                        st.rerun()
 
-                        st.markdown(
-                            f'<div class="topic-tile-meta"><span class="topic-rank">TILE {index + 1:02d}</span>'
-                            f'<span>{len(members)} headlines</span></div>',
-                            unsafe_allow_html=True,
-                        )
-                        if not is_open:
-                            continue
+                    if not is_open:
+                        continue
 
                     for headline_index, member in enumerate(members):
                         is_selected = (
@@ -4406,6 +4402,7 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_content_type = content_type
                 st.session_state.test_top5_topics = []
                 st.session_state.test_top5_selected = []
+                st.session_state.test_top5_topic_open_tile = None
                 st.session_state.test_top5_handoff = None
                 st.session_state.test_top5_script_data = None
                 st.session_state.test_top5_script_handoff = None
@@ -4453,6 +4450,7 @@ elif st.session_state.app_mode == "test":
                     st.session_state.test_top5_topics = existing + new_topics
                     if not more:
                         st.session_state.test_top5_selected = []
+                        st.session_state.test_top5_topic_open_tile = None
                         st.session_state.test_top5_handoff = None
                         st.session_state.test_top5_script_data = None
                         st.session_state.test_top5_script_handoff = None
@@ -4564,30 +4562,78 @@ elif st.session_state.app_mode == "test":
                     )
                     for start in range(0, len(topics), 2):
                         row = st.columns(2, gap="medium")
-                        for col, (index, topic) in zip(row, enumerate(topics[start:start + 2], start=start)):
+                        for col, (index, tile) in zip(
+                            row,
+                            enumerate(topics[start:start + 2], start=start),
+                        ):
+                            members = tuple(sorted(
+                                tile.group_members or (tile,),
+                                key=lambda item: item.score,
+                                reverse=True,
+                            ))
+                            if tile.group_key.startswith("keyword:"):
+                                tile_title = f'Keyword: "{tile.group_key.split(":", 1)[1]}"'
+                            elif tile.group_key.startswith("player:"):
+                                tile_title = tile.group_key.split(":", 1)[1].title()
+                            else:
+                                tile_title = tile.title
+
                             with col:
                                 with st.container(key=f"test-top5-topic-{index}"):
-                                    selected_here = index in selected
-                                    label = "✓ Selected" if selected_here else "Select story"
-                                    disabled = not selected_here and len(selected) >= 5
-                                    st.markdown(
-                                        f'<div class="topic-top"><span class="topic-rank">STORY {index + 1:02d}</span></div>'
-                                        f'<div class="topic-title">{topic.title}</div>'
-                                        f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b · %H:%M UTC}</div>',
-                                        unsafe_allow_html=True,
-                                    )
-                                    if st.button(label, key=f"test-top5-select-{index}", width="stretch", disabled=disabled):
-                                        if selected_here:
-                                            selected.remove(index)
-                                        else:
-                                            selected.append(index)
-                                        st.session_state.test_top5_selected = selected
-                                        st.session_state.test_top5_handoff = None
-                                        st.session_state.test_top5_script_data = None
-                                        st.session_state.test_top5_script_handoff = None
-                                        st.session_state.test_top5_audio_data = None
-                                        st.session_state.test_top5_audio_handoff = None
+                                    is_open = st.session_state.get("test_top5_topic_open_tile") == index
+                                    if st.button(
+                                        f'{"▾" if is_open else "▸"}  {tile_title}',
+                                        key=f"test-top5-topic-header-{index}",
+                                        width="stretch",
+                                        type="primary" if is_open else "secondary",
+                                    ):
+                                        st.session_state.test_top5_topic_open_tile = None if is_open else index
                                         st.rerun()
+
+                                    if not is_open:
+                                        continue
+
+                                    for headline_index, member in enumerate(members):
+                                        selected_here = (
+                                            index in selected
+                                            and topics[index].url == member.url
+                                        )
+                                        select_disabled = (
+                                            index not in selected and len(selected) >= 5
+                                        )
+                                        with st.container(
+                                            horizontal=True,
+                                            vertical_alignment="center",
+                                            horizontal_alignment="distribute",
+                                            gap="small",
+                                        ):
+                                            st.markdown(
+                                                f'<div class="topic-title">{member.title}</div>'
+                                                f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b · %H:%M UTC}</div>',
+                                                unsafe_allow_html=True,
+                                            )
+                                            if st.button(
+                                                "Selected" if selected_here else "Choose",
+                                                key=f"test-top5-select-{index}-{headline_index}",
+                                                width="content",
+                                                type="primary" if selected_here else "secondary",
+                                                disabled=select_disabled,
+                                            ):
+                                                st.session_state.test_top5_topics[index] = replace(
+                                                    member,
+                                                    group_key=tile.group_key,
+                                                    group_members=members,
+                                                )
+                                                if index not in selected:
+                                                    selected.append(index)
+                                                st.session_state.test_top5_selected = selected
+                                                st.session_state.test_top5_topic_open_tile = None
+                                                st.session_state.test_top5_handoff = None
+                                                st.session_state.test_top5_script_data = None
+                                                st.session_state.test_top5_script_handoff = None
+                                                st.session_state.test_top5_audio_data = None
+                                                st.session_state.test_top5_audio_handoff = None
+                                                st.rerun()
 
                 selected = st.session_state.test_top5_selected
                 if len(selected) == 5:
@@ -4652,8 +4698,14 @@ elif st.session_state.app_mode == "test":
                                 number = int(slide.get("slide_number") or 0)
                                 st.session_state[f"test-top5-script-headline-{number}"] = str(slide.get("headline") or "")
                                 st.session_state[f"test-top5-script-body-{number}"] = str(slide.get("body") or "")
+                            st.session_state["test-top5-script-description"] = str(
+                                result.get("seo_description") or ""
+                            )
                             st.session_state["test-top5-script-hashtags"] = " ".join(
                                 str(tag) for tag in (result.get("hashtags") or [])
+                            )
+                            st.session_state["test-top5-script-comment"] = str(
+                                result.get("comment") or ""
                             )
                             st.rerun()
                         except (RuntimeError, ValueError) as exc:
@@ -4715,10 +4767,22 @@ elif st.session_state.app_mode == "test":
                             )
                         st.divider()
 
-                    st.markdown('<div class="mini-label">HASHTAGS</div>', unsafe_allow_html=True)
+                    st.markdown('<div class="mini-label">PUBLISH METADATA</div>', unsafe_allow_html=True)
+                    st.text_area(
+                        "Description",
+                        key="test-top5-script-description",
+                        height=110,
+                        label_visibility="collapsed",
+                    )
                     st.text_input(
                         "Hashtags",
                         key="test-top5-script-hashtags",
+                        label_visibility="collapsed",
+                    )
+                    st.text_area(
+                        "Public comment",
+                        key="test-top5-script-comment",
+                        height=90,
                         label_visibility="collapsed",
                     )
 
@@ -4748,11 +4812,17 @@ elif st.session_state.app_mode == "test":
                                 }
                                 for slide in slides
                             ],
+                            "seo_description": st.session_state.get(
+                                "test-top5-script-description", ""
+                            ).strip(),
                             "hashtags": [
                                 tag.strip()
                                 for tag in st.session_state.get("test-top5-script-hashtags", "").split()
                                 if tag.strip()
                             ],
+                            "comment": st.session_state.get(
+                                "test-top5-script-comment", ""
+                            ).strip(),
                         }
                         valid, reason = validate_top5_script(edited, stories)
                         if not valid:
