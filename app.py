@@ -1869,6 +1869,7 @@ def _live_reset_downstream():
         "live_selected_topic": None,
         "live_pipeline_notice": None,
         "live_stage": "01 · Story",
+        "live_topic_open_tile": None,
         "live_script_data": None,
         "live_approved_script": None,
         "live_script_error": "",
@@ -2037,18 +2038,11 @@ def _live_generate_script():
     if selected_index is None or not 0 <= selected_index < len(topics):
         raise ValueError("No valid Live story is selected.")
 
-    story = _live_story(topics[selected_index])
-    from niche_sports_script_writer import write_niche_sports_script
-    from script_writer import write_script
-
-    writer = (
-        write_niche_sports_script
-        if st.session_state.get("live_topics_profile") == "niche_sports"
-        else write_script
-    )
-    script = writer(
-        story,
-        language=st.session_state.get("live_script_language", "english"),
+    topic = topics[selected_index]
+    script = _script_for_topic(
+        topic,
+        st.session_state.get("live_topics_profile") or "",
+        st.session_state.get("live_script_language", "english"),
     )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
@@ -2516,7 +2510,7 @@ def _render_live_visuals(slide_count: int):
                 st.info("Choose a Live story first.")
             else:
                 topic = topics[selected_index]
-                ranked_story = _live_story(topic)
+                ranked_story = _story_payload(topic)
                 ranked_story["script"] = script.get("script") or []
                 run = st.button(
                     "Run ranked search",
