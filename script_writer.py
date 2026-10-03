@@ -33,7 +33,7 @@ CRICKET_SCHEMA = {
     "properties": {
         "subject_name": {"type": "string"},
         "headline": {"type": "string"},
-        "titles": {"type": "array", "items": {"type": "string"}, "minItems": 5, "maxItems": 5},
+        "titles": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
         "seo_description": {"type": "string"},
         "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 1},
         "comment": {"type": "string"},
@@ -123,12 +123,10 @@ STYLE
 
 METADATA
 - `headline`: exactly 3 or 4 words.
-- `titles`: exactly 5 concise YouTube Shorts title candidates, one for each angle below, in this exact order:
+- `titles`: exactly 3 concise YouTube Shorts title candidates:
   1. SEO / Search — lead with the main player, team, event or key search term and make the story immediately understandable.
-  2. Curiosity / Baity — create a strong information gap from a confirmed fact without misleading or hiding what the Short is about.
-  3. Trend / Format — use a current-feeling Shorts/news title pattern and natural audience language without inventing a trend.
-  4. Consequence / Why It Matters — foreground the concrete impact on the player, team, match, series, tournament or status.
-  5. Fan / Emotion — use a vivid player- or team-centered angle that feels natural to cricket viewers while staying factual.
+  2. Consequence / Why It Matters — foreground the concrete impact on the player, team, match, series, tournament or status.
+  3. Curiosity — create a strong information gap from a confirmed fact without misleading or hiding what the Short is about.
 - Every title must be accurate, concise and clearly different in wording and angle from the other four.
 - Put the most important words first; avoid generic filler such as "latest update", "breaking news", "big update" or "sports update".
 - Do not use fake urgency, unsupported superlatives, misleading open loops, excessive ALL CAPS, or excessive emoji. Do not add #Shorts unless it genuinely fits the title.
@@ -392,8 +390,8 @@ def validate_cricket_script(result: dict, *, headline_required: bool = True) -> 
         return False, "The opening headline must contain 3 or 4 words."
 
     titles = result.get("titles")
-    if not isinstance(titles, list) or len(titles) != 5 or not all(_clean(item) for item in titles):
-        return False, "The Cricket Scriptwriter must produce exactly 5 titles."
+    if not isinstance(titles, list) or len(titles) != 3 or not all(_clean(item) for item in titles):
+        return False, "The Cricket Scriptwriter must produce exactly 3 titles."
 
     if not _clean(result.get("seo_description")):
         return False, "The Scriptwriter must produce a description."
