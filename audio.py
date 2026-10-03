@@ -20,9 +20,7 @@ MAX_ATTEMPTS = 2
 MAX_DURATION_SECONDS = 30.0
 CORRECTION_TARGET_SECONDS = 29.6
 TOP5_SCENE_COUNT = 6
-TOP5_MAX_SCENE_DURATION_SECONDS = 15.0
 TOP5_MAX_TOTAL_DURATION_SECONDS = 30.0
-TOP5_CORRECTION_TARGET_SECONDS = 14.6
 TOP5_TOTAL_CORRECTION_TARGET_SECONDS = 29.6
 
 VOICES = {
@@ -415,13 +413,8 @@ def generate_top5_audio(
 
     total_duration = sum(float(scene["duration"]) for scene in results)
     max_duration = max(float(scene["duration"]) for scene in results)
-    if (
-        max_duration >= TOP5_MAX_SCENE_DURATION_SECONDS
-        or total_duration > TOP5_MAX_TOTAL_DURATION_SECONDS
-    ):
-        scene_multiplier = max_duration / TOP5_CORRECTION_TARGET_SECONDS
-        total_multiplier = total_duration / TOP5_TOTAL_CORRECTION_TARGET_SECONDS
-        multiplier = max(scene_multiplier, total_multiplier)
+    if total_duration > TOP5_MAX_TOTAL_DURATION_SECONDS:
+        multiplier = total_duration / TOP5_TOTAL_CORRECTION_TARGET_SECONDS
         adjusted = (
             (1.0 + rate_percent / 100.0) * multiplier - 1.0
         ) * 100.0
@@ -434,17 +427,10 @@ def generate_top5_audio(
         rate_percent = round(adjusted, 2)
         corrected = True
 
-    if (
-        any(
-            float(scene["duration"]) >= TOP5_MAX_SCENE_DURATION_SECONDS
-            for scene in results
-        )
-        or total_duration > TOP5_MAX_TOTAL_DURATION_SECONDS
-    ):
+    if total_duration > TOP5_MAX_TOTAL_DURATION_SECONDS:
         raise RuntimeError(
-            "Top-5 audio remains outside the Shorts duration limits after one "
-            f"measured speed correction (max line {max_duration:.2f}s, "
-            f"total {total_duration:.2f}s)."
+            "Top-5 audio remains over the 30-second Shorts limit after one "
+            f"measured speed correction (total {total_duration:.2f}s)."
         )
 
     return {
@@ -473,10 +459,6 @@ def approve_top5_audio(audio: dict[str, Any]) -> dict[str, Any]:
     for expected_number, scene in enumerate(scenes, 1):
         if scene.get("scene") != expected_number:
             raise ValueError(f"Top-5 Audio scene {expected_number} is out of order.")
-        if float(scene.get("duration") or 0) >= TOP5_MAX_SCENE_DURATION_SECONDS:
-            raise ValueError(
-                f"Top-5 Audio scene {expected_number} must remain below 15 seconds."
-            )
         path = Path(scene.get("path", ""))
         if not path.exists() or path.stat().st_size <= 500:
             raise ValueError(
