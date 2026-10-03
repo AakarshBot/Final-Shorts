@@ -40,8 +40,8 @@ def valid_result():
                 "slide_number": index + 1,
                 "story_index": index,
                 "headline": (
-                    f"Story {index} confirmed the cricket record after the match, "
-                    "with the board publishing the result"
+                    f"Story {index} confirmed the record after the match, "
+                    "and the board published results"
                 ),
                 "body": (
                     f"Player {index} made the record official after the match. "
