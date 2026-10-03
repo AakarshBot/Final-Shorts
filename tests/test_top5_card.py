@@ -5,6 +5,19 @@ from PIL import Image
 import renderer
 
 
+TEST_SUBTITLE_DATA = {
+    "schema": "final-shorts.subtitles.v1",
+    "language": "english",
+    "cues": [
+        {
+            "start": 0.0,
+            "end": 0.5,
+            "words": [{"text": "A", "start": 0.0, "end": 0.2}],
+        }
+    ],
+}
+
+
 def _solid_png(size, color):
     buffer = BytesIO()
     Image.new("RGB", size, color).save(buffer, format="PNG")
@@ -104,7 +117,7 @@ def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
     renderer.render_production_video(
         script,
         audio,
-        renderer.PREVIEW_SUBTITLE_DATA,
+        TEST_SUBTITLE_DATA,
         visuals,
         output,
     )
