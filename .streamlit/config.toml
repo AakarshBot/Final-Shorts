@@ -5,3 +5,12 @@ backgroundColor = "#F5F7FB"
 secondaryBackgroundColor = "#FFFFFF"
 textColor = "#111827"
 font = "sans serif"
+
+[server]
+# Keep the normal "streamlit run app.py" command free of project-wide file-watcher overhead.
+fileWatcherType = "none"
+runOnSave = false
+
+[browser]
+# This is a local production factory; Streamlit usage telemetry is unnecessary here.
+gatherUsageStats = false
