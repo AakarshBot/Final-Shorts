@@ -4757,8 +4757,15 @@ elif st.session_state.app_mode == "test":
                                 label_visibility="collapsed",
                             )
                             st.caption(
-                                f'{len(headline.split())} words · maximum 14 words · '
+                                f'{len(headline.split())} words · package opener · '
                                 f'{estimate_speech_seconds(headline):.1f}s estimated speech'
+                            )
+                            st.text_area(
+                                "Visual package body",
+                                key="test-top5-script-body-1",
+                                height=120,
+                                max_chars=600,
+                                label_visibility="collapsed",
                             )
                         else:
                             story = stories[number - 2]
@@ -4781,8 +4788,8 @@ elif st.session_state.app_mode == "test":
                             st.text_area(
                                 "Visual story body",
                                 key=f"test-top5-script-body-{number}",
-                                height=110,
-                                max_chars=360,
+                                height=120,
+                                max_chars=600,
                                 label_visibility="collapsed",
                             )
                         st.divider()
@@ -4999,7 +5006,7 @@ elif st.session_state.app_mode == "test":
                     active_slide = slide_labels.index(active_label) + 1
                     slide = slides[active_slide - 1]
                     headline = str(slide.get("headline") or "").strip()
-                    body = "" if active_slide == 1 else str(slide.get("body") or "").strip()
+                    body = str(slide.get("body") or "").strip()
                     visual_intent = str(slide.get("visual_intent") or "").strip()
                     specific_prompt = str(slide.get("specific_search_prompt") or "").strip()
 
@@ -5456,7 +5463,7 @@ elif st.session_state.app_mode == "test":
                                     "Quote",
                                     key=f"test-top5-quote-{active_slide}",
                                     height=105,
-                                    max_chars=500,
+                                    max_chars=280,
                                 )
                                 attribution = st.text_input(
                                     "Attribution",
@@ -5515,6 +5522,7 @@ elif st.session_state.app_mode == "test":
                                                 "quote": card_result["quote"],
                                                 "attribution": card_result["attribution"],
                                                 "language": "english",
+                                                "source_label": card_result["source"],
                                             },
                                             preview_bytes=card_result["preview"],
                                         )
@@ -5561,7 +5569,7 @@ elif st.session_state.app_mode == "test":
                                 board_slide = slides[number - 1]
                                 board_headline = str(board_slide.get("headline") or "").strip()
                                 st.markdown(f"**{board_headline}**")
-                                board_body = "" if number == 1 else str(board_slide.get("body") or "").strip()
+                                board_body = str(board_slide.get("body") or "").strip()
                                 if board_body:
                                     st.caption(board_body)
                                 if board_preview:

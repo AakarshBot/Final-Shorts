@@ -52,7 +52,7 @@ def test_top5_preview_keeps_a_9x16_crop_instead_of_recropping_it():
     assert corner != (249, 250, 252)
 
 
-def test_top5_preview_uses_text_only_readability_treatment_not_a_full_width_panel():
+def test_top5_preview_uses_a_soft_white_editorial_fade_behind_text():
     background = (236, 236, 236)
     preview = renderer.build_top5_card_preview(
         _solid_png((1080, 1920), background),
@@ -63,18 +63,17 @@ def test_top5_preview_uses_text_only_readability_treatment_not_a_full_width_pane
     image = Image.open(BytesIO(preview)).convert("RGB")
 
     assert image.size == (1080, 1920)
-    assert image.getpixel((20, 1180)) == background
     assert image.getpixel((1050, 1180)) == background
-    assert image.getpixel((540, 600)) == background
+    assert image.getpixel((540, 620)) == background
+    assert image.getpixel((540, 1180)) != background
 
-    text_region = image.crop((72, 500, 1008, 1640))
+    text_region = image.crop((72, 500, 980, 1450))
     changed = sum(
         1
         for pixel in text_region.getdata()
         if pixel != background
     )
-    assert changed > 1_000
-    assert changed < text_region.width * text_region.height // 3
+    assert changed > 20_000
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
@@ -150,11 +149,15 @@ def test_top5_production_accepts_six_slides_without_subtitles(monkeypatch, tmp_p
                 "slide_number": number,
                 "story_index": number - 1,
                 "headline": (
-                    "Gill returns with India reshuffling their squad"
+                    "Top 5 Cricket News Today"
                     if number == 1
                     else f"India confirm the selected cricket development number {number}"
                 ),
-                "body": "" if number == 1 else "The board confirmed the move. The decision changes the lineup.",
+                "body": (
+                    "India confirmed a squad change while two other major cricket developments also made the roundup."
+                    if number == 1
+                    else "The board confirmed the move. The decision changes the lineup."
+                ),
             }
             for number in range(1, 7)
         ],
@@ -227,6 +230,15 @@ def test_top5_headline_layout_is_dynamic():
     assert len(long_lines) <= 2
 
 
+def test_top5_editorial_headline_handles_long_manual_headlines():
+    fonts, display, lines = renderer._fit_top5_editorial_headline(
+        "India announce a major selection change after the latest international cricket result",
+    )
+    assert display
+    assert len(lines) <= renderer.TOP5_EDITORIAL_HEADLINE_MAX_LINES
+    assert fonts[0].size >= renderer.TOP5_EDITORIAL_HEADLINE_MIN_SIZE
+
+
 def test_top5_body_layout_is_dynamic():
     short_body_font, short_paragraphs = renderer._fit_top5_editorial_body(
         "The board confirmed the move. The decision changes the lineup.",
@@ -255,20 +267,26 @@ def test_top5_body_is_two_editorial_sentences():
     assert all(paragraph for paragraph in paragraphs)
 
 
-def test_top5_opener_has_no_body_copy():
+def test_top5_opener_accepts_body_copy():
     preview = renderer.build_top5_card_preview(
         _solid_png((900, 1600), "white"),
-        "Five cricket stories shaping today",
+        "Top 5 Cricket News Today",
+        "India confirmed a squad change while two other major cricket developments also made the day's biggest stories.",
         story_number=0,
     )
     image = Image.open(BytesIO(preview))
 
     assert image.size == (1080, 1920)
     _, _, lines = renderer._fit_top5_editorial_headline(
-        "Five cricket stories shaping today",
+        "Top 5 Cricket News Today",
     )
     assert len(lines) <= 2
-    assert renderer._fit_top5_body("", "english") == (None, [])
+    body_font, body = renderer._fit_top5_editorial_body(
+        "India confirmed a squad change while two other major cricket developments also made the day's biggest stories.",
+        "english",
+    )
+    assert body_font is not None
+    assert body
 
 
 def test_top5_text_geometry_respects_bottom_safe_boundary():

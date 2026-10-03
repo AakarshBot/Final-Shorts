@@ -73,21 +73,25 @@ TOP5_LIGHT_TEXT_THRESHOLD = 146
 TOP5_SOURCE_COLOR = (86, 91, 100)
 
 TOP5_EDITORIAL_MARGIN_X = 72
-TOP5_EDITORIAL_MAX_WIDTH = WIDTH - (TOP5_EDITORIAL_MARGIN_X * 2)
+TOP5_EDITORIAL_MAX_WIDTH = 860
 TOP5_EDITORIAL_SAFE_TOP = 500
-TOP5_EDITORIAL_SAFE_BOTTOM = 270
-TOP5_EDITORIAL_HEADLINE_MAX_SIZE = 132
-TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 54
+TOP5_EDITORIAL_SAFE_BOTTOM = 240
+TOP5_EDITORIAL_HEADLINE_MAX_SIZE = 124
+TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 40
 TOP5_EDITORIAL_HEADLINE_MAX_LINES = 2
 TOP5_EDITORIAL_HEADLINE_LINE_GAP = 4
-TOP5_EDITORIAL_BODY_MAX_SIZE = 34
-TOP5_EDITORIAL_BODY_MIN_SIZE = 25
+TOP5_EDITORIAL_BODY_MAX_SIZE = 36
+TOP5_EDITORIAL_BODY_MIN_SIZE = 24
 TOP5_EDITORIAL_BODY_MAX_LINES = 8
 TOP5_EDITORIAL_BODY_LINE_GAP = 10
 TOP5_EDITORIAL_HEADLINE_BODY_GAP = 30
-TOP5_EDITORIAL_SHADOW_BLUR = 16
-TOP5_EDITORIAL_SHADOW_ALPHA = 165
-TOP5_EDITORIAL_STROKE_WIDTH = 3
+TOP5_EDITORIAL_FADE_LEFT = 20
+TOP5_EDITORIAL_FADE_RIGHT = 980
+TOP5_EDITORIAL_FADE_TOP_PAD = 260
+TOP5_EDITORIAL_FADE_BOTTOM_PAD = 110
+TOP5_EDITORIAL_FADE_MAX_ALPHA = 232
+TOP5_EDITORIAL_FADE_BLUR = 34
+TOP5_EDITORIAL_STROKE_WIDTH = 2
 TOP5_EDITORIAL_STORY_Y = 880
 TOP5_EDITORIAL_OPENER_Y = 760
 
@@ -438,21 +442,29 @@ def _top5_sentences(text: str) -> list[str]:
     return sentences[:2]
 
 
-def _fit_top5_headline(text: str):
+def _fit_top5_headline(
+    text: str,
+    *,
+    headline_max_lines: int = TOP5_HEADLINE_MAX_LINES,
+    headline_min_size: int = TOP5_HEADLINE_MIN_SIZE,
+):
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     clean = " ".join(str(text or "").split())
     if not clean:
         raise ValueError("Top-5 headline requires text.")
 
-    for size in range(TOP5_HEADLINE_MAX_SIZE, TOP5_HEADLINE_MIN_SIZE - 1, -1):
+    for size in range(TOP5_HEADLINE_MAX_SIZE, headline_min_size - 1, -1):
         font = _top5_headline_font(size)
-        lines = _top5_wrap_words(
-            probe,
-            clean,
-            font,
-            TOP5_TEXT_MAX_WIDTH,
-        )
-        if len(lines) <= TOP5_HEADLINE_MAX_LINES:
+        try:
+            lines = _top5_wrap_words(
+                probe,
+                clean,
+                font,
+                TOP5_TEXT_MAX_WIDTH,
+            )
+        except ValueError:
+            continue
+        if len(lines) <= headline_max_lines:
             return font, lines
     raise ValueError("Top-5 headline is too long to fit cleanly.")
 
@@ -618,14 +630,24 @@ def _draw_top5_haze(
     return canvas, text_color
 
 
-def _draw_top5_card(base: Image.Image, card: dict) -> Image.Image:
+def _draw_top5_card(
+    base: Image.Image,
+    card: dict,
+    *,
+    headline_max_lines: int = TOP5_HEADLINE_MAX_LINES,
+    headline_min_size: int = TOP5_HEADLINE_MIN_SIZE,
+) -> Image.Image:
     headline = " ".join(str(card.get("headline") or "").split())
     body = " ".join(str(card.get("body") or "").split())
     if not headline:
         raise ValueError("Top-5 card requires a headline.")
 
     language = str(card.get("language") or "english")
-    headline_font, headline_lines = _fit_top5_headline(headline)
+    headline_font, headline_lines = _fit_top5_headline(
+        headline,
+        headline_max_lines=headline_max_lines,
+        headline_min_size=headline_min_size,
+    )
 
     body_font = None
     body_paragraphs = []
@@ -761,16 +783,21 @@ def _fit_top5_editorial_headline(text: str, language: str = "english"):
         -1,
     ):
         fonts = _headline_font_stack(size, language)
-        lines = _top5_wrap_editorial_words(
-            probe,
-            display,
-            fonts,
-            TOP5_EDITORIAL_MAX_WIDTH,
-        )
+        try:
+            lines = _top5_wrap_editorial_words(
+                probe,
+                display,
+                fonts,
+                TOP5_EDITORIAL_MAX_WIDTH,
+            )
+        except ValueError:
+            continue
         if len(lines) <= TOP5_EDITORIAL_HEADLINE_MAX_LINES:
             return fonts, display, lines
 
-    raise ValueError("Top-5 headline is too long to fit cleanly.")
+    raise ValueError(
+        "Top-5 headline is too long to fit cleanly at a readable size."
+    )
 
 
 def _fit_top5_editorial_body(
@@ -790,10 +817,13 @@ def _fit_top5_editorial_body(
         -1,
     ):
         font = _top5_body_font(size, language)
-        paragraphs = [
-            _top5_wrap_words(probe, sentence, font, TOP5_EDITORIAL_MAX_WIDTH)
-            for sentence in sentences
-        ]
+        try:
+            paragraphs = [
+                _top5_wrap_words(probe, sentence, font, TOP5_EDITORIAL_MAX_WIDTH)
+                for sentence in sentences
+            ]
+        except ValueError:
+            continue
         total_lines = sum(len(lines) for lines in paragraphs)
         if 0 < total_lines <= TOP5_EDITORIAL_BODY_MAX_LINES:
             return font, paragraphs
@@ -838,6 +868,60 @@ def _top5_editorial_metrics(
     return headline_height, body_height
 
 
+def _draw_top5_editorial_fade(
+    base: Image.Image,
+    content_top: int,
+    content_bottom: int,
+) -> Image.Image:
+    """Add a soft white editorial wash that fades through the photograph behind the text."""
+    canvas = _top5_full_frame_image(base).convert("RGBA")
+
+    fade_start = max(0, content_top - TOP5_EDITORIAL_FADE_TOP_PAD)
+    fade_end = min(HEIGHT, content_bottom + TOP5_EDITORIAL_FADE_BOTTOM_PAD)
+    if fade_end <= fade_start:
+        return canvas
+
+    vertical_mask = Image.new("L", (1, HEIGHT), 0)
+    pixels = []
+    total = max(1, fade_end - fade_start)
+    for y in range(HEIGHT):
+        if y <= fade_start:
+            alpha = 0
+        else:
+            progress = min(1.0, (y - fade_start) / total)
+            eased = progress * progress * (3 - 2 * progress)
+            alpha = int(TOP5_EDITORIAL_FADE_MAX_ALPHA * eased)
+        pixels.append(alpha)
+    vertical_mask.putdata(pixels)
+    vertical_mask = vertical_mask.resize(
+        (WIDTH, HEIGHT),
+        Image.Resampling.BICUBIC,
+    )
+
+    horizontal_mask = Image.new("L", (WIDTH, HEIGHT), 0)
+    horizontal_draw = ImageDraw.Draw(horizontal_mask)
+    horizontal_draw.rectangle(
+        (
+            TOP5_EDITORIAL_FADE_LEFT,
+            0,
+            TOP5_EDITORIAL_FADE_RIGHT,
+            HEIGHT,
+        ),
+        fill=255,
+    )
+    horizontal_mask = horizontal_mask.filter(
+        ImageFilter.GaussianBlur(TOP5_EDITORIAL_FADE_BLUR)
+    )
+
+    from PIL import ImageChops
+
+    mask = ImageChops.multiply(vertical_mask, horizontal_mask)
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (255, 255, 255, 0))
+    overlay.putalpha(mask)
+    canvas.alpha_composite(overlay)
+    return canvas
+
+
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     language = str(card.get("language") or "english")
     headline_fonts, display_headline, headline_lines = _fit_top5_editorial_headline(
@@ -875,6 +959,14 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         TOP5_EDITORIAL_SAFE_TOP,
         min(preferred_y, max_y),
     )
+    content_bottom = content_top + content_height
+
+    canvas = _draw_top5_editorial_fade(
+        canvas,
+        content_top,
+        content_bottom,
+    )
+    draw = ImageDraw.Draw(canvas, "RGBA")
 
     commands = []
     cursor_y = content_top
@@ -909,12 +1001,6 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         for paragraph_index, paragraph in enumerate(body_paragraphs):
             for line_words in paragraph:
                 line = " ".join(line_words)
-                box = draw.textbbox(
-                    (0, 0),
-                    line,
-                    font=body_font,
-                    stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-                )
                 commands.append(
                     (line, body_font, TOP5_EDITORIAL_MARGIN_X, cursor_y)
                 )
@@ -940,12 +1026,8 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             stroke_fill=255,
         )
 
-    blurred = shadow_mask.filter(
-        ImageFilter.GaussianBlur(TOP5_EDITORIAL_SHADOW_BLUR)
-    )
-    shadow_alpha = blurred.point(
-        lambda value: value * TOP5_EDITORIAL_SHADOW_ALPHA // 255
-    )
+    blurred = shadow_mask.filter(ImageFilter.GaussianBlur(5))
+    shadow_alpha = blurred.point(lambda value: value * 70 // 255)
     shadow_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     shadow_layer.putalpha(shadow_alpha)
     canvas.alpha_composite(shadow_layer)
@@ -962,9 +1044,9 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             (x - box[0], y - box[1]),
             text,
             font=font,
-            fill=WHITE,
+            fill=(12, 14, 18, 255),
             stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-            stroke_fill=DARK,
+            stroke_fill=(249, 250, 252, 190),
         )
 
     return canvas
@@ -985,6 +1067,8 @@ def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
             "body": f"— {attribution}",
             "language": str(card.get("language") or "english"),
         },
+        headline_max_lines=5,
+        headline_min_size=38,
     )
 
 
@@ -1036,7 +1120,7 @@ def build_top5_card_preview(
     "Render one static Top-5 slide with the full manually-cropped 9:16 image and an adaptive local readability treatment."
     frame = _draw_top5_editorial_card(source_image, {
         "headline": headline,
-        "body": body if story_number else "",
+        "body": body,
         "story_number": story_number,
         "total_stories": total_stories,
     })
@@ -1639,7 +1723,13 @@ def render_production_video(
         elif isinstance(quote_card, dict):
             static_frame = _draw_quote_card(image, quote_card)
             _paste_logo(static_frame)
-            _paste_source(static_frame, source_label)
+            quote_source_label = str(
+                quote_card.get("source_label")
+                or visual.get("source")
+                or source_label
+                or "Commons"
+            ).strip() or "Commons"
+            _paste_source(static_frame, quote_source_label)
             static_frame = static_frame.convert("RGB")
 
         prepared_visuals.append({
