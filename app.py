@@ -696,8 +696,6 @@ if "script_data" not in st.session_state:
     st.session_state.script_data = None
 if "approved_script" not in st.session_state:
     st.session_state.approved_script = None
-if "headline_enabled" not in st.session_state:
-    st.session_state.headline_enabled = True
 if "audio_data" not in st.session_state:
     st.session_state.audio_data = None
 if "approved_audio" not in st.session_state:
@@ -3430,7 +3428,6 @@ def render_topic_fetcher():
         )
         st.session_state.selected_topic = index
         st.session_state.topic_open_tile = None
-        st.session_state.headline_enabled = True
         st.session_state.test_stage = "02 · Scriptwriter"
         st.session_state.test_pipeline_notice = {
             "confirmed": "Story confirmed",
@@ -3501,6 +3498,9 @@ def render_scriptwriter():
         st.info("Select a story in the Story Desk first.")
         return
     topic=st.session_state.topics[selected_index]
+    story_key = _live_story_key(topic)
+    headline_toggle_key = f"test-headline-enabled-{story_key}"
+    headline_text_key = f"test-script-headline-{story_key}"
 
     st.markdown(
         f'<div class="canvas-head"><div><div class="eyebrow">02 · SCRIPT</div>'
@@ -3513,6 +3513,12 @@ def render_scriptwriter():
         language=st.pills("Language",["English","Hindi","Telugu"],default="English",key="script_language",label_visibility="collapsed") or "English"
     with top_right:
         if st.button("Generate script",type="primary",width="stretch"):
+            for key in (
+                headline_toggle_key,
+                headline_text_key,
+                *(f"script-slide-{story_key}-{index}" for index in range(1, 7)),
+            ):
+                st.session_state.pop(key, None)
             with st.spinner("Writing the Short…"):
                 st.session_state.script_data = _script_for_topic(
                     topic,
@@ -3538,17 +3544,17 @@ def render_scriptwriter():
     with left:
         with st.container(key="script-editor"):
             st.markdown('<div class="mini-label">Opening</div>',unsafe_allow_html=True)
-            st.session_state.headline_enabled = st.toggle(
+            headline_enabled = st.toggle(
                 "Use opening headline",
-                value=st.session_state.get("headline_enabled", True),
-                key="test-headline-enabled",
+                value=st.session_state.get(headline_toggle_key, True),
+                key=headline_toggle_key,
             )
             edited_headline=st.text_input(
                 "Opening heading (3–4 words)",
-                value=script.get("headline","") if st.session_state.headline_enabled else "",
+                value=script.get("headline","") if headline_enabled else "",
                 max_chars=48,
-                key="script-headline",
-                disabled=not st.session_state.headline_enabled,
+                key=headline_text_key,
+                disabled=not headline_enabled,
                 label_visibility="collapsed",
             )
             st.markdown('<div style="height:.7rem"></div>',unsafe_allow_html=True)
@@ -3562,15 +3568,15 @@ def render_scriptwriter():
             edited_voiceovers=[]
             for index,scene in enumerate(script.get("script",[]),1):
                 st.markdown(f'<div class="scene-label">Scene {index}</div>',unsafe_allow_html=True)
-                edited_voiceovers.append(st.text_area("Narration",value=scene.get("voiceover",""),height=105,key=f"script-slide-{index}",label_visibility="collapsed"))
+                edited_voiceovers.append(st.text_area("Narration",value=scene.get("voiceover",""),height=105,key=f"script-slide-{story_key}-{index}",label_visibility="collapsed"))
             if st.button("Approve script",type="primary",width="stretch"):
                 try:
                     approved=apply_script_edits(
                         script,
                         edited_voiceovers,
-                        headline=edited_headline if st.session_state.headline_enabled else "",
+                        headline=edited_headline if headline_enabled else "",
                     )
-                    approved["headline_enabled"] = bool(st.session_state.headline_enabled)
+                    approved["headline_enabled"] = bool(headline_enabled)
                     st.session_state.approved_script=approved
                     st.session_state.visuals_approved = False
                     st.session_state.approved_visuals = None
@@ -4079,7 +4085,7 @@ def render_renderer_test():
         st.info("Renderer is waiting for approval of: " + ", ".join(missing) + ".")
         return
 
-    headline_enabled = bool(script.get("headline_enabled", st.session_state.get("headline_enabled", True)))
+    headline_enabled = bool(script.get("headline_enabled", True))
     headline_text = str(script.get("headline") or "").strip()
     selected_topic = st.session_state.get("selected_topic")
     topics = st.session_state.get("topics") or []
