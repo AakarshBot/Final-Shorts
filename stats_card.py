@@ -786,6 +786,7 @@ def _h2h_stats(intent: StatsIntent) -> dict[str, Any]:
     }
 
 
+@lru_cache(maxsize=128)
 def _font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
     root = Path(__file__).resolve().parent / "fonts"
     candidates = [
@@ -1183,7 +1184,6 @@ def build_stats_card(
 ) -> dict[str, Any]:
     intent = _parse_query(query)
     stats = _stats_for_intent(intent)
-    _asset_image(image_bytes)
 
     if intent.kind == "h2h":
         card = _h2h_card(stats, image_bytes)
@@ -1203,12 +1203,12 @@ def build_stats_card(
     while path.exists():
         path = output / f"{slug}-{index}.png"
         index += 1
-    card.save(path, format="PNG", optimize=True)
-
     buffer = BytesIO()
     card.save(buffer, format="PNG", optimize=True)
+    data = buffer.getvalue()
+    path.write_bytes(data)
     return {
-        "bytes": buffer.getvalue(),
+        "bytes": data,
         "path": str(path),
         "width": WIDTH,
         "height": HEIGHT,
