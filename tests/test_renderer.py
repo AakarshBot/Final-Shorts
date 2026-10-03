@@ -441,3 +441,100 @@ def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(m
 
     assert seen
     assert seen[0][6] is None
+
+
+
+def test_quote_card_preview_uses_top5_full_frame_treatment():
+    image_buffer = BytesIO()
+    Image.new("RGB", (1200, 800), "white").save(image_buffer, format="JPEG")
+
+    preview = renderer.build_quote_card_preview(
+        image_buffer.getvalue(),
+        "I think Virat Kohli will finish on 98 centuries.",
+        "Aakash Chopra",
+    )
+
+    image = Image.open(BytesIO(preview))
+    assert image.size == (renderer.WIDTH, renderer.HEIGHT)
+
+
+def test_quote_card_suppresses_headline_and_subtitles(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(renderer, "_draw_quote_card", lambda *args: calls.append("quote"))
+    monkeypatch.setattr(renderer, "_draw_headline", lambda *args: calls.append("headline"))
+    monkeypatch.setattr(renderer, "_draw_subtitles", lambda *args: calls.append("subtitles"))
+    monkeypatch.setattr(renderer, "_paste_logo", lambda *args: None)
+    monkeypatch.setattr(renderer, "_paste_source", lambda *args: None)
+
+    base = renderer.make_sample_background()
+    renderer.render_frame(
+        base,
+        0.5,
+        quote_card={
+            "quote": "I think Virat Kohli will finish on 98 centuries.",
+            "attribution": "Aakash Chopra",
+        },
+        headline_enabled=True,
+    )
+
+    assert calls == ["quote"]
+
+
+def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+    visual = Image.new("RGB", (1080, 1920), "white")
+    visual_buffer = BytesIO()
+    visual.save(visual_buffer, format="PNG")
+
+    script = {
+        "approved_for_audio": True,
+        "script": [{"voiceover": "Aakash Chopra predicts 98 centuries."}],
+        "headline": "Kohli On 98 Centuries",
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
+    }
+    subtitles = renderer.PREVIEW_SUBTITLE_DATA
+    quote_card = {
+        "quote": "I think Virat Kohli will finish on 98 centuries.",
+        "attribution": "Aakash Chopra",
+        "language": "english",
+    }
+    seen = []
+
+    def fake_frame(*args):
+        seen.append(args)
+        return args[0]
+
+    def fake_preview(frames, path):
+        next(iter(frames))
+        path.write_bytes(b"silent")
+        return path
+
+    def fake_mux(silent_video, audio_scenes, output):
+        output.write_bytes(b"final")
+        return output
+
+    monkeypatch.setattr(renderer, "render_frame", fake_frame)
+    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
+    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
+
+    output = tmp_path / "quote.mp4"
+    renderer.render_production_video(
+        script,
+        audio,
+        subtitles,
+        [{
+            "bytes": visual_buffer.getvalue(),
+            "result_key": "quote-card",
+            "quote_card": quote_card,
+        }],
+        output,
+    )
+
+    assert seen
+    assert seen[0][8] == quote_card
+    assert seen[0][9] is False
