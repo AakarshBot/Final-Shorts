@@ -724,6 +724,18 @@ if "stats_card_image_crop" not in st.session_state:
     st.session_state.stats_card_image_crop = None
 if "stats_card_approved" not in st.session_state:
     st.session_state.stats_card_approved = False
+if "quote_card_image_selection" not in st.session_state:
+    st.session_state.quote_card_image_selection = None
+if "quote_card_image_crop" not in st.session_state:
+    st.session_state.quote_card_image_crop = None
+if "quote_card_preview" not in st.session_state:
+    st.session_state.quote_card_preview = None
+if "quote_card_quote" not in st.session_state:
+    st.session_state.quote_card_quote = ""
+if "quote_card_attribution" not in st.session_state:
+    st.session_state.quote_card_attribution = ""
+if "quote_card_slide" not in st.session_state:
+    st.session_state.quote_card_slide = 1
 
 if "live_production_line" not in st.session_state:
     st.session_state.live_production_line = None
@@ -771,6 +783,20 @@ if "live_stats_card_image_crop" not in st.session_state:
     st.session_state.live_stats_card_image_crop = None
 if "live_stats_card_approved" not in st.session_state:
     st.session_state.live_stats_card_approved = False
+if "live_quote_card_image_selection" not in st.session_state:
+    st.session_state.live_quote_card_image_selection = None
+if "live_quote_card_image_crop" not in st.session_state:
+    st.session_state.live_quote_card_image_crop = None
+if "live_quote_card_preview" not in st.session_state:
+    st.session_state.live_quote_card_preview = None
+if "live_quote_card_quote" not in st.session_state:
+    st.session_state.live_quote_card_quote = ""
+if "live_quote_card_attribution" not in st.session_state:
+    st.session_state.live_quote_card_attribution = ""
+if "live_quote_card_slide" not in st.session_state:
+    st.session_state.live_quote_card_slide = 1
+if "live_visual_option" not in st.session_state:
+    st.session_state.live_visual_option = "Option 1 · Automatic Scraper"
 if "live_ranked_visual_result" not in st.session_state:
     st.session_state.live_ranked_visual_result = None
 if "live_script_language" not in st.session_state:
@@ -1375,6 +1401,211 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
 
 
 
+def _render_quote_card(live: bool = False, slide_count: int = 0):
+    from renderer import build_quote_card_preview
+
+    prefix = "live_" if live else ""
+    script_key = f"{prefix}approved_script"
+    selection_key = f"{prefix}quote_card_image_selection"
+    crop_key = f"{prefix}quote_card_image_crop"
+    preview_key = f"{prefix}quote_card_preview"
+    quote_key = f"{prefix}quote_card_quote"
+    attribution_key = f"{prefix}quote_card_attribution"
+    slide_key = f"{prefix}quote_card_slide"
+
+    script = st.session_state.get(script_key)
+    if not isinstance(script, dict):
+        st.info("Approve the Scriptwriter result first.")
+        return
+
+    entries = _stats_card_pool_entries(live)
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">QUOTE CARD</div>'
+        '<div class="section-title">Use a quote as the visual treatment for one existing slide</div></div>'
+        '<div class="section-count">existing visual pool</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    quote = str(st.session_state.get(quote_key) or "")
+    attribution = str(st.session_state.get(attribution_key) or "")
+    if quote:
+        st.caption("Scriptwriter identified this quote from the research. Edit it before previewing if needed.")
+    else:
+        st.info("No quote was identified by the Scriptwriter for this story. Enter one only when the source supports it.")
+
+    if not entries:
+        st.info(
+            "Run an existing visual option first. Quote Card uses that pool and does not run another image search."
+        )
+        return
+
+    current_selection = st.session_state.get(selection_key)
+    for start_index in range(0, len(entries), 3):
+        row = entries[start_index:start_index + 3]
+        cols = st.columns(len(row), gap="medium")
+        for col, (asset_key, index, asset, image_bytes, source_name) in zip(cols, row):
+            with col:
+                source = str(
+                    asset.get("publisher")
+                    or asset.get("source")
+                    or asset.get("model")
+                    or source_name
+                )
+                label = str(
+                    asset.get("article_title")
+                    or asset.get("model")
+                    or source_name
+                )
+                with st.container(key=f"{prefix}quote-card-image-{asset_key}"):
+                    preview = _asset_to_image(image_bytes)
+                    if preview is not None:
+                        preview.thumbnail((420, 420), Image.Resampling.LANCZOS)
+                        st.image(preview, width="stretch")
+                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
+                    if label:
+                        st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
+                    selected = (
+                        isinstance(current_selection, dict)
+                        and current_selection.get("asset_key") == asset_key
+                    )
+                    if st.button(
+                        "Selected" if selected else "Select image",
+                        type="primary" if selected else "secondary",
+                        width="stretch",
+                        key=f"{prefix}quote-card-select-{asset_key}",
+                    ):
+                        st.session_state[selection_key] = {
+                            "asset_key": asset_key,
+                            "source": source,
+                            "label": label,
+                            "bytes": image_bytes,
+                        }
+                        st.session_state[crop_key] = None
+                        st.session_state[preview_key] = None
+                        st.rerun()
+
+    selected = st.session_state.get(selection_key)
+    if not isinstance(selected, dict):
+        return
+
+    source_bytes = st.session_state.get(crop_key) or selected.get("bytes")
+    if not isinstance(source_bytes, (bytes, bytearray)):
+        st.error("The selected image is missing.")
+        return
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">QUOTE CONTENT</div>'
+        '<div class="section-title">Edit the quote before rendering</div></div>'
+        '<div class="section-count">one existing slide</div></div>',
+        unsafe_allow_html=True,
+    )
+    text_col, attr_col = st.columns([1.65, .8], gap="medium")
+    with text_col:
+        quote = st.text_area(
+            "Quote",
+            value=quote,
+            height=105,
+            max_chars=500,
+            key=quote_key,
+        ).strip()
+    with attr_col:
+        attribution = st.text_input(
+            "Attribution",
+            value=attribution,
+            max_chars=120,
+            key=attribution_key,
+        ).strip()
+
+    scenes = script.get("script") or []
+    available_slides = max(1, slide_count or len(scenes))
+    default_slide = max(
+        1,
+        min(available_slides, int(st.session_state.get(slide_key) or 1)),
+    )
+    selected_slide = st.selectbox(
+        "Use Quote Card for slide",
+        list(range(1, available_slides + 1)),
+        index=default_slide - 1,
+        key=slide_key,
+    )
+    st.session_state[slide_key] = selected_slide
+
+    crop_cols = st.columns([1, .42], gap="small")
+    with crop_cols[0]:
+        st.image(source_bytes, width=360)
+    with crop_cols[1]:
+        if st.button(
+            "Crop / reposition",
+            type="primary",
+            width="stretch",
+            key=f"{prefix}quote-card-crop-{selected.get('asset_key')}",
+        ):
+            _crop_visual_dialog(
+                selected["asset_key"],
+                bytes(selected.get("bytes") or b""),
+                str(selected.get("source") or "Selected image"),
+                crop_store="live_visual_crops" if live else "visual_crops",
+            )
+        if st.session_state.get(crop_key):
+            st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
+
+    if st.button(
+        "Preview Quote Card",
+        type="primary",
+        width="stretch",
+        key=f"{prefix}quote-card-preview-button",
+    ):
+        if not quote or not attribution:
+            st.warning("Quote and attribution are required.")
+        else:
+            try:
+                st.session_state[preview_key] = build_quote_card_preview(
+                    bytes(source_bytes),
+                    quote,
+                    attribution,
+                    source_label="SPORTS DESK",
+                )
+            except (ValueError, OSError) as exc:
+                st.error(str(exc))
+
+    preview_bytes = st.session_state.get(preview_key)
+    if not preview_bytes:
+        return
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">MANUAL QC</div>'
+        '<div class="section-title">Quote Card preview</div></div>'
+        '<div class="section-count">1080 × 1920</div></div>',
+        unsafe_allow_html=True,
+    )
+    st.image(preview_bytes, width=420)
+    st.caption(
+        "The selected quote is visual-only on this slide; normal subtitles are suppressed for the Quote Card."
+    )
+
+    if live:
+        if st.button(
+            f"Use Quote Card for slide {selected_slide}",
+            type="primary",
+            width="stretch",
+            key="live-quote-card-attach",
+        ):
+            st.session_state.live_visual_assignments[selected_slide] = {
+                "asset_key": f"quote-card-{selected.get('asset_key')}",
+                "result_key": "quote-card",
+                "source": f"Quote Card · {attribution}",
+                "label": quote,
+                "bytes": bytes(source_bytes),
+                "preview_bytes": bytes(preview_bytes),
+                "quote_card": {
+                    "quote": quote,
+                    "attribution": attribution,
+                    "language": str(script.get("language_used") or "english"),
+                },
+            }
+            st.session_state.live_visuals_approved = False
+            st.rerun()
+
 def _top5_fit_preview(value, width=300, height=533):
     from PIL import Image
     image = _asset_to_image(value)
@@ -1639,6 +1870,13 @@ def _live_reset_downstream():
         "live_stats_card_image_selection": None,
         "live_stats_card_image_crop": None,
         "live_stats_card_approved": False,
+        "live_quote_card_image_selection": None,
+        "live_quote_card_image_crop": None,
+        "live_quote_card_preview": None,
+        "live_quote_card_quote": "",
+        "live_quote_card_attribution": "",
+        "live_quote_card_slide": 1,
+        "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
         "live_visual_deleted": set(),
         "live_visual_assignments": {},
@@ -1705,6 +1943,15 @@ def _live_generate_script():
         str(item) for item in (script.get("hashtags") or [])
     )
     st.session_state.live_upload_comment = str(script.get("comment") or "")
+    st.session_state.live_quote_card_quote = str(script.get("quote") or "")
+    st.session_state.live_quote_card_attribution = str(
+        script.get("quote_attribution") or ""
+    )
+    quote_slide = int(script.get("quote_slide") or 1)
+    st.session_state.live_quote_card_slide = max(1, min(4, quote_slide))
+    st.session_state.live_quote_card_image_selection = None
+    st.session_state.live_quote_card_image_crop = None
+    st.session_state.live_quote_card_preview = None
     return script
 
 
@@ -1942,9 +2189,14 @@ def _render_live_visual_board(slide_count: int):
                         unsafe_allow_html=True,
                     )
                     st.text(voiceover)
+                preview_source = (
+                    assignment.get("preview_bytes")
+                    if assignment and assignment.get("preview_bytes")
+                    else assignment.get("bytes") if assignment else None
+                )
                 preview = (
-                    _live_fit_preview(assignment["bytes"], 300, 533)
-                    if assignment
+                    _live_fit_preview(preview_source, 300, 533)
+                    if preview_source is not None
                     else None
                 )
                 if preview is not None:
@@ -1964,13 +2216,30 @@ def _render_live_visuals(slide_count: int):
         return
 
     _render_live_visual_board(slide_count)
+    visual_options = [
+        "Option 1 · Automatic Scraper",
+        "Option 2 · Manual Scraper",
+        "Option 3 · Real Image Search",
+        "Option 4 · AI Generation",
+        "Option 5 · Ranked Scene Search",
+        "Option 6 · Stats Card",
+        "Option 7 · Quote Card",
+    ]
+    visual_option = st.pills(
+        "Visual source",
+        visual_options,
+        default=st.session_state.get("live_visual_option", visual_options[0]),
+        key="live_visual_option",
+        label_visibility="collapsed",
+    ) or visual_options[0]
+
     assigned = len(st.session_state.live_visual_assignments)
     st.caption(
         f"{assigned}/{slide_count} slides attached. "
         "Attached images remain in their original pools until you delete them."
     )
 
-    with st.expander("Option 1 · Automatic Scraper", expanded=True):
+    if visual_option == "Option 1 · Automatic Scraper":
         result = st.session_state.get("live_visual_result") or {}
         if result.get("error"):
             st.error(result["error"])
@@ -2007,7 +2276,7 @@ def _render_live_visuals(slide_count: int):
                 slide_count,
             )
 
-    with st.expander("Option 2 · Manual Scraper", expanded=False):
+    if visual_option == "Option 2 · Manual Scraper":
         st.caption("Manual query only. This searches publisher pages and scrapes their images.")
         with st.form("live-manual-crawler-form"):
             query = st.text_input(
@@ -2047,7 +2316,7 @@ def _render_live_visuals(slide_count: int):
                 slide_count,
             )
 
-    with st.expander("Option 3 · Real Image Search", expanded=False):
+    if visual_option == "Option 3 · Real Image Search":
         st.caption("Manual query only. Searches the configured real-image providers.")
         with st.form("live-real-image-form"):
             query = st.text_input(
@@ -2084,7 +2353,7 @@ def _render_live_visuals(slide_count: int):
                 slide_count,
             )
 
-    with st.expander("Option 4 · AI Generation", expanded=False):
+    if visual_option == "Option 4 · AI Generation":
         st.caption("Manual prompt only. Uses the configured AI image providers.")
         with st.form("live-ai-image-form"):
             query = st.text_input(
@@ -2121,7 +2390,7 @@ def _render_live_visuals(slide_count: int):
                 slide_count,
             )
 
-    with st.expander("Option 5 · Ranked Scene Search", expanded=False):
+    if visual_option == "Option 5 · Ranked Scene Search":
         st.caption("Runs the approved Scriptwriter scene searches together. This does not replace the automatic or manual scrapers.")
         script = st.session_state.get("live_approved_script")
         if not isinstance(script, dict):
@@ -2173,8 +2442,11 @@ def _render_live_visuals(slide_count: int):
                         slide_count,
                     )
 
-    with st.expander("Option 6 · Stats Card", expanded=False):
+    if visual_option == "Option 6 · Stats Card":
         _render_stats_card(live=True, slide_count=slide_count)
+
+    if visual_option == "Option 7 · Quote Card":
+        _render_quote_card(live=True, slide_count=slide_count)
 
     ready = all(
         slide in st.session_state.live_visual_assignments
@@ -2963,6 +3235,12 @@ def render_topic_fetcher():
             "ai_image_result": None, "ranked_visual_result": None, "visual_crops": {},
             "stats_card_result": None, "stats_card_image_selection": None,
              "stats_card_image_crop": None, "stats_card_approved": False,
+            "quote_card_image_selection": None,
+            "quote_card_image_crop": None,
+            "quote_card_preview": None,
+            "quote_card_quote": "",
+            "quote_card_attribution": "",
+            "quote_card_slide": 1,
         }.items():
             st.session_state[key] = value
     st.session_state.topic_desk_profile = profiles[desk]
@@ -3144,6 +3422,12 @@ def render_topic_fetcher():
                                 st.session_state.ranked_visual_result = None
                                 st.session_state.stats_card_result = None
                                 st.session_state.stats_card_image_selection = None
+                                st.session_state.quote_card_image_selection = None
+                                st.session_state.quote_card_image_crop = None
+                                st.session_state.quote_card_preview = None
+                                st.session_state.quote_card_quote = ""
+                                st.session_state.quote_card_attribution = ""
+                                st.session_state.quote_card_slide = 1
                                 st.session_state.visual_result = None
                                 st.session_state.visual_loaded_story = None
                                 st.session_state.visual_crops = {}
@@ -3250,6 +3534,15 @@ def render_scriptwriter():
                     st.session_state.upload_description=str(approved.get("seo_description") or "")
                     st.session_state.upload_hashtags=" ".join(approved.get("hashtags") or [])
                     st.session_state.upload_comment=str(approved.get("comment") or "")
+                    st.session_state.quote_card_quote = str(approved.get("quote") or "")
+                    st.session_state.quote_card_attribution = str(
+                        approved.get("quote_attribution") or ""
+                    )
+                    quote_slide = int(approved.get("quote_slide") or 1)
+                    st.session_state.quote_card_slide = max(1, min(4, quote_slide))
+                    st.session_state.quote_card_image_selection = None
+                    st.session_state.quote_card_image_crop = None
+                    st.session_state.quote_card_preview = None
                 except ValueError as exc:
                     st.error(str(exc))
 
@@ -3595,6 +3888,7 @@ def render_visuals():
             "Option 4 · AI Generation",
             "Option 5 · Ranked Scene Search",
             "Option 6 · Stats Card",
+            "Option 7 · Quote Card",
         ],
         default="Option 1 · Automatic Scraper",
         key="visual_test_mode",
@@ -3610,8 +3904,10 @@ def render_visuals():
         _render_manual_ai_images()
     elif mode.startswith("Option 5"):
         _render_ranked_visual_search()
-    else:
+    elif mode.startswith("Option 6"):
         _render_stats_card()
+    else:
+        _render_quote_card()
 
 
 def render_subtitles():
