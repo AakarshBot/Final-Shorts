@@ -123,20 +123,25 @@ def test_top5_audio_requires_exactly_six_slides(monkeypatch, tmp_path):
         generate_top5_audio(script, tmp_path)
 
 
-def test_top5_audio_approval_requires_six_valid_scenes(tmp_path):
+def test_top5_audio_approval_requires_six_valid_scenes_and_allows_one_long_line(tmp_path):
     scenes = []
     for index in range(1, 7):
         path = tmp_path / f"voiceover_{index}.mp3"
         path.write_bytes(b"x" * 700)
         scenes.append(
-            {"scene": index, "path": str(path), "duration": 2.0, "timings": []}
+            {
+                "scene": index,
+                "path": str(path),
+                "duration": 16.0 if index == 1 else 2.0,
+                "timings": [],
+            }
         )
 
     result = approve_top5_audio(
         {
             "schema": "final-shorts.top5-audio.v1",
             "scenes": scenes,
-            "total_duration": 12.0,
+            "total_duration": 26.0,
         }
     )
 
