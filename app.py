@@ -641,12 +641,6 @@ if "test_top5_visual_loaded_key" not in st.session_state:
     st.session_state.test_top5_visual_loaded_key = None
 if "test_top5_visual_crops" not in st.session_state:
     st.session_state.test_top5_visual_crops = {}
-if "test_top5_visual_deleted" not in st.session_state:
-    st.session_state.test_top5_visual_deleted = set()
-if "test_top5_visual_assignments" not in st.session_state:
-    st.session_state.test_top5_visual_assignments = {}
-if "test_top5_visual_handoff" not in st.session_state:
-    st.session_state.test_top5_visual_handoff = None
 if "test_top5_manual_visual_result" not in st.session_state:
     st.session_state.test_top5_manual_visual_result = None
 if "test_top5_real_image_result" not in st.session_state:
@@ -1381,10 +1375,6 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
 
 
 
-def _top5_visual_asset_key(result_key: str, index: int, asset: dict) -> str:
-    return _visual_asset_key(f"top5-{result_key}", index, asset)
-
-
 def _top5_fit_preview(value, width=300, height=533):
     from PIL import Image
     image = _asset_to_image(value)
@@ -1401,48 +1391,6 @@ def _top5_fit_preview(value, width=300, height=533):
         top = (image.height - crop_height) // 2
         image = image.crop((0, top, image.width, top + crop_height))
     return image.resize((width, height), Image.Resampling.LANCZOS)
-
-
-def _top5_delete_asset(result_key: str, index: int, asset: dict):
-    asset_key = _top5_visual_asset_key(result_key, index, asset)
-    st.session_state.test_top5_visual_deleted.add(asset_key)
-    for slide, assignment in list(st.session_state.test_top5_visual_assignments.items()):
-        if assignment.get("asset_key") == asset_key:
-            del st.session_state.test_top5_visual_assignments[slide]
-    st.session_state.test_top5_visual_crops.pop(asset_key, None)
-
-
-def _top5_attach_asset(result_key: str, index: int, asset: dict, slide: int):
-    raw = asset.get("bytes")
-    if not isinstance(raw, (bytes, bytearray)):
-        st.warning("This visual has no usable image payload.")
-        return
-
-    asset_key = _top5_visual_asset_key(result_key, index, asset)
-    cropped = st.session_state.test_top5_visual_crops.get(asset_key)
-    selected_bytes = bytes(cropped) if cropped else bytes(raw)
-    st.session_state.test_top5_visual_assignments[slide] = {
-        "asset_key": asset_key,
-        "result_key": result_key,
-        "slide_number": slide,
-        "story_index": None if slide == 1 else slide - 2,
-        "source": str(
-            asset.get("publisher")
-            or asset.get("source")
-            or asset.get("model")
-            or "Web source"
-        ),
-        "label": str(
-            asset.get("article_title")
-            or asset.get("model")
-            or "Selected visual"
-        ),
-        "source_page_url": str(asset.get("source_page_url") or ""),
-        "source_image_url": str(asset.get("source_image_url") or ""),
-        "bytes": selected_bytes,
-    }
-    st.session_state.test_top5_visual_handoff = None
-
 
 @st.dialog("Crop visual", width="large")
 def _top5_crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
@@ -1506,9 +1454,6 @@ def _top5_crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
             cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
             crop_bytes = buffer.getvalue()
             st.session_state.test_top5_visual_crops[asset_key] = crop_bytes
-            for assignment in st.session_state.test_top5_visual_assignments.values():
-                if assignment.get("asset_key") == asset_key:
-                    assignment["bytes"] = crop_bytes
             st.rerun()
 
 
