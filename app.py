@@ -3760,18 +3760,20 @@ def render_visuals_crawler():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_grid(assets, "auto-crawler")
+    _render_visual_asset_pool(assets, "auto-crawler", 4)
 
 
 def _render_ranked_visual_search():
     from visual_fetcher import ranked_visual_search
 
     st.subheader("Ranked Scene Search")
-    st.caption("Runs the approved Scriptwriter visual searches together. The existing scrapers remain unchanged.")
+    st.caption("Runs the Scriptwriter scene searches. This visual option can use generated Test script data without waiting for Script approval.")
 
     approved_script = st.session_state.get("approved_script")
     if not isinstance(approved_script, dict):
-        st.info("Approve the Scriptwriter first so each scene has a specific visual search prompt.")
+        approved_script = st.session_state.get("script_data")
+    if not isinstance(approved_script, dict):
+        st.info("Generate the Scriptwriter first so each scene has a specific visual search prompt.")
         return
     if not st.session_state.topics or st.session_state.selected_topic is None:
         st.info("Select a story first.")
@@ -3831,7 +3833,7 @@ def _render_ranked_visual_search():
 
     if assets:
         st.markdown('<div class="section-head"><div><div class="eyebrow">RANKED MEDIA BOARD</div><div class="section-title">Combined visual candidates</div></div><div class="section-count">highest-scoring first</div></div>', unsafe_allow_html=True)
-        _render_visual_asset_grid(assets, "ranked-search")
+        _render_visual_asset_pool(assets, "ranked-search", 4)
     else:
         st.warning("The ranked search returned no usable images.")
 
@@ -3894,7 +3896,7 @@ def _render_manual_crawler():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_grid(assets, "manual-crawler")
+    _render_visual_asset_pool(assets, "manual-crawler", 4)
 
 
 def _render_manual_real_images():
@@ -3943,7 +3945,7 @@ def _render_manual_real_images():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Real images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_grid(assets, "real-search")
+    _render_visual_asset_pool(assets, "real-search", 4)
 
 
 def _render_manual_ai_images():
@@ -3990,7 +3992,7 @@ def _render_manual_ai_images():
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Generated images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
-    _render_visual_asset_grid(assets, "ai-generation")
+    _render_visual_asset_pool(assets, "ai-generation", 4)
 
 
 def render_visuals():
@@ -4001,7 +4003,12 @@ def render_visuals():
         default=VISUAL_OPTIONS[0],
         key="visual_test_mode",
         label_visibility="collapsed",
-    ) or "Option 1 · Automatic Scraper"
+    ) or VISUAL_OPTIONS[0]
+
+    script = st.session_state.get("approved_script") or st.session_state.get("script_data")
+    slide_count = len(script.get("script") or []) if isinstance(script, dict) else 4
+    slide_count = max(1, slide_count)
+
     if mode.startswith("Option 1"):
         render_visuals_crawler()
     elif mode.startswith("Option 2"):
@@ -4013,9 +4020,40 @@ def render_visuals():
     elif mode.startswith("Option 5"):
         _render_ranked_visual_search()
     elif mode.startswith("Option 6"):
-        _render_stats_card()
+        _render_stats_card(live=False, slide_count=slide_count)
     else:
-        _render_quote_card()
+        _render_quote_card(live=False, slide_count=slide_count)
+
+    _render_visual_board(slide_count)
+
+    assignments = st.session_state.get("visual_assignments") or {}
+    ready = all(slide in assignments for slide in range(1, slide_count + 1))
+    if st.session_state.visuals_approved:
+        st.success("Visuals approved. The exact visual handoff is ready for Renderer.")
+    elif ready:
+        if st.button(
+            f"Approve {slide_count} visuals",
+            type="primary",
+            width="stretch",
+            key="test-approve-visuals",
+        ):
+            st.session_state.approved_visuals = [
+                assignments[slide]
+                for slide in range(1, slide_count + 1)
+            ]
+            st.session_state.visuals_approved = True
+            st.session_state.test_stage = "05 · Subtitles"
+            st.session_state.test_pipeline_notice = {
+                "confirmed": "Visual QC confirmed",
+                "next": "Moving to Subtitles.",
+            }
+            st.rerun()
+    else:
+        st.info(
+            f"{len(assignments)}/{slide_count} visuals attached. "
+            "Choose visuals above to build the Renderer handoff."
+        )
+
 
 
 def render_subtitles():
