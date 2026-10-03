@@ -674,8 +674,6 @@ if "test_top5_standalone_preview" not in st.session_state:
     st.session_state.test_top5_standalone_preview = None
 if "test_pipeline_notice" not in st.session_state:
     st.session_state.test_pipeline_notice = None
-if "renderer_previews" not in st.session_state:
-    st.session_state.renderer_previews = None
 if "visual_crops" not in st.session_state:
     st.session_state.visual_crops = {}
 if "visual_deleted" not in st.session_state:
@@ -3667,8 +3665,7 @@ def render_scriptwriter():
                     }
                     st.session_state.audio_data=None
                     st.session_state.approved_audio=None
-                    st.session_state.renderer_previews=None
-                    st.session_state.upload_qc_approved=False
+                           st.session_state.upload_qc_approved=False
                     st.session_state.upload_result=None
                     st.session_state.rendered_video_path=None
                     st.session_state.upload_qc=None
@@ -4130,56 +4127,79 @@ def render_subtitles():
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
 def render_renderer_test():
-    from renderer import FINAL_STYLE_NAME, HEADLINE_TEXT, build_preview_bundle
+    from renderer import render_production_video
 
-    approved_script=st.session_state.get("approved_script")
-    headline_enabled = (
-        bool(approved_script.get("headline_enabled", st.session_state.get("headline_enabled", True)))
-        if isinstance(approved_script, dict)
-        else st.session_state.get("headline_enabled", True)
-    )
-    headline_text=(str(approved_script.get("headline") or "").strip() if isinstance(approved_script,dict) else "") or HEADLINE_TEXT
+    script = st.session_state.get("approved_script")
+    audio = st.session_state.get("approved_audio")
+    subtitles = st.session_state.get("approved_subtitles")
+    visuals = st.session_state.get("approved_visuals")
 
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">06 · RENDER</div>'
-        '<div class="canvas-title">Preview the finished treatment</div>'
-        '<div class="canvas-copy">Check the opening headline and final caption treatment before the production render.</div></div></div>',
+        '<div class="canvas-title">Build the finished Short</div>'
+        '<div class="canvas-copy">Renderer consumes the exact approved Scriptwriter, Audio, Subtitles and Visual handoffs.</div></div></div>',
         unsafe_allow_html=True,
     )
-    left,right=st.columns([1.15,.85],gap="large")
-    with left:
-        st.markdown('<div class="media-surface">',unsafe_allow_html=True)
-        previews=st.session_state.get("renderer_previews") or {}
-        if previews.get("final") and Path(previews["final"]).exists():
-            st.video(str(previews["final"]),width=380)
-        elif previews.get("opening") and Path(previews["opening"]).exists():
-            st.video(str(previews["opening"]),width=380)
-        else:
-            st.caption("Build a preview to see the video treatment.")
-        st.markdown('</div>',unsafe_allow_html=True)
-    with right:
-        with st.container(key="renderer-inspector"):
-            st.markdown('<div class="inspector">',unsafe_allow_html=True)
-            st.markdown('<div class="mini-label">Treatment</div>',unsafe_allow_html=True)
-            st.markdown(f'<div class="inspector-line"><span>Opening</span><span class="inspector-value">{headline_text}</span></div>',unsafe_allow_html=True)
-            st.markdown(f'<div class="inspector-line"><span>Style</span><span class="inspector-value">{FINAL_STYLE_NAME}</span></div>',unsafe_allow_html=True)
-            st.markdown('<div class="inspector-line"><span>Captions</span><span class="inspector-value">Word highlight</span></div>',unsafe_allow_html=True)
-            st.markdown(
-                f'<div class="inspector-line"><span>Headline</span><span class="inspector-value">{"Enabled" if headline_enabled else "Off"}</span></div>',
-                unsafe_allow_html=True,
-            )
-            if st.button("Build preview",type="primary",width="stretch"):
-                with st.spinner("Rendering preview…"):
-                    try:
-                        st.session_state.renderer_previews=build_preview_bundle(
-                            headline_enabled=headline_enabled,
-                            headline_text=headline_text.strip() if headline_enabled else "",
-                        )
-                    except (RuntimeError,ValueError) as exc:
-                        st.error(str(exc))
-            if previews:
-                st.markdown('<div style="margin-top:.8rem;color:var(--muted);font-size:.72rem;">Preview bundle ready.</div>',unsafe_allow_html=True)
-            st.markdown('</div>',unsafe_allow_html=True)
+
+    missing = []
+    if not isinstance(script, dict):
+        missing.append("Scriptwriter")
+    if not isinstance(audio, dict):
+        missing.append("Audio")
+    if not isinstance(subtitles, dict):
+        missing.append("Subtitles")
+    if not isinstance(visuals, list):
+        missing.append("Visuals")
+
+    if missing:
+        st.info("Renderer is waiting for approval of: " + ", ".join(missing) + ".")
+        return
+
+    headline_enabled = bool(script.get("headline_enabled", st.session_state.get("headline_enabled", True)))
+    headline_text = str(script.get("headline") or "").strip()
+    selected_topic = st.session_state.get("selected_topic")
+    topics = st.session_state.get("topics") or []
+    source_label = "SPORTS DESK"
+    if isinstance(selected_topic, int) and 0 <= selected_topic < len(topics):
+        source_label = str(topics[selected_topic].source or "SPORTS DESK")
+
+    video_path = st.session_state.get("rendered_video_path")
+    if video_path and Path(str(video_path)).is_file():
+        st.video(str(video_path), width=520)
+        st.caption("This is the current rendered Test handoff. Rebuild it after changing an approved upstream stage.")
+    else:
+        st.caption("All required handoffs are approved. Build the Short below.")
+
+    if st.button(
+        "Build final Short",
+        type="primary",
+        width="stretch",
+        key="test-build-final-short",
+    ):
+        output = Path("output/test") / "rendered_short.mp4"
+        try:
+            output.parent.mkdir(parents=True, exist_ok=True)
+            with st.spinner("Rendering the final Short…"):
+                render_production_video(
+                    script,
+                    audio,
+                    subtitles,
+                    visuals,
+                    output_path=output,
+                    headline_text=headline_text,
+                    headline_enabled=headline_enabled,
+                    source_label=source_label,
+                )
+            st.session_state.rendered_video_path = str(output)
+            st.session_state.upload_qc_approved = False
+            st.session_state.upload_result = None
+            st.session_state.upload_qc = None
+            st.rerun()
+        except (RuntimeError, ValueError, OSError) as exc:
+            st.error(str(exc))
+
+
+
 TITLE_OPTION_STYLES = (
     "SEO / Search",
     "Curiosity / Baity",
