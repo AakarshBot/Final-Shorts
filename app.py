@@ -2499,6 +2499,7 @@ def _render_live_visuals(slide_count: int):
                 list(result.get("assets") or []),
                 "manual",
                 slide_count,
+                live=True,
             )
 
     if visual_option == "Option 3 · Real Image Search":
@@ -2536,6 +2537,7 @@ def _render_live_visuals(slide_count: int):
                 list(result.get("assets") or []),
                 "real",
                 slide_count,
+                live=True,
             )
 
     if visual_option == "Option 4 · AI Generation":
@@ -2573,6 +2575,7 @@ def _render_live_visuals(slide_count: int):
                 list(result.get("assets") or []),
                 "ai",
                 slide_count,
+                live=True,
             )
 
     if visual_option == "Option 5 · Ranked Scene Search":
