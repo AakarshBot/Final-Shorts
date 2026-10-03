@@ -545,6 +545,32 @@ Purpose:
 
 Status: **Planned / Test framework WIP.**
 
+### Test / Live architecture audit — cleanup required
+The factory must have one shared implementation of each seven production stages: Topic Fetcher, Scriptwriter, Audio, Visuals, Subtitles, Renderer and YouTube Upload. Test and Live may differ in presentation and in whether an already-approved stage is triggered manually or automatically, but they must not drift into different stage logic, handoff contracts or parameter sets.
+
+Current audit found that the underlying stage modules are mostly shared, but app.py contains duplicated Test/Live orchestration and UI logic. There are 61 Test-side session-state keys, 48 Live-side keys and 31 mirrored Test/Live state pairs. Several stage screens are separate implementations rather than two presentations of the same stage.
+
+Known drift that must be cleaned up:
+- Topic Fetcher has separate Test and Live tile/search implementations.
+- Scriptwriter uses the same writers but separate Test/Live orchestration.
+- Test Audio and Subtitles are manual staged QC; Live combines them into an automatic Audio + Subtitles transition. The workflow difference is intentional, but the underlying handoff logic must remain one shared implementation.
+- Test Automatic Visuals and Live Automatic Visuals currently pass different Scriptwriter context into crawl_visuals(). Test passes the selected story plus the first scene entity; Live additionally passes the first scene specific_search_prompt and visual_intent. This must not remain divergent.
+- Test and Live use separate visual asset/attachment implementations. Their presentation may differ, but the approved visual handoff rules must be the same.
+- Test Renderer preview and Live production rendering currently do not exercise exactly the same headline-enabled handoff.
+- Test and Live Upload QC use different interaction patterns. That is acceptable only where it is presentation; publish metadata and uploader handoff must remain the same contract.
+- Niche Sports has a separate writer contract from Cricket. Any cleanup must preserve its line-specific behavior and must not force it through an incompatible Cricket-only validator.
+
+Cleanup rules for this work:
+- Do not add wrappers, compatibility layers, duplicate pipelines, parallel metadata systems or abstraction layers that make the code harder to follow.
+- Prefer one direct stage implementation with small explicit mode/presentation differences over two copies of the same logic.
+- Preserve the existing seven-stage order and all approved production requirements.
+- Do not change retrieval algorithms, story scoring, Scriptwriter generation requirements, audio behavior, subtitle behavior, renderer design or upload behavior unless required to remove a concrete Test/Live mismatch.
+- Test must remain the place where new behavior is designed and manually approved before Live uses it.
+- Live may automate already-approved transitions, but it must consume the same approved handoffs as Test.
+- Each cleanup step must be checked against the relevant tests and the actual Test/Live handoff path before merge.
+
+Status: **Architecture cleanup in progress.**
+
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
