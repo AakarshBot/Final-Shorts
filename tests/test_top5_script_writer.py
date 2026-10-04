@@ -218,3 +218,33 @@ def test_generate_top5_script_uses_one_package_call(monkeypatch):
     assert calls == [("openai/gpt-oss-120b", calls[0][1])]
     assert [slide["story_index"] for slide in result["slides"]] == [0, 1, 2, 3, 4, 5]
     assert result["provider_used"] == "openai/gpt-oss-120b"
+
+
+
+def test_top5_request_retries_transient_groq_connection_errors(monkeypatch):
+    import requests
+    import top5_script_writer
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"choices": [{"message": {"content": valid_result()}}]}
+
+    attempts = []
+
+    def fake_post(*args, **kwargs):
+        attempts.append(1)
+        if len(attempts) < 3:
+            raise requests.exceptions.SSLError("temporary TLS EOF")
+        return FakeResponse()
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setattr(top5_script_writer.requests, "post", fake_post)
+    monkeypatch.setattr(top5_script_writer.time, "sleep", lambda _seconds: None)
+
+    result = top5_script_writer._request("openai/gpt-oss-20b", "system", "evidence")
+
+    assert len(attempts) == 3
+    assert result == valid_result()
