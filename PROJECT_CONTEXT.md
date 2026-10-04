@@ -303,6 +303,13 @@ Top-5 Visual QC:
 - Human image selection remains authoritative; there is no automatic image selection.
 - All six slide assignments must be approved together before Renderer.
 
+Top-5 editorial card design:
+- Text is editorial typography directly over the photograph. There is no white fade, white wash, gradient panel or background text block.
+- Headline and body both use adaptive sizing and can occupy the full available vertical editorial area of the 9:16 frame.
+- There are no arbitrary maximum line counts or body/headline length validators in the renderer.
+- Wrapping and font size are determined by the available width and height of the frame. The renderer uses adaptive text/stroke contrast and a subtle text shadow for readability without washing out the photograph.
+- The final card remains a static rendered frame; there is no headline-then-body motion treatment.
+
 Top-5 Live orchestration:
 - The user manually chooses and orders the five stories.
 - Approving Stage 1 creates the canonical five-story handoff and immediately starts five automatic Visual Fetcher jobs, one per selected story URL.
@@ -322,7 +329,8 @@ Top-5 Upload:
 Top-5 status:
 - **Test implementation: approved.**
 - **Live implementation: complete and in production testing.**
-- **No separate Top-5 dependency or parallel runtime pipeline was introduced.**
+- **Top-5 editorial card typography is now the approved target; no white fade/wash is permitted.**
+
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -340,14 +348,14 @@ The factory must have one shared implementation of each production stage. Test a
 Current audit state:
 - Topic Fetcher, Scriptwriter, Audio, Visuals, Subtitles, Renderer and YouTube Upload remain separate modules with shared underlying contracts.
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
-- The Test and Live Top-5 visual screens may differ in orchestration, but both consume the same visual asset shape and approved assignment semantics.
-- Top-5 Test Visual QC now routes Automatic Scraper, Manual Scraper, Real Image Search and AI Generation through one direct attachment path into test_top5_visual_assignments.
-- Top-5 Stats Card and Quote Card also attach into the same Top-5 handoff instead of the regular Cricket/Test visual assignment state.
-- The attachment path normalizes provider image bytes before building the actual Top-5 card preview, so all image sources reach Renderer through the same payload contract.
-- No wrapper, compatibility layer or new dependency was introduced for this fix.
+- Test and Live Top-5 visuals consume the same approved image and assignment contracts.
+- Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
+- The Top-5 renderer uses the photograph directly behind editorial text. White fades/washes and arbitrary headline/body line caps are not part of the approved design.
+- Top-5 renderer typography is sized against available frame space rather than fixed headline/body length limits.
+- No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
+- Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.
 - Live Top-5 starts automatic visual crawling at Stage 1 approval and streams page results into its existing Visual QC state.
 - Test remains manually stageable; Live remains approval-triggered.
-- Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 attachment fix.
 
 Cleanup rules:
 - Do not add wrappers, compatibility layers, duplicate pipelines, parallel metadata systems or abstraction layers that make the code harder to follow.
@@ -359,6 +367,7 @@ Cleanup rules:
 - Each cleanup step must be checked against the relevant tests and the actual Test/Live handoff path before merge.
 
 Status: **Architecture cleanup in progress.**
+
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
