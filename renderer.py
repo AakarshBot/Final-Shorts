@@ -892,7 +892,10 @@ def _top5_editorial_layout(
         else TOP5_EDITORIAL_STORY_Y
     )
 
-    def fit(available_height: int):
+    for available_height in (
+        HEIGHT - preferred_top - TOP5_EDITORIAL_SAFE_BOTTOM,
+        HEIGHT - TOP5_EDITORIAL_SAFE_TOP - TOP5_EDITORIAL_SAFE_BOTTOM,
+    ):
         for headline_size in range(
             TOP5_EDITORIAL_HEADLINE_MAX_SIZE,
             TOP5_EDITORIAL_HEADLINE_MIN_SIZE - 1,
@@ -917,10 +920,8 @@ def _top5_editorial_layout(
                 len(headline_lines) - 1,
             )
 
-            if not body:
-                if headline_height <= available_height:
-                    return headline_fonts, headline_lines, None, []
-                continue
+            if not body and headline_height <= available_height:
+                return headline_fonts, headline_lines, None, [], preferred_top
 
             remaining = (
                 available_height
@@ -967,21 +968,10 @@ def _top5_editorial_layout(
                         headline_lines,
                         body_font,
                         paragraphs,
+                        preferred_top,
                     )
-        return None
 
-    # Keep ordinary cards at the proven lower editorial anchor. Only move upward
-    # when unusually long copy cannot fit even at the minimum readable sizes.
-    available = HEIGHT - preferred_top - TOP5_EDITORIAL_SAFE_BOTTOM
-    fitted = fit(available)
-    if fitted is None:
-        available = HEIGHT - TOP5_EDITORIAL_SAFE_TOP - TOP5_EDITORIAL_SAFE_BOTTOM
-        fitted = fit(available)
-    if fitted is None:
-        raise ValueError("Top-5 text cannot fit inside the available frame.")
-
-    return fitted + (preferred_top,)
-
+    raise ValueError("Top-5 text cannot fit inside the available frame.")
 
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     language = str(card.get("language") or "english")
