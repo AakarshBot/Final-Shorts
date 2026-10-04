@@ -457,12 +457,15 @@ def _top5_editorial_layout(
             -1,
         ):
             headline_fonts = _headline_font_stack(headline_size, language)
-            headline_lines = _top5_wrap_editorial_words(
-                probe,
-                display_headline,
-                headline_fonts,
-                width,
-            )
+            try:
+                headline_lines = _top5_wrap_editorial_words(
+                    probe,
+                    display_headline,
+                    headline_fonts,
+                    width,
+                )
+            except ValueError:
+                continue
             headline_height = (
                 sum(
                     _top5_editorial_measure(
@@ -494,12 +497,15 @@ def _top5_editorial_layout(
                     -1,
                 ):
                     candidate_body_font = _top5_body_font(body_size, language)
-                    wrapped_body = _top5_wrap_editorial_words(
-                        probe,
-                        clean_body,
-                        (candidate_body_font,),
-                        min(width, 760),
-                    )
+                    try:
+                        wrapped_body = _top5_wrap_editorial_words(
+                            probe,
+                            clean_body,
+                            (candidate_body_font,),
+                            min(width, 760),
+                        )
+                    except ValueError:
+                        continue
                     body_box = probe.textbbox(
                         (0, 0),
                         "Ag",
