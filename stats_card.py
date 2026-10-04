@@ -237,7 +237,7 @@ DYNAMIC_SCHEMA = {
         "team2": {"type": "string"},
         "count": {"type": "integer", "minimum": 0, "maximum": 20},
         "metrics": {
-            "type": "array", "minItems": 1, "maxItems": 12,
+            "type": "array", "minItems": 0, "maxItems": 12,
             "items": {"type": "string", "enum": list(dict.fromkeys(DYNAMIC_PLAYER_METRICS + DYNAMIC_H2H_METRICS))},
         },
         "detail_table": {"type": "string", "enum": ["none", "innings", "meetings"]},
@@ -296,8 +296,9 @@ def _plan_dynamic_stats(query: str) -> dict[str, Any]:
     if not key:
         raise StatsCardError("GROQ_API_KEY is not configured.")
 
-    response = requests.post(
-        "https://api.groq.com/openai/v1/chat/completions",
+    try:
+        response = requests.post(
+            "https://api.groq.com/openai/v1/chat/completions",
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
         json={
             "model": DYNAMIC_GROQ_MODEL,
@@ -314,8 +315,11 @@ def _plan_dynamic_stats(query: str) -> dict[str, Any]:
             "temperature": 0.1,
             "max_completion_tokens": 700,
         },
-        timeout=REQUEST_TIMEOUT,
-    )
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        raise StatsCardError("Stats query research failed. Try a different query.") from exc
+
     try:
         response.raise_for_status()
     except requests.RequestException as exc:
@@ -380,6 +384,11 @@ def _plan_dynamic_stats(query: str) -> dict[str, Any]:
         if not plan["team1"] or not plan["team2"] or plan["team1"].casefold() == plan["team2"].casefold():
             raise StatsCardError("Please include two different teams for head-to-head stats and try again.")
         plan["opponent_team"] = ""
+
+    if detail_table == "meetings" and scope != "h2h":
+        raise StatsCardError("Meeting tables are only available for head-to-head requests. Try a different query.")
+    if detail_table == "innings" and scope == "h2h":
+        raise StatsCardError("Innings tables are only available for player requests. Try a different query.")
 
     plan["metrics"] = metrics[:12]
     plan["count"] = count
@@ -1620,8 +1629,8 @@ def _draw_dynamic_metric_grid(
         else 150 if len(metrics) >= 10
         else 142
     )
-    label_font = _font(18 if columns == 4 else 20)
-    value_font = _font(39 if columns == 4 else 46)
+    label_font = _font(16 if columns == 4 else 20)
+    value_font = _font(34 if columns == 4 else 46)
     rows = (len(metrics) + columns - 1) // columns
     for row_index in range(rows):
         row = metrics[row_index*columns:(row_index+1)*columns]
@@ -1629,18 +1638,24 @@ def _draw_dynamic_metric_grid(
         for col_index,(label,value) in enumerate(row):
             x=MARGIN+col_index*(tile_width+gap)
             draw.rounded_rectangle((x,y,x+tile_width,y+tile_height),radius=16,fill=(255,255,255),outline=LINE,width=2)
-            label_lines=_wrap_words(draw,label.upper(),label_font,tile_width-28)
-            label_y=y+13
-            for line in label_lines[:2]:
+            label_lines=_wrap_words(draw,label.upper(),label_font,tile_width-28)[:2]
+            label_y=y+10
+            for line in label_lines:
                 box=draw.textbbox((0,0),line,font=label_font)
                 draw.text((x+(tile_width-(box[2]-box[0]))/2,label_y),line,font=label_font,fill=MUTED)
                 label_y += box[3]-box[1]+2
+            label_bottom=label_y
             value_text=_fit_single_line(draw,value,value_font,tile_width-28)
             value_for_tile=value_font
-            while value_for_tile.size>28 and draw.textbbox((0,0),value_text,font=value_for_tile)[2]>tile_width-28:
+            while value_for_tile.size>22 and draw.textbbox((0,0),value_text,font=value_for_tile)[2]>tile_width-28:
                 value_for_tile=_font(value_for_tile.size-2)
-            box=draw.textbbox((0,0),value_text,font=value_for_tile)
-            draw.text((x+(tile_width-(box[2]-box[0]))/2,y+tile_height-(box[3]-box[1])-13),value_text,font=value_for_tile,fill=INK)
+            value_box=draw.textbbox((0,0),value_text,font=value_for_tile)
+            value_width=value_box[2]-value_box[0]
+            value_height=value_box[3]-value_box[1]
+            value_y=max(y+tile_height-value_height-10,label_bottom+6)
+            if value_y+value_height>y+tile_height-7:
+                raise StatsCardError("A requested stat value is too long to fit cleanly.") if value_for_tile.size<=22 else None
+            draw.text((x+(tile_width-value_width)/2,value_y),value_text,font=value_for_tile,fill=INK)
     return top+rows*tile_height+max(0,rows-1)*gap
 
 def _draw_dynamic_detail_table(
