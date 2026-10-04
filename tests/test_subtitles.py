@@ -62,7 +62,7 @@ def test_subtitles_create_fixed_full_script_scenes():
 def test_subtitles_preserve_script_punctuation_when_audio_word_matches():
     result = generate_subtitles(approved_script(), approved_audio())
     assert result["scenes"][0]["text"] == "India won the match."
-    assert result["scenes"][0]["words"][-1]["text"] == "match"
+    assert result["scenes"][0]["words"][-1]["text"] == "match."
 
 
 def test_subtitles_keep_all_words_in_one_scene_for_highlighting():
@@ -117,6 +117,14 @@ def test_subtitles_reject_missing_script_text():
 
     with pytest.raises(ValueError, match="Scene 1 has no script text"):
         generate_subtitles(script, approved_audio())
+
+
+def test_subtitles_reject_incomplete_audio_word_timings():
+    audio = approved_audio()
+    audio["scenes"][0]["timings"] = audio["scenes"][0]["timings"][:-1]
+
+    with pytest.raises(ValueError, match="word counts do not match"):
+        generate_subtitles(approved_script(), audio)
 
 
 def test_subtitles_require_approved_handoffs():
