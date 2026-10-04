@@ -376,27 +376,42 @@ def _top5_full_frame_image(value: bytes | bytearray | Image.Image) -> Image.Imag
     return _fit_visual_to_frame(image)
 
 
+def _top5_editorial_measure(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    fonts: tuple[object, ...],
+) -> tuple[int, int]:
+    runs = _headline_runs(text, fonts)
+    if not runs:
+        return 0, 0
+    widths = []
+    heights = []
+    for run, font in runs:
+        box = draw.textbbox(
+            (0, 0),
+            run,
+            font=font,
+            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
+        )
+        widths.append(box[2] - box[0])
+        heights.append(box[3] - box[1])
+    return sum(widths), max(heights)
+
+
 def _top5_wrap_editorial_words(
     draw: ImageDraw.ImageDraw,
     text: str,
-    font,
+    fonts: tuple[object, ...],
     max_width: int,
 ) -> list[list[str]]:
     words = " ".join(str(text or "").split()).split()
     if not words:
         return []
-
     lines = []
     current = []
     current_width = 0
     for word in words:
-        box = draw.textbbox(
-            (0, 0),
-            word,
-            font=font,
-            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-        )
-        width = box[2] - box[0]
+        width, _ = _top5_editorial_measure(draw, word, fonts)
         if width > max_width:
             raise ValueError("Top-5 text contains a word that is too wide to fit.")
         candidate = current_width + width + (12 if current else 0)
@@ -410,20 +425,6 @@ def _top5_wrap_editorial_words(
     if current:
         lines.append(current)
     return lines
-
-
-def _top5_editorial_measure(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    font,
-) -> tuple[int, int]:
-    box = draw.textbbox(
-        (0, 0),
-        text,
-        font=font,
-        stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-    )
-    return box[2] - box[0], box[3] - box[1]
 
 
 def _top5_editorial_layout(
@@ -455,11 +456,11 @@ def _top5_editorial_layout(
             TOP5_EDITORIAL_HEADLINE_MIN_SIZE - 1,
             -1,
         ):
-            headline_font = _headline_font_stack(headline_size, language)[0]
+            headline_fonts = _headline_font_stack(headline_size, language)
             headline_lines = _top5_wrap_editorial_words(
                 probe,
                 display_headline,
-                headline_font,
+                headline_fonts,
                 width,
             )
             headline_height = (
@@ -467,7 +468,7 @@ def _top5_editorial_layout(
                     _top5_editorial_measure(
                         probe,
                         " ".join(line),
-                        headline_font,
+                        headline_fonts,
                     )[1]
                     for line in headline_lines
                 )
@@ -485,7 +486,6 @@ def _top5_editorial_layout(
                 remaining = height - headline_height - TOP5_EDITORIAL_HEADLINE_BODY_GAP
                 if remaining <= 0:
                     continue
-
                 body_font = None
                 body_lines = []
                 for body_size in range(
@@ -497,7 +497,7 @@ def _top5_editorial_layout(
                     wrapped_body = _top5_wrap_editorial_words(
                         probe,
                         clean_body,
-                        candidate_body_font,
+                        (candidate_body_font,),
                         min(width, 760),
                     )
                     body_box = probe.textbbox(
@@ -520,7 +520,6 @@ def _top5_editorial_layout(
                             + body_height
                         )
                         break
-
                 chosen = body_font is not None
 
             if not chosen or total_height > height:
@@ -534,6 +533,9 @@ def _top5_editorial_layout(
                     min(HEIGHT, y + total_height),
                 )
             ).convert("L")
+            if not sample.width or not sample.height:
+                continue
+
             from PIL import ImageStat
 
             stats = ImageStat.Stat(sample)
@@ -551,7 +553,7 @@ def _top5_editorial_layout(
                 "y": y,
                 "width": width,
                 "align": align,
-                "headline_font": headline_font,
+                "headline_fonts": headline_fonts,
                 "headline_lines": headline_lines,
                 "body_font": body_font,
                 "body_lines": body_lines,
@@ -569,7 +571,7 @@ def _top5_editorial_layout(
 
     if best["luminance"] >= 150:
         best["fill"] = (8, 10, 14, 255)
-        best["stroke"] = (249, 250, 252, 220)
+        best["stroke"] = (249, 250, 252, 210)
     else:
         best["fill"] = (249, 250, 252, 255)
         best["stroke"] = (5, 7, 10, 220)
@@ -594,23 +596,32 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
 
     for line_words in layout["headline_lines"]:
         line = " ".join(line_words)
-        box = draw.textbbox(
-            (0, 0),
+        box = _top5_editorial_measure(
+            draw,
             line,
-            font=layout["headline_font"],
-            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
+            layout["headline_fonts"],
         )
-        line_width = box[2] - box[0]
+        line_width = box[0]
+        line_height = box[1]
         draw_x = x if layout["align"] == "left" else right - line_width
-        draw.text(
-            (draw_x - box[0], cursor_y - box[1]),
-            line,
-            font=layout["headline_font"],
-            fill=layout["fill"],
-            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-            stroke_fill=layout["stroke"],
-        )
-        cursor_y += box[3] - box[1] + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+        cursor_x = draw_x
+        for run, font in _headline_runs(line, layout["headline_fonts"]):
+            run_box = draw.textbbox(
+                (0, 0),
+                run,
+                font=font,
+                stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
+            )
+            draw.text(
+                (cursor_x - run_box[0], cursor_y - run_box[1]),
+                run,
+                font=font,
+                fill=layout["fill"],
+                stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
+                stroke_fill=layout["stroke"],
+            )
+            cursor_x += run_box[2] - run_box[0]
+        cursor_y += line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
 
     if layout["body_lines"] and layout["body_font"] is not None:
         cursor_y += layout["body_gap"]
