@@ -182,12 +182,14 @@ def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
     monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
     base = _test_base()
     subtitle_data = {
-        "schema": "final-shorts.subtitles.v1",
+        "schema": "final-shorts.subtitles.v2",
         "language": "english",
-        "cues": [
+        "scenes": [
             {
+                "scene": 1,
                 "start": 0.0,
                 "end": 2.0,
+                "text": "Championship International Cricket Update",
                 "words": [
                     {"text": "Championship", "start": 0.0, "end": 0.5},
                     {"text": "International", "start": 0.5, "end": 1.0},
@@ -365,15 +367,7 @@ def test_production_renderer_uses_approved_handoffs(monkeypatch, tmp_path):
         "approved_for_visuals": True,
         "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
     }
-    subtitles = {
-        "schema": "final-shorts.subtitles.v1",
-        "language": "english",
-        "cues": [{
-            "start": 0.0,
-            "end": 0.5,
-            "words": [{"text": "A", "start": 0.0, "end": 0.2}],
-        }],
-    }
+    subtitles = TEST_SUBTITLE_DATA
     visuals = [{"bytes": visual_buffer.getvalue()}]
 
     silent = []
