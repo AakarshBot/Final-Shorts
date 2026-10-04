@@ -3925,38 +3925,49 @@ def render_subtitles():
 
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">05 · SUBTITLES</div>'
-        '<div class="canvas-title">Review captions</div>'
-        '<div class="canvas-copy">Native Audio word timings are used directly; there is no second transcription pass.</div></div></div>',
+        '<div class="canvas-title">Review full-slide captions</div>'
+        '<div class="canvas-copy">The complete script stays fixed on each slide; the spoken word is highlighted using native Audio timings.</div></div></div>',
         unsafe_allow_html=True,
     )
-    if st.button("Generate subtitles",type="primary",width="stretch"):
+    if st.button("Generate subtitles", type="primary", width="stretch"):
         try:
-            from subtitles import generate_subtitles
-            st.session_state.subtitle_data=generate_subtitles(st.session_state.approved_script,st.session_state.approved_audio)
-            st.session_state.approved_subtitles=None
+            st.session_state.subtitle_data = generate_subtitles(
+                st.session_state.approved_script,
+                st.session_state.approved_audio,
+            )
+            st.session_state.approved_subtitles = None
         except ValueError as exc:
             st.error(str(exc))
-    subtitles=st.session_state.subtitle_data
+
+    subtitles = st.session_state.subtitle_data
     if not subtitles:
         return
 
-    left,right=st.columns([1.55,.45],gap="large")
+    left, right = st.columns([1.55, .45], gap="large")
     with left:
         with st.container(key="subtitle-editor"):
-            for index,cue in enumerate(subtitles["cues"],1):
-                words=" ".join(word["text"] for word in cue["words"])
+            for scene in subtitles.get("scenes") or []:
                 st.markdown(
-                    f'<div class="cue-row"><div class="cue-time">{cue["start"]:.2f}s<br>{cue["end"]:.2f}s</div><div class="cue-text">{words}</div></div>',
+                    f'<div class="cue-row"><div class="cue-time">Slide {scene["scene"]}<br>'
+                    f'{scene["start"]:.2f}s–{scene["end"]:.2f}s</div>'
+                    f'<div class="cue-text">{scene["text"]}</div></div>',
                     unsafe_allow_html=True,
                 )
-            st.markdown('</div>',unsafe_allow_html=True)
     with right:
-        st.markdown('<div class="inspector">',unsafe_allow_html=True)
-        st.markdown('<div class="mini-label">Caption set</div>',unsafe_allow_html=True)
-        for label,value in [("Cues",len(subtitles["cues"])),("Language",subtitles["language"]),("Timing","Audio-native")]:
-            st.markdown(f'<div class="inspector-line"><span>{label}</span><span class="inspector-value">{value}</span></div>',unsafe_allow_html=True)
-        if st.button("Approve subtitles",type="primary",width="stretch"):
-            st.session_state.approved_subtitles=dict(subtitles)
+        st.markdown('<div class="inspector">', unsafe_allow_html=True)
+        st.markdown('<div class="mini-label">Caption set</div>', unsafe_allow_html=True)
+        for label, value in [
+            ("Slides", len(subtitles.get("scenes") or [])),
+            ("Language", subtitles["language"]),
+            ("Timing", "Audio-native"),
+            ("Highlight", "Spoken word"),
+        ]:
+            st.markdown(
+                f'<div class="inspector-line"><span>{label}</span><span class="inspector-value">{value}</span></div>',
+                unsafe_allow_html=True,
+            )
+        if st.button("Approve subtitles", type="primary", width="stretch"):
+            st.session_state.approved_subtitles = dict(subtitles)
             st.session_state.test_stage = "06 · Renderer"
             st.session_state.test_pipeline_notice = {
                 "confirmed": "Subtitle QC confirmed",
@@ -3964,8 +3975,10 @@ def render_subtitles():
             }
             st.rerun()
         if st.session_state.approved_subtitles:
-            st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
-        st.markdown('</div>',unsafe_allow_html=True)
+            st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+
 def render_renderer_test():
     from renderer import render_production_video
 

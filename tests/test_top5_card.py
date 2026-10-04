@@ -6,13 +6,20 @@ import renderer
 
 
 TEST_SUBTITLE_DATA = {
-    "schema": "final-shorts.subtitles.v1",
+    "schema": "final-shorts.subtitles.v2",
     "language": "english",
-    "cues": [
+    "scenes": [
         {
+            "scene": 1,
             "start": 0.0,
             "end": 0.5,
-            "words": [{"text": "A", "start": 0.0, "end": 0.2}],
+            "text": "A factual opening sentence.",
+            "words": [
+                {"text": "A", "start": 0.0, "end": 0.15},
+                {"text": "factual", "start": 0.15, "end": 0.25},
+                {"text": "opening", "start": 0.25, "end": 0.35},
+                {"text": "sentence.", "start": 0.35, "end": 0.5},
+            ],
         }
     ],
 }

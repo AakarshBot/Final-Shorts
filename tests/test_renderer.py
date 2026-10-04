@@ -7,36 +7,38 @@ import renderer
 
 
 TEST_SUBTITLE_DATA = {
-    "schema": "final-shorts.subtitles.v1",
+    "schema": "final-shorts.subtitles.v2",
     "language": "english",
-    "cues": [
+    "scenes": [
         {
-            "start": 0.30,
-            "end": 1.28,
+            "scene": 1,
+            "start": 0.0,
+            "end": 2.85,
+            "text": "India started strongly, but the momentum shifted when pressure finally arrived.",
             "words": [
                 {"text": "India", "start": 0.30, "end": 0.52},
                 {"text": "started", "start": 0.52, "end": 0.75},
                 {"text": "strongly,", "start": 0.75, "end": 0.98},
                 {"text": "but", "start": 0.98, "end": 1.28},
-            ],
-        },
-        {
-            "start": 1.28,
-            "end": 2.27,
-            "words": [
                 {"text": "the", "start": 1.28, "end": 1.44},
                 {"text": "momentum", "start": 1.44, "end": 1.70},
                 {"text": "shifted", "start": 1.70, "end": 1.96},
                 {"text": "when", "start": 1.96, "end": 2.27},
-            ],
-        },
-        {
-            "start": 2.27,
-            "end": 2.85,
-            "words": [
                 {"text": "pressure", "start": 2.27, "end": 2.51},
                 {"text": "finally", "start": 2.51, "end": 2.68},
                 {"text": "arrived.", "start": 2.68, "end": 2.85},
+            ],
+        },
+        {
+            "scene": 2,
+            "start": 2.85,
+            "end": 4.0,
+            "text": "Bowlers held their nerve.",
+            "words": [
+                {"text": "Bowlers", "start": 2.95, "end": 3.20},
+                {"text": "held", "start": 3.20, "end": 3.45},
+                {"text": "their", "start": 3.45, "end": 3.65},
+                {"text": "nerve.", "start": 3.65, "end": 3.90},
             ],
         },
     ],
@@ -180,12 +182,14 @@ def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
     monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
     base = _test_base()
     subtitle_data = {
-        "schema": "final-shorts.subtitles.v1",
+        "schema": "final-shorts.subtitles.v2",
         "language": "english",
-        "cues": [
+        "scenes": [
             {
+                "scene": 1,
                 "start": 0.0,
                 "end": 2.0,
+                "text": "Championship International Cricket Update",
                 "words": [
                     {"text": "Championship", "start": 0.0, "end": 0.5},
                     {"text": "International", "start": 0.5, "end": 1.0},
@@ -249,41 +253,68 @@ def test_headline_marker_and_subtitle_style_are_brand_consistent():
     assert renderer.HEADLINE_MARKER_WIDTH > 0
     assert renderer.HEADLINE_MARKER_HEIGHT > 0
     assert renderer.BRAND_BLUE != renderer.ACCENT
-    assert renderer.SUBTITLE_MAX_SIZE > 58
-    assert renderer.SUBTITLE_MAX_WIDTH >= 860
-    assert renderer.SUBTITLE_WORD_SPACING <= 12
+    assert renderer.SUBTITLE_MAX_SIZE >= 50
+    assert renderer.SUBTITLE_MIN_SIZE <= 32
+    assert renderer.SUBTITLE_MAX_WIDTH >= 900
+    assert renderer.SUBTITLE_WORD_SPACING <= 10
     assert renderer.SUBTITLE_Y < 1450
-    assert renderer.SUBTITLE_LINE_GAP >= 12
+    assert renderer.SUBTITLE_LINE_GAP <= 10
+    assert renderer.SUBTITLE_MAX_LINES >= 8
 
 
-def test_subtitle_layout_uses_second_line_only_when_needed():
-    words = TEST_SUBTITLE_DATA["cues"][0]["words"]
+def test_subtitle_layout_is_fixed_for_the_entire_slide():
+    words = TEST_SUBTITLE_DATA["scenes"][0]["words"]
+    word_texts = tuple(word["text"] for word in words)
 
-    font, line_lengths, _, line_heights, total_height = renderer._subtitle_render_geometry_cached(
-        tuple(word["text"] for word in words),
-        "english",
-    )
-    assert font.size >= renderer.SUBTITLE_MIN_SIZE
-    assert 1 <= len(line_lengths) <= 2
+    first = renderer._subtitle_render_geometry_cached(word_texts, "english")
+    second = renderer._subtitle_render_geometry_cached(word_texts, "english")
+
+    assert first == second
+    font, line_lengths, measurements, line_heights, line_widths, total_height = first
+    assert renderer.SUBTITLE_MIN_SIZE <= font.size <= renderer.SUBTITLE_MAX_SIZE
+    assert 1 <= len(line_lengths) <= renderer.SUBTITLE_MAX_LINES
+    assert sum(line_lengths) == len(words)
+    assert all(width <= renderer.SUBTITLE_MAX_WIDTH for width in line_widths)
     assert line_heights
-    assert total_height > 0
+    assert total_height <= renderer.SUBTITLE_MAX_HEIGHT
 
-    long_words = [
-        {"text": "This", "start": 0.0, "end": 0.2},
-        {"text": "is", "start": 0.2, "end": 0.4},
-        {"text": "a", "start": 0.4, "end": 0.6},
-        {"text": "very", "start": 0.6, "end": 0.8},
-        {"text": "long", "start": 0.8, "end": 1.0},
-        {"text": "sports", "start": 1.0, "end": 1.2},
-        {"text": "update", "start": 1.2, "end": 1.4},
-        {"text": "today", "start": 1.4, "end": 1.6},
-    ]
-    _, long_line_lengths, _, _, _ = renderer._subtitle_render_geometry_cached(
-        tuple(word["text"] for word in long_words),
+
+def test_subtitle_scene_lookup_keeps_the_whole_script_visible():
+    scene = renderer._subtitle_scene_at_time(TEST_SUBTITLE_DATA, 1.50)
+
+    assert scene is not None
+    assert scene["text"] == TEST_SUBTITLE_DATA["scenes"][0]["text"]
+    assert len(scene["words"]) == len(scene["text"].split())
+    assert 1.44 <= 1.50 < 1.70
+
+
+
+def test_subtitles_change_highlight_without_changing_text_geometry(monkeypatch):
+    monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
+    monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
+
+    base = _test_base()
+    early = renderer.render_frame(
+        base,
+        0.60,
+        subtitle_data=TEST_SUBTITLE_DATA,
+        headline_enabled=False,
+    )
+    late = renderer.render_frame(
+        base,
+        1.80,
+        subtitle_data=TEST_SUBTITLE_DATA,
+        headline_enabled=False,
+    )
+
+    assert ImageChops.difference(early, late).getbbox() is not None
+    assert renderer._subtitle_render_geometry_cached(
+        tuple(word["text"] for word in TEST_SUBTITLE_DATA["scenes"][0]["words"]),
+        "english",
+    ) == renderer._subtitle_render_geometry_cached(
+        tuple(word["text"] for word in TEST_SUBTITLE_DATA["scenes"][0]["words"]),
         "english",
     )
-    assert len(long_line_lengths) == 2
-    assert sum(long_line_lengths) == len(long_words)
 
 
 def test_subtitle_dash_variants_are_normalised():
@@ -300,19 +331,22 @@ def test_subtitle_handoff_contract():
 
 def test_invalid_subtitle_handoff_is_rejected():
     bad = {
-        "schema": "final-shorts.subtitles.v1",
+        "schema": "final-shorts.subtitles.v2",
         "language": "english",
-        "cues": [
+        "scenes": [
             {
+                "scene": 1,
                 "start": 1.0,
                 "end": 1.5,
-                "words": [{"text": "hello", "start": 1.1, "end": 1.6}],
+                "text": "hello",
+                "words": [
+                    {"text": "hello", "start": 1.1, "end": 1.6},
+                ],
             }
         ],
     }
 
     assert renderer.validate_subtitle_handoff(bad) is False
-
 
 
 def test_production_renderer_uses_approved_handoffs(monkeypatch, tmp_path):
@@ -333,15 +367,7 @@ def test_production_renderer_uses_approved_handoffs(monkeypatch, tmp_path):
         "approved_for_visuals": True,
         "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
     }
-    subtitles = {
-        "schema": "final-shorts.subtitles.v1",
-        "language": "english",
-        "cues": [{
-            "start": 0.0,
-            "end": 0.5,
-            "words": [{"text": "A", "start": 0.0, "end": 0.2}],
-        }],
-    }
+    subtitles = TEST_SUBTITLE_DATA
     visuals = [{"bytes": visual_buffer.getvalue()}]
 
     silent = []

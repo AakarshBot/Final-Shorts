@@ -5,14 +5,12 @@ from __future__ import annotations
 import re
 from typing import Any
 
-SCHEMA = "final-shorts.subtitles.v1"
+
+SCHEMA = "final-shorts.subtitles.v2"
 DASH_TRANSLATION = str.maketrans({
     "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "−": "-",
     "﹘": "-", "﹣": "-", "－": "-",
 })
-MAX_WORDS_PER_CUE = 4
-MAX_CUE_SECONDS = 1.6
-STRONG_BREAK = re.compile(r"[.!?][\"'”’)]?$")
 
 
 def _clean(value: Any) -> str:
@@ -27,7 +25,10 @@ def _normalise_word(value: str) -> str:
     return re.sub(r"[^\w]+", "", str(value or "").casefold())
 
 
-def _display_words(script_text: str, timings: list[dict[str, Any]]) -> list[str]:
+def _display_words(
+    script_text: str,
+    timings: list[dict[str, Any]],
+) -> list[str]:
     tokens = _clean(script_text).split()
     result = []
 
@@ -48,32 +49,11 @@ def _display_words(script_text: str, timings: list[dict[str, Any]]) -> list[str]
     return result
 
 
-def _group(words: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
-    cues: list[list[dict[str, Any]]] = []
-    current: list[dict[str, Any]] = []
-
-    for word in words:
-        current.append(word)
-        duration = float(word["end"]) - float(current[0]["start"])
-        if (
-            len(current) >= MAX_WORDS_PER_CUE
-            or duration >= MAX_CUE_SECONDS
-            or bool(STRONG_BREAK.search(str(word["text"])))
-        ):
-            cues.append(current)
-            current = []
-
-    if current:
-        cues.append(current)
-
-    return cues
-
-
 def generate_subtitles(
     approved_script: dict,
     approved_audio: dict,
 ) -> dict[str, Any]:
-    """Build the renderer handoff using only existing script and audio timings."""
+    """Build one fixed full-script scene handoff with audio-native word timings."""
     if (
         not isinstance(approved_script, dict)
         or approved_script.get("approved_for_audio") is not True
@@ -96,12 +76,16 @@ def generate_subtitles(
     ):
         raise ValueError("Script and audio scene counts do not match.")
 
-    script_language = _clean(approved_script.get("language_used") or "english").casefold()
-    audio_language = _clean(approved_audio.get("language") or "english").casefold()
+    script_language = _clean(
+        approved_script.get("language_used") or "english"
+    ).casefold()
+    audio_language = _clean(
+        approved_audio.get("language") or "english"
+    ).casefold()
     if script_language != audio_language:
         raise ValueError("Script and audio languages do not match.")
 
-    cues: list[dict[str, Any]] = []
+    scenes: list[dict[str, Any]] = []
     scene_offset = 0.0
 
     for number, (script_scene, audio_scene) in enumerate(
@@ -110,10 +94,18 @@ def generate_subtitles(
     ):
         duration = float(audio_scene.get("duration") or 0.0)
         timings = audio_scene.get("timings")
+        script_text = _subtitle_text(script_scene.get("voiceover", ""))
+
         if duration <= 0 or not isinstance(timings, list) or not timings:
             raise ValueError(f"Scene {number} has no usable audio timings.")
+        if not script_text:
+            raise ValueError(f"Scene {number} has no script text.")
 
-        display_words = _display_words(script_scene.get("voiceover", ""), timings)
+        display_words = _display_words(script_text, timings)
+        if len(_clean(script_text).split()) != len(timings):
+            raise ValueError(
+                f"Scene {number} script and audio word counts do not match."
+            )
         timed_words: list[dict[str, Any]] = []
 
         for index, timing in enumerate(timings):
@@ -121,12 +113,16 @@ def generate_subtitles(
                 start = float(timing["start"])
                 end = float(timing["end"])
             except (KeyError, TypeError, ValueError) as exc:
-                raise ValueError(f"Scene {number} contains invalid word timing.") from exc
+                raise ValueError(
+                    f"Scene {number} contains invalid word timing."
+                ) from exc
 
             if start < 0 or end <= start:
                 raise ValueError(f"Scene {number} contains invalid word timing.")
             if start > duration + 0.10 or end > duration + 0.10:
-                raise ValueError(f"Scene {number} timing exceeds its audio duration.")
+                raise ValueError(
+                    f"Scene {number} timing exceeds its audio duration."
+                )
 
             start = min(duration, start)
             end = min(duration, end)
@@ -145,22 +141,27 @@ def generate_subtitles(
                 }
             )
 
-        for group in _group(timed_words):
-            cues.append(
-                {
-                    "start": group[0]["start"],
-                    "end": group[-1]["end"],
-                    "words": group,
-                }
-            )
+        if not timed_words:
+            raise ValueError(f"Scene {number} has no usable word timings.")
 
-        scene_offset = round(scene_offset + duration, 3)
+        scene_start = round(scene_offset, 3)
+        scene_end = round(scene_offset + duration, 3)
+        scenes.append(
+            {
+                "scene": number,
+                "start": scene_start,
+                "end": scene_end,
+                "text": script_text,
+                "words": timed_words,
+            }
+        )
+        scene_offset = scene_end
 
     result = {
         "schema": SCHEMA,
         "language": audio_language,
-        "cues": cues,
+        "scenes": scenes,
     }
-    if not cues:
-        raise ValueError("No subtitle cues were generated.")
+    if not scenes:
+        raise ValueError("No subtitle scenes were generated.")
     return result

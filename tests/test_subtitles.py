@@ -44,35 +44,52 @@ def approved_audio(language="english"):
     }
 
 
-def test_subtitles_create_absolute_timestamps_across_scenes():
+def test_subtitles_create_fixed_full_script_scenes():
     result = generate_subtitles(approved_script(), approved_audio())
-    assert result["schema"] == "final-shorts.subtitles.v1"
-    assert result["language"] == "english"
-    assert result["cues"][0]["start"] == 0.0
-    assert result["cues"][0]["end"] == 1.0
 
-    scene_one_duration = approved_audio()["scenes"][0]["duration"]
-    assert result["cues"][1]["start"] == pytest.approx(scene_one_duration + 0.1)
-    assert result["cues"][1]["end"] == pytest.approx(scene_one_duration + 1.2)
+    assert result["schema"] == "final-shorts.subtitles.v2"
+    assert result["language"] == "english"
+    assert [scene["text"] for scene in result["scenes"]] == [
+        "India won the match.",
+        "Bowlers held their nerve.",
+    ]
+    assert result["scenes"][0]["start"] == 0.0
+    assert result["scenes"][0]["end"] == 1.4
+    assert result["scenes"][1]["start"] == pytest.approx(1.4)
+    assert result["scenes"][1]["words"][0]["start"] == pytest.approx(1.5)
 
 
 def test_subtitles_preserve_script_punctuation_when_audio_word_matches():
     result = generate_subtitles(approved_script(), approved_audio())
-    assert result["cues"][0]["words"][-1]["text"] == "match."
+    assert result["scenes"][0]["text"] == "India won the match."
+    assert result["scenes"][0]["words"][-1]["text"] == "match."
 
 
-def test_subtitles_break_into_small_readable_cues():
+def test_subtitles_keep_all_words_in_one_scene_for_highlighting():
     script = approved_script()
-    script["script"][0]["voiceover"] = "One two three four five six seven eight."
+    script["script"][0]["voiceover"] = (
+        "One two three four five six seven eight."
+    )
     audio = approved_audio()
     audio["scenes"][0]["duration"] = 1.8
     audio["scenes"][0]["timings"] = [
-        {"word": word, "start": index * 0.2, "end": (index + 1) * 0.2}
-        for index, word in enumerate("One two three four five six seven eight".split())
+        {
+            "word": word,
+            "start": index * 0.2,
+            "end": (index + 1) * 0.2,
+        }
+        for index, word in enumerate(
+            "One two three four five six seven eight".split()
+        )
     ]
+
     result = generate_subtitles(script, audio)
-    assert all(len(cue["words"]) <= 4 for cue in result["cues"])
-    assert len(result["cues"]) >= 2
+
+    assert result["scenes"][0]["text"] == (
+        "One two three four five six seven eight."
+    )
+    assert len(result["scenes"][0]["words"]) == 8
+    assert result["scenes"][0]["words"][4]["text"] == "five"
 
 
 def test_subtitles_normalise_unicode_dashes():
@@ -86,10 +103,28 @@ def test_subtitles_normalise_unicode_dashes():
         {"word": "the", "start": 0.5, "end": 0.7},
         {"word": "match.", "start": 0.7, "end": 1.0},
     ]
+
     result = generate_subtitles(script, audio)
-    texts = [word["text"] for cue in result["cues"] for word in cue["words"]]
+    texts = [word["text"] for word in result["scenes"][0]["words"]]
+
     assert "—" not in "".join(texts)
     assert "-" in texts
+
+
+def test_subtitles_reject_missing_script_text():
+    script = approved_script()
+    script["script"][0]["voiceover"] = ""
+
+    with pytest.raises(ValueError, match="Scene 1 has no script text"):
+        generate_subtitles(script, approved_audio())
+
+
+def test_subtitles_reject_incomplete_audio_word_timings():
+    audio = approved_audio()
+    audio["scenes"][0]["timings"] = audio["scenes"][0]["timings"][:-1]
+
+    with pytest.raises(ValueError, match="word counts do not match"):
+        generate_subtitles(approved_script(), audio)
 
 
 def test_subtitles_require_approved_handoffs():
