@@ -3701,6 +3701,161 @@ def render_visuals_crawler():
     _render_visual_asset_pool(assets, "auto-crawler", _test_visual_slide_count())
 
 
+
+def _render_manual_crawler():
+    from visual_fetcher import manual_crawl_visuals
+
+    st.subheader("Manual Scraper")
+    st.caption("Manual query only. Searches current publisher pages and scrapes their images.")
+    with st.form("manual_crawler_form"):
+        query = st.text_input(
+            "Search query",
+            placeholder="e.g. Virat Kohli Rohit Sharma",
+            key="manual_crawler_query",
+        )
+        scrape = st.form_submit_button(
+            "Run manual scrape",
+            type="primary",
+            width="stretch",
+        )
+
+    if scrape:
+        query = query.strip()
+        if not query:
+            st.warning("Enter a query first.")
+        else:
+            with st.spinner("Searching and scraping publisher pages…"):
+                try:
+                    st.session_state.manual_visual_result = manual_crawl_visuals(query)
+                    st.session_state.visual_crops = {}
+                except Exception as exc:
+                    st.session_state.manual_visual_result = {
+                        "error": f"{type(exc).__name__}: {exc}"
+                    }
+
+    result = st.session_state.get("manual_visual_result") or {}
+    if result.get("error"):
+        st.error(result["error"])
+        return
+    if not result:
+        return
+
+    st.caption(
+        f'{len(result.get("assets") or [])} images · '
+        f'{int(result.get("pages_scraped") or 0)} pages · '
+        f'{"historical search" if result.get("historical") else "current search"}'
+    )
+    for query in result.get("search_queries") or []:
+        st.code(query)
+    diagnostics = list(result.get("diagnostics") or [])
+    with st.expander("Crawler diagnostics", expanded=not bool(result.get("assets"))):
+        if diagnostics:
+            st.code(json.dumps(diagnostics, indent=2, ensure_ascii=False), language="text")
+        else:
+            st.caption("No page diagnostics were returned.")
+
+    assets = list(result.get("assets") or [])
+    if not assets:
+        st.warning("The manual crawler found no usable images.")
+        return
+
+    st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
+    _render_visual_asset_pool(assets, "manual-crawler", _test_visual_slide_count())
+
+def _render_manual_real_images():
+    from visual_search import search_images
+
+    st.subheader("Real Image Search")
+    st.caption("Manual query only. Searches all configured real-image sources in parallel.")
+    with st.form("real_image_search_form"):
+        query = st.text_input(
+            "Manual query",
+            placeholder="e.g. Ben Stokes batting",
+            key="real_image_query",
+        )
+        search = st.form_submit_button(
+            "Search real images",
+            type="primary",
+            width="stretch",
+        )
+
+    if search:
+        query = query.strip()
+        if not query:
+            st.warning("Enter a query first.")
+        else:
+            with st.spinner("Searching real-image sources…"):
+                st.session_state.real_image_result = search_images(query)
+                st.session_state.visual_crops = {}
+
+    result = st.session_state.get("real_image_result") or {}
+    if not result:
+        return
+    if result.get("errors"):
+        st.caption("Some sources failed; successful sources are still shown.")
+
+    assets = result.get("assets") or []
+    st.caption(
+        f"{len(assets)} images · "
+        + " · ".join(
+            f"{name} {count}"
+            for name, count in (result.get("providers") or {}).items()
+            if count
+        )
+    )
+    if not assets:
+        st.warning("No usable images were returned.")
+        return
+
+    st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Real images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
+    _render_visual_asset_pool(assets, "real-search", _test_visual_slide_count())
+
+def _render_manual_ai_images():
+    from visual_generator import generate_images
+
+    st.subheader("AI Generation")
+    st.caption("Manual query only. Each configured AI provider runs independently.")
+    with st.form("ai_image_form"):
+        query = st.text_input(
+            "Manual prompt",
+            placeholder="e.g. Ben Stokes hitting a six in a packed stadium",
+            key="ai_image_query",
+        )
+        generate = st.form_submit_button(
+            "Generate images",
+            type="primary",
+            width="stretch",
+        )
+
+    if generate:
+        query = query.strip()
+        if not query:
+            st.warning("Enter a prompt first.")
+        else:
+            with st.spinner("Generating images…"):
+                st.session_state.ai_image_result = generate_images(query)
+                st.session_state.visual_crops = {}
+
+    result = st.session_state.get("ai_image_result") or {}
+    if not result:
+        return
+    if result.get("errors"):
+        st.caption("Some AI providers failed; successful providers are still shown.")
+
+    assets = result.get("assets") or []
+    st.caption(
+        f"{len(assets)} generated · "
+        + " · ".join(
+            name for name, count in (result.get("providers") or {}).items() if count
+        )
+    )
+    if not assets:
+        st.warning("No configured AI provider returned an image.")
+        return
+
+    st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Generated images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
+    _render_visual_asset_pool(assets, "ai-generation", _test_visual_slide_count())
+
 def render_visuals():
     st.header("04 · Visuals")
     mode = st.pills(
