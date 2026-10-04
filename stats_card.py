@@ -391,17 +391,26 @@ def _plan_dynamic_stats(query: str) -> dict[str, Any]:
         raise StatsCardError("The stats planner returned an invalid request. Try a different query.")
 
     metrics = []
-    allowed = set(DYNAMIC_H2H_METRICS if scope == "h2h" else DYNAMIC_PLAYER_METRICS)
-    for metric in plan.get("metrics") or ():
-        metric_id = str(metric or "").strip()
-        if metric_id in allowed and metric_id not in metrics:
-            metrics.append(metric_id)
+    raw_metrics = plan.get("metrics") or ()
+    if isinstance(raw_metrics, (list, tuple)):
+        allowed = set(DYNAMIC_H2H_METRICS if scope == "h2h" else DYNAMIC_PLAYER_METRICS)
+        for metric in raw_metrics:
+            metric_id = str(metric or "").strip()
+            if metric_id in allowed and metric_id not in metrics:
+                metrics.append(metric_id)
     if not metrics:
         metrics = list(DYNAMIC_DEFAULT_METRICS[scope])
 
     detail_table = str(plan.get("detail_table") or "none").strip()
-    detail_limit = max(0, min(20, int(plan.get("detail_limit") or 0)))
-    count = max(0, min(20, int(plan.get("count") or 0)))
+
+    def _bounded_int(value: Any, default: int = 0) -> int:
+        try:
+            return max(0, min(20, int(value)))
+        except (TypeError, ValueError):
+            return default
+
+    detail_limit = _bounded_int(plan.get("detail_limit"))
+    count = _bounded_int(plan.get("count"))
 
     if scope == "player_last_n":
         count = count or 10
