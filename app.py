@@ -1096,7 +1096,7 @@ def _stats_card_crop_dialog(image_bytes: bytes, live: bool):
 
 
 def _render_stats_card(live: bool = False, slide_count: int = 0):
-    from stats_card import StatsCardError, build_stats_card, build_stats_card_preview
+    from stats_card import StatsCardError, build_stats_card, build_test_stats_card, build_stats_card_preview
 
     state_key = "live_stats_card_result" if live else "stats_card_result"
     selection_key = "live_stats_card_image_selection" if live else "stats_card_image_selection"
@@ -1216,6 +1216,14 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
     if isinstance(result, dict) and result:
         if result.get("error"):
             st.error(result["error"])
+            if not live and st.button(
+                "Research a different query",
+                width="stretch",
+                key=f"{build_key}-requery-error",
+            ):
+                st.session_state[state_key] = None
+                st.session_state[approved_key] = False
+                st.rerun()
             return
         st.markdown(
             '<div class="section-head"><div><div class="eyebrow">MANUAL QC</div>'
@@ -1235,6 +1243,22 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
             st.caption(f"Data through {stats['last_date']}")
         elif stats.get("latest_date"):
             st.caption(f"Latest meeting: {stats['latest_date']}")
+        if not live and result.get("plan"):
+            plan = result["plan"]
+            st.caption(
+                "AI interpretation: "
+                + str(plan.get("scope") or "").replace("_", " ")
+                + " · "
+                + str(plan.get("format") or "").upper()
+            )
+        if not live and st.button(
+            "Research a different query",
+            width="stretch",
+            key=f"{build_key}-requery",
+        ):
+            st.session_state[state_key] = None
+            st.session_state[approved_key] = False
+            st.rerun()
 
         if not st.session_state.get(approved_key):
             if st.button(
@@ -1328,7 +1352,8 @@ def _render_stats_card(live: bool = False, slide_count: int = 0):
 
     with st.spinner("Building the stats card from the cricket database…"):
         try:
-            st.session_state[state_key] = build_stats_card(
+            builder = build_stats_card if live else build_test_stats_card
+            st.session_state[state_key] = builder(
                 query,
                 bytes(source_bytes),
             )
