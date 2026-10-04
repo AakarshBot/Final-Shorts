@@ -238,7 +238,7 @@ DYNAMIC_SCHEMA = {
         "count": {"type": "integer", "minimum": 0, "maximum": 20},
         "metrics": {
             "type": "array", "minItems": 1, "maxItems": 12,
-            "items": {"type": "string", "enum": list(DYNAMIC_PLAYER_METRICS)},
+            "items": {"type": "string", "enum": list(dict.fromkeys(DYNAMIC_PLAYER_METRICS + DYNAMIC_H2H_METRICS))},
         },
         "detail_table": {"type": "string", "enum": ["none", "innings", "meetings"]},
         "detail_limit": {"type": "integer", "minimum": 0, "maximum": 20},
@@ -1653,7 +1653,8 @@ def _draw_dynamic_detail_table(
     rows=list(stats.get("innings_rows") if detail_type=="innings" else stats.get("meetings") or [])
     if not rows or top>=bottom_limit:
         return top
-    rows=rows[:min(20, len(rows))]
+    detail_limit = int(stats.get("detail_limit") or 20)
+    rows=rows[:min(20, detail_limit, len(rows))]
     title="RECENT INNINGS" if detail_type=="innings" else "RECENT MEETINGS"
     draw.text((MARGIN,top),title,font=_font(19),fill=BRAND_BLUE)
     header_y=top+30
