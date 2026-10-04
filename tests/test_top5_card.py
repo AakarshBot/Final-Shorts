@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from PIL import Image
+from PIL import Image, ImageChops
 
 import renderer
 
@@ -64,8 +64,14 @@ def test_top5_preview_keeps_the_photograph_clean_behind_editorial_text():
 
     assert image.size == (1080, 1920)
     assert image.getpixel((20, 20)) == background
+    assert image.getpixel((540, 400)) == background
     assert image.getpixel((20, 700)) == background
     assert image.getpixel((20, 1800)) == background
+
+    diff = Image.new("RGB", image.size, background)
+    bbox = ImageChops.difference(image, diff).getbbox()
+    assert bbox is not None
+    assert bbox[1] >= 700
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
