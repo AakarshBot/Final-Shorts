@@ -884,3 +884,51 @@ def test_dynamic_planner_rejects_non_200_after_fallback_with_api_detail(monkeypa
 
     with pytest.raises(stats_card.StatsCardError, match=r"invalid api key"):
         stats_card._plan_dynamic_stats("Virat Kohli ODI stats")
+
+
+def test_dynamic_planner_json_mode_fallback_coerces_bad_integer_fields(monkeypatch):
+    class Response:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self._payload = payload
+            self.text = "bad request"
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError(str(self.status_code))
+
+        def json(self):
+            return self._payload
+
+    payloads = [
+        Response(400, {"error": {"message": "schema rejected"}}),
+        Response(200, {
+            "choices": [{
+                "message": {
+                    "content": {
+                        "ready": True,
+                        "message": "",
+                        "scope": "player_last_n",
+                        "format": "odi",
+                        "gender": "men",
+                        "player": "Virat Kohli",
+                        "opponent_team": "",
+                        "team1": "",
+                        "team2": "",
+                        "count": "not-a-number",
+                        "metrics": "runs",
+                        "detail_table": "innings",
+                        "detail_limit": "also-not-a-number",
+                    }
+                }
+            }]
+        }),
+    ]
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setattr(stats_card.requests, "post", lambda *args, **kwargs: payloads.pop(0))
+
+    plan = stats_card._plan_dynamic_stats("Virat Kohli recent ODI innings")
+    assert plan["count"] == 10
+    assert plan["detail_limit"] == 10
+    assert plan["metrics"] == list(stats_card.DYNAMIC_DEFAULT_METRICS["player_last_n"])
