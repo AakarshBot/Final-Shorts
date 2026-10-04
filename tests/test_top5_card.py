@@ -52,7 +52,7 @@ def test_top5_preview_keeps_a_9x16_crop_instead_of_recropping_it():
     assert corner != (249, 250, 252)
 
 
-def test_top5_preview_uses_a_soft_white_editorial_fade_behind_text():
+def test_top5_preview_keeps_the_photograph_clean_behind_editorial_text():
     background = (236, 236, 236)
     preview = renderer.build_top5_card_preview(
         _solid_png((1080, 1920), background),
@@ -63,17 +63,9 @@ def test_top5_preview_uses_a_soft_white_editorial_fade_behind_text():
     image = Image.open(BytesIO(preview)).convert("RGB")
 
     assert image.size == (1080, 1920)
-    assert image.getpixel((1050, 1180)) == background
-    assert image.getpixel((540, 620)) == background
-    assert image.getpixel((540, 1180)) != background
-
-    text_region = image.crop((72, 500, 980, 1450))
-    changed = sum(
-        1
-        for pixel in text_region.getdata()
-        if pixel != background
-    )
-    assert changed > 20_000
+    assert image.getpixel((20, 20)) == background
+    assert image.getpixel((20, 700)) == background
+    assert image.getpixel((20, 1800)) == background
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
@@ -230,30 +222,29 @@ def test_top5_headline_layout_is_dynamic():
     assert len(long_lines) <= 2
 
 
-def test_top5_editorial_headline_handles_long_manual_headlines():
+def test_top5_editorial_headline_has_no_arbitrary_line_cap():
     fonts, display, lines = renderer._fit_top5_editorial_headline(
-        "India announce a major selection change after the latest international cricket result",
+        "India announce a major selection change after the latest international cricket result and confirm another late squad decision",
     )
     assert display
-    assert len(lines) <= renderer.TOP5_EDITORIAL_HEADLINE_MAX_LINES
+    assert len(lines) > 2
     assert fonts[0].size >= renderer.TOP5_EDITORIAL_HEADLINE_MIN_SIZE
 
 
-def test_top5_body_layout_is_dynamic():
+def test_top5_body_layout_is_dynamic_without_line_cap():
     short_body_font, short_paragraphs = renderer._fit_top5_editorial_body(
         "The board confirmed the move. The decision changes the lineup.",
         "english",
     )
     long_body_font, long_paragraphs = renderer._fit_top5_editorial_body(
         "The board confirmed the move after reviewing the latest result and the selection options. "
-        "The decision changes the lineup ahead of the next series and follows the latest update from officials.",
+        "The decision changes the lineup ahead of the next series and follows the latest update from officials. "
+        "Officials also confirmed the timing of the next review and the squad decision that follows it.",
         "english",
     )
 
     assert short_body_font.size >= long_body_font.size
-    assert sum(len(lines) for lines in long_paragraphs) >= sum(
-        len(lines) for lines in short_paragraphs
-    )
+    assert sum(len(lines) for lines in long_paragraphs) > 8
 
 
 def test_top5_body_is_two_editorial_sentences():
@@ -313,3 +304,14 @@ def test_top5_text_geometry_respects_bottom_safe_boundary():
     assert content_top < content_bottom
     assert content_height == content_bottom - content_top
     assert content_bottom <= renderer.HEIGHT - renderer.TOP5_TEXT_SAFE_BOTTOM
+
+
+def test_top5_editorial_card_accepts_long_headline_and_body():
+    preview = renderer.build_top5_card_preview(
+        _solid_png((1080, 1920), (28, 42, 64)),
+        "India announce a major selection change after the latest international cricket result and confirm another late squad decision",
+        "The board confirmed the move after reviewing the latest result and the selection options. The decision changes the lineup ahead of the next series and follows the latest update from officials. Officials also confirmed the timing of the next review and the squad decision that follows it.",
+        story_number=1,
+    )
+    image = Image.open(BytesIO(preview)).convert("RGB")
+    assert image.size == (1080, 1920)
