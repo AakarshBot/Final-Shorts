@@ -3,6 +3,7 @@ import hashlib
 import json
 from io import BytesIO
 from dataclasses import replace
+from PIL import Image
 from pathlib import Path
 from functools import lru_cache
 
