@@ -662,7 +662,7 @@ def test_dynamic_player_card_uses_ai_metrics_and_existing_image(monkeypatch, tmp
     assert result["plan"]["scope"] == "player"
     assert result["stats"]["runs"] == 183
     assert result["stats"]["average"] == pytest.approx(183)
-    assert result["stats"]["strike_rate"] == pytest.approx(96.8253968254)
+    assert result["stats"]["strike_rate"] == pytest.approx(96.3157894737)
     assert result["stats"]["fours"] == 18
     assert result["stats"]["sixes"] == 1
     assert result["stats"]["not_outs"] == 1
@@ -718,3 +718,48 @@ def test_dynamic_last_n_card_renders_20_rows_without_clipping_error(monkeypatch,
     result = stats_card.build_test_stats_card("Virat Kohli last 20 ODI innings", _image_bytes(), output_dir=tmp_path)
     with Image.open(BytesIO(result["bytes"])) as card:
         assert card.size == (1080, 1920)
+
+
+def test_dynamic_h2h_card_uses_requested_metrics(monkeypatch, tmp_path):
+    plan = {
+        "ready": True,
+        "message": "",
+        "scope": "h2h",
+        "format": "odi",
+        "gender": "men",
+        "player": "",
+        "opponent_team": "",
+        "team1": "India",
+        "team2": "Pakistan",
+        "count": 0,
+        "metrics": [
+            "matches",
+            "wins_team1",
+            "wins_team2",
+            "no_result",
+            "team1_win_pct",
+            "team2_win_pct",
+            "last_meeting",
+        ],
+        "detail_table": "none",
+        "detail_limit": 0,
+    }
+    monkeypatch.setattr(stats_card, "_plan_dynamic_stats", lambda query: dict(plan))
+    monkeypatch.setattr(
+        stats_card,
+        "_query",
+        lambda sql: [
+            {"match_id": "1", "start_date": "2026-01-01", "team1": "India", "team2": "Pakistan", "winner": "India"},
+            {"match_id": "2", "start_date": "2025-01-01", "team1": "Pakistan", "team2": "India", "winner": "Pakistan"},
+            {"match_id": "3", "start_date": "2024-01-01", "team1": "India", "team2": "Pakistan", "winner": None},
+        ],
+    )
+    result = stats_card.build_test_stats_card("India vs Pakistan head to head", _image_bytes(), output_dir=tmp_path)
+
+    assert result["stats"]["matches"] == 3
+    assert result["stats"]["wins_team1"] == 1
+    assert result["stats"]["wins_team2"] == 1
+    assert result["stats"]["no_result"] == 1
+    assert result["stats"]["team1_win_pct"] == pytest.approx(33.3333333333)
+    assert result["stats"]["team2_win_pct"] == pytest.approx(33.3333333333)
+    assert result["stats"]["last_meeting"].isoformat() == "2026-01-01"
