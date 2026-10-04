@@ -1545,7 +1545,7 @@ def crawl_visuals(story, on_assets=None):
             def profile_result(index, request, result):
                 for asset in result.get("assets") or []:
                     asset["profile_page"] = True
-                ingest_result(index, request, result)
+                ingest_result(-1, request, result)
 
             if on_assets is not None:
                 _crawl_pages(
