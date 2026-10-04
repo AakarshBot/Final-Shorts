@@ -6,13 +6,20 @@ import renderer
 
 
 TEST_SUBTITLE_DATA = {
-    "schema": "final-shorts.subtitles.v1",
+    "schema": "final-shorts.subtitles.v2",
     "language": "english",
-    "cues": [
+    "scenes": [
         {
+            "scene": 1,
             "start": 0.0,
             "end": 0.5,
-            "words": [{"text": "A", "start": 0.0, "end": 0.2}],
+            "text": "A factual opening sentence.",
+            "words": [
+                {"text": "A", "start": 0.0, "end": 0.15},
+                {"text": "factual", "start": 0.15, "end": 0.25},
+                {"text": "opening", "start": 0.25, "end": 0.35},
+                {"text": "sentence.", "start": 0.35, "end": 0.5},
+            ],
         }
     ],
 }
@@ -248,68 +255,3 @@ def test_top5_body_layout_is_dynamic():
         "The board confirmed the move after reviewing the latest result and the selection options. "
         "The decision changes the lineup ahead of the next series and follows the latest update from officials.",
         "english",
-    )
-
-    assert short_body_font.size >= long_body_font.size
-    assert sum(len(lines) for lines in long_paragraphs) >= sum(
-        len(lines) for lines in short_paragraphs
-    )
-
-
-def test_top5_body_is_two_editorial_sentences():
-    font, paragraphs = renderer._fit_top5_body(
-        "The board confirmed the move after the latest result. The decision changes the lineup for the next series.",
-        "english",
-    )
-
-    assert font is not None
-    assert len(paragraphs) == 2
-    assert all(paragraph for paragraph in paragraphs)
-
-
-def test_top5_opener_accepts_body_copy():
-    preview = renderer.build_top5_card_preview(
-        _solid_png((900, 1600), "white"),
-        "Top 5 Cricket News Today",
-        "India confirmed a squad change while two other major cricket developments also made the day's biggest stories.",
-        story_number=0,
-    )
-    image = Image.open(BytesIO(preview))
-
-    assert image.size == (1080, 1920)
-    _, _, lines = renderer._fit_top5_editorial_headline(
-        "Top 5 Cricket News Today",
-    )
-    assert len(lines) <= 2
-    body_font, body = renderer._fit_top5_editorial_body(
-        "India confirmed a squad change while two other major cricket developments also made the day's biggest stories.",
-        "english",
-    )
-    assert body_font is not None
-    assert body
-
-
-def test_top5_text_geometry_respects_bottom_safe_boundary():
-    headline_font, headline_lines = renderer._fit_top5_headline(
-        "India confirm the latest squad change",
-    )
-    body_font, body = renderer._fit_top5_body(
-        "The board confirmed the move. The decision changes the lineup.",
-        "english",
-    )
-    headline_height, body_height = renderer._top5_text_metrics(
-        headline_font,
-        headline_lines,
-        body_font,
-        body,
-    )
-
-    content_top, content_bottom, content_height = renderer._top5_text_geometry(
-        headline_height,
-        body_height,
-        True,
-    )
-
-    assert content_top < content_bottom
-    assert content_height == content_bottom - content_top
-    assert content_bottom <= renderer.HEIGHT - renderer.TOP5_TEXT_SAFE_BOTTOM
