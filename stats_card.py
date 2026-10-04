@@ -299,8 +299,8 @@ def _plan_dynamic_stats(query: str) -> dict[str, Any]:
     try:
         response = requests.post(
             "https://api.groq.com/openai/v1/chat/completions",
-        headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
-        json={
+            headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+            json={
             "model": DYNAMIC_GROQ_MODEL,
             "messages": [
                 {"role": "system", "content": _dynamic_planner_prompt()},
@@ -314,7 +314,7 @@ def _plan_dynamic_stats(query: str) -> dict[str, Any]:
             "reasoning_effort": "low",
             "temperature": 0.1,
             "max_completion_tokens": 700,
-        },
+            },
             timeout=REQUEST_TIMEOUT,
         )
     except requests.RequestException as exc:
