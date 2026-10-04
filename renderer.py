@@ -760,29 +760,6 @@ def _top5_wrap_editorial_words(
     return lines
 
 
-def _top5_editorial_text_lines(
-    text: str,
-    font_or_fonts,
-    max_width: int,
-    draw: ImageDraw.ImageDraw,
-) -> list[list[str]]:
-    return _top5_wrap_editorial_words(
-        draw,
-        text,
-        font_or_fonts,
-        max_width,
-    )
-
-
-def _top5_editorial_line_height(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    fonts,
-) -> int:
-    _, height = _top5_editorial_measure(draw, text, fonts)
-    return height
-
-
 def _fit_top5_editorial_headline(
     text: str,
     language: str = "english",
@@ -802,14 +779,14 @@ def _fit_top5_editorial_headline(
         -1,
     ):
         fonts = _headline_font_stack(size, language)
-        lines = _top5_editorial_text_lines(
+        lines = _top5_wrap_editorial_words(
+            probe,
             display,
             fonts,
             TOP5_EDITORIAL_MAX_WIDTH,
-            probe,
         )
         height = sum(
-            _top5_editorial_line_height(probe, " ".join(line), fonts)
+            _top5_editorial_measure(probe, " ".join(line), fonts)[1]
             for line in lines
         ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
         if height <= limit:
@@ -871,7 +848,7 @@ def _top5_editorial_metrics(
     body_paragraphs: list[list[list[str]]],
 ) -> tuple[int, int]:
     headline_height = sum(
-        _top5_editorial_line_height(draw, " ".join(line), headline_fonts)
+        _top5_editorial_measure(draw, " ".join(line), headline_fonts)[1]
         for line in headline_lines
     ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(headline_lines) - 1)
 
@@ -908,14 +885,14 @@ def _top5_editorial_layout(
         -1,
     ):
         headline_fonts = _headline_font_stack(headline_size, language)
-        headline_lines = _top5_editorial_text_lines(
+        headline_lines = _top5_wrap_editorial_words(
+            probe,
             " ".join(str(headline or "").split()).upper(),
             headline_fonts,
             TOP5_EDITORIAL_MAX_WIDTH,
-            probe,
         )
         headline_height = sum(
-            _top5_editorial_line_height(probe, " ".join(line), headline_fonts)
+            _top5_editorial_measure(probe, " ".join(line), headline_fonts)[1]
             for line in headline_lines
         ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(headline_lines) - 1)
 
@@ -1020,7 +997,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
 
     for line_words in headline_lines:
         line = " ".join(line_words)
-        line_height = _top5_editorial_line_height(draw, line, headline_fonts)
+        line_height = _top5_editorial_measure(draw, line, headline_fonts)[1]
         cursor_x = TOP5_EDITORIAL_MARGIN_X
         for run, font in _headline_runs(line, headline_fonts):
             box = draw.textbbox(
