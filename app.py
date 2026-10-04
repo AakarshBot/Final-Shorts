@@ -5938,10 +5938,14 @@ elif st.session_state.app_mode == "test":
                         card_data=None,
                         preview_bytes=None,
                     ):
-                        if not isinstance(source_bytes, (bytes, bytearray)) or not source_bytes:
-                            st.warning("This visual does not have a usable image payload.")
+                        image = _asset_to_image(source_bytes)
+                        if image is None:
+                            st.warning("This visual could not be decoded as an image.")
                             return
-                        selected_bytes = bytes(source_bytes)
+
+                        buffer = BytesIO()
+                        image.save(buffer, format="JPEG", quality=94, optimize=True)
+                        selected_bytes = buffer.getvalue()
                         story_number = 0 if active_slide == 1 else active_slide - 1
                         assignment = {
                             "asset_key": str(
@@ -5957,7 +5961,9 @@ elif st.session_state.app_mode == "test":
 
                         if card_type == "quote" and isinstance(card_data, dict):
                             assignment["quote_card"] = dict(card_data)
-                        elif card_type == "editorial":
+                        elif card_type == "stats" and isinstance(card_data, dict):
+                            assignment["card_layout"] = dict(card_data.get("layout") or {})
+                        else:
                             assignment["top5_card"] = {
                                 "headline": headline,
                                 "body": body,
@@ -5987,7 +5993,7 @@ elif st.session_state.app_mode == "test":
                             assignment["preview_bytes"] = bytes(preview_bytes)
 
                         st.session_state.test_top5_visual_assignments[active_slide] = assignment
-                        st.session_state.test_top5_visual_previews[active_slide] = bytes(preview_bytes or b"")
+                        st.session_state.test_top5_visual_previews[active_slide] = bytes(preview_bytes or selected_bytes)
                         st.session_state.test_top5_visual_handoff = None
                         st.session_state.test_top5_rendered_video_path = None
                         st.session_state.test_top5_visual_card_results.pop(active_slide, None)
@@ -6328,6 +6334,7 @@ elif st.session_state.app_mode == "test":
                                             f"Stats Card · {result.get('source') or 'Cricket data'}",
                                             str(result.get("label") or "Stats Card"),
                                             card_type="stats",
+                                            card_data=result,
                                             preview_bytes=result["bytes"],
                                         )
                                         st.rerun()
