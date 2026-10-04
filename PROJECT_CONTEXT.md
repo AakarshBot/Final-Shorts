@@ -283,7 +283,7 @@ Top-5 Scriptwriter:
 - Slide 1 is the Top-5 package opener; Slides 2–6 map exactly to the five selected stories.
 - Slides 2–6 use their story headlines as spoken narration.
 - Every slide has separate visual-only body copy plus visual metadata/search prompts.
-- Body copy remains reasonably compact for the 9:16 editorial card with no fixed sentence or word-count rule.
+- Body copy remains reasonably compact for the 9:16 editorial composition with no fixed sentence or word-count rule.
 - The six spoken headlines together remain within the 30-second total narration budget; there is no separate per-headline 15-second rule.
 
 Top-5 Test / Topic stage:
@@ -303,14 +303,17 @@ Top-5 Visual QC:
 - Human image selection remains authoritative; there is no automatic image selection.
 - All six slide assignments must be approved together before Renderer.
 
-Top-5 editorial card design:
-- Text is editorial typography directly over the full-bleed photograph; there is no white fade, white wash, gradient panel, background text block or other readability panel.
-- The approved composition is lower-left / lower-editorial, not centered and not top-middle. Story slides use a preferred text anchor around y=880; the package opener uses a preferred anchor around y=760.
-- The headline is large, uppercase, condensed display typography with tight editorial hierarchy; the body is smaller, lighter supporting copy beneath it.
-- Headline and body use adaptive sizing and wrapping against the available width and vertical space. There are no arbitrary maximum line counts or body/headline length validators in the renderer.
-- Ordinary cards preserve the lower editorial anchor. Only unusually long copy may force the whole block upward enough to remain inside the frame; the renderer does not vertically center the text.
-- Adaptive text/stroke contrast and a subtle shadow improve readability without washing out or obscuring the photograph.
-- The final card remains a static rendered frame; there is no headline-then-body motion treatment.
+Top-5 editorial card design — current redesign:
+- The card is a static 9:16 editorial composition: the manually selected/repositioned photograph remains full-bleed and is the primary visual field.
+- Typography is integrated with the photograph rather than placed inside a panel, fade, wash, rounded card, lower-third or other readability container.
+- Layout is image-aware. The renderer evaluates multiple safe editorial regions and chooses the quietest usable area of the actual photograph for the text, instead of using a fixed y-coordinate or forcing every story into the same lower-left position.
+- The headline is the dominant visual element: large, uppercase, condensed display typography with adaptive sizing and natural wrapping. There is no arbitrary headline line-count validator in the renderer.
+- Supporting body copy is a restrained sans-serif deck beneath the headline. The renderer keeps the full supplied body copy; it does not truncate it to two sentences or impose a fixed body line-count rule.
+- Left- and right-aligned compositions are both allowed so the typography can respond to the photograph rather than covering the focal subject by default.
+- Readability comes from choosing the appropriate photographic region and using only a minimal contrasting text stroke when necessary. There is no white haze, gradient, panel, glass effect or broad photo wash.
+- The renderer uses the repository's existing bundled fonts and Pillow only; no new runtime dependency or segmentation service is introduced.
+- The composition remains completely static. There is no headline-then-body motion, word animation, slide-in, bounce or platform-style UI treatment.
+- The Top-5 card redesign is **not yet user-approved**. Test preview review is required before this treatment is treated as the production baseline.
 
 Top-5 Live orchestration:
 - The user manually chooses and orders the five stories.
@@ -329,9 +332,9 @@ Top-5 Upload:
 - Public upload attempts to add the approved public comment; comment failure is reported without adding another approval gate.
 
 Top-5 status:
-- **Test implementation: approved.**
-- **Live implementation: complete and in production testing.**
-- **Top-5 editorial card typography is now the approved target; no white fade/wash is permitted.**
+- **Test pipeline: approved.**
+- **Visual treatment: redesign in Test; pending user approval.**
+- **Live implementation: complete in production testing, but the new editorial card treatment must not be treated as approved until Test review succeeds.**
 
 ### Production Line 03 — On This Day
 
@@ -352,8 +355,10 @@ Current audit state:
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
-- The Top-5 renderer uses the full-bleed photograph directly behind a lower-left editorial text composition. White fades/washes, background panels and arbitrary headline/body line caps are not part of the approved design.
-- Top-5 renderer typography is sized against available frame space while preserving the approved lower editorial anchor; unusually long copy can move the block upward only as a fit fallback.
+- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography against image-aware safe regions rather than a fixed anchor.
+- The renderer chooses between usable left/right and upper/middle/lower regions based on the actual photograph, allowing the composition to vary from story to story while preserving brand typography.
+- White fades/washes, background panels, fixed lower-third geometry, arbitrary headline/body line caps and body truncation are not part of the current Top-5 design.
+- The renderer keeps the supplied body copy and fits headline/body typography to the chosen region without an artificial sentence or line-count cap.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
 - Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.
 - Live Top-5 starts automatic visual crawling at Stage 1 approval and streams page results into its existing Visual QC state.
