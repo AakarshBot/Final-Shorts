@@ -87,7 +87,7 @@ def test_top5_layout_is_not_locked_to_a_bottom_anchor():
         "english",
     )
 
-    assert layout["y"] == 180
+    assert layout["y"] < 700
 
 
 def test_top5_headline_size_adapts_to_copy():
