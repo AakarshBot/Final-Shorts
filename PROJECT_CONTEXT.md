@@ -304,10 +304,12 @@ Top-5 Visual QC:
 - All six slide assignments must be approved together before Renderer.
 
 Top-5 editorial card design:
-- Text is editorial typography directly over the photograph. There is no white fade, white wash, gradient panel or background text block.
-- Headline and body both use adaptive sizing and can occupy the full available vertical editorial area of the 9:16 frame.
-- There are no arbitrary maximum line counts or body/headline length validators in the renderer.
-- Wrapping and font size are determined by the available width and height of the frame. The renderer uses adaptive text/stroke contrast and a subtle text shadow for readability without washing out the photograph.
+- Text is editorial typography directly over the full-bleed photograph; there is no white fade, white wash, gradient panel, background text block or other readability panel.
+- The approved composition is lower-left / lower-editorial, not centered and not top-middle. Story slides use a preferred text anchor around y=880; the package opener uses a preferred anchor around y=760.
+- The headline is large, uppercase, condensed display typography with tight editorial hierarchy; the body is smaller, lighter supporting copy beneath it.
+- Headline and body use adaptive sizing and wrapping against the available width and vertical space. There are no arbitrary maximum line counts or body/headline length validators in the renderer.
+- Ordinary cards preserve the lower editorial anchor. Only unusually long copy may force the whole block upward enough to remain inside the frame; the renderer does not vertically center the text.
+- Adaptive text/stroke contrast and a subtle shadow improve readability without washing out or obscuring the photograph.
 - The final card remains a static rendered frame; there is no headline-then-body motion treatment.
 
 Top-5 Live orchestration:
@@ -350,8 +352,8 @@ Current audit state:
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
-- The Top-5 renderer uses the photograph directly behind editorial text. White fades/washes and arbitrary headline/body line caps are not part of the approved design.
-- Top-5 renderer typography is sized against available frame space rather than fixed headline/body length limits.
+- The Top-5 renderer uses the full-bleed photograph directly behind a lower-left editorial text composition. White fades/washes, background panels and arbitrary headline/body line caps are not part of the approved design.
+- Top-5 renderer typography is sized against available frame space while preserving the approved lower editorial anchor; unusually long copy can move the block upward only as a fit fallback.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
 - Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.
 - Live Top-5 starts automatic visual crawling at Stage 1 approval and streams page results into its existing Visual QC state.
