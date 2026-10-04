@@ -31,14 +31,21 @@ HEADLINE_MARKER_HEIGHT = 8
 HEADLINE_MARKER_GAP = 16
 HEADLINE_LINE_GAP = 8
 
-SUBTITLE_SAFE_MARGIN = 64
+SUBTITLE_SAFE_MARGIN = 72
 SUBTITLE_MAX_WIDTH = WIDTH - (SUBTITLE_SAFE_MARGIN * 2)
-SUBTITLE_MAX_SIZE = 70
-SUBTITLE_MIN_SIZE = 54
-SUBTITLE_STROKE_WIDTH = 5
-SUBTITLE_WORD_SPACING = 10
-SUBTITLE_LINE_GAP = 14
+SUBTITLE_MAX_SIZE = 54
+SUBTITLE_MIN_SIZE = 30
+SUBTITLE_STROKE_WIDTH = 4
+SUBTITLE_WORD_SPACING = 8
+SUBTITLE_LINE_GAP = 8
 SUBTITLE_Y = 1390
+SUBTITLE_MAX_LINES = 9
+SUBTITLE_MAX_HEIGHT = 500
+SUBTITLE_HAZE_PAD_X = 120
+SUBTITLE_HAZE_PAD_Y = 80
+SUBTITLE_HAZE_BLUR = 46
+SUBTITLE_HAZE_MAX_ALPHA = 180
+SUBTITLE_LIGHT_TEXT_THRESHOLD = 146
 
 DASH_TRANSLATION = str.maketrans({
     "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "―": "-", "−": "-",
@@ -1225,11 +1232,11 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
         )
 
     base.paste(layer, (0, 0), layer)
-def _cue_at_time(subtitle_data: dict, t: float):
-    for cue in subtitle_data.get("cues") or []:
+def _subtitle_scene_at_time(subtitle_data: dict, t: float) -> dict | None:
+    for scene in subtitle_data.get("scenes") or []:
         try:
-            if float(cue["start"]) <= t < float(cue["end"]):
-                return cue
+            if float(scene["start"]) <= t < float(scene["end"]):
+                return scene
         except (KeyError, TypeError, ValueError):
             continue
     return None
@@ -1238,24 +1245,29 @@ def _cue_at_time(subtitle_data: dict, t: float):
 def validate_subtitle_handoff(subtitle_data: dict) -> bool:
     if not isinstance(subtitle_data, dict):
         return False
-    if subtitle_data.get("schema") != "final-shorts.subtitles.v1":
+    if subtitle_data.get("schema") != "final-shorts.subtitles.v2":
         return False
     if not str(subtitle_data.get("language") or "").strip():
         return False
 
     previous_end = -1.0
-    for cue in subtitle_data.get("cues") or []:
+    for scene in subtitle_data.get("scenes") or []:
         try:
-            start = float(cue["start"])
-            end = float(cue["end"])
+            start = float(scene["start"])
+            end = float(scene["end"])
         except (KeyError, TypeError, ValueError):
             return False
 
-        if start < 0 or end <= start or start < previous_end:
-            return False
-
-        words = cue.get("words")
-        if not isinstance(words, list) or not words:
+        text = str(scene.get("text") or "").strip()
+        words = scene.get("words")
+        if (
+            not text
+            or not isinstance(words, list)
+            or not words
+            or start < 0
+            or end <= start
+            or start < previous_end
+        ):
             return False
 
         word_end = start
@@ -1278,102 +1290,167 @@ def validate_subtitle_handoff(subtitle_data: dict) -> bool:
 
         previous_end = end
 
-    return bool(subtitle_data.get("cues"))
+    return bool(subtitle_data.get("scenes"))
 
 
 def _subtitle_lines(
-    words: list[dict],
+    word_texts: tuple[str, ...],
     draw: ImageDraw.ImageDraw,
     font,
-) -> list[list[dict]]:
-    if not words:
+) -> list[list[str]]:
+    words = [str(text or "") for text in word_texts]
+    if not words or any(not word.strip() for word in words):
         return []
 
-    measurements = [
-        _measure(
-            draw,
-            str(word.get("text") or ""),
-            font,
-            SUBTITLE_STROKE_WIDTH,
-        )[0]
+    widths = [
+        _measure(draw, word, font, SUBTITLE_STROKE_WIDTH)[0]
         for word in words
     ]
 
-    def line_width(start: int, end: int) -> int:
-        return (
-            sum(measurements[start:end])
-            + SUBTITLE_WORD_SPACING * max(0, end - start - 1)
+    lines: list[list[str]] = []
+    current: list[str] = []
+    current_width = 0
+
+    for word, width in zip(words, widths):
+        if width > SUBTITLE_MAX_WIDTH:
+            raise ValueError("Subtitle contains a word that is too wide to fit.")
+
+        candidate_width = (
+            current_width
+            + width
+            + (SUBTITLE_WORD_SPACING if current else 0)
         )
+        if current and candidate_width > SUBTITLE_MAX_WIDTH:
+            lines.append(current)
+            current = [word]
+            current_width = width
+        else:
+            current.append(word)
+            current_width = candidate_width
 
-    if line_width(0, len(words)) <= SUBTITLE_MAX_WIDTH:
-        return [words]
+    if current:
+        lines.append(current)
 
-    candidates = []
-    for split in range(1, len(words)):
-        top = line_width(0, split)
-        bottom = line_width(split, len(words))
-        if (
-            top <= SUBTITLE_MAX_WIDTH
-            and bottom <= SUBTITLE_MAX_WIDTH
-        ):
-            candidates.append((max(top, bottom), abs(top - bottom), split))
-
-    if not candidates:
-        raise ValueError("Subtitle cue is too wide to fit in two lines.")
-
-    _, _, split = min(candidates)
-    return [words[:split], words[split:]]
+    return lines
 
 
 @lru_cache(maxsize=256)
-def _fit_subtitle_layout_cached(
-    word_texts: tuple[str, ...],
-    language: str,
-):
-    words = [{"text": text} for text in word_texts]
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    for size in range(SUBTITLE_MAX_SIZE, SUBTITLE_MIN_SIZE - 1, -1):
-        font = _font(_font_candidates("subtitle", language), size)
-        try:
-            lines = _subtitle_lines(words, probe, font)
-        except ValueError:
-            continue
-        return font, tuple(len(line) for line in lines)
-
-    raise ValueError("Subtitle cue is too wide to fit in two lines.")
-
-@lru_cache(maxsize=512)
 def _subtitle_render_geometry_cached(
     word_texts: tuple[str, ...],
     language: str,
 ):
-    words = [{"text": text} for text in word_texts]
-    font, line_lengths = _fit_subtitle_layout_cached(word_texts, language)
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    measurements = tuple(
-        probe.textbbox(
-            (0, 0),
-            str(word.get("text") or ""),
-            font=font,
-            stroke_width=SUBTITLE_STROKE_WIDTH,
+
+    for size in range(SUBTITLE_MAX_SIZE, SUBTITLE_MIN_SIZE - 1, -1):
+        font = _font(_font_candidates("subtitle", language), size)
+        try:
+            lines = _subtitle_lines(word_texts, probe, font)
+        except ValueError:
+            continue
+
+        if not lines or len(lines) > SUBTITLE_MAX_LINES:
+            continue
+
+        measurements = []
+        line_heights = []
+        offset = 0
+        for line in lines:
+            line_measurements = []
+            for text in line:
+                box = probe.textbbox(
+                    (0, 0),
+                    text,
+                    font=font,
+                    stroke_width=SUBTITLE_STROKE_WIDTH,
+                )
+                measurements.append(box)
+                line_measurements.append(box[3] - box[1])
+            line_heights.append(max(line_measurements))
+
+        total_height = (
+            sum(line_heights)
+            + SUBTITLE_LINE_GAP * max(0, len(line_heights) - 1)
         )
-        for word in words
-    )
-    line_heights = []
-    offset = 0
-    for length in line_lengths:
-        indices = range(offset, offset + length)
-        line_heights.append(
-            max(
-                measurements[index][3] - measurements[index][1]
-                for index in indices
+        if total_height > SUBTITLE_MAX_HEIGHT:
+            continue
+
+        line_lengths = tuple(len(line) for line in lines)
+        line_widths = []
+        offset = 0
+        for length in line_lengths:
+            line_widths.append(
+                sum(
+                    measurements[offset + index][2] - measurements[offset + index][0]
+                    for index in range(length)
+                )
+                + SUBTITLE_WORD_SPACING * max(0, length - 1)
             )
+            offset += length
+
+        return (
+            font,
+            line_lengths,
+            tuple(measurements),
+            tuple(line_heights),
+            tuple(line_widths),
+            total_height,
         )
-        offset += length
-    total_height = sum(line_heights) + SUBTITLE_LINE_GAP * max(
-        0, len(line_heights) - 1
+
+    raise ValueError("Subtitle script is too long to fit cleanly.")
+
+
+def _subtitle_luminance(
+    image: Image.Image,
+    content_top: int,
+    content_bottom: int,
+) -> float:
+    from PIL import ImageStat
+
+    left = max(0, SUBTITLE_SAFE_MARGIN - SUBTITLE_HAZE_PAD_X)
+    right = min(WIDTH, SUBTITLE_MAX_WIDTH + SUBTITLE_SAFE_MARGIN + SUBTITLE_HAZE_PAD_X)
+    top = max(0, content_top - SUBTITLE_HAZE_PAD_Y)
+    bottom = min(HEIGHT, content_bottom + SUBTITLE_HAZE_PAD_Y)
+    if right <= left or bottom <= top:
+        return 128.0
+
+    sample = image.crop((left, top, right, bottom)).convert("L")
+    return float(ImageStat.Stat(sample).mean[0])
+
+
+def _draw_subtitle_haze(
+    base: Image.Image,
+    content_top: int,
+    content_bottom: int,
+) -> tuple[Image.Image, tuple[int, int, int, int]]:
+    canvas = base.convert("RGBA")
+    luma = _subtitle_luminance(canvas.convert("RGB"), content_top, content_bottom)
+
+    if luma >= SUBTITLE_LIGHT_TEXT_THRESHOLD:
+        haze_color = (255, 255, 255)
+        text_color = (12, 14, 18, 255)
+    else:
+        haze_color = (0, 0, 0)
+        text_color = (249, 250, 252, 255)
+
+    mask = Image.new("L", canvas.size, 0)
+    mask_draw = ImageDraw.Draw(mask)
+    bbox = (
+        max(0, SUBTITLE_SAFE_MARGIN - SUBTITLE_HAZE_PAD_X),
+        max(0, content_top - SUBTITLE_HAZE_PAD_Y),
+        min(WIDTH, WIDTH - SUBTITLE_SAFE_MARGIN + SUBTITLE_HAZE_PAD_X),
+        min(HEIGHT, content_bottom + SUBTITLE_HAZE_PAD_Y),
     )
-    return font, line_lengths, measurements, tuple(line_heights), total_height
+    mask_draw.rounded_rectangle(
+        bbox,
+        radius=56,
+        fill=SUBTITLE_HAZE_MAX_ALPHA,
+    )
+    mask = mask.filter(ImageFilter.GaussianBlur(SUBTITLE_HAZE_BLUR))
+
+    overlay = Image.new("RGBA", canvas.size, (*haze_color, 0))
+    overlay.putalpha(mask)
+    canvas.alpha_composite(overlay)
+    return canvas, text_color
 
 
 def _draw_subtitles(
@@ -1382,59 +1459,64 @@ def _draw_subtitles(
     t: float,
     y_position: int | None = None,
 ) -> None:
-    cue = _cue_at_time(subtitle_data, t)
-    if cue is None:
+    scene = _subtitle_scene_at_time(subtitle_data, t)
+    if scene is None:
         return
 
-    words = cue["words"]
     language = subtitle_data.get("language") or "english"
-    draw = ImageDraw.Draw(base)
-    font, line_lengths, measurements, line_heights, total_height = _subtitle_render_geometry_cached(
-        tuple(str(word.get("text") or "") for word in words),
-        language,
+    words = scene["words"]
+    word_texts = tuple(str(word.get("text") or "") for word in words)
+    (
+        font,
+        line_lengths,
+        measurements,
+        line_heights,
+        line_widths,
+        total_height,
+    ) = _subtitle_render_geometry_cached(word_texts, language)
+
+    content_y = (
+        int(y_position) if y_position is not None else SUBTITLE_Y
     )
-    lines = []
+    content_top = content_y - total_height // 2
+    content_bottom = content_top + total_height
+
+    canvas, text_color = _draw_subtitle_haze(
+        base,
+        content_top,
+        content_bottom,
+    )
+    draw = ImageDraw.Draw(canvas, "RGBA")
+
     offset = 0
-    for length in line_lengths:
-        lines.append(words[offset:offset + length])
-        offset += length
+    for row, length in enumerate(line_lengths):
+        line_words = words[offset:offset + length]
+        line_width = line_widths[row]
+        cursor_x = SUBTITLE_SAFE_MARGIN
 
-    y = (int(y_position) if y_position is not None else SUBTITLE_Y) - total_height // 2
-
-    word_index = 0
-    for row, line in enumerate(lines):
-        widths = [
-            measurements[word_index + offset][2] - measurements[word_index + offset][0]
-            for offset in range(len(line))
-        ]
-        line_width = sum(widths) + SUBTITLE_WORD_SPACING * max(0, len(line) - 1)
-        cursor = (WIDTH - line_width) // 2
-
-        for offset, word in enumerate(line):
-            index = word_index + offset
+        # Match the card treatment: one fixed, left-aligned text block.
+        for index, word in enumerate(line_words):
+            absolute_index = offset + index
             text = str(word["text"]).translate(DASH_TRANSLATION)
-            box = measurements[index]
+            box = measurements[absolute_index]
             width = box[2] - box[0]
             start = float(word["start"])
             end = float(word["end"])
             active = start <= t < end
-
-            text_fill = ACCENT if active else WHITE
+            text_fill = ACCENT if active else text_color
 
             draw.text(
-                (cursor - box[0], y - box[1]),
+                (cursor_x - box[0], content_top - box[1]),
                 text,
                 font=font,
                 fill=text_fill,
                 stroke_width=SUBTITLE_STROKE_WIDTH,
-                stroke_fill=DARK,
+                stroke_fill=DARK if text_color[0] < 100 else WHITE,
             )
-            cursor += width + SUBTITLE_WORD_SPACING
+            cursor_x += width + SUBTITLE_WORD_SPACING
 
-        y += line_heights[row] + SUBTITLE_LINE_GAP
-        word_index += len(line)
-
-
+        content_top += line_heights[row] + SUBTITLE_LINE_GAP
+        offset += length
 def render_frame(
     base_image: Image.Image,
     t: float,
@@ -1448,7 +1530,7 @@ def render_frame(
     quote_card: dict | None = None,
 ) -> Image.Image:
     if subtitle_data is None:
-        subtitle_data = {"language": "english", "cues": []}
+        subtitle_data = {"schema": "final-shorts.subtitles.v2", "language": "english", "scenes": []}
     elif validate_handoff and not validate_subtitle_handoff(subtitle_data):
         raise ValueError("Invalid subtitle handoff.")
 
@@ -1798,4 +1880,3 @@ def render_production_video(
             silent_video.unlink()
         except FileNotFoundError:
             pass
-
