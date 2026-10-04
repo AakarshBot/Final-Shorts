@@ -1275,7 +1275,7 @@ def _static_page(request):
     }
 
 
-def _crawl_pages(page_requests, images_per_page=IMAGES_PER_PAGE):
+def _crawl_pages(page_requests, images_per_page=IMAGES_PER_PAGE, on_result=None):
     async def run_browser():
         try:
             from playwright.async_api import async_playwright
@@ -1295,9 +1295,11 @@ def _crawl_pages(page_requests, images_per_page=IMAGES_PER_PAGE):
                         "AppleWebKit/537.36 Chrome/151 Safari/537.36"
                     ),
                 )
-                results = await asyncio.gather(
-                    *(
-                        _browser_page(
+                results = [None] * len(page_requests)
+
+                async def fetch_one(index, request):
+                    try:
+                        result = await _browser_page(
                             context,
                             {
                                 **request,
@@ -1306,26 +1308,27 @@ def _crawl_pages(page_requests, images_per_page=IMAGES_PER_PAGE):
                                 ),
                             },
                         )
-                        for request in page_requests
-                    ),
-                    return_exceptions=True,
+                    except Exception as exc:
+                        result = {
+                            "assets": [],
+                            "error": f"{type(exc).__name__}: {exc}",
+                        }
+                    results[index] = result
+                    if on_result is not None:
+                        on_result(index, request, result)
+
+                await asyncio.gather(
+                    *(
+                        fetch_one(index, request)
+                        for index, request in enumerate(page_requests)
+                    )
                 )
-                output = [
-                    {
-                        "assets": [],
-                        "error": f"{type(result).__name__}: {result}",
-                    }
-                    if isinstance(result, Exception)
-                    else result
-                    for result in results
-                ]
                 await context.close()
-                return output
+                return results
             finally:
                 await browser.close()
 
     browser_results = asyncio.run(run_browser())
-
     missing = [
         (index, request)
         for index, (request, result) in enumerate(zip(page_requests, browser_results))
@@ -1335,32 +1338,37 @@ def _crawl_pages(page_requests, images_per_page=IMAGES_PER_PAGE):
         return browser_results
 
     with ThreadPoolExecutor(max_workers=min(4, len(missing))) as executor:
-        fallback_results = list(executor.map(
-            lambda pair: _static_page(pair[1]), missing
-        ))
-
-    for (index, _), fallback in zip(missing, fallback_results):
-        merged = {
-            **browser_results[index],
-            "static_fallback_attempted": True,
-            "static_candidates": int(fallback.get("static_candidates") or 0),
-            "static_assets": len(fallback.get("assets") or []),
-            "static_error": str(fallback.get("error") or ""),
+        futures = {
+            executor.submit(_static_page, request): (index, request)
+            for index, request in missing
         }
-        if fallback.get("assets"):
-            browser_results[index] = {
-                **fallback,
+        for future in futures:
+            index, request = futures[future]
+            fallback = future.result()
+            merged = {
+                **browser_results[index],
                 "static_fallback_attempted": True,
                 "static_candidates": int(fallback.get("static_candidates") or 0),
                 "static_assets": len(fallback.get("assets") or []),
                 "static_error": str(fallback.get("error") or ""),
-                "browser_candidate_count": int(browser_results[index].get("candidate_count") or 0),
-                "browser_dom_image_count": int(browser_results[index].get("dom_image_count") or 0),
-                "browser_network_image_count": int(browser_results[index].get("network_image_count") or 0),
             }
-        else:
-            browser_results[index] = merged
+            if fallback.get("assets"):
+                browser_results[index] = {
+                    **fallback,
+                    "static_fallback_attempted": True,
+                    "static_candidates": int(fallback.get("static_candidates") or 0),
+                    "static_assets": len(fallback.get("assets") or []),
+                    "static_error": str(fallback.get("error") or ""),
+                    "browser_candidate_count": int(browser_results[index].get("candidate_count") or 0),
+                    "browser_dom_image_count": int(browser_results[index].get("dom_image_count") or 0),
+                    "browser_network_image_count": int(browser_results[index].get("network_image_count") or 0),
+                }
+            else:
+                browser_results[index] = merged
+            if on_result is not None:
+                on_result(index, request, browser_results[index])
     return browser_results
+
 
 
 def _dedupe(assets):
@@ -1392,7 +1400,7 @@ def _dedupe(assets):
 
 
 
-def crawl_visuals(story):
+def crawl_visuals(story, on_assets=None):
     """Fetch the 10–15 image web pool for one selected sports story."""
     title = _topic_value(story, "title")
     description = _topic_value(story, "description")
@@ -1448,7 +1456,6 @@ def crawl_visuals(story):
             "story_title": title,
         })
 
-    results = _crawl_pages(page_requests)
     assets = []
     diagnostics = []
 
@@ -1480,10 +1487,9 @@ def crawl_visuals(story):
             "profile": bool(request.get("profile")),
         })
 
-    for index, result in enumerate(results):
-        request = page_requests[index]
+    def ingest_result(index, request, result):
         add_diagnostic(request, result)
-
+        page_assets = []
         for asset in result.get("assets") or []:
             asset["article_title"] = (
                 asset.get("article_title") or request.get("title", "")
@@ -1497,7 +1503,6 @@ def crawl_visuals(story):
             asset["query"] = (
                 asset.get("query") or request.get("query", "")
             )
-
             if index == 0:
                 asset["query"] = "original story URL"
                 asset["original_story"] = True
@@ -1505,8 +1510,17 @@ def crawl_visuals(story):
                     asset.get("published_at")
                     or _topic_value(story, "published_at")
                 )
-
             assets.append(asset)
+            page_assets.append(asset)
+        if on_assets is not None and page_assets:
+            on_assets(page_assets)
+
+    if on_assets is not None:
+        results = _crawl_pages(page_requests, on_result=ingest_result)
+    else:
+        results = _crawl_pages(page_requests)
+        for index, result in enumerate(results):
+            ingest_result(index, page_requests[index], result)
 
     selected = _dedupe(assets)
 
@@ -1528,27 +1542,24 @@ def crawl_visuals(story):
         ]
 
         if profile_requests:
-            profile_results = _crawl_pages(
-                profile_requests,
-                images_per_page=PROFILE_IMAGES,
-            )
-            for request, result in zip(profile_requests, profile_results):
-                add_diagnostic(request, result)
+            def profile_result(index, request, result):
                 for asset in result.get("assets") or []:
-                    asset["article_title"] = (
-                        asset.get("article_title") or request["title"]
-                    )
-                    asset["source_page_url"] = (
-                        asset.get("source_page_url") or request["url"]
-                    )
-                    asset["publisher"] = (
-                        asset.get("publisher") or request["publisher"]
-                    )
-                    asset["query"] = (
-                        asset.get("query") or request["query"]
-                    )
                     asset["profile_page"] = True
-                    assets.append(asset)
+                ingest_result(index, request, result)
+
+            if on_assets is not None:
+                _crawl_pages(
+                    profile_requests,
+                    images_per_page=PROFILE_IMAGES,
+                    on_result=profile_result,
+                )
+            else:
+                profile_results = _crawl_pages(
+                    profile_requests,
+                    images_per_page=PROFILE_IMAGES,
+                )
+                for index, result in enumerate(profile_results):
+                    profile_result(index, profile_requests[index], result)
             selected = _dedupe(assets)
 
     publishers = sorted({
