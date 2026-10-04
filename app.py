@@ -831,6 +831,40 @@ if "live_script_language" not in st.session_state:
     st.session_state.live_script_language = "english"
 if "live_headline_enabled" not in st.session_state:
     st.session_state.live_headline_enabled = True
+if "live_top5_topics" not in st.session_state:
+    st.session_state.live_top5_topics = []
+if "live_top5_selected" not in st.session_state:
+    st.session_state.live_top5_selected = []
+if "live_top5_topic_open_tile" not in st.session_state:
+    st.session_state.live_top5_topic_open_tile = None
+if "live_top5_handoff" not in st.session_state:
+    st.session_state.live_top5_handoff = None
+if "live_top5_script_data" not in st.session_state:
+    st.session_state.live_top5_script_data = None
+if "live_top5_script_handoff" not in st.session_state:
+    st.session_state.live_top5_script_handoff = None
+if "live_top5_audio_data" not in st.session_state:
+    st.session_state.live_top5_audio_data = None
+if "live_top5_audio_handoff" not in st.session_state:
+    st.session_state.live_top5_audio_handoff = None
+if "live_top5_visual_results" not in st.session_state:
+    st.session_state.live_top5_visual_results = {}
+if "live_top5_manual_visual_results" not in st.session_state:
+    st.session_state.live_top5_manual_visual_results = {}
+if "live_top5_real_image_results" not in st.session_state:
+    st.session_state.live_top5_real_image_results = {}
+if "live_top5_ai_image_results" not in st.session_state:
+    st.session_state.live_top5_ai_image_results = {}
+if "live_top5_visual_handoff" not in st.session_state:
+    st.session_state.live_top5_visual_handoff = None
+if "live_top5_visual_done" not in st.session_state:
+    st.session_state.live_top5_visual_done = {}
+if "live_top5_visual_queues" not in st.session_state:
+    st.session_state.live_top5_visual_queues = {}
+if "live_top5_visual_futures" not in st.session_state:
+    st.session_state.live_top5_visual_futures = {}
+if "live_top5_visual_active_slide" not in st.session_state:
+    st.session_state.live_top5_visual_active_slide = 1
 if "live_visual_crops" not in st.session_state:
     st.session_state.live_visual_crops = {}
 if "live_visual_deleted" not in st.session_state:
@@ -1869,6 +1903,23 @@ def _live_reset_downstream():
         "live_upload_hashtags": "",
         "live_upload_comment": "",
         "live_headline_enabled": True,
+        "live_top5_topics": [],
+        "live_top5_selected": [],
+        "live_top5_topic_open_tile": None,
+        "live_top5_handoff": None,
+        "live_top5_script_data": None,
+        "live_top5_script_handoff": None,
+        "live_top5_audio_data": None,
+        "live_top5_audio_handoff": None,
+        "live_top5_visual_results": {},
+        "live_top5_manual_visual_results": {},
+        "live_top5_real_image_results": {},
+        "live_top5_ai_image_results": {},
+        "live_top5_visual_handoff": None,
+        "live_top5_visual_done": {},
+        "live_top5_visual_queues": {},
+        "live_top5_visual_futures": {},
+        "live_top5_visual_active_slide": 1,
     }.items():
         st.session_state[key] = value
 
@@ -2722,10 +2773,21 @@ def _render_live_script():
 
 
 def _render_live_upload():
-    video_path = Path(st.session_state.live_rendered_video_path)
-    script = st.session_state.live_approved_script
-    story = st.session_state.live_topics[st.session_state.live_selected_topic]
-    story_id = _live_story_key(story)
+    is_top5 = st.session_state.live_production_line == "top_5"
+    if is_top5:
+        script = st.session_state.live_top5_script_handoff
+        slides = list(script.get("slides") or []) if isinstance(script, dict) else []
+        title = str(slides[0].get("headline") or "").strip() if slides else ""
+        if not isinstance(script, dict) or len(slides) != 6 or not title:
+            st.info("Approve the Top-5 Scriptwriter result first.")
+            return
+        video_path = Path(st.session_state.live_rendered_video_path)
+        story_id = "top5"
+    else:
+        video_path = Path(st.session_state.live_rendered_video_path)
+        script = st.session_state.live_approved_script
+        story = st.session_state.live_topics[st.session_state.live_selected_topic]
+        story_id = _live_story_key(story)
 
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">UPLOAD QC</div>'
@@ -2733,85 +2795,73 @@ def _render_live_upload():
         '<div class="section-count">one approval</div>',
         unsafe_allow_html=True,
     )
-
-    if video_path.is_file():
-        st.video(str(video_path), width=520)
-
-    titles = list(
-        st.session_state.live_upload_titles
-        or script.get("titles")
-        or []
-    )
-    if not titles:
-        st.error("Scriptwriter did not return title candidates.")
+    if not video_path.is_file():
+        st.info("The rendered video is not available yet.")
         return
+    st.video(str(video_path), width=520)
 
-    st.caption("Edit the title candidates, choose the one to publish, then approve the metadata once.")
-    edited_titles = []
-    for index, title in enumerate(titles, 1):
-        edited_titles.append(
-            st.text_input(
-                f"Title {index} · {TITLE_OPTION_STYLES[index - 1]}",
-                value=str(title),
-                max_chars=100,
-                key=f"live-upload-title-{story_id}-{index}",
+    if is_top5:
+        st.markdown("**Title**")
+        st.write(title)
+        st.caption("Top-5 uses the approved Slide 1 spoken headline as the YouTube title.")
+    else:
+        titles = list(st.session_state.live_upload_titles or script.get("titles") or [])
+        if not titles:
+            st.error("Scriptwriter did not return title candidates.")
+            return
+        st.caption("Edit the title candidates, choose the one to publish, then approve the metadata once.")
+        edited_titles = []
+        for index, candidate in enumerate(titles, 1):
+            edited_titles.append(
+                st.text_input(
+                    f"Title {index} · {TITLE_OPTION_STYLES[index - 1]}",
+                    value=str(candidate),
+                    max_chars=100,
+                    key=f"live-upload-title-{story_id}-{index}",
+                )
             )
+        st.session_state.live_upload_titles = edited_titles
+        choice = st.pills(
+            "Title to publish",
+            list(range(len(edited_titles))),
+            default=min(int(st.session_state.live_upload_title_choice), len(edited_titles) - 1),
+            format_func=lambda index: edited_titles[index] or f"Title option {index + 1}",
+            key=f"live-upload-choice-{story_id}",
         )
-    st.session_state.live_upload_titles = edited_titles
+        if choice is None:
+            choice = 0
+        st.session_state.live_upload_title_choice = choice
+        title = edited_titles[choice].strip()
 
-    choice = st.pills(
-        "Title to publish",
-        list(range(len(edited_titles))),
-        default=min(
-            int(st.session_state.live_upload_title_choice),
-            len(edited_titles) - 1,
-        ),
-        format_func=lambda index: edited_titles[index] or f"Title option {index + 1}",
-        key=f"live-upload-choice-{story_id}",
-    )
-    if choice is None:
-        choice = 0
-    st.session_state.live_upload_title_choice = choice
+    description_key = f"live-upload-description-{story_id}"
+    hashtags_key = f"live-upload-hashtags-{story_id}"
+    comment_key = f"live-upload-comment-{story_id}"
+    if not st.session_state.live_upload_description:
+        st.session_state.live_upload_description = str(script.get("seo_description") or "")
+    if not st.session_state.live_upload_hashtags:
+        st.session_state.live_upload_hashtags = " ".join(str(tag) for tag in script.get("hashtags") or [])
+    if not st.session_state.live_upload_comment:
+        st.session_state.live_upload_comment = str(script.get("comment") or "")
 
-    st.text_area(
-        "Description",
-        key=f"live-upload-description-{story_id}",
-        value=st.session_state.live_upload_description,
-        height=150,
-    )
-    st.text_input(
-        "Hashtags",
-        key=f"live-upload-hashtags-{story_id}",
-        value=st.session_state.live_upload_hashtags,
-    )
-    st.text_area(
-        "Public comment",
-        key=f"live-upload-comment-{story_id}",
-        value=st.session_state.live_upload_comment,
-        height=100,
-    )
+    st.text_area("Description", key=description_key, value=st.session_state.live_upload_description, height=150)
+    st.text_input("Hashtags", key=hashtags_key, value=st.session_state.live_upload_hashtags)
+    st.text_area("Public comment", key=comment_key, value=st.session_state.live_upload_comment, height=100)
+    st.session_state.live_upload_description = st.session_state.get(description_key, "")
+    st.session_state.live_upload_hashtags = st.session_state.get(hashtags_key, "")
+    st.session_state.live_upload_comment = st.session_state.get(comment_key, "")
 
     if not st.session_state.live_upload_qc_approved:
         if st.button(
-            "Approve metadata",
+            "Approve Upload QC",
             type="primary",
             width="stretch",
-            key="live-approve-upload-qc",
+            key="live-top5-approve-upload-qc" if is_top5 else "live-approve-upload-qc",
         ):
-            st.session_state.live_upload_description = st.session_state[
-                f"live-upload-description-{story_id}"
-            ]
-            st.session_state.live_upload_hashtags = st.session_state[
-                f"live-upload-hashtags-{story_id}"
-            ]
-            st.session_state.live_upload_comment = st.session_state[
-                f"live-upload-comment-{story_id}"
-            ]
             st.session_state.live_upload_qc = {
-                "title": edited_titles[choice].strip(),
-                "description": st.session_state.live_upload_description,
-                "hashtags": st.session_state.live_upload_hashtags,
-                "comment": st.session_state.live_upload_comment,
+                "title": title,
+                "description": st.session_state.live_upload_description.strip(),
+                "hashtags": st.session_state.live_upload_hashtags.strip(),
+                "comment": st.session_state.live_upload_comment.strip(),
             }
             st.session_state.live_upload_qc_approved = True
             st.session_state.live_upload_result = None
@@ -2831,9 +2881,7 @@ def _render_live_upload():
 
     result = st.session_state.live_upload_result
     if result:
-        st.success(
-            f"Upload successful · Video ID: `{result.get('video_id')}`"
-        )
+        st.success(f"Upload successful · Video ID: {result.get('video_id')}")
         if result.get("url"):
             st.link_button("Open YouTube video", result["url"], width="stretch")
         if result.get("requested_privacy") == "public":
@@ -2846,21 +2894,20 @@ def _render_live_upload():
                 )
         return
 
-    col1, col2 = st.columns(2, gap="medium")
-    with col1:
+    left, right = st.columns(2, gap="medium")
+    with left:
         public = st.button(
             "Upload Public",
             type="primary",
             width="stretch",
-            key="live-upload-public",
+            key="live-top5-upload-public" if is_top5 else "live-upload-public",
         )
-    with col2:
+    with right:
         private = st.button(
             "Upload Private",
             width="stretch",
-            key="live-upload-private",
+            key="live-top5-upload-private" if is_top5 else "live-upload-private",
         )
-
     if not (public or private):
         return
 
@@ -2958,6 +3005,9 @@ def render_live_dashboard():
                             "02 · TOP-5": "top_5",
                             "03 · OTD": "otd",
                         }[eyebrow]
+                        _live_reset_downstream()
+                        if eyebrow == "02 · TOP-5":
+                            st.session_state.live_stage = "01 · Top-5 Topics"
                         st.session_state.live_desk = None
                         st.session_state.live_cricket_profile = None
                         st.session_state.live_topics_profile = None
@@ -2966,18 +3016,8 @@ def render_live_dashboard():
         return
 
     if st.session_state.live_production_line == "top_5":
-        st.space("medium")
-        st.markdown(
-            '<div class="section-head"><div><div class="eyebrow">TOP-5 · WIP</div>'
-            '<div class="section-title">Top 5 cricket stories of the day</div></div></div>',
-            unsafe_allow_html=True,
-        )
-        st.info("This production line is reserved for the Top-5 design we are building next.")
-        if st.button("← Back to production lines", key="live-back-from-top-5"):
-            st.session_state.live_production_line = None
-            st.session_state.live_desk = None
-            st.rerun()
-        return
+        return render_live_top5()
+
 
     if st.session_state.live_production_line == "otd":
         st.space("medium")
