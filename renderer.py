@@ -655,17 +655,14 @@ def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
     if not attribution:
         raise ValueError("Quote Card requires an attribution.")
 
-    return _draw_top5_card(
+    return _draw_top5_editorial_card(
         base,
         {
             "headline": quote,
             "body": f"— {attribution}",
             "language": str(card.get("language") or "english"),
         },
-        headline_max_lines=5,
-        headline_min_size=38,
     )
-
 
 def build_quote_card_preview(
     source_image: bytes | bytearray | Image.Image,
@@ -673,7 +670,7 @@ def build_quote_card_preview(
     attribution: str,
     source_label: str | None = None,
 ) -> bytes:
-    """Render a static Quote Card using the existing Top-5 full-frame text treatment."""
+    """Render a static Quote Card using the direct editorial card renderer."""
     frame = _draw_quote_card(
         _top5_full_frame_image(source_image),
         {
@@ -695,12 +692,12 @@ def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
     box = draw.textbbox((0, 0), label, font=font)
     draw.text(
         (
-            WIDTH - TOP5_TEXT_MARGIN_X - (box[2] - box[0]),
+            WIDTH - TOP5_EDITORIAL_MARGIN_X - (box[2] - box[0]),
             HEIGHT - 48,
         ),
         label,
         font=font,
-        fill=TOP5_SOURCE_COLOR,
+        fill=(86, 91, 100),
     )
 
 
