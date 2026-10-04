@@ -1,6 +1,7 @@
 from io import BytesIO
 
 import pytest
+import requests
 from PIL import Image
 
 import stats_card
@@ -586,6 +587,8 @@ def test_resolved_player_with_no_format_data_reports_data_gap(monkeypatch):
 
 def test_dynamic_planner_clarification_is_returned_verbatim(monkeypatch):
     class Response:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 
