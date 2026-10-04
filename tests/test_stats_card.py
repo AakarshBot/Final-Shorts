@@ -1,6 +1,7 @@
 from io import BytesIO
 
 import pytest
+import requests
 from PIL import Image
 
 import stats_card
@@ -582,3 +583,355 @@ def test_resolved_player_with_no_format_data_reports_data_gap(monkeypatch):
         stats_card._stats_for_intent(
             stats_card._parse_query("Virat Kohli ODI stats")
         )
+
+
+def test_dynamic_planner_clarification_is_returned_verbatim(monkeypatch):
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [{
+                    "message": {
+                        "content": {
+                            "ready": False,
+                            "message": "Tell me which format you want for Kohli: ODI, T20, Test, or IPL.",
+                        }
+                    }
+                }]
+            }
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setattr(stats_card.requests, "post", lambda *args, **kwargs: Response())
+
+    with pytest.raises(stats_card.StatsCardError, match=r"Tell me which format you want for Kohli: ODI, T20, Test, or IPL\."):
+        stats_card._plan_dynamic_stats("Kohli stats")
+
+
+def test_dynamic_player_card_uses_ai_metrics_and_existing_image(monkeypatch, tmp_path):
+    plan = {
+        "ready": True,
+        "message": "",
+        "scope": "player",
+        "format": "odi",
+        "gender": "men",
+        "player": "Virat Kohli",
+        "opponent_team": "",
+        "team1": "",
+        "team2": "",
+        "count": 0,
+        "metrics": [
+            "runs", "average", "strike_rate", "high_score", "hundreds",
+            "fifties", "fours", "sixes", "balls_faced", "not_outs",
+        ],
+        "detail_table": "none",
+        "detail_limit": 0,
+    }
+    monkeypatch.setattr(stats_card, "_plan_dynamic_stats", lambda query: dict(plan))
+    monkeypatch.setattr(
+        stats_card,
+        "_cricsheet_registry",
+        lambda _: (
+            {"vk1": {
+                "identifier": "vk1", "name": "V Kohli", "unique_name": "V Kohli",
+                "aliases": {"Virat Kohli"},
+            }},
+            {stats_card._name_key("Virat Kohli"): {"vk1"}},
+        ),
+    )
+
+    def fake_query(sql):
+        assert "SUM(CASE WHEN b.runs_off_bat = 4" in sql
+        assert "SUM(CASE WHEN b.runs_off_bat = 6" in sql
+        return [
+            {
+                "match_id": "1", "start_date": "2026-01-01", "innings": 1,
+                "batting_team": "India", "bowling_team": "Australia",
+                "runs": 82, "balls_faced": 91, "fours": 8, "sixes": 1, "dismissed": 1,
+            },
+            {
+                "match_id": "2", "start_date": "2025-12-01", "innings": 1,
+                "batting_team": "India", "bowling_team": "South Africa",
+                "runs": 101, "balls_faced": 99, "fours": 10, "sixes": 0, "dismissed": 0,
+            },
+        ]
+
+    monkeypatch.setattr(stats_card, "_query", fake_query)
+    result = stats_card.build_test_stats_card("Virat Kohli career stats", _image_bytes(), output_dir=tmp_path)
+
+    assert result["plan"]["scope"] == "player"
+    assert result["stats"]["runs"] == 183
+    assert result["stats"]["average"] == pytest.approx(183)
+    assert result["stats"]["strike_rate"] == pytest.approx(96.3157894737)
+    assert result["stats"]["fours"] == 18
+    assert result["stats"]["sixes"] == 1
+    assert result["stats"]["not_outs"] == 1
+    assert result["stats"]["high_score"] == "101*"
+    with Image.open(BytesIO(result["bytes"])) as card:
+        assert card.size == (1080, 1920)
+
+
+def test_dynamic_last_n_card_renders_20_rows_without_clipping_error(monkeypatch, tmp_path):
+    plan = {
+        "ready": True,
+        "message": "",
+        "scope": "player_last_n",
+        "format": "odi",
+        "gender": "men",
+        "player": "Virat Kohli",
+        "opponent_team": "",
+        "team1": "",
+        "team2": "",
+        "count": 20,
+        "metrics": list(stats_card.DYNAMIC_DEFAULT_METRICS["player_last_n"]),
+        "detail_table": "innings",
+        "detail_limit": 20,
+    }
+    monkeypatch.setattr(stats_card, "_plan_dynamic_stats", lambda query: dict(plan))
+    monkeypatch.setattr(
+        stats_card,
+        "_cricsheet_registry",
+        lambda _: (
+            {"vk1": {
+                "identifier": "vk1", "name": "Virat Kohli", "unique_name": "Virat Kohli",
+                "aliases": {"Virat Kohli"},
+            }},
+            {stats_card._name_key("Virat Kohli"): {"vk1"}},
+        ),
+    )
+    rows = [
+        {
+            "match_id": str(index),
+            "start_date": f"2026-{(index % 12) + 1:02d}-01",
+            "innings": 1,
+            "batting_team": "India",
+            "bowling_team": "Very Long Opponent Name That Must Never Push Into The Score Column",
+            "runs": index,
+            "balls_faced": 20,
+            "fours": 1,
+            "sixes": 0,
+            "dismissed": index % 2,
+        }
+        for index in range(20)
+    ]
+    monkeypatch.setattr(stats_card, "_query", lambda sql: rows)
+    result = stats_card.build_test_stats_card("Virat Kohli last 20 ODI innings", _image_bytes(), output_dir=tmp_path)
+    with Image.open(BytesIO(result["bytes"])) as card:
+        assert card.size == (1080, 1920)
+
+
+def test_dynamic_h2h_card_uses_requested_metrics(monkeypatch, tmp_path):
+    plan = {
+        "ready": True,
+        "message": "",
+        "scope": "h2h",
+        "format": "odi",
+        "gender": "men",
+        "player": "",
+        "opponent_team": "",
+        "team1": "India",
+        "team2": "Pakistan",
+        "count": 0,
+        "metrics": [
+            "matches",
+            "wins_team1",
+            "wins_team2",
+            "no_result",
+            "team1_win_pct",
+            "team2_win_pct",
+            "last_meeting",
+        ],
+        "detail_table": "none",
+        "detail_limit": 0,
+    }
+    monkeypatch.setattr(stats_card, "_plan_dynamic_stats", lambda query: dict(plan))
+    monkeypatch.setattr(
+        stats_card,
+        "_query",
+        lambda sql: [
+            {"match_id": "1", "start_date": "2026-01-01", "team1": "India", "team2": "Pakistan", "winner": "India"},
+            {"match_id": "2", "start_date": "2025-01-01", "team1": "Pakistan", "team2": "India", "winner": "Pakistan"},
+            {"match_id": "3", "start_date": "2024-01-01", "team1": "India", "team2": "Pakistan", "winner": None},
+        ],
+    )
+    result = stats_card.build_test_stats_card("India vs Pakistan head to head", _image_bytes(), output_dir=tmp_path)
+
+    assert result["stats"]["matches"] == 3
+    assert result["stats"]["wins_team1"] == 1
+    assert result["stats"]["wins_team2"] == 1
+    assert result["stats"]["no_result"] == 1
+    assert result["stats"]["team1_win_pct"] == pytest.approx(33.3333333333)
+    assert result["stats"]["team2_win_pct"] == pytest.approx(33.3333333333)
+    assert result["stats"]["last_meeting"].isoformat() == "2026-01-01"
+
+
+def test_dynamic_planner_request_is_groq_compatible(monkeypatch):
+    captured = {}
+
+    class Response:
+        status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "choices": [{
+                    "message": {
+                        "content": '{"ready":true,"message":"","scope":"player","format":"odi","gender":"men","player":"Virat Kohli","opponent_team":"","team1":"","team2":"","count":0,"metrics":["runs","average"],"detail_table":"none","detail_limit":0}'
+                    }
+                }]
+            }
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        captured["url"] = url
+        captured["headers"] = headers
+        captured["json"] = json
+        captured["timeout"] = timeout
+        return Response()
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setattr(stats_card.requests, "post", fake_post)
+
+    plan = stats_card._plan_dynamic_stats("Virat Kohli ODI stats")
+
+    assert plan["scope"] == "player"
+    payload = captured["json"]
+    assert payload["model"] == "openai/gpt-oss-20b"
+    assert payload["reasoning_format"] == "hidden"
+    assert payload["reasoning_effort"] == "low"
+    assert payload["response_format"]["type"] == "json_schema"
+    assert payload["response_format"]["json_schema"]["strict"] is True
+    assert payload["response_format"]["json_schema"]["schema"]["additionalProperties"] is False
+    assert "include_reasoning" not in payload
+    assert "messages" in payload and payload["messages"][0]["role"] == "system"
+
+
+def test_dynamic_planner_falls_back_to_json_object_on_http_400(monkeypatch):
+    calls = []
+
+    class Response:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self._payload = payload
+            self.text = "bad request"
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                error = requests.HTTPError(f"{self.status_code}")
+                raise error
+            return None
+
+        def json(self):
+            return self._payload
+
+    good_payload = {
+        "choices": [{
+            "message": {
+                "content": {
+                    "ready": True,
+                    "message": "",
+                    "scope": "player",
+                    "format": "odi",
+                    "gender": "men",
+                    "player": "Virat Kohli",
+                    "opponent_team": "",
+                    "team1": "",
+                    "team2": "",
+                    "count": 0,
+                    "metrics": ["runs", "average"],
+                    "detail_table": "none",
+                    "detail_limit": 0,
+                }
+            }
+        }]
+    }
+
+    def fake_post(url, headers=None, json=None, timeout=None):
+        calls.append(json)
+        return Response(400, {"error": {"message": "schema rejected"}}) if len(calls) == 1 else Response(200, good_payload)
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setattr(stats_card.requests, "post", fake_post)
+
+    plan = stats_card._plan_dynamic_stats("Virat Kohli ODI stats")
+
+    assert plan["player"] == "Virat Kohli"
+    assert len(calls) == 2
+    assert calls[0]["response_format"]["type"] == "json_schema"
+    assert calls[1]["response_format"] == {"type": "json_object"}
+    assert calls[1]["reasoning_format"] == "hidden"
+
+
+def test_dynamic_planner_rejects_non_200_after_fallback_with_api_detail(monkeypatch):
+    class Response:
+        def __init__(self, status_code, detail):
+            self.status_code = status_code
+            self.text = detail
+
+        def raise_for_status(self):
+            raise requests.HTTPError(str(self.status_code))
+
+        def json(self):
+            return {"error": {"message": "invalid api key"}}
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setattr(
+        stats_card.requests,
+        "post",
+        lambda *args, **kwargs: Response(401, "unauthorized"),
+    )
+
+    with pytest.raises(stats_card.StatsCardError, match=r"invalid api key"):
+        stats_card._plan_dynamic_stats("Virat Kohli ODI stats")
+
+
+def test_dynamic_planner_json_mode_fallback_coerces_bad_integer_fields(monkeypatch):
+    class Response:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self._payload = payload
+            self.text = "bad request"
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError(str(self.status_code))
+
+        def json(self):
+            return self._payload
+
+    payloads = [
+        Response(400, {"error": {"message": "schema rejected"}}),
+        Response(200, {
+            "choices": [{
+                "message": {
+                    "content": {
+                        "ready": True,
+                        "message": "",
+                        "scope": "player_last_n",
+                        "format": "odi",
+                        "gender": "men",
+                        "player": "Virat Kohli",
+                        "opponent_team": "",
+                        "team1": "",
+                        "team2": "",
+                        "count": "not-a-number",
+                        "metrics": "runs",
+                        "detail_table": "innings",
+                        "detail_limit": "also-not-a-number",
+                    }
+                }
+            }]
+        }),
+    ]
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    monkeypatch.setattr(stats_card.requests, "post", lambda *args, **kwargs: payloads.pop(0))
+
+    plan = stats_card._plan_dynamic_stats("Virat Kohli recent ODI innings")
+    assert plan["count"] == 10
+    assert plan["detail_limit"] == 10
+    assert plan["metrics"] == list(stats_card.DYNAMIC_DEFAULT_METRICS["player_last_n"])

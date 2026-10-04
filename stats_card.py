@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import csv
+import json
+import os
 from dataclasses import dataclass
 from datetime import date, datetime
 from functools import lru_cache
@@ -99,6 +101,28 @@ TEAM_ALIASES = {
     "zim": "Zimbabwe",
     "zimbabwe": "Zimbabwe",
     "ps": "Pakistan Super League",
+    "mi": "Mumbai Indians",
+    "mumbai indians": "Mumbai Indians",
+    "csk": "Chennai Super Kings",
+    "chennai super kings": "Chennai Super Kings",
+    "rcb": "Royal Challengers Bengaluru",
+    "royal challengers bangalore": "Royal Challengers Bengaluru",
+    "royal challengers bengaluru": "Royal Challengers Bengaluru",
+    "kkr": "Kolkata Knight Riders",
+    "kolkata knight riders": "Kolkata Knight Riders",
+    "dc": "Delhi Capitals",
+    "delhi capitals": "Delhi Capitals",
+    "dd": "Delhi Capitals",
+    "srh": "Sunrisers Hyderabad",
+    "sunrisers hyderabad": "Sunrisers Hyderabad",
+    "rr": "Rajasthan Royals",
+    "rajasthan royals": "Rajasthan Royals",
+    "pbks": "Punjab Kings",
+    "kings xi punjab": "Punjab Kings",
+    "punjab kings": "Punjab Kings",
+    "gt": "Gujarat Titans",
+    "lsg": "Lucknow Super Giants",
+    "lucknow super giants": "Lucknow Super Giants",
 }
 
 
@@ -145,6 +169,288 @@ def _canonical_team(value: str) -> str:
     clean = _normalise(value).strip(" '")
     return TEAM_ALIASES.get(clean.casefold(), clean.title())
 
+
+
+DYNAMIC_GROQ_MODEL = "openai/gpt-oss-20b"
+
+DYNAMIC_PLAYER_METRICS = (
+    "matches", "innings", "runs", "average", "strike_rate", "high_score",
+    "hundreds", "fifties", "not_outs", "balls_faced", "fours", "sixes",
+    "ducks", "runs_per_innings", "boundary_runs",
+)
+DYNAMIC_H2H_METRICS = (
+    "matches", "wins_team1", "wins_team2", "no_result",
+    "team1_win_pct", "team2_win_pct", "first_meeting", "last_meeting",
+)
+DYNAMIC_DEFAULT_METRICS = {
+    "player": (
+        "matches", "innings", "runs", "average", "strike_rate", "high_score",
+        "hundreds", "fifties", "not_outs", "fours", "sixes", "balls_faced",
+    ),
+    "player_last_n": (
+        "innings", "runs", "average", "strike_rate", "high_score",
+        "hundreds", "fifties", "not_outs", "fours", "sixes",
+    ),
+    "player_vs_team": (
+        "matches", "innings", "runs", "average", "strike_rate", "high_score",
+        "hundreds", "fifties", "not_outs", "fours", "sixes", "balls_faced",
+    ),
+    "h2h": (
+        "matches", "wins_team1", "wins_team2", "no_result",
+        "team1_win_pct", "team2_win_pct", "last_meeting",
+    ),
+}
+DYNAMIC_METRIC_INFO = {
+    "matches": ("Matches", "number of matches"),
+    "innings": ("Innings", "batting innings"),
+    "runs": ("Runs", "total runs"),
+    "average": ("Average", "batting average"),
+    "strike_rate": ("Strike rate", "runs per 100 balls"),
+    "high_score": ("High score", "highest score, including not-out marker"),
+    "hundreds": ("100s", "innings of 100 or more"),
+    "fifties": ("50s", "innings from 50 to 99"),
+    "not_outs": ("Not outs", "innings not dismissed"),
+    "balls_faced": ("Balls faced", "legal balls faced using the existing database rule"),
+    "fours": ("4s", "fours hit"),
+    "sixes": ("6s", "sixes hit"),
+    "ducks": ("Ducks", "completed innings scoring zero"),
+    "runs_per_innings": ("Runs / innings", "average runs per batting innings"),
+    "boundary_runs": ("Boundary runs", "runs from fours and sixes"),
+    "wins_team1": ("Team 1 wins", "wins by the first named team"),
+    "wins_team2": ("Team 2 wins", "wins by the second named team"),
+    "no_result": ("Other / no result", "matches not won by either named team"),
+    "team1_win_pct": ("Team 1 win %", "first team's share of H2H matches"),
+    "team2_win_pct": ("Team 2 win %", "second team's share of H2H matches"),
+    "first_meeting": ("First meeting", "date of the earliest H2H meeting"),
+    "last_meeting": ("Last meeting", "date of the latest H2H meeting"),
+}
+DYNAMIC_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "ready": {"type": "boolean"},
+        "message": {"type": "string"},
+        "scope": {"type": "string", "enum": ["player", "player_last_n", "player_vs_team", "h2h"]},
+        "format": {"type": "string", "enum": ["odi", "t20", "test", "ipl"]},
+        "gender": {"type": "string", "enum": ["men", "women"]},
+        "player": {"type": "string"},
+        "opponent_team": {"type": "string"},
+        "team1": {"type": "string"},
+        "team2": {"type": "string"},
+        "count": {"type": "integer"},
+        "metrics": {
+            "type": "array",
+            "items": {"type": "string", "enum": list(dict.fromkeys(DYNAMIC_PLAYER_METRICS + DYNAMIC_H2H_METRICS))},
+        },
+        "detail_table": {"type": "string", "enum": ["none", "innings", "meetings"]},
+        "detail_limit": {"type": "integer"},
+    },
+    "required": [
+        "ready", "message", "scope", "format", "gender", "player", "opponent_team",
+        "team1", "team2", "count", "metrics", "detail_table", "detail_limit",
+    ],
+    "additionalProperties": False,
+}
+
+def _dynamic_planner_prompt() -> str:
+    metric_lines = "\n".join(
+        f"- {metric_id}: {label} — {description}"
+        for metric_id, (label, description) in DYNAMIC_METRIC_INFO.items()
+    )
+    return """You are the stats-query planner for a human-reviewed cricket YouTube Shorts factory.
+
+Your job is ONLY to interpret the user's natural-language request into the supplied JSON schema.
+The database is the source of truth. Never invent numbers and never write SQL.
+
+INTERPRETATION
+- The user may be vague. Infer the intended cricket stats when the request is reasonably clear.
+- Default to ODI and men when the user does not specify another format or gender.
+- Use player scope for general career/format stats.
+- Use player_last_n for last/latest N innings, recent scores, or recent form.
+- Use player_vs_team for a player against/vs a named team.
+- Use h2h for two teams against each other, including record, wins, head-to-head, or meetings.
+- Resolve common team abbreviations when obvious.
+- Count is the requested innings/meeting count, 1-20 when present.
+- For a broad stats request, choose the richest useful metric set that fits one 1080x1920 card, rather than returning only one or two stats.
+- For explicit metrics, include them and add only closely relevant context metrics if there is room.
+- For player_last_n, prefer detail_table=innings.
+- For h2h, use detail_table=meetings when recent/last meetings are requested.
+- Bowling, fielding, unsupported team score totals, and any metric not listed below are unsupported.
+
+WHEN UNCLEAR OR UNSUPPORTED
+- Set ready=false.
+- Put the exact user-facing re-query instruction in message.
+- Do not guess a missing player/team, incompatible scope, or unsupported metric.
+- Keep message concise and immediately actionable.
+
+METRICS
+""" + metric_lines + """
+
+Return only JSON matching the supplied schema.
+"""
+
+def _plan_dynamic_stats(query: str) -> dict[str, Any]:
+    clean = _normalise(query)
+    if not clean:
+        raise StatsCardError("Enter a stats query.")
+
+    key = _normalise(os.getenv("GROQ_API_KEY"))
+    if not key:
+        raise StatsCardError("GROQ_API_KEY is not configured.")
+
+    url = "https://api.groq.com/openai/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {key}",
+        "Content-Type": "application/json",
+    }
+    messages = [
+        {"role": "system", "content": _dynamic_planner_prompt()},
+        {"role": "user", "content": clean},
+    ]
+    primary_payload = {
+        "model": DYNAMIC_GROQ_MODEL,
+        "messages": messages,
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "dynamic_stats_query",
+                "strict": True,
+                "schema": DYNAMIC_SCHEMA,
+            },
+        },
+        "reasoning_format": "hidden",
+        "reasoning_effort": "low",
+        "temperature": 0.1,
+        "max_completion_tokens": 700,
+    }
+
+    try:
+        response = requests.post(
+            url,
+            headers=headers,
+            json=primary_payload,
+            timeout=REQUEST_TIMEOUT,
+        )
+    except requests.RequestException as exc:
+        raise StatsCardError(
+            f"Stats query research failed: could not reach Groq ({type(exc).__name__})."
+        ) from exc
+
+    if response.status_code == 400:
+        # Groq supports JSON Object Mode on GPT-OSS 20B as a compatibility fallback.
+        fallback_payload = {
+            "model": DYNAMIC_GROQ_MODEL,
+            "messages": messages,
+            "response_format": {"type": "json_object"},
+            "reasoning_format": "hidden",
+            "reasoning_effort": "low",
+            "temperature": 0.1,
+            "max_completion_tokens": 700,
+        }
+        try:
+            fallback_response = requests.post(
+                url,
+                headers=headers,
+                json=fallback_payload,
+                timeout=REQUEST_TIMEOUT,
+            )
+        except requests.RequestException as exc:
+            raise StatsCardError(
+                f"Stats query research failed: could not reach Groq ({type(exc).__name__})."
+            ) from exc
+        if fallback_response.status_code == 200:
+            response = fallback_response
+
+    try:
+        response.raise_for_status()
+    except requests.RequestException as exc:
+        detail = ""
+        try:
+            payload = response.json()
+            detail = str(((payload.get("error") or {}).get("message") or "")).strip()
+        except (ValueError, TypeError, AttributeError):
+            detail = ""
+        suffix = f" — {detail[:300]}" if detail else f" (HTTP {response.status_code})"
+        raise StatsCardError(f"Stats query research failed{suffix}.") from exc
+
+    try:
+        content = response.json()["choices"][0]["message"]["content"]
+        plan = content if isinstance(content, dict) else json.loads(content)
+    except (KeyError, IndexError, TypeError, ValueError) as exc:
+        raise StatsCardError("Stats query research returned an unreadable plan. Try a different query.") from exc
+
+    if not isinstance(plan, dict):
+        raise StatsCardError("Stats query research returned an unreadable plan. Try a different query.")
+
+    if not bool(plan.get("ready")):
+        message = str(plan.get("message") or "").strip()
+        raise StatsCardError(message or "The stats query needs more detail. Try a different query.")
+
+    scope = str(plan.get("scope") or "").strip()
+    format_name = str(plan.get("format") or "").strip().lower()
+    gender = str(plan.get("gender") or "").strip().lower()
+    if scope not in DYNAMIC_DEFAULT_METRICS or format_name not in FORMAT_LABELS or gender not in {"men", "women"}:
+        raise StatsCardError("The stats planner returned an invalid request. Try a different query.")
+
+    metrics = []
+    raw_metrics = plan.get("metrics") or ()
+    if isinstance(raw_metrics, (list, tuple)):
+        allowed = set(DYNAMIC_H2H_METRICS if scope == "h2h" else DYNAMIC_PLAYER_METRICS)
+        for metric in raw_metrics:
+            metric_id = str(metric or "").strip()
+            if metric_id in allowed and metric_id not in metrics:
+                metrics.append(metric_id)
+    if not metrics:
+        metrics = list(DYNAMIC_DEFAULT_METRICS[scope])
+
+    detail_table = str(plan.get("detail_table") or "none").strip()
+
+    def _bounded_int(value: Any, default: int = 0) -> int:
+        try:
+            return max(0, min(20, int(value)))
+        except (TypeError, ValueError):
+            return default
+
+    detail_limit = _bounded_int(plan.get("detail_limit"))
+    count = _bounded_int(plan.get("count"))
+
+    if scope == "player_last_n":
+        count = count or 10
+        detail_table = "innings" if detail_table == "none" else detail_table
+        if detail_table != "innings":
+            raise StatsCardError("Last-innings requests need an innings detail table. Try a different query.")
+        detail_limit = detail_limit or count
+        plan["player"] = _normalise(plan.get("player") or "")
+        if not plan["player"]:
+            raise StatsCardError("Please include the player name and try again.")
+        plan["opponent_team"] = ""
+    elif scope == "player":
+        plan["player"] = _normalise(plan.get("player") or "")
+        if not plan["player"]:
+            raise StatsCardError("Please include the player name and try again.")
+        plan["opponent_team"] = ""
+    elif scope == "player_vs_team":
+        plan["player"] = _normalise(plan.get("player") or "")
+        plan["opponent_team"] = _canonical_team(plan.get("opponent_team") or "")
+        if not plan["player"] or not plan["opponent_team"]:
+            raise StatsCardError("Please include both the player and opponent team and try again.")
+    else:
+        plan["player"] = ""
+        plan["team1"] = _canonical_team(plan.get("team1") or "")
+        plan["team2"] = _canonical_team(plan.get("team2") or "")
+        if not plan["team1"] or not plan["team2"] or plan["team1"].casefold() == plan["team2"].casefold():
+            raise StatsCardError("Please include two different teams for head-to-head stats and try again.")
+        plan["opponent_team"] = ""
+
+    if detail_table == "meetings" and scope != "h2h":
+        raise StatsCardError("Meeting tables are only available for head-to-head requests. Try a different query.")
+    if detail_table == "innings" and scope == "h2h":
+        raise StatsCardError("Innings tables are only available for player requests. Try a different query.")
+
+    plan["metrics"] = metrics[:12]
+    plan["count"] = count
+    plan["detail_table"] = detail_table
+    plan["detail_limit"] = min(20, detail_limit)
+    return plan
 
 def _parse_query(query: str) -> StatsIntent:
     clean = _normalise(query)
@@ -1167,6 +1473,365 @@ def _last_n_card(stats: dict[str, Any], source_image: Any) -> Image.Image:
     draw.text((MARGIN, HEIGHT - 76), note, font=_font(18, bold=False), fill=MUTED)
     _draw_attribution(draw)
     return base
+
+
+def _dynamic_player_rows(
+    intent: StatsIntent,
+    player: dict[str, Any],
+    opponent_team: str = "",
+) -> list[dict[str, Any]]:
+    table = FORMAT_TABLES.get((intent.format_name, intent.gender))
+    if not table:
+        raise StatsCardError("That format/gender combination is not available in the stats database.")
+    unique_name = _normalise(player.get("unique_name") or "")
+    if not unique_name:
+        raise StatsCardError("The matched player has no usable database name.")
+    conditions = [
+        f"lower(b.striker) = lower('{_sql_text(unique_name)}')",
+        f"b.innings <= {_innings_limit(intent.format_name)}",
+    ]
+    if opponent_team:
+        conditions.append(f"lower(b.bowling_team) = lower('{_sql_text(opponent_team)}')")
+    sql = (
+        "SELECT b.match_id, b.start_date, b.innings, b.batting_team, b.bowling_team, "
+        "SUM(b.runs_off_bat) AS runs, "
+        "COUNT(*) FILTER (WHERE b.wides IS NULL) AS balls_faced, "
+        "SUM(CASE WHEN b.runs_off_bat = 4 THEN 1 ELSE 0 END) AS fours, "
+        "SUM(CASE WHEN b.runs_off_bat = 6 THEN 1 ELSE 0 END) AS sixes, "
+        "MAX(CASE WHEN lower(b.player_dismissed) = lower(b.striker) THEN 1 ELSE 0 END) AS dismissed "
+        f"FROM {table} b WHERE {' AND '.join(conditions)} "
+        "GROUP BY b.match_id, b.start_date, b.innings, b.batting_team, b.bowling_team, b.striker "
+        "ORDER BY b.start_date DESC, b.match_id DESC, b.innings DESC"
+    )
+    rows = _query(sql)
+    return [
+        {
+            "match_id": row.get("match_id"),
+            "date": row.get("start_date"),
+            "opponent": _normalise(row.get("bowling_team") or ""),
+            "team": _normalise(row.get("batting_team") or ""),
+            "runs": _to_int(row.get("runs")),
+            "balls": _to_int(row.get("balls_faced")),
+            "fours": _to_int(row.get("fours")),
+            "sixes": _to_int(row.get("sixes")),
+            "dismissed": _to_int(row.get("dismissed")) == 1,
+        }
+        for row in rows
+    ]
+
+def _dynamic_player_summary(
+    intent: StatsIntent,
+    player: dict[str, Any],
+    opponent_team: str = "",
+) -> dict[str, Any]:
+    all_innings = _dynamic_player_rows(intent, player, opponent_team)
+    if not all_innings:
+        suffix = f" against {opponent_team}" if opponent_team else ""
+        raise StatsCardError(
+            f"No {FORMAT_LABELS[intent.format_name]} batting data was found for {player['name']}{suffix}."
+        )
+    innings = all_innings[:intent.count] if intent.kind == "player_last_n" else all_innings
+    total_runs = sum(item["runs"] for item in innings)
+    outs = sum(1 for item in innings if item["dismissed"])
+    balls = sum(item["balls"] for item in innings)
+    fours = sum(item["fours"] for item in innings)
+    sixes = sum(item["sixes"] for item in innings)
+    dates = [parsed for item in innings if (parsed := _date_value(item["date"])) is not None]
+    high_score = max(item["runs"] for item in innings)
+    high_rows = [item for item in innings if item["runs"] == high_score]
+    team_counts: dict[str, int] = {}
+    for item in innings:
+        if item["team"]:
+            team_counts[item["team"]] = team_counts.get(item["team"], 0) + 1
+    return {
+        "player": player["name"],
+        "format": FORMAT_LABELS[intent.format_name],
+        "gender": intent.gender,
+        "team": max(team_counts, key=team_counts.get) if team_counts else "",
+        "opponent_team": opponent_team,
+        "matches": len({str(item["match_id"]) for item in innings}),
+        "innings": len(innings),
+        "runs": total_runs,
+        "average": total_runs / outs if outs else None,
+        "strike_rate": total_runs * 100 / balls if balls else None,
+        "high_score": f"{high_score}{'' if all(item['dismissed'] for item in high_rows) else '*'}",
+        "hundreds": sum(1 for item in innings if item["runs"] >= 100),
+        "fifties": sum(1 for item in innings if 50 <= item["runs"] < 100),
+        "not_outs": sum(1 for item in innings if not item["dismissed"]),
+        "balls_faced": balls,
+        "fours": fours,
+        "sixes": sixes,
+        "ducks": sum(1 for item in innings if item["runs"] == 0),
+        "runs_per_innings": total_runs / len(innings) if innings else None,
+        "boundary_runs": fours * 4 + sixes * 6,
+        "last_date": max(dates) if dates else None,
+        "first_date": min(dates) if dates else None,
+        "count_requested": intent.count,
+        "count_available": len(innings),
+        "innings_rows": innings,
+    }
+
+def _dynamic_h2h_summary(plan: dict[str, Any]) -> dict[str, Any]:
+    team1 = _sql_text(plan["team1"])
+    team2 = _sql_text(plan["team2"])
+    match_type = FORMAT_LABELS[plan["format"]]
+    gender_value = "female" if plan["gender"] == "women" else "male"
+    sql = (
+        "SELECT match_id, start_date, team1, team2, winner FROM match_info "
+        f"WHERE match_type = '{match_type}' AND gender = '{gender_value}' "
+        f"AND ((lower(team1) = lower('{team1}') AND lower(team2) = lower('{team2}')) "
+        f"OR (lower(team1) = lower('{team2}') AND lower(team2) = lower('{team1}'))) "
+        "ORDER BY start_date DESC, match_id DESC"
+    )
+    rows = _query(sql)
+    if not rows:
+        raise StatsCardError(f"No {match_type} H2H matches were found for {plan['team1']} vs {plan['team2']}.")
+    wins1 = wins2 = other = 0
+    meetings = []
+    for row in rows:
+        winner = _normalise(row.get("winner") or "")
+        if winner.casefold() == plan["team1"].casefold():
+            wins1 += 1
+            result = f"{plan['team1']} won"
+        elif winner.casefold() == plan["team2"].casefold():
+            wins2 += 1
+            result = f"{plan['team2']} won"
+        else:
+            other += 1
+            result = "No result / tied"
+        meetings.append({"date": row.get("start_date"), "result": result})
+    dates = [parsed for row in rows if (parsed := _date_value(row.get("start_date"))) is not None]
+    return {
+        "team1": plan["team1"], "team2": plan["team2"], "format": match_type, "gender": plan["gender"],
+        "matches": len(rows), "wins_team1": wins1, "wins_team2": wins2, "no_result": other,
+        "team1_win_pct": wins1 * 100 / len(rows), "team2_win_pct": wins2 * 100 / len(rows),
+        "first_meeting": min(dates) if dates else None, "last_meeting": max(dates) if dates else None,
+        "meetings": meetings,
+    }
+
+def _dynamic_metric_items(plan: dict[str, Any], stats: dict[str, Any]) -> list[tuple[str, str]]:
+    if plan["scope"] == "h2h":
+        labels = {
+            "wins_team1": f"{stats['team1']} wins",
+            "wins_team2": f"{stats['team2']} wins",
+        }
+        values = {
+            "matches": stats["matches"], "wins_team1": stats["wins_team1"], "wins_team2": stats["wins_team2"],
+            "no_result": stats["no_result"], "team1_win_pct": stats["team1_win_pct"],
+            "team2_win_pct": stats["team2_win_pct"], "first_meeting": _date_label(stats["first_meeting"]),
+            "last_meeting": _date_label(stats["last_meeting"]),
+        }
+        items=[]
+        for metric_id in plan["metrics"]:
+            value=values[metric_id]
+            if metric_id.endswith("_win_pct"):
+                text_value=f"{float(value):.1f}%"
+            elif isinstance(value,(int,float)):
+                text_value=f"{value:,}"
+            else:
+                text_value=str(value)
+            items.append((labels.get(metric_id,DYNAMIC_METRIC_INFO[metric_id][0]),text_value))
+        return items
+
+    values = {
+        "matches": stats["matches"], "innings": stats["innings"], "runs": stats["runs"],
+        "average": stats["average"], "strike_rate": stats["strike_rate"], "high_score": stats["high_score"],
+        "hundreds": stats["hundreds"], "fifties": stats["fifties"], "not_outs": stats["not_outs"],
+        "balls_faced": stats["balls_faced"], "fours": stats["fours"], "sixes": stats["sixes"],
+        "ducks": stats["ducks"], "runs_per_innings": stats["runs_per_innings"],
+        "boundary_runs": stats["boundary_runs"],
+    }
+    items=[]
+    for metric_id in plan["metrics"]:
+        value=values[metric_id]
+        if value is None:
+            text_value="—"
+        elif metric_id in {"average","strike_rate","runs_per_innings"}:
+            text_value=f"{float(value):.2f}"
+        elif isinstance(value,(int,float)):
+            text_value=f"{value:,}"
+        else:
+            text_value=str(value)
+        items.append((DYNAMIC_METRIC_INFO[metric_id][0],text_value))
+    return items
+
+def _fit_single_line(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> str:
+    value = _normalise(text)
+    if not value:
+        return "—"
+    if draw.textbbox((0,0),value,font=font)[2] <= max_width:
+        return value
+    candidate=value
+    while candidate and draw.textbbox((0,0),candidate+"…",font=font)[2] > max_width:
+        candidate=candidate[:-1]
+    return (candidate.rstrip()+"…") if candidate else "…"
+
+def _draw_dynamic_metric_grid(
+    draw: ImageDraw.ImageDraw,
+    metrics: list[tuple[str, str]],
+    top: int,
+    *,
+    with_detail: bool,
+) -> int:
+    if not metrics:
+        return top
+    columns = 4 if with_detail or len(metrics) >= 10 else 3
+    gap = 16
+    available = WIDTH - MARGIN * 2
+    tile_width = (available - gap * (columns - 1)) // columns
+    tile_height = (
+        96 if with_detail and len(metrics) >= 10
+        else 106 if with_detail
+        else 150 if len(metrics) >= 10
+        else 142
+    )
+    label_font = _font(16 if columns == 4 else 20)
+    value_font = _font(34 if columns == 4 else 46)
+    rows = (len(metrics) + columns - 1) // columns
+    for row_index in range(rows):
+        row = metrics[row_index*columns:(row_index+1)*columns]
+        y=top+row_index*(tile_height+gap)
+        for col_index,(label,value) in enumerate(row):
+            x=MARGIN+col_index*(tile_width+gap)
+            draw.rounded_rectangle((x,y,x+tile_width,y+tile_height),radius=16,fill=(255,255,255),outline=LINE,width=2)
+            label_lines=_wrap_words(draw,label.upper(),label_font,tile_width-28)[:2]
+            label_y=y+10
+            for line in label_lines:
+                box=draw.textbbox((0,0),line,font=label_font)
+                draw.text((x+(tile_width-(box[2]-box[0]))/2,label_y),line,font=label_font,fill=MUTED)
+                label_y += box[3]-box[1]+2
+            label_bottom=label_y
+            value_text=_fit_single_line(draw,value,value_font,tile_width-28)
+            value_for_tile=value_font
+            while value_for_tile.size>22 and draw.textbbox((0,0),value_text,font=value_for_tile)[2]>tile_width-28:
+                value_for_tile=_font(value_for_tile.size-2)
+            value_box=draw.textbbox((0,0),value_text,font=value_for_tile)
+            value_width=value_box[2]-value_box[0]
+            value_height=value_box[3]-value_box[1]
+            value_y=max(y+tile_height-value_height-10,label_bottom+6)
+            if value_y+value_height>y+tile_height-7:
+                raise StatsCardError("A requested stat value is too long to fit cleanly.") if value_for_tile.size<=22 else None
+            draw.text((x+(tile_width-value_width)/2,value_y),value_text,font=value_for_tile,fill=INK)
+    return top+rows*tile_height+max(0,rows-1)*gap
+
+def _draw_dynamic_detail_table(
+    draw: ImageDraw.ImageDraw,
+    detail_type: str,
+    stats: dict[str, Any],
+    top: int,
+    bottom_limit: int,
+) -> int:
+    rows=list(stats.get("innings_rows") if detail_type=="innings" else stats.get("meetings") or [])
+    if not rows or top>=bottom_limit:
+        return top
+    detail_limit = int(stats.get("detail_limit") or 20)
+    rows=rows[:min(20, detail_limit, len(rows))]
+    title="RECENT INNINGS" if detail_type=="innings" else "RECENT MEETINGS"
+    draw.text((MARGIN,top),title,font=_font(19),fill=BRAND_BLUE)
+    header_y=top+30
+    small=_font(16,bold=False)
+    heading="SCORE" if detail_type=="innings" else "RESULT"
+    draw.text((MARGIN,header_y),"DATE · OPPONENT" if detail_type=="innings" else "DATE",font=small,fill=MUTED)
+    hb=draw.textbbox((0,0),heading,font=small)
+    draw.text((WIDTH-MARGIN-(hb[2]-hb[0]),header_y),heading,font=small,fill=MUTED)
+    rows_per_column=max(1,(len(rows)+1)//2)
+    gap=14
+    row_gap=4
+    table_rows_top=header_y+23
+    max_row_height=max(32,(bottom_limit-table_rows_top-8-row_gap*(rows_per_column-1))//rows_per_column)
+    row_height=min(50 if len(rows)<=10 else 43,max_row_height)
+    if row_height<32:
+        return top
+    col_width=(WIDTH-MARGIN*2-gap)//2
+    body_font=_font(20 if len(rows)<=10 else 17,bold=False)
+    value_font=_font(25 if len(rows)<=10 else 21)
+    right_width=118
+    left_width=col_width-right_width-28
+    for column in range(2):
+        col_rows=rows[column*rows_per_column:(column+1)*rows_per_column]
+        x=MARGIN+column*(col_width+gap)
+        for row_index,row in enumerate(col_rows):
+            row_y=table_rows_top+row_index*(row_height+row_gap)
+            draw.rounded_rectangle((x,row_y,x+col_width,row_y+row_height),radius=10,fill=(255,255,255),outline=LINE,width=1)
+            if detail_type=="innings":
+                left_text=f"{_date_label(row.get('date'))} · {_normalise(row.get('opponent') or '')}"
+                right_text=f"{_to_int(row.get('runs'))}{'' if bool(row.get('dismissed')) else '*'}"
+            else:
+                left_text=_date_label(row.get('date'))
+                right_text=_normalise(row.get('result') or "No result / tied")
+            left=_fit_single_line(draw,left_text,body_font,left_width)
+            right=_fit_single_line(draw,right_text,value_font,right_width)
+            lb=draw.textbbox((0,0),left,font=body_font)
+            rb=draw.textbbox((0,0),right,font=value_font)
+            draw.text((x+12,row_y+(row_height-(lb[3]-lb[1]))/2-1),left,font=body_font,fill=INK)
+            draw.text((x+col_width-(rb[2]-rb[0])-12,row_y+(row_height-(rb[3]-rb[1]))/2-1),right,font=value_font,fill=INK)
+    return table_rows_top+rows_per_column*(row_height+row_gap)-row_gap
+
+def _dynamic_stats_card(plan: dict[str, Any], stats: dict[str, Any], source_image: Any) -> Image.Image:
+    base=Image.new("RGB",(WIDTH,HEIGHT),WHITE)
+    _draw_image_header(base,source_image)
+    if plan["scope"]=="h2h":
+        title=f"{stats['team1']} vs {stats['team2']}"
+        context=[f"{stats['format']} · HEAD-TO-HEAD · {stats['matches']} matches",f"{_date_label(stats['first_meeting'])} – {_date_label(stats['last_meeting'])}"]
+    elif plan["scope"]=="player_last_n":
+        title=f"{stats['player']} · last {stats['count_requested']} innings"
+        context=[f"{stats['format']} · {stats['count_available']} innings shown",f"Stats through {_date_label(stats['last_date'])}"]
+    elif plan["scope"]=="player_vs_team":
+        title=f"{stats['player']} vs {stats['opponent_team']}"
+        context=[f"{stats['format']} · AGAINST {stats['opponent_team']}",f"{stats['matches']} matches · {stats['innings']} innings"]
+    else:
+        title=f"{stats['player']} · {stats['format']} stats"
+        context=[f"{stats['format']} · {stats['team'] or 'Team not recorded'} · CAREER",f"{stats['matches']} matches · {stats['innings']} batting innings"]
+    y=_draw_header(base,title,context)
+    metrics=_dynamic_metric_items(plan,stats)
+    metrics_bottom=_draw_dynamic_metric_grid(ImageDraw.Draw(base),metrics,y+14,with_detail=plan["detail_table"]!="none")
+    if plan["detail_table"]!="none":
+        stats["detail_limit"]=plan["detail_limit"]
+        table_top=metrics_bottom+20
+        table_bottom=_draw_dynamic_detail_table(ImageDraw.Draw(base),plan["detail_table"],stats,table_top,1830)
+        if table_bottom<=table_top:
+            raise StatsCardError("The requested stats and detail table do not fit on one card. Try a narrower query.")
+    _draw_attribution(ImageDraw.Draw(base))
+    return base
+
+def _dynamic_stats_for_plan(plan: dict[str, Any]) -> tuple[dict[str, Any], str]:
+    if plan["scope"]=="h2h":
+        return _dynamic_h2h_summary(plan), ""
+    intent=StatsIntent(kind=plan["scope"],format_name=plan["format"],gender=plan["gender"],player=plan["player"],count=plan["count"])
+    player=_resolve_player(intent)
+    return _dynamic_player_summary(intent,player,plan.get("opponent_team") or ""), player["name"]
+
+def build_test_stats_card(query: str, image_bytes: bytes | bytearray | Image.Image, output_dir: str | Path = "output/visuals/stats_cards") -> dict[str, Any]:
+    plan=_plan_dynamic_stats(query)
+    stats,resolved_player=_dynamic_stats_for_plan(plan)
+    card=_dynamic_stats_card(plan,stats,image_bytes)
+    if plan["scope"]=="h2h":
+        label=f"{stats['team1']} vs {stats['team2']} · {stats['format']} H2H"
+    elif plan["scope"]=="player_last_n":
+        label=f"{resolved_player} · {stats['format']} last {stats['count_requested']} innings"
+    elif plan["scope"]=="player_vs_team":
+        label=f"{resolved_player} vs {stats['opponent_team']} · {stats['format']}"
+    else:
+        label=f"{resolved_player} · {stats['format']} stats"
+    output=Path(output_dir)
+    output.mkdir(parents=True,exist_ok=True)
+    slug=re.sub(r"[^a-z0-9]+","-",label.casefold()).strip("-") or "stats-card"
+    path=output/f"{slug}.png"
+    index=2
+    while path.exists():
+        path=output/f"{slug}-{index}.png"
+        index+=1
+    buffer=BytesIO()
+    card.save(buffer,format="PNG",optimize=True)
+    data=buffer.getvalue()
+    path.write_bytes(data)
+    return {
+        "bytes":data,"path":str(path),"width":WIDTH,"height":HEIGHT,"label":label,
+        "source":SOURCE_NAME,"query":_normalise(query),"stats":stats,
+        "layout":{"width":WIDTH,"height":HEIGHT,"image_width":WIDTH,"image_height":IMAGE_HEIGHT,"panel_height":HEIGHT-IMAGE_HEIGHT},
+        "intent":{"kind":plan["scope"],"format":plan["format"],"gender":plan["gender"]},
+        "plan":plan,
+    }
 
 def _stats_for_intent(intent: StatsIntent) -> dict[str, Any]:
     if intent.kind == "h2h":
