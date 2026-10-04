@@ -280,48 +280,49 @@ Top-5 is the first new production line to graduate from Test into Live.
 
 Top-5 Scriptwriter:
 - Generates exactly six slides from five selected cricket stories.
-- Slide 1 is a smart Top-5 package opener that communicates the day's five-story cricket package with concrete details from selected stories; it is not a bare generic label.
-- Slides 2–6 use the five selected story headlines as spoken narration.
-- Slides 2–6 carry separate visual-only body copy plus visual metadata/search prompts.
-- Body copy remains reasonably compact for the 9:16 editorial card, with no fixed sentence or word-count rule.
-- The six spoken headlines together must remain within the 30-second total narration budget; there is no separate per-headline 15-second rule.
+- Slide 1 is the Top-5 package opener; Slides 2–6 map exactly to the five selected stories.
+- Slides 2–6 use their story headlines as spoken narration.
+- Every slide has separate visual-only body copy plus visual metadata/search prompts.
+- Body copy remains reasonably compact for the 9:16 editorial card with no fixed sentence or word-count rule.
+- The six spoken headlines together remain within the 30-second total narration budget; there is no separate per-headline 15-second rule.
 
-Top-5 Live Topic stage:
-- Uses the same 20-story grouped/collapsed cricket Topic Fetcher pool as Test.
-- The user manually chooses exactly five headlines and manually controls their order.
-- Approving Stage 1 creates the canonical five-story handoff and immediately starts five automatic Visual Fetcher jobs, one per selected story URL.
-- Automatic visual retrieval intentionally overlaps Scriptwriter research.
-- Slide 1 and Slide 2 use the first selected story's automatic image pool; Slides 3–6 use stories 2–5.
-
-Top-5 Live Script / Audio:
-- Scriptwriter starts automatically after Stage 1 approval, then waits for manual Script QC approval.
-- Audio starts automatically after Script QC approval and narrates only the six spoken headlines.
-- Audio still has a manual approval gate.
-
-Top-5 Live Visuals:
-- The Test Visuals design approved on 2026-10-03 is the Live Visuals design.
-- Live exposes all six options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
-- Every slide shows the approved Scriptwriter headline/body context before visual selection.
-- Automatic Scraper results are delivered page-by-page into the Live visual pool while the five crawls are still running. The user does not need to wait for a complete crawl before reviewing available images.
-- Manual Scraper, Real Image Search and AI Generation remain user-triggered and per-slide.
-- Retrieved images can be cropped/repositioned, and the actual Top-5 1080 × 1920 card render is previewed before approval.
-- Human image selection remains authoritative; there is no automatic image selection.
-- All six visual assignments must be approved together before Renderer.
-
-Top-5 Live Renderer / Upload:
+Top-5 Test / Topic stage:
+- Uses the 20-story grouped/collapsed cricket Topic Fetcher pool.
+- The user manually chooses exactly five stories and manually controls their order.
+- Scriptwriter, Audio and Visual QC retain explicit Test approval gates.
 - Top-5 intentionally skips Subtitles.
-- Renderer consumes only the approved Top-5 Scriptwriter, Audio and six-slide Visual handoffs.
-- Renderer automatically builds the final six-slide video after Visual approval.
-- The user explicitly approves the finished render before Upload QC.
+
+Top-5 Visual QC:
+- Test and Live expose the same six approved visual choices: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
+- Every slide shows the approved Scriptwriter headline/body context before visual selection.
+- Options 1–4 return image assets that all use the same direct Top-5 attachment path.
+- Real Image Search and AI-generated provider bytes are normalized to a standard JPEG payload at attachment so the card renderer receives the same image contract as scraper assets.
+- Stats Card attaches to the Top-5 visual handoff and preserves its card layout metadata.
+- Quote Card attaches to the Top-5 visual handoff with its quote/attribution metadata.
+- Crop/reposition remains per image. The actual 1080 × 1920 rendered card preview is shown for every attached treatment.
+- Human image selection remains authoritative; there is no automatic image selection.
+- All six slide assignments must be approved together before Renderer.
+
+Top-5 Live orchestration:
+- The user manually chooses and orders the five stories.
+- Approving Stage 1 creates the canonical five-story handoff and immediately starts five automatic Visual Fetcher jobs, one per selected story URL.
+- Automatic visual retrieval overlaps Scriptwriter research and streams page results into the Visual QC pool as they finish.
+- Slide 1 and Slide 2 use the first selected story's automatic image pool; Slides 3–6 use stories 2–5.
+- Scriptwriter starts automatically after Stage 1 approval and waits for manual Script QC approval.
+- Audio starts automatically after Script QC approval and waits for manual Audio approval.
+- Visual QC waits for the approved Script and Audio handoffs, while automatic retrieval may already be running.
+- Renderer builds the finished six-slide video after Visual approval; the user explicitly approves the rendered result before Upload QC.
+
+Top-5 Upload:
 - Upload QC uses Slide 1's approved spoken headline as the YouTube title.
 - Description, hashtags and public comment remain editable.
-- After one Upload QC approval, Live exposes the same two upload choices as Cricket: Upload Public or Upload Private.
+- One Upload QC approval unlocks Upload Public and Upload Private.
+- Public upload attempts to add the approved public comment; comment failure is reported without adding another approval gate.
 
 Top-5 status:
 - **Test implementation: approved.**
-- **Live implementation: complete and ready for production testing.**
-- **No separate Top-5 runtime architecture or dependency was introduced.**
-
+- **Live implementation: complete and in production testing.**
+- **No separate Top-5 dependency or parallel runtime pipeline was introduced.**
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -332,22 +333,23 @@ Purpose:
 
 Status: **Planned / Test framework WIP.**
 
-### Test / Live architecture audit — cleanup required
-The factory must have one shared implementation of each seven production stages: Topic Fetcher, Scriptwriter, Audio, Visuals, Subtitles, Renderer and YouTube Upload. Test and Live may differ in presentation and in whether an already-approved stage is triggered manually or automatically, but they must not drift into different stage logic, handoff contracts or parameter sets.
+### Test / Live architecture audit
 
-Current audit found that the underlying stage modules are mostly shared, but app.py contains duplicated Test/Live orchestration and UI logic. There are 61 Test-side session-state keys, 48 Live-side keys and 31 mirrored Test/Live state pairs. Several stage screens are separate implementations rather than two presentations of the same stage.
+The factory must have one shared implementation of each production stage. Test and Live may differ in presentation and in whether an already-approved stage is triggered manually or automatically, but they must not drift into different stage logic, handoff contracts or asset contracts.
 
-Known drift that must be cleaned up:
-- Topic Fetcher has separate Test and Live tile/search implementations.
-- Scriptwriter uses the same writers but separate Test/Live orchestration.
-- Test Audio and Subtitles are manual staged QC; Live combines them into an automatic Audio + Subtitles transition. The workflow difference is intentional, but the underlying handoff logic must remain one shared implementation.
-- Test Automatic Visuals and Live Automatic Visuals currently pass different Scriptwriter context into crawl_visuals(). Test passes the selected story plus the first scene entity; Live additionally passes the first scene specific_search_prompt and visual_intent. This must not remain divergent.
-- Test and Live use separate visual asset/attachment implementations. Their presentation may differ, but the approved visual handoff rules must be the same.
-- Test Renderer preview and Live production rendering currently do not exercise exactly the same headline-enabled handoff.
-- Test and Live Upload QC use different interaction patterns. That is acceptable only where it is presentation; publish metadata and uploader handoff must remain the same contract.
-- Niche Sports has a separate writer contract from Cricket. Any cleanup must preserve its line-specific behavior and must not force it through an incompatible Cricket-only validator.
+Current audit state:
+- Topic Fetcher, Scriptwriter, Audio, Visuals, Subtitles, Renderer and YouTube Upload remain separate modules with shared underlying contracts.
+- Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
+- The Test and Live Top-5 visual screens may differ in orchestration, but both consume the same visual asset shape and approved assignment semantics.
+- Top-5 Test Visual QC now routes Automatic Scraper, Manual Scraper, Real Image Search and AI Generation through one direct attachment path into test_top5_visual_assignments.
+- Top-5 Stats Card and Quote Card also attach into the same Top-5 handoff instead of the regular Cricket/Test visual assignment state.
+- The attachment path normalizes provider image bytes before building the actual Top-5 card preview, so all image sources reach Renderer through the same payload contract.
+- No wrapper, compatibility layer or new dependency was introduced for this fix.
+- Live Top-5 starts automatic visual crawling at Stage 1 approval and streams page results into its existing Visual QC state.
+- Test remains manually stageable; Live remains approval-triggered.
+- Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 attachment fix.
 
-Cleanup rules for this work:
+Cleanup rules:
 - Do not add wrappers, compatibility layers, duplicate pipelines, parallel metadata systems or abstraction layers that make the code harder to follow.
 - Prefer one direct stage implementation with small explicit mode/presentation differences over two copies of the same logic.
 - Preserve the existing seven-stage order and all approved production requirements.
@@ -357,19 +359,6 @@ Cleanup rules for this work:
 - Each cleanup step must be checked against the relevant tests and the actual Test/Live handoff path before merge.
 
 Status: **Architecture cleanup in progress.**
-
-Current cleanup baseline after the first passes:
-- Shared Topic tile UI, story payload construction, Scriptwriter selection, visual context construction, upload metadata extraction and the seven Visual QC options now have single shared implementations in app.py.
-- The redundant Live asset-key wrapper was removed.
-- Five unused Test Top-5 visual session-state entries were deleted.
-- The duplicate Live Final Title field was removed; Live now uses the selected one of the five editable title options directly, matching Test semantics.
-- Test and Live share the same underlying Visual Fetcher and approved handoff rules. Top-5 Live starts its five automatic crawls at Topic approval so retrieval can overlap Scriptwriter research and stream page results into Visual QC.
-- Test and Live still intentionally have different orchestration where the production workflow requires it: Test exposes manual stage controls/QC, while Live automatically starts the next approved stage.
-- Remaining major intentional UI/orchestration differences are Live Audio + Subtitles being one automatic production stage, Test Audio and Subtitles being separately reviewed stages, Live visual attachment/assignment controls, and Test renderer preview vs Live production render.
-- A Live Scriptwriter language state exists, but the current Live UI does not expose a language selector. This must be resolved before removing or restoring that state; do not guess the intended workflow.
-- The current codebase has 57 Test-side and 49 Live-side session-state keys, with 33 mirrored pairs. These counts should decrease only when a state is proven unnecessary; do not create a generic state framework just to reduce the number.
-
-
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
