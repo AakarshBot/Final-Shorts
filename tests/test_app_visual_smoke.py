@@ -7,6 +7,14 @@ from streamlit.testing.v1 import AppTest
 
 APP_PATH = Path(__file__).resolve().parents[1] / "app.py"
 
+VISUAL_OPTIONS = (
+    "Option 2 · Manual Scraper",
+    "Option 3 · Real Image Search",
+    "Option 4 · AI Generation",
+    "Option 5 · Stats Card",
+    "Option 6 · Quote Card",
+)
+
 
 def _image_bytes() -> bytes:
     image = Image.new("RGB", (600, 900), (40, 50, 60))
@@ -34,11 +42,13 @@ def _run_visual_option(option: str) -> AppTest:
     return at
 
 
-def test_stats_card_visual_screen_loads():
-    at = _run_visual_option("Option 5 · Stats Card")
-    assert not at.exception, at.exception
+def test_manual_visual_options_load():
+    for option in VISUAL_OPTIONS[:3]:
+        at = _run_visual_option(option)
+        assert not at.exception, at.exception
 
 
-def test_quote_card_visual_screen_loads():
-    at = _run_visual_option("Option 6 · Quote Card")
-    assert not at.exception, at.exception
+def test_card_visual_options_load():
+    for option in VISUAL_OPTIONS[3:]:
+        at = _run_visual_option(option)
+        assert not at.exception, at.exception
