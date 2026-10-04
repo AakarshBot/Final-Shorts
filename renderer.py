@@ -1517,6 +1517,9 @@ def _draw_subtitles(
 
         content_top += line_heights[row] + SUBTITLE_LINE_GAP
         offset += length
+
+    base.paste(canvas, (0, 0), canvas)
+
 def render_frame(
     base_image: Image.Image,
     t: float,
