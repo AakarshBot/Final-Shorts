@@ -11,6 +11,7 @@ import os
 from pathlib import Path
 from functools import lru_cache
 import re
+import time
 from urllib.parse import urlparse
 
 import requests
@@ -472,33 +473,41 @@ def _request(model: str, prompt: str, evidence: str) -> dict:
     if not key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
 
-    response = requests.post(
-        GROQ_URL,
-        headers={
-            "Authorization": f"Bearer {key}",
-            "Content-Type": "application/json",
-        },
-        json={
-            "model": model,
-            "messages": [
-                {"role": "system", "content": prompt},
-                {"role": "user", "content": "TOP-5 STORY EVIDENCE:\n" + evidence},
-            ],
-            "response_format": {
-                "type": "json_schema",
-                "json_schema": {
-                    "name": "top5_cricket_script",
-                    "strict": True,
-                    "schema": SCHEMA,
-                },
+    payload = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": prompt},
+            {"role": "user", "content": "TOP-5 STORY EVIDENCE:\n" + evidence},
+        ],
+        "response_format": {
+            "type": "json_schema",
+            "json_schema": {
+                "name": "top5_cricket_script",
+                "strict": True,
+                "schema": SCHEMA,
             },
-            "include_reasoning": False,
-            "reasoning_effort": "low",
-            "temperature": 0.35,
-            "max_completion_tokens": 2200,
         },
-        timeout=TIMEOUT,
-    )
+        "include_reasoning": False,
+        "reasoning_effort": "low",
+        "temperature": 0.35,
+        "max_completion_tokens": 2200,
+    }
+    for attempt in range(3):
+        try:
+            response = requests.post(
+                GROQ_URL,
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
+                },
+                json=payload,
+                timeout=TIMEOUT,
+            )
+            break
+        except (requests.exceptions.SSLError, requests.exceptions.ConnectionError, requests.exceptions.Timeout):
+            if attempt == 2:
+                raise
+            time.sleep(2 ** attempt)
     response.raise_for_status()
     content = response.json()["choices"][0]["message"]["content"]
     return content if isinstance(content, dict) else json.loads(content)
