@@ -50,6 +50,48 @@ def test_crawl_prefers_scriptwriter_visual_prompt(monkeypatch):
     assert calls[0][0][0] == "Shubman Gill batting India"
 
 
+def test_crawl_emits_assets_as_pages_finish(monkeypatch):
+    emitted = []
+
+    def fake_crawl(requests, on_result=None):
+        result = {
+            "assets": [{
+                "bytes": b"image",
+                "hash": "abc",
+                "source_image_url": "https://example.com/image.jpg",
+            }],
+            "url": requests[0]["url"],
+            "title": "Test page",
+        }
+        if on_result is not None:
+            on_result(0, requests[0], result)
+        return [result]
+
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl)
+
+    result = visual_fetcher.crawl_visuals(
+        _story(),
+        on_assets=lambda assets: emitted.extend(assets),
+    )
+
+    assert result["assets"][0]["hash"] == "abc"
+    assert [asset["hash"] for asset in emitted] == ["abc"]
+
+
+def test_crawl_without_callback_preserves_default_contract(monkeypatch):
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_crawl_pages",
+        lambda requests: [{
+            "assets": [],
+            "url": requests[0]["url"],
+            "title": "Test page",
+        }],
+    )
+    result = visual_fetcher.crawl_visuals(_story())
+    assert result["assets"] == []
+
+
 def test_ranked_visual_search_runs_scene_queries_together(monkeypatch):
     calls = []
 
