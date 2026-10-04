@@ -102,6 +102,10 @@ def generate_subtitles(
             raise ValueError(f"Scene {number} has no script text.")
 
         display_words = _display_words(script_text, timings)
+        if len(_clean(script_text).split()) != len(timings):
+            raise ValueError(
+                f"Scene {number} script and audio word counts do not match."
+            )
         timed_words: list[dict[str, Any]] = []
 
         for index, timing in enumerate(timings):
