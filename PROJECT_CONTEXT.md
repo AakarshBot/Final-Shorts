@@ -361,7 +361,7 @@ Current cleanup baseline after the first passes:
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5** is **WIP**.
+- **Top-5** is **approved in Test and implemented in Live; production testing is now the active step**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
