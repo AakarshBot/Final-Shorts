@@ -73,7 +73,7 @@ def test_top5_standalone_visual_qc_exposes_all_seven_options():
         if options[:7] == [
             "Option 1 · Automatic Scraper",
             "Option 2 · Manual Scraper",
-            "Option 3 · Real Image Search",
+            "Option 3 · Real Image Search · WIP",
             "Option 4 · AI Generation",
             "Option 5 · Stats Card",
             "Option 6 · Quote Card",
@@ -84,7 +84,7 @@ def test_top5_standalone_visual_qc_exposes_all_seven_options():
     assert seven == [
         "Option 1 · Automatic Scraper",
         "Option 2 · Manual Scraper",
-        "Option 3 · Real Image Search",
+        "Option 3 · Real Image Search · WIP",
         "Option 4 · AI Generation",
         "Option 5 · Stats Card",
         "Option 6 · Quote Card",
