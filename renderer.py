@@ -512,114 +512,57 @@ def _top5_editorial_layout(
         raise ValueError("Top-5 Subject Cutout returned no usable foreground subjects.")
 
     sx1, sy1, sx2, sy2 = bbox
-    left_space, right_space = sx1 - left, right - sx2
-    center = (sx1 + sx2) / 2 / WIDTH
-
-    if 0.30 <= center <= 0.70 and left_space >= 70 and right_space >= 70:
-        for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -2):
-            fonts = _top5_headline_font_stack(size, language)
-            width, height = _top5_editorial_measure(draw, clean_headline, fonts)
-            lines = [clean_headline.split()]
-            if width > safe_width:
-                candidates = []
-                words = clean_headline.split()
-                for split in range(1, len(words)):
-                    first, second = words[:split], words[split:]
-                    w1, h1 = _top5_editorial_measure(draw, " ".join(first), fonts)
-                    w2, h2 = _top5_editorial_measure(draw, " ".join(second), fonts)
-                    if max(w1, w2) <= safe_width:
-                        candidates.append(
-                            (
-                                abs(w1 - w2),
-                                [first, second],
-                                max(w1, w2),
-                                h1 + TOP5_EDITORIAL_HEADLINE_LINE_GAP + h2,
-                            )
-                        )
-                if not candidates:
-                    continue
-                _, lines, width, height = min(candidates, key=lambda item: item[0])
-            if width < (sx2 - sx1) + 32:
-                continue
-            min_x = max(left, sx2 + 18 - width)
-            max_x = min(sx1 - 18, right - width)
-            if min_x > max_x:
-                continue
-            x = int((min_x + max_x) / 2)
-            y = int(max(top, min(bottom - height, (sy1 + sy2 - height) / 2)))
-            overlap_w = max(0, min(x + width, sx2) - max(x, sx1))
-            overlap_h = max(0, min(y + height, sy2) - max(y, sy1))
-            return {
-                "x": x, "y": y, "width": width, "headline_fonts": fonts,
-                "headline_lines": lines, "headline_height": height, "headline_size": size,
-                "body_font": None, "body_lines": [], "body_height": 0, "body_size": None,
-                "body_gap": 0, "total_height": height, "zone_bottom": bottom,
-                "subject_overlap": (overlap_w * overlap_h) / max(1, width * height),
-                "subject_bbox": bbox, "composition_mode": "cross-subject", "region_mode": "center",
-                "story_number": story_number,
-            }
-
+    subject_width = max(1, sx2 - sx1)
+    subject_height = max(1, sy2 - sy1)
     words = clean_headline.split()
-    if center >= 0.50:
-        region = (left, top, max(left + 1, sx1 - TOP5_SUBJECT_GAP), bottom)
-        mode = "vertical-left"
-    else:
-        region = (min(right - 1, sx2 + TOP5_SUBJECT_GAP), top, right, bottom)
-        mode = "vertical-right"
 
-    if region[2] - region[0] >= 180:
-        region_width = region[2] - region[0]
-        region_height = region[3] - region[1]
-        for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -4):
-            fonts = _top5_headline_font_stack(size, language)
-            lines = []
-            current = []
-            for word in words:
-                trial = " ".join(current + [word])
-                if current and _top5_editorial_measure(draw, trial, fonts)[0] > region_width:
-                    lines.append(current)
-                    current = [word]
-                else:
-                    current.append(word)
-            if current:
-                lines.append(current)
-            if not lines or any(_top5_editorial_measure(draw, " ".join(line), fonts)[0] > region_width for line in lines):
+    for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -2):
+        fonts = _top5_headline_font_stack(size, language)
+        width, height = _top5_editorial_measure(draw, clean_headline, fonts)
+        lines = [words]
+        if width > safe_width or height > (bottom - top):
+            if max_headline_lines < 2:
                 continue
-            widths = [_top5_editorial_measure(draw, " ".join(line), fonts)[0] for line in lines]
-            heights = [_top5_editorial_measure(draw, " ".join(line), fonts)[1] for line in lines]
-            width = max(widths)
-            height = sum(heights) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
-            if height <= region_height:
+            two = _top5_two_line_headline(draw, words, fonts)
+            if two[1] > safe_width or two[2] > (bottom - top):
+                continue
+            lines, width, height = two[0], two[1], two[2]
+
+        positions = [
+            (left + (safe_width - width) / 2, sy1 - height * 0.62),
+            (left + (safe_width - width) / 2, sy1 + (subject_height - height) / 2),
+            (left + (safe_width - width) / 2, sy2 - height * 0.38),
+        ]
+        if sx1 > left + width * 0.18:
+            positions.append((left, sy1 + (subject_height - height) / 2))
+        if sx2 < right - width * 0.18:
+            positions.append((right - width, sy1 + (subject_height - height) / 2))
+
+        candidates = []
+        for candidate_x, candidate_y in positions:
+            x = int(round(max(left, min(right - width, candidate_x))))
+            y = int(round(max(top, min(bottom - height, candidate_y))))
+            overlap = mask.crop((x, y, x + width, y + height))
+            overlap_pixels = sum(1 for value in overlap.getdata() if value)
+            overlap_ratio = overlap_pixels / max(1, width * height)
+            distance = abs(overlap_ratio - 0.22)
+            candidates.append((distance, -overlap_ratio if overlap_ratio <= 0.42 else overlap_ratio, x, y, overlap_ratio))
+
+        if candidates:
+            viable = [candidate for candidate in candidates if candidate[4] <= 0.42]
+            if viable:
+                _, _, x, y, overlap_ratio = min(viable, key=lambda item: (item[0], item[1]))
                 return {
-                    "x": int(region[0] + (region_width - width) / 2),
-                    "y": int(region[1] + (region_height - height) / 2),
-                    "width": width, "headline_fonts": fonts, "headline_lines": lines,
-                    "headline_height": height, "headline_size": size, "body_font": None,
-                    "body_lines": [], "body_height": 0, "body_size": None, "body_gap": 0,
-                    "total_height": height, "zone_bottom": bottom, "subject_overlap": 0.0,
-                    "subject_bbox": bbox, "composition_mode": mode, "region_mode": mode,
+                    "x": x, "y": y, "width": width, "headline_fonts": fonts,
+                    "headline_lines": lines, "headline_height": height, "headline_size": size,
+                    "body_font": None, "body_lines": [], "body_height": 0, "body_size": None,
+                    "body_gap": 0, "total_height": height, "zone_bottom": bottom,
+                    "subject_overlap": overlap_ratio, "subject_bbox": bbox,
+                    "composition_mode": "subject-cutout", "region_mode": "hero-overlay",
                     "story_number": story_number,
                 }
 
-    if sy1 - top >= bottom - sy2:
-        region = (left, top, right, max(top + 1, sy1 - TOP5_SUBJECT_GAP))
-        mode = "top-negative-space"
-    else:
-        region = (left, min(bottom - 1, sy2 + TOP5_SUBJECT_GAP), right, bottom)
-        mode = "bottom-negative-space"
-
-    layout = horizontal(region, TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE)
-    if layout is None:
-        raise ValueError("Top-5 Subject Cutout could not place the headline.")
-    x, y, width, height, fonts, lines, size = layout
-    return {
-        "x": x, "y": y, "width": width, "headline_fonts": fonts, "headline_lines": lines,
-        "headline_height": height, "headline_size": size, "body_font": None, "body_lines": [],
-        "body_height": 0, "body_size": None, "body_gap": 0, "total_height": height,
-        "zone_bottom": bottom, "subject_overlap": 0.0, "subject_bbox": bbox,
-        "composition_mode": mode, "region_mode": mode, "story_number": story_number,
-    }
-
+    raise ValueError("Top-5 Subject Cutout could not place the headline.")
 
 @lru_cache(maxsize=1)
 def _load_top5_birefnet():
@@ -698,7 +641,27 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         subject_mask=subject_mask,
     )
 
-    canvas = source_image.convert("RGBA")
+    if subject_mask is not None:
+        subject_mask = subject_mask.convert("L").point(lambda value: 255 if value >= 96 else 0)
+        backdrop = Image.blend(
+            source_image.convert("RGBA"),
+            Image.new("RGBA", source_image.size, DARK + (255,)),
+            0.20,
+        )
+        canvas = Image.composite(
+            source_image.convert("RGBA"),
+            backdrop,
+            subject_mask,
+        )
+
+        subject_shadow = subject_mask.filter(ImageFilter.GaussianBlur(9))
+        subject_shadow = subject_shadow.point(lambda value: min(150, value * 150 // 255))
+        shadow_layer = Image.new("RGBA", canvas.size, DARK + (0,))
+        shadow_layer.putalpha(subject_shadow)
+        canvas.alpha_composite(shadow_layer, dest=(0, 7))
+    else:
+        canvas = source_image.convert("RGBA")
+
     draw = ImageDraw.Draw(canvas, "RGBA")
     commands = []
     cursor_y = layout["y"]
@@ -735,7 +698,14 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     text_draw = ImageDraw.Draw(text_mask)
     for text, font, x, y in commands:
         box = text_draw.textbbox((0, 0), text, font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
-        text_draw.text((x - box[0], y - box[1]), text, font=font, fill=255, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH, stroke_fill=255)
+        text_draw.text(
+            (x - box[0], y - box[1]),
+            text,
+            font=font,
+            fill=255,
+            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
+            stroke_fill=255,
+        )
 
     shadow = text_mask.filter(ImageFilter.GaussianBlur(TOP5_EDITORIAL_SHADOW_BLUR))
     shadow = shadow.point(lambda value: value * TOP5_EDITORIAL_SHADOW_ALPHA // 255)
@@ -746,13 +716,19 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     draw = ImageDraw.Draw(canvas, "RGBA")
     for text, font, x, y in commands:
         box = draw.textbbox((0, 0), text, font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
-        draw.text((x - box[0], y - box[1]), text, font=font, fill=text_fill, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH, stroke_fill=stroke_fill)
+        draw.text(
+            (x - box[0], y - box[1]),
+            text,
+            font=font,
+            fill=text_fill,
+            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
+            stroke_fill=stroke_fill,
+        )
 
     if subject_mask is not None:
         canvas = Image.composite(source_image.convert("RGBA"), canvas, subject_mask)
 
     return canvas
-
 
 def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
     quote = " ".join(str(card.get("quote") or "").split())
