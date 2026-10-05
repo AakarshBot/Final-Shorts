@@ -276,11 +276,11 @@ Important:
 
 ### Top-5 editorial card design — current Test redesign:
 - Top-5 uses a static 9:16 editorial composition. The selected photograph remains full-bleed.
-- English Top-5 headlines use the bundled Oswald-Bold.ttf display treatment, rendered **ALL CAPS**.
+- English Top-5 headlines use the bundled **BarlowCondensed-Black.ttf** display treatment, rendered **ALL CAPS**. Barlow Condensed was selected over Oswald after reviewing current short-form/video typography guidance and sports/editorial type use: it is condensed enough for long headlines while retaining a broad, modern grotesk character. citeturn730203search0turn587275search4
 - The headline has a maximum of two lines and a readable minimum size; it is fitted only within the fixed Top-5 text zone rather than being allowed to drift around the image.
 - The Top-5 text zone is fixed at **x=64, y=900 through y=1480** on the 1080 × 1920 frame. The headline always starts at that fixed position, the body follows it, and the block does not move upward or downward based on copy length.
 - Top-5 body copy uses a clean regular sans-serif and will not shrink below the renderer's minimum readable size. Copy that cannot fit inside the fixed zone at that minimum is rejected instead of being made tiny.
-- Readability treatment is localized to the actual text area: a stronger soft dark scrim/halo is generated from the text mask, plus a distinct text shadow and dark outline. It is deliberately **not** a large panel, full-frame wash, permanent gradient, border, line, dot treatment or fake UI element.
+- Readability treatment is localized to the actual text area: a stronger soft dark scrim/halo is generated from the text mask, plus a distinct shadow whose color switches between **black on locally bright photography and white on locally dark photography**, with a dark text outline. It is deliberately **not** a large panel, full-frame wash, permanent gradient, border, line, dot treatment or fake UI element.
 - When body copy is rejected, Renderer reports the strict maximum word count supported by the fixed zone. Visual QC automatically presents the **rejected body** in an editable field on the same slide.
 - Visual QC has a **Rewrite slide body (≤ N words)** action. This uses deterministic local compression only: no LLM/API call and no new dependency. The compressed result remains editable before the user renders it again.
 - Manual image selection, crop/reposition, Test preview, Render Now, logo and source-label handoffs remain unchanged.
@@ -315,7 +315,7 @@ Top-5 Upload:
 Top-5 status:
 - Test pipeline/framework: approved.
 - Standalone Top-5 Visuals renderer playground: implemented in Test; pending user visual approval.
-- Fixed-zone Oswald + localized scrim/shadow typography: implemented in the shared renderer and wired into Visual QC; pending user Test review.
+- Fixed-zone Barlow Condensed + localized contrast-aware shadow typography: implemented in the shared renderer and wired into Visual QC; pending user Test review.
 - Local body compression is implemented in the Visual QC path with no additional AI/API call or code dependency.
 - Live implementation: existing pipeline remains in production testing, but this typography/readability redesign is not approved for Live until Test review succeeds.
 ### Production Line 03 — On This Day
