@@ -57,7 +57,7 @@ def test_card_visual_options_load():
 def test_top5_standalone_visual_qc_exposes_all_seven_options():
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
-    at.session_state["test_production_line"] = "top5"
+    at.session_state["test_production_line"] = "top_5"
     at.session_state["test_stage"] = "04 · Visuals"
     at.run()
 
