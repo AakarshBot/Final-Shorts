@@ -593,38 +593,32 @@ def _top5_body_word_cap(
 
 def _top5_subject_geometry(subject_mask: Image.Image) -> dict | None:
     mask = subject_mask.convert("L")
-    candidates = []
-    for threshold in (96, 128, 160, 192):
-        binary = mask.point(lambda value, t=threshold: 255 if value >= t else 0)
-        bbox = binary.getbbox()
-        if not bbox:
-            continue
-        coverage = sum(
-            value > 128
-            for value in binary.resize((90, 160), Image.Resampling.BOX).getdata()
-        ) / 14400
-        if 0.003 <= coverage <= 0.94:
-            x1, y1, x2, y2 = bbox
-            candidates.append({
-                "bbox": bbox,
-                "coverage": coverage,
-                "center_x": (x1 + x2) / 2,
-                "center_y": (y1 + y2) / 2,
-                "left_space": x1,
-                "right_space": WIDTH - x2,
-                "width": x2 - x1,
-                "height": y2 - y1,
-            })
-    if not candidates:
+    binary = mask.point(lambda value: 255 if value >= 128 else 0)
+    bbox = binary.getbbox()
+    if not bbox:
         return None
-    return min(candidates, key=lambda item: abs(item["coverage"] - 0.18))
+
+    x1, y1, x2, y2 = bbox
+    width = max(1, x2 - x1)
+    height = max(1, y2 - y1)
+    return {
+        "bbox": bbox,
+        "coverage": sum(value > 128 for value in binary.resize((90, 160), Image.Resampling.BOX).getdata()) / 14400,
+        "center_x": (x1 + x2) / 2,
+        "center_y": (y1 + y2) / 2,
+        "left_space": x1,
+        "right_space": WIDTH - x2,
+        "width": width,
+        "height": height,
+    }
 
 
 def _top5_subject_mode(geometry: dict) -> str:
-    ratio = geometry["center_x"] / WIDTH
-    if ratio < 0.38 and geometry["right_space"] >= 220:
+    left_space = geometry["left_space"]
+    right_space = geometry["right_space"]
+    if right_space >= 280 and right_space >= left_space * 1.25:
         return "vertical-right"
-    if ratio > 0.62 and geometry["left_space"] >= 220:
+    if left_space >= 280 and left_space >= right_space * 1.25:
         return "vertical-left"
     return "cross-subject"
 
@@ -658,29 +652,38 @@ def _top5_subject_layout(
     mode = _top5_subject_mode(geometry)
     clean_headline = " ".join(str(headline or "").split()).upper()
     clean_body = " ".join(str(body or "").split())
+    if not clean_headline:
+        return None
+
+    safe_top = 420
+    safe_bottom = 1710
     candidates = []
-    safe_top = TOP5_EDITORIAL_SAFE_TOP
-    safe_bottom = TOP5_EDITORIAL_SAFE_BOTTOM
 
     if mode.startswith("vertical"):
         side_space = geometry["right_space"] if mode == "vertical-right" else geometry["left_space"]
-        width_max = max(260, min(560, side_space + 90))
-        width_min = min(340, width_max)
+        width_max = min(580, max(360, side_space + 36))
+        width_min = min(430, width_max)
         target_lines = min(4, max(2, math.ceil(len(clean_headline.split()) / 3)))
 
-        for size in range(240, 108, -4):
+        for size in range(230, 139, -4):
             fonts = _top5_headline_font_stack(size, language)
-            for width in range(int(width_max), int(width_min) - 1, -20):
+            for width in range(int(width_max), int(width_min) - 1, -16):
                 try:
                     lines = _top5_wrap_editorial_words(probe, clean_headline, fonts, width)
                 except ValueError:
                     continue
                 if not 2 <= len(lines) <= 4:
                     continue
+
+                line_widths = [
+                    _top5_editorial_measure(probe, " ".join(line), fonts)[0]
+                    for line in lines
+                ]
                 singleton_lines = sum(len(line) == 1 for line in lines)
                 if singleton_lines > 1:
                     continue
-
+                mean_width = sum(line_widths) / len(line_widths)
+                balance = min(line_widths) / max(line_widths)
                 headline_height = (
                     sum(
                         _top5_editorial_measure(probe, " ".join(line), fonts)[1]
@@ -688,44 +691,38 @@ def _top5_subject_layout(
                     )
                     + TOP5_EDITORIAL_HEADLINE_LINE_GAP * (len(lines) - 1)
                 )
-                if headline_height > 900:
+                if headline_height > 980:
                     continue
 
-                overlap_px = max(18, min(70, int(width * 0.08)))
+                overlap_inset = min(34, max(18, int(width * 0.06)))
                 x = (
-                    geometry["bbox"][2] - overlap_px
+                    geometry["bbox"][2] - overlap_inset
                     if mode == "vertical-right"
-                    else geometry["bbox"][0] - width + overlap_px
+                    else geometry["bbox"][0] - width + overlap_inset
                 )
-                x = max(
-                    TOP5_EDITORIAL_MARGIN_X,
-                    min(WIDTH - TOP5_EDITORIAL_MARGIN_X - width, x),
+                x = max(48, min(WIDTH - 48 - width, x))
+
+                target_y = 960 - headline_height // 2
+                target_y += int((geometry["center_y"] - 960) * 0.12)
+                y_values = range(
+                    max(safe_top, target_y - 150),
+                    min(safe_bottom - headline_height, target_y + 150) + 1,
+                    24,
                 )
-                y_low = max(safe_top, geometry["bbox"][1] - 120)
-                y_high = min(safe_bottom - headline_height, geometry["bbox"][3] - headline_height // 3)
-                if y_low > y_high:
-                    y_values = [
-                        max(
-                            safe_top,
-                            min(safe_bottom - headline_height, int(geometry["center_y"] - headline_height / 2)),
-                        )
-                    ]
-                else:
-                    y_values = list(range(int(y_low), int(y_high) + 1, 32))
 
                 for y in y_values:
-                    overlap = _top5_subject_overlap_ratio(
-                        subject_mask,
-                        (x, y, x + width, y + headline_height),
-                    )
+                    box = (x, y, x + width, y + headline_height)
+                    overlap = _top5_subject_overlap_ratio(subject_mask, box)
                     score = (
                         size * 5.5
-                        + (4 - abs(len(lines) - target_lines)) * 85.0
-                        + (2 - singleton_lines) * 95.0
-                        + min(side_space, width) * 0.12
-                        - abs(overlap - 0.035) * 1050.0
-                        - max(0.0, overlap - 0.12) * 900.0
-                        - abs((y + headline_height / 2) - geometry["center_y"]) * 0.08
+                        + (150.0 - abs(len(lines) - target_lines) * 85.0)
+                        + balance * 150.0
+                        + min(mean_width / max(1, width), 1.0) * 70.0
+                        + min(side_space, 600) * 0.18
+                        - singleton_lines * 120.0
+                        - abs(overlap - 0.035) * 900.0
+                        - max(0.0, overlap - 0.10) * 1100.0
+                        - abs((y + headline_height / 2) - 960) * 0.10
                     )
                     candidates.append({
                         "score": score,
@@ -741,81 +738,78 @@ def _top5_subject_layout(
                     })
     else:
         subject_x1, subject_y1, subject_x2, subject_y2 = geometry["bbox"]
-        subject_width = max(1, subject_x2 - subject_x1)
-        target_overlap = max(42, min(105, int(min(subject_width, 760) * 0.12)))
-        target_y = subject_y1 + int(geometry["height"] * 0.52)
+        target_y_center = 960 + int((geometry["center_y"] - 960) * 0.18)
 
-        for size in range(300, 128, -4):
+        for size in range(300, 149, -4):
             fonts = _top5_headline_font_stack(size, language)
+            measured_width, measured_height = _top5_editorial_measure(
+                probe,
+                clean_headline,
+                fonts,
+            )
             line_sets = []
-
-            measured_width, measured_height = _top5_editorial_measure(probe, clean_headline, fonts)
-            if 620 <= measured_width <= 1020:
-                line_sets.append(([clean_headline.split()], measured_width, measured_height, size))
-
-            if size <= 220:
+            if 760 <= measured_width <= WIDTH - 72:
+                line_sets.append((
+                    [clean_headline.split()],
+                    measured_width,
+                    measured_height,
+                    size,
+                ))
+            if measured_width > WIDTH - 72 and size <= 220:
                 try:
-                    lines = _top5_wrap_editorial_words(probe, clean_headline, fonts, 1000)
+                    lines = _top5_wrap_editorial_words(
+                        probe,
+                        clean_headline,
+                        fonts,
+                        WIDTH - 96,
+                    )
                 except ValueError:
                     lines = []
                 if len(lines) == 2:
-                    width = max(
+                    line_width = max(
                         _top5_editorial_measure(probe, " ".join(line), fonts)[0]
                         for line in lines
                     )
-                    height = (
+                    line_height = (
                         sum(
                             _top5_editorial_measure(probe, " ".join(line), fonts)[1]
                             for line in lines
                         )
                         + TOP5_EDITORIAL_HEADLINE_LINE_GAP
                     )
-                    if 620 <= width <= 1020:
-                        line_sets.append((lines, width, height, size))
+                    if 760 <= line_width <= WIDTH - 72:
+                        line_sets.append((lines, line_width, line_height, size))
 
             for lines, width, height, candidate_size in line_sets:
-                x_min = TOP5_EDITORIAL_MARGIN_X
-                x_max = WIDTH - TOP5_EDITORIAL_MARGIN_X - width
-                if x_max < x_min:
+                if len(lines) > 2:
                     continue
-
-                x_values = range(int(x_min), int(x_max) + 1, 12)
-                y_low = max(safe_top, target_y - 240)
-                y_high = min(safe_bottom - height, target_y + 240)
-                if y_high < y_low:
-                    y_values = [
-                        max(
-                            safe_top,
-                            min(safe_bottom - height, int(target_y - height / 2)),
-                        )
-                    ]
-                else:
-                    y_values = range(int(y_low), int(y_high) + 1, 24)
-
-                for x in x_values:
-                    text_left = x
-                    text_right = x + width
-                    crosses_both_sides = text_left < subject_x1 and text_right > subject_x2
-                    overlap_px = max(0, min(text_right, subject_x2) - max(text_left, subject_x1))
-                    if overlap_px <= 0:
+                x_center = WIDTH / 2
+                for x_shift in range(-120, 121, 20):
+                    x = int(round(x_center - width / 2 + x_shift))
+                    x = max(36, min(WIDTH - 36 - width, x))
+                    if x >= subject_x2 or x + width <= subject_x1:
                         continue
+
+                    target_y = target_y_center - height // 2
+                    y_values = range(
+                        max(safe_top, target_y - 170),
+                        min(safe_bottom - height, target_y + 170) + 1,
+                        24,
+                    )
                     for y in y_values:
-                        overlap = _top5_subject_overlap_ratio(
-                            subject_mask,
-                            (x, y, x + width, y + height),
-                        )
-                        side_left = max(0, subject_x1 - text_left)
-                        side_right = max(0, text_right - subject_x2)
-                        side_balance = min(side_left, side_right)
+                        box = (x, y, x + width, y + height)
+                        overlap = _top5_subject_overlap_ratio(subject_mask, box)
+                        crosses_subject = x < subject_x1 and x + width > subject_x2
+                        center_distance = abs((x + width / 2) - WIDTH / 2)
                         score = (
-                            candidate_size * 6.0
-                            + (260.0 if len(lines) == 1 else 70.0)
-                            + (190.0 if crosses_both_sides else 0.0)
-                            + min(side_balance, 360) * 0.8
-                            - abs(overlap_px - target_overlap) * 2.2
-                            - abs(overlap - 0.09) * 1100.0
-                            - max(0.0, overlap - 0.16) * 1000.0
-                            - abs((y + height / 2) - target_y) * 0.06
+                            candidate_size * 7.0
+                            + (260.0 if len(lines) == 1 else 110.0)
+                            + (260.0 if crosses_subject else 0.0)
+                            + min(width, 1020) * 0.18
+                            - abs(overlap - 0.10) * 750.0
+                            - max(0.0, overlap - 0.24) * 700.0
+                            - center_distance * 0.10
+                            - abs((y + height / 2) - 960) * 0.11
                         )
                         candidates.append({
                             "score": score,
@@ -833,11 +827,16 @@ def _top5_subject_layout(
     if not candidates:
         return None
 
-    candidates.sort(key=lambda candidate: (candidate["score"], candidate["headline_size"]), reverse=True)
+    candidates.sort(
+        key=lambda candidate: (candidate["score"], candidate["headline_size"]),
+        reverse=True,
+    )
+
     for best in candidates:
         body_font = None
         body_lines = []
         body_height = 0
+
         if clean_body:
             for body_size in range(
                 TOP5_EDITORIAL_BODY_MAX_SIZE,
@@ -855,7 +854,7 @@ def _top5_subject_layout(
                     )
                 except ValueError:
                     continue
-                available_height = safe_bottom - safe_top - best["headline_height"] - TOP5_EDITORIAL_HEADLINE_BODY_GAP
+                available_height = safe_bottom - best["y"] - best["headline_height"] - TOP5_EDITORIAL_HEADLINE_BODY_GAP
                 if candidate_height <= available_height:
                     body_font = _top5_body_font(body_size, language)
                     body_lines = candidate_lines
@@ -882,6 +881,7 @@ def _top5_subject_layout(
         return best
 
     return None
+
 
 def _top5_composition_score(
     image: Image.Image,
