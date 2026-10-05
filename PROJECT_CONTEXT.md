@@ -280,7 +280,7 @@ Important:
 - The headline has a maximum of two lines and a readable minimum size; it is fitted only within the fixed Top-5 text zone rather than being allowed to drift around the image.
 - The Top-5 text zone is fixed at **x=64, y=900 through y=1480** on the 1080 × 1920 frame. The headline always starts at that fixed position, the body follows it, and the block does not move upward or downward based on copy length.
 - Top-5 body copy uses a clean regular sans-serif and will not shrink below the renderer's minimum readable size. Copy that cannot fit inside the fixed zone at that minimum is rejected instead of being made tiny.
-- Readability treatment is localized to the actual text area: a stronger soft dark scrim/halo is generated from the text mask, plus a distinct shadow whose color switches between **black on locally bright photography and white on locally dark photography**, with a dark text outline. It is deliberately **not** a large panel, full-frame wash, permanent gradient, border, line, dot treatment or fake UI element.
+- Readability treatment is localized to the actual text area: a stronger soft dark scrim/halo is generated from the text mask, plus a distinct contrast-aware shadow whose color switches between **black on locally bright photography and white on locally dark photography**. Headline shadow remains stronger; body shadow is deliberately lighter/subtler. A dark text outline remains. It is deliberately **not** a large panel, full-frame wash, permanent gradient, border, line, dot treatment or fake UI element.
 - When body copy is rejected, Renderer reports the strict maximum word count supported by the fixed zone. Visual QC automatically presents the **rejected body** in an editable field on the same slide.
 - Visual QC has a **Rewrite slide body (≤ N words)** action. This uses deterministic local compression only: no LLM/API call and no new dependency. The compressed result remains editable before the user renders it again.
 - Manual image selection, crop/reposition, Test preview, Render Now, logo and source-label handoffs remain unchanged.
@@ -338,8 +338,8 @@ Current audit state:
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
 - The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in one fixed text zone at x=64, y=900 through y=1480.
-- Top-5 headlines use Oswald-Bold in ALL CAPS with a two-line maximum and a readable minimum size; body copy uses a clean regular sans-serif with a readable minimum size.
-- Top-5 readability uses a localized dark scrim/halo derived from the actual text mask, plus a distinct text shadow and dark outline. It does not use a broad photo wash or full-frame panel.
+- Top-5 headlines use Barlow Condensed Black in ALL CAPS with a two-line maximum and a readable minimum size; body copy uses Barlow Regular with a readable minimum size.
+- Top-5 readability uses a localized dark scrim/halo derived from the actual text mask, plus separate contrast-aware headline/body shadows and a dark outline. The body shadow is intentionally lighter than the headline shadow. It does not use a broad photo wash or full-frame panel.
 - Body copy is rejected when it cannot fit at the minimum readable size. Renderer exposes the strict maximum word count; Visual QC shows the rejected body as editable copy and offers deterministic local compression to that cap.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
@@ -363,7 +363,7 @@ Status: **Architecture cleanup in progress.**
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is approved; the current fixed-zone Oswald + localized scrim/shadow visual treatment remains in Test until the user approves it**.
+- **Top-5 production framework is approved; the current fixed-zone Barlow + localized scrim/shadow visual treatment remains in Test until the user approves it**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
