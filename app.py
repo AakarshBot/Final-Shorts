@@ -24,7 +24,15 @@ VISUAL_OPTIONS = (
     "Option 6 · Quote Card",
 )
 
-TOP5_VISUAL_OPTIONS = tuple(option for option in VISUAL_OPTIONS if option != "Option 3 · Real Image Search") + ("Option 3 · Real Image Search · WIP", "Option 7 · Subject Cutout")
+TOP5_VISUAL_OPTIONS = (
+    "Option 1 · Automatic Scraper",
+    "Option 2 · Manual Scraper",
+    "Option 3 · Real Image Search · WIP",
+    "Option 4 · AI Generation",
+    "Option 5 · Stats Card",
+    "Option 6 · Quote Card",
+    "Option 7 · Subject Cutout",
+)
 
 STAGES = [
     {"key": "01 · Topic Fetcher", "number": "01", "label": "Topics", "desc": "Find the story"},
