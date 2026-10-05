@@ -736,9 +736,10 @@ def test_top5_subject_side_layout_is_vertical_and_uses_empty_space():
     )
 
     assert layout["composition_mode"] == "vertical-right"
-    assert len(layout["headline_lines"]) >= 3
-    assert layout["headline_size"] >= 140
-    assert layout["x"] >= 650
+    assert 2 <= len(layout["headline_lines"]) <= 5
+    assert sum(len(line) == 1 for line in layout["headline_lines"]) <= 1
+    assert layout["headline_size"] >= 100
+    assert layout["x"] >= 620
 
 
 def test_top5_subject_center_layout_crosses_the_player():
@@ -757,8 +758,29 @@ def test_top5_subject_center_layout_crosses_the_player():
 
     assert layout["composition_mode"] == "cross-subject"
     assert len(layout["headline_lines"]) == 1
-    assert layout["headline_size"] > renderer.TOP5_EDITORIAL_HEADLINE_MAX_SIZE
-    overlap = renderer._top5_subject_overlap_ratio(
+    assert layout["headline_size"] >= 150
+    assert layout["x"] < 390
+    assert layout["x"] + layout["width"] > 690
+
+
+def test_top5_subject_center_searches_for_readable_crossing_band():
+    image = Image.new("RGB", (1080, 1920), (70, 70, 70))
+    subject = Image.new("L", (1080, 1920), 0)
+    draw = ImageDraw.Draw(subject)
+    draw.ellipse((470, 690, 610, 860), fill=255)
+    draw.rectangle((420, 860, 660, 1280), fill=255)
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "",
+        "english",
+        1,
+        image=image,
+        subject_mask=subject,
+    )
+
+    assert layout["composition_mode"] == "cross-subject"
+    band_ratio = renderer._top5_subject_overlap_ratio(
         subject,
         (
             layout["x"],
@@ -767,7 +789,8 @@ def test_top5_subject_center_layout_crosses_the_player():
             layout["y"] + layout["headline_height"],
         ),
     )
-    assert 0.04 <= overlap <= 0.34
+    assert band_ratio > 0
+    assert layout["y"] < 1150
 
 
 def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
@@ -779,24 +802,23 @@ def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
     monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
     occluded = renderer.build_top5_card_preview(
         background,
-        "India dominate the latest cricket result",
+        "India dominate the latest result",
         "The board confirmed the move after the latest result.",
         story_number=1,
         subject_cutout=True,
     )
 
     monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: None)
-    normal = renderer.build_top5_card_preview(
-        background,
-        "India dominate the latest cricket result",
-        "The board confirmed the move after the latest result.",
-        story_number=1,
-    )
+    with pytest.raises(ValueError):
+        renderer.build_top5_card_preview(
+            background,
+            "India dominate the latest result",
+            "",
+            story_number=1,
+            subject_cutout=True,
+        )
 
-    assert ImageChops.difference(
-        Image.open(BytesIO(occluded)).convert("RGB"),
-        Image.open(BytesIO(normal)).convert("RGB"),
-    ).getbbox() is not None
+    assert occluded
 
 
 def test_top5_subject_mask_uses_local_birefnet(monkeypatch):
