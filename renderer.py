@@ -818,7 +818,8 @@ def _top5_subject_layout(
     probe: ImageDraw.ImageDraw,
 ) -> dict | None:
     clean_headline = " ".join(str(headline or "").split())
-    if not clean_headline or str(body or "").strip():
+    clean_body = " ".join(str(body or "").split())
+    if not clean_headline:
         return None
 
     x1, y1, x2, y2 = subject_geometry["bbox"]
@@ -856,7 +857,53 @@ def _top5_subject_layout(
         for fit in fits[:40]:
             if fit["headline_size"] < 120:
                 continue
+
+            body_font = None
+            body_lines = []
+            body_height = 0
+            if clean_body:
+                for body_size in range(
+                    TOP5_EDITORIAL_BODY_MAX_SIZE,
+                    TOP5_EDITORIAL_BODY_MIN_SIZE - 1,
+                    -1,
+                ):
+                    try:
+                        candidate_lines, candidate_height = _top5_body_fits(
+                            clean_body,
+                            fit["headline_height"],
+                            body_size,
+                            language,
+                            probe,
+                            region_width,
+                        )
+                    except ValueError:
+                        continue
+                    if candidate_height <= max(
+                        0,
+                        TOP5_EDITORIAL_SAFE_BOTTOM
+                        - region[1]
+                        - fit["headline_height"]
+                        - TOP5_EDITORIAL_HEADLINE_BODY_GAP,
+                    ):
+                        body_font = _top5_body_font(body_size, language)
+                        body_lines = candidate_lines
+                        body_height = candidate_height
+                        break
+                if body_font is None:
+                    continue
+
+            total_height = fit["headline_height"] + (
+                TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height
+                if body_lines
+                else 0
+            )
             min_y = region[1]
+            max_y = min(
+                max(min_y, region[3] - fit["headline_height"]),
+                TOP5_EDITORIAL_SAFE_BOTTOM - total_height,
+            )
+            if max_y < min_y:
+                continue
             max_y = max(min_y, region[3] - fit["headline_height"])
             for index in range(21):
                 y = (
@@ -915,6 +962,12 @@ def _top5_subject_layout(
                         "y": int(y),
                         "subject_overlap": overlap,
                         "region_area": region_width * region_height,
+                        "body_font": body_font,
+                        "body_lines": body_lines,
+                        "body_height": body_height,
+                        "body_size": body_font.size if body_font is not None else None,
+                        "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
+                        "total_height": total_height,
                         "score": (
                             fit["score"]
                             + overlap_quality * 360.0
@@ -932,12 +985,6 @@ def _top5_subject_layout(
                 ),
             )
             best.update({
-                "body_font": None,
-                "body_lines": [],
-                "body_height": 0,
-                "body_size": None,
-                "body_gap": 0,
-                "total_height": best["headline_height"],
                 "zone_bottom": HEIGHT - 120,
                 "story_number": story_number,
                 "composition_score": best["score"],
@@ -974,14 +1021,60 @@ def _top5_subject_layout(
             preferred_lines=preferred_lines,
         )
         for fit in fits[:30]:
+            body_font = None
+            body_lines = []
+            body_height = 0
+            if clean_body:
+                for body_size in range(
+                    TOP5_EDITORIAL_BODY_MAX_SIZE,
+                    TOP5_EDITORIAL_BODY_MIN_SIZE - 1,
+                    -1,
+                ):
+                    try:
+                        candidate_lines, candidate_height = _top5_body_fits(
+                            clean_body,
+                            fit["headline_height"],
+                            body_size,
+                            language,
+                            probe,
+                            rw,
+                        )
+                    except ValueError:
+                        continue
+                    if candidate_height <= max(
+                        0,
+                        rh
+                        - fit["headline_height"]
+                        - TOP5_EDITORIAL_HEADLINE_BODY_GAP,
+                    ):
+                        body_font = _top5_body_font(body_size, language)
+                        body_lines = candidate_lines
+                        body_height = candidate_height
+                        break
+                if body_font is None:
+                    continue
+
+            total_height = fit["headline_height"] + (
+                TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height
+                if body_lines
+                else 0
+            )
+            if total_height > rh:
+                continue
             candidates.append({
                 **fit,
                 "composition_mode": mode,
                 "x": int(rx1 + (rw - fit["width"]) / 2),
-                "y": int(ry1 + (rh - fit["headline_height"]) / 2),
+                "y": int(ry1 + (rh - total_height) / 2),
                 "subject_overlap": 0.0,
                 "region_area": rw * rh,
                 "mode_bonus": mode_bonus,
+                "body_font": body_font,
+                "body_lines": body_lines,
+                "body_height": body_height,
+                "body_size": body_font.size if body_font is not None else None,
+                "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
+                "total_height": total_height,
             })
 
     if top_space >= 420:
@@ -1053,12 +1146,6 @@ def _top5_subject_layout(
 
     best = max(candidates, key=candidate_score)
     best.update({
-        "body_font": None,
-        "body_lines": [],
-        "body_height": 0,
-        "body_size": None,
-        "body_gap": 0,
-        "total_height": best["headline_height"],
         "zone_bottom": HEIGHT - 120,
         "story_number": story_number,
         "composition_score": candidate_score(best),
@@ -1173,7 +1260,7 @@ def _top5_editorial_layout(
             )
         subject_layout = _top5_subject_layout(
             clean_headline,
-            "",
+            clean_body,
             language,
             story_number,
             subject_geometry,
