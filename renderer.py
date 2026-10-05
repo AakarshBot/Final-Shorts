@@ -592,40 +592,63 @@ def _top5_body_word_cap(
 
 
 def _top5_subject_geometry(subject_mask: Image.Image) -> dict | None:
-    mask = subject_mask.convert("L").point(lambda value: 255 if value >= 128 else 0)
-    bbox = mask.getbbox()
-    if not bbox:
-        return None
-
-    x1, y1, x2, y2 = bbox
-    width = x2 - x1
-    height = y2 - y1
-    if width < 100 or height < 140:
-        return None
-
-    coverage = sum(
-        value > 128
-        for value in mask.resize((90, 160), Image.Resampling.BOX).getdata()
-    ) / 14400.0
+    mask = subject_mask.convert("L")
     frame_area = WIDTH * HEIGHT
-    bbox_area = width * height
-    if coverage < 0.003 or bbox_area > frame_area * 0.92:
-        return None
+    best = None
 
-    return {
-        "bbox": bbox,
-        "mask": mask,
-        "coverage": coverage,
-        "width": width,
-        "height": height,
-        "center_x": (x1 + x2) / 2.0,
-        "center_y": (y1 + y2) / 2.0,
-        "left_space": x1,
-        "right_space": WIDTH - x2,
-        "top_space": y1,
-        "bottom_space": HEIGHT - y2,
-    }
+    for threshold in (96, 128, 160, 192):
+        binary = mask.point(
+            lambda value, t=threshold: 255 if value >= t else 0
+        )
+        bbox = binary.getbbox()
+        if not bbox:
+            continue
 
+        x1, y1, x2, y2 = bbox
+        width = x2 - x1
+        height = y2 - y1
+        coverage = sum(
+            value > 128
+            for value in binary.resize(
+                (90, 160),
+                Image.Resampling.BOX,
+            ).getdata()
+        ) / 14400.0
+        bbox_area = width * height
+
+        if width < 100 or height < 140:
+            continue
+        if coverage < 0.002 or coverage > 0.90:
+            continue
+        if bbox_area > frame_area * 0.96:
+            continue
+
+        compactness = 1.0 - min(1.0, bbox_area / frame_area)
+        quality = (
+            min(coverage, 0.55) * 2.0
+            + min(width / WIDTH, 0.80) * 0.5
+            + min(height / HEIGHT, 0.90) * 0.7
+            + compactness * 0.8
+            + (threshold / 192.0) * 0.2
+        )
+        candidate = {
+            "bbox": bbox,
+            "mask": binary,
+            "coverage": coverage,
+            "width": width,
+            "height": height,
+            "center_x": (x1 + x2) / 2.0,
+            "center_y": (y1 + y2) / 2.0,
+            "left_space": x1,
+            "right_space": WIDTH - x2,
+            "top_space": y1,
+            "bottom_space": HEIGHT - y2,
+            "quality": quality,
+        }
+        if best is None or candidate["quality"] > best["quality"]:
+            best = candidate
+
+    return best
 
 def _top5_subject_overlap_ratio(
     subject_mask: Image.Image,
