@@ -56,7 +56,7 @@ TOP5_EDITORIAL_SAFE_TOP = 150
 TOP5_EDITORIAL_SAFE_BOTTOM = 1780
 TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE = 118
 TOP5_EDITORIAL_HEADLINE_MAX_SIZE = 200
-TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 76
+TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 60
 TOP5_EDITORIAL_HEADLINE_MAX_LINES = 2
 TOP5_EDITORIAL_HEADLINE_LINE_GAP = 8
 TOP5_EDITORIAL_BODY_MAX_SIZE = 50
@@ -516,12 +516,29 @@ def _top5_editorial_layout(
     center = (sx1 + sx2) / 2 / WIDTH
 
     if 0.30 <= center <= 0.70 and left_space >= 70 and right_space >= 70:
-        for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -6):
+        for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -2):
             fonts = _top5_headline_font_stack(size, language)
             width, height = _top5_editorial_measure(draw, clean_headline, fonts)
             lines = [clean_headline.split()]
             if width > safe_width:
-                lines, width, height = _top5_two_line_headline(draw, clean_headline.split(), fonts)
+                candidates = []
+                words = clean_headline.split()
+                for split in range(1, len(words)):
+                    first, second = words[:split], words[split:]
+                    w1, h1 = _top5_editorial_measure(draw, " ".join(first), fonts)
+                    w2, h2 = _top5_editorial_measure(draw, " ".join(second), fonts)
+                    if max(w1, w2) <= safe_width:
+                        candidates.append(
+                            (
+                                abs(w1 - w2),
+                                [first, second],
+                                max(w1, w2),
+                                h1 + TOP5_EDITORIAL_HEADLINE_LINE_GAP + h2,
+                            )
+                        )
+                if not candidates:
+                    continue
+                _, lines, width, height = min(candidates, key=lambda item: item[0])
             if width < (sx2 - sx1) + 32:
                 continue
             min_x = max(left, sx2 + 18 - width)
@@ -543,7 +560,7 @@ def _top5_editorial_layout(
             }
 
     words = clean_headline.split()
-    if center < 0.50:
+    if center >= 0.50:
         region = (left, top, max(left + 1, sx1 - TOP5_SUBJECT_GAP), bottom)
         mode = "vertical-left"
     else:
