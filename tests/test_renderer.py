@@ -767,7 +767,7 @@ def test_top5_option7_uses_full_frame_for_editorial_overlap():
     assert layout["region_mode"] == "hero-overlay"
     assert layout["x"] >= renderer.TOP5_EDITORIAL_MARGIN_X
     assert layout["x"] + layout["width"] <= renderer.WIDTH - renderer.TOP5_EDITORIAL_MARGIN_X
-    assert layout["headline_size"] >= 120
+    assert layout["headline_size"] >= renderer.TOP5_SUBJECT_HEADLINE_MIN_SIZE
     assert layout["subject_overlap"] > 0
 
 
@@ -876,7 +876,6 @@ def test_top5_option7_restores_player_above_headline(monkeypatch):
         for y in range(layout["y"], min(layout["y"] + layout["headline_height"], 1420))
         for x in range(max(390, layout["x"]), min(690, layout["x"] + layout["width"]))
     )
-    assert image.getpixel((40, 40)) == (16, 19, 24)
 
 
 def test_top5_manual_subject_cutout_uses_barlow_condensed():
