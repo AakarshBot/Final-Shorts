@@ -344,7 +344,7 @@ Cleanup rules:
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
-- Build new production lines in **Test** first; Top-5 has completed that gate and is now being tested in Live. OTD remains Test-first.
+- Build new production lines in **Test** first; Top-5 remains in Test/WIP until its current visual work is accepted. OTD remains Test-first.
 - Do not create a separate stage pipeline, parallel model, duplicate metadata system or duplicate runtime architecture for a new line.
 - **Do not touch, regress, replace or redesign the functionality of the current factory** while building these new production lines.
 - Existing approved function behaviour and handoffs remain the baseline.
