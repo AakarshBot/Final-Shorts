@@ -554,15 +554,22 @@ def _top5_editorial_layout(
         top_space = outer_top - safe_top
         bottom_space = safe_bottom - outer_bottom
 
+        crosses_center = any(
+            item["x1"] <= WIDTH * 0.50
+            and item["x2"] >= WIDTH * 0.50
+            for item in components
+        )
+        has_flanking_subjects = any(
+            left["x2"] <= WIDTH * 0.50
+            and right["x1"] >= WIDTH * 0.50
+            for index, left in enumerate(components)
+            for right in components[index + 1:]
+        )
         centered = (
             left_space >= TOP5_SUBJECT_MIN_SPACE
             and right_space >= TOP5_SUBJECT_MIN_SPACE
             and 0.30 <= center_x / WIDTH <= 0.70
-            and any(
-                item["x1"] <= WIDTH * 0.55
-                and item["x2"] >= WIDTH * 0.45
-                for item in components
-            )
+            and (crosses_center or has_flanking_subjects)
         )
 
         def headline_options(size, region_width):
