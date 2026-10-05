@@ -70,6 +70,15 @@ TOP5_EDITORIAL_SHADOW_OFFSET = (0, 5)
 TOP5_SUBJECT_HEADLINE_MAX_SIZE = 220
 TOP5_SUBJECT_HEADLINE_MIN_SIZE = 92
 TOP5_SUBJECT_REMOVAL_MODEL = "ZhengPeng7/BiRefNet"
+TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE = 72
+TOP5_MANUAL_SUBJECT_MAX_FONT_SIZE = 260
+TOP5_MANUAL_SUBJECT_DEFAULT_FONT_SIZE = 150
+TOP5_MANUAL_SUBJECT_STROKE_WIDTH = 4
+TOP5_MANUAL_SUBJECT_SHADOW_BLUR = 10
+TOP5_MANUAL_SUBJECT_SHADOW_ALPHA = 220
+TOP5_MANUAL_SUBJECT_SHADOW_OFFSET = (0, 7)
+TOP5_MANUAL_SUBJECT_FADE_BLUR = 26
+TOP5_MANUAL_SUBJECT_FADE_ALPHA = 70
 
 
 @lru_cache(maxsize=256)
@@ -728,6 +737,185 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
 
     return canvas
 
+
+def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
+    headline = " ".join(str(config.get("headline") or "").split()).upper()
+    if not headline:
+        raise ValueError("Manual Subject Cutout requires a headline.")
+
+    box = config.get("text_box")
+    if not isinstance(box, (list, tuple)) or len(box) != 4:
+        raise ValueError("Manual Subject Cutout requires a text box.")
+    try:
+        box_left, box_top, box_width, box_height = [int(value) for value in box]
+        font_size = int(config.get("font_size") or TOP5_MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
+    except (TypeError, ValueError) as exc:
+        raise ValueError("Manual Subject Cutout has invalid layout values.") from exc
+
+    if box_width <= 0 or box_height <= 0:
+        raise ValueError("Manual Subject Cutout text box must have positive dimensions.")
+    font_size = max(
+        TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE,
+        min(TOP5_MANUAL_SUBJECT_MAX_FONT_SIZE, font_size),
+    )
+
+    mode = str(config.get("mode") or "negative-space").strip().casefold()
+    if mode not in {"negative-space", "behind-subject"}:
+        raise ValueError("Manual Subject Cutout has an invalid composition mode.")
+
+    x = box_left
+    y = box_top
+    if mode == "behind-subject":
+        x = int(config.get("x") if config.get("x") is not None else box_left)
+        y = int(config.get("y") if config.get("y") is not None else box_top)
+    x = max(0, min(WIDTH - box_width, x))
+    y = max(0, min(HEIGHT - box_height, y))
+
+    font_path = Path(__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    if not font_path.exists():
+        raise RuntimeError("Manual Subject Cutout requires the existing Barlow Condensed Black font.")
+    font = ImageFont.truetype(str(font_path), font_size)
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+
+    words = headline.split()
+    lines = []
+    current = []
+    for word in words:
+        trial = " ".join(current + [word])
+        width = probe.textbbox(
+            (0, 0),
+            trial,
+            font=font,
+            stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
+        )[2]
+        if current and width > box_width:
+            lines.append(" ".join(current))
+            current = [word]
+        else:
+            current.append(word)
+    if current:
+        lines.append(" ".join(current))
+
+    line_height = probe.textbbox(
+        (0, 0),
+        "Ag",
+        font=font,
+        stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
+    )[3]
+    total_height = line_height * len(lines) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
+    if total_height > box_height:
+        raise ValueError(
+            "The headline does not fit the Manual Subject Cutout text box at this font size. "
+            "Reduce the font size or make the text box taller."
+        )
+
+    canvas = _top5_full_frame_image(base).convert("RGBA")
+    if mode == "behind-subject":
+        source_bytes = BytesIO()
+        canvas.convert("RGB").save(source_bytes, format="PNG", optimize=False)
+        subject_mask = _top5_subject_mask(source_bytes.getvalue())
+        if subject_mask is None:
+            raise ValueError("Manual Subject Cutout could not produce a usable subject mask.")
+        subject_mask = subject_mask.convert("L").point(lambda value: 255 if value >= 96 else value)
+        backdrop = Image.blend(
+            canvas,
+            Image.new("RGBA", canvas.size, DARK + (255,)),
+            0.18,
+        )
+        canvas = Image.composite(canvas, backdrop, subject_mask)
+    else:
+        subject_mask = None
+
+    text_mask = Image.new("L", canvas.size, 0)
+    text_draw = ImageDraw.Draw(text_mask)
+    cursor_y = y + (box_height - total_height) // 2
+    for line in lines:
+        bbox = text_draw.textbbox(
+            (0, 0),
+            line,
+            font=font,
+            stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
+        )
+        line_width = bbox[2] - bbox[0]
+        cursor_x = x + (box_width - line_width) // 2
+        text_draw.text(
+            (cursor_x - bbox[0], cursor_y - bbox[1]),
+            line,
+            font=font,
+            fill=255,
+            stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
+            stroke_fill=255,
+        )
+        cursor_y += line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+
+    fade = text_mask.filter(ImageFilter.GaussianBlur(TOP5_MANUAL_SUBJECT_FADE_BLUR))
+    fade = fade.point(lambda value: value * TOP5_MANUAL_SUBJECT_FADE_ALPHA // 255)
+    fade_layer = Image.new("RGBA", canvas.size, DARK + (0,))
+    fade_layer.putalpha(fade)
+    canvas.alpha_composite(fade_layer)
+
+    shadow = text_mask.filter(ImageFilter.GaussianBlur(TOP5_MANUAL_SUBJECT_SHADOW_BLUR))
+    shadow = shadow.point(lambda value: value * TOP5_MANUAL_SUBJECT_SHADOW_ALPHA // 255)
+    shadow_layer = Image.new("RGBA", canvas.size, DARK + (0,))
+    shadow_layer.putalpha(shadow)
+    canvas.alpha_composite(shadow_layer, dest=TOP5_MANUAL_SUBJECT_SHADOW_OFFSET)
+
+    draw = ImageDraw.Draw(canvas, "RGBA")
+    cursor_y = y + (box_height - total_height) // 2
+    for line in lines:
+        bbox = draw.textbbox(
+            (0, 0),
+            line,
+            font=font,
+            stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
+        )
+        line_width = bbox[2] - bbox[0]
+        cursor_x = x + (box_width - line_width) // 2
+        draw.text(
+            (cursor_x - bbox[0], cursor_y - bbox[1]),
+            line,
+            font=font,
+            fill=WHITE + (255,),
+            stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
+            stroke_fill=DARK + (245,),
+        )
+        cursor_y += line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+
+    if subject_mask is not None:
+        canvas = Image.composite(_top5_full_frame_image(base).convert("RGBA"), canvas, subject_mask)
+
+    return canvas
+
+
+def build_top5_manual_subject_cutout_preview(
+    source_image: bytes | bytearray | Image.Image,
+    headline: str,
+    *,
+    mode: str,
+    text_box: tuple[int, int, int, int],
+    font_size: int,
+    x: int | None = None,
+    y: int | None = None,
+    source_label: str | None = None,
+) -> bytes:
+    frame = _draw_top5_manual_subject_cutout(
+        source_image,
+        {
+            "headline": headline,
+            "mode": mode,
+            "text_box": tuple(text_box),
+            "font_size": int(font_size),
+            "x": x,
+            "y": y,
+        },
+    )
+    _paste_logo(frame)
+    _paste_top5_source(frame, source_label)
+    buffer = BytesIO()
+    frame.convert("RGB").save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
 def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
     quote = " ".join(str(card.get("quote") or "").split())
     attribution = " ".join(str(card.get("attribution") or "").split())
@@ -1375,6 +1563,9 @@ def render_production_video(
         top5_card = visual.get("top5_card")
         if top5_card is not None and not isinstance(top5_card, dict):
             raise ValueError(f"Visual {index} has malformed Top-5 card data.")
+        manual_subject_cutout = visual.get("manual_subject_cutout")
+        if manual_subject_cutout is not None and not isinstance(manual_subject_cutout, dict):
+            raise ValueError(f"Visual {index} has malformed Manual Subject Cutout data.")
         quote_card = visual.get("quote_card")
         if quote_card is not None:
             if not isinstance(quote_card, dict):
@@ -1385,7 +1576,15 @@ def render_production_video(
                 raise ValueError(f"Visual {index} has incomplete Quote Card data.")
         image = _fit_visual_to_frame(visual.get("bytes")).convert("RGBA")
         static_frame = None
-        if isinstance(top5_card, dict):
+        if isinstance(manual_subject_cutout, dict):
+            static_frame = _draw_top5_manual_subject_cutout(image, manual_subject_cutout)
+            _paste_logo(static_frame)
+            _paste_source(
+                static_frame,
+                str(visual.get("source") or source_label or "Commons").strip() or "Commons",
+            )
+            static_frame = static_frame.convert("RGB")
+        elif isinstance(top5_card, dict):
             static_frame = _draw_top5_editorial_card(image, top5_card)
             _paste_logo(static_frame)
             _paste_source(
@@ -1411,6 +1610,7 @@ def render_production_video(
             "is_stats_card": result_key == "stats-card",
             "is_top5_card": isinstance(top5_card, dict),
             "top5_card": top5_card,
+            "manual_subject_cutout": manual_subject_cutout,
             "is_quote_card": isinstance(quote_card, dict),
             "quote_card": quote_card,
             "image_height": int(layout.get("image_height") or 0),
