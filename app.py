@@ -3356,6 +3356,7 @@ def render_live_top5():
                 assets = list(result.get("assets") or [])
                 result_key = "ai"
 
+
             for start in range(0, len(assets), 3):
                 cols = st.columns(3, gap="medium")
                 for offset, raw_asset in enumerate(assets[start:start + 3]):
