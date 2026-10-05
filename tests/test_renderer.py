@@ -752,6 +752,7 @@ def test_top5_editorial_uses_local_text_treatments(monkeypatch):
     assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA > 100
     assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA > 150
     assert renderer.TOP5_EDITORIAL_BODY_SHADOW_ALPHA < renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA
+    assert renderer.TOP5_EDITORIAL_BODY_SHADOW_ALPHA < renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA
 
 
 def test_top5_card_preview_renders_the_shared_editorial_treatment():
