@@ -831,6 +831,44 @@ def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
     assert occluded
 
 
+def test_top5_subject_layout_uses_vertical_stack_for_side_subject():
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((60, 600, 430, 1500), fill=255)
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest cricket result",
+        "",
+        "english",
+        1,
+        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        subject_mask=subject,
+    )
+
+    assert layout["composition_mode"] == "vertical-right"
+    assert 2 <= len(layout["headline_lines"]) <= 4
+    assert layout["headline_size"] >= 120
+
+
+def test_top5_subject_layout_crosses_center_subject_with_large_horizontal_headline():
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((390, 580, 690, 1480), fill=255)
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "",
+        "english",
+        1,
+        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        subject_mask=subject,
+    )
+
+    assert layout["composition_mode"] == "cross-subject"
+    assert len(layout["headline_lines"]) == 1
+    assert layout["headline_size"] >= 180
+    assert layout["x"] < 390
+    assert layout["x"] + layout["width"] > 690
+
+
 def test_top5_subject_mask_uses_local_birefnet(monkeypatch):
     import torch
 
