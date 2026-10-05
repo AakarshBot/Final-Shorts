@@ -6160,6 +6160,7 @@ elif st.session_state.app_mode == "test":
                                         story_number=story_number,
                                         total_stories=5,
                                         source_label=source,
+                                        subject_cutout=subject_cutout,
                                     )
                                 elif card_type == "quote" and isinstance(card_data, dict):
                                     preview_bytes = build_quote_card_preview(
@@ -6240,6 +6241,7 @@ elif st.session_state.app_mode == "test":
                                                 result_key,
                                                 source,
                                                 label,
+                                                subject_cutout=subject_cutout,
                                             )
                                             st.rerun()
                                     with crop_col:
@@ -6640,7 +6642,7 @@ elif st.session_state.app_mode == "test":
                         max_words = int(rejection.get("max_words") or 0)
                         if max_words > 0:
                             st.warning(
-                                f'{rejection.get("reason") or "The body does not fit the fixed text zone."} '
+                                f'{rejection.get("reason") or "The body does not fit the editorial text area."} '
                                 f'Edit it below or use the local rewrite to reduce it to {max_words} words or fewer.'
                             )
                         else:
