@@ -300,20 +300,21 @@ Important:
 - Top-5 Visuals Test is independently runnable and exposes exactly seven visual options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
 - Every Top-5 image option uses the factory's existing 9:16 Crop / Reposition component. The crop is applied before selection, preview, rendering and Subject Cutout analysis; the original pool asset remains unchanged.
 - Normal Top-5 cards remain static full-bleed editorial cards. The headline uses a **118px baseline size** without an image and can grow to **160px** when the actual image provides enough quiet negative space.
-- Normal-card headline sizing is image-aware: the renderer evaluates multiple sizes against the real candidate text region, weighs image quietness, and lets genuinely large negative space justify a larger headline. Size and position are solved together; the renderer must not fall back to a fixed 118px treatment when the image supports materially larger type.
+- Normal-card headline sizing is image-aware: the renderer evaluates multiple headline sizes against the real candidate text region, weighs image quietness, and lets genuinely large negative space justify larger type. Size and position are solved together; the renderer must not regress to a fixed 118px treatment when the image supports materially larger type.
 - Body-copy fit is evaluated for each headline size so enlarging the headline cannot silently break the remaining readable area.
 - The approved editorial text treatment remains opaque Oswald-style type with the existing shadow/outline treatment. No transparent text panel, universal gradient, decorative rail, border, dot or headline motion is used.
 - Subject Cutout is an optional image-driven treatment used only when selected. It uses the existing local ZhengPeng7/BiRefNet_lite / PyTorch / Transformers stack and is not invoked for normal Top-5 cards.
-- **Player occlusion is a major required behavior, not a visual suggestion.** When a centered or multi-person subject composition is selected, the headline must be rendered first and the detected foreground subject must then be restored above the headline glyphs and shadow. The result must visibly read as **text going behind the player**.
-- For two or more detected people, the same shared foreground mask must occlude the headline over each person while preserving headline visibility through genuine gaps between them.
-- Centered subjects with meaningful left and right copy space must use the **cross-subject** composition when a valid overlap candidate exists. The renderer must not choose a separate negative-space composition merely because that scores higher.
-- Side subjects may use normally oriented vertical headline stacks in the strongest opposite-side copy space, with the same foreground-over-type treatment available when the headline intentionally intrudes toward the subject.
-- Upper/lower negative-space compositions remain valid when the subject geometry clearly calls for them and no centered cross-subject composition is required.
-- Weak or unusable segmentation falls back to the normal editorial treatment rather than crashing.
-- The occlusion implementation must be verified at the pixel level in Test. A visual-difference test alone is insufficient: regression coverage must prove that headline pixels over a detected player are restored to the original player image while headline pixels in a genuine gap remain visible.
+- **Player occlusion is a major hard requirement.** In subject-aware compositions, the headline is rendered first and the detected foreground subject is restored above the headline glyphs and shadow. The visible result must read as the text physically passing behind the player rather than simply overlapping or sitting beside the player.
+- The subject mask uses adaptive thresholds from the BiRefNet probability mask instead of relying on one fixed binary threshold. Geometry selection must tolerate a soft foreground edge while rejecting an effectively full-frame/background mask.
+- A centered subject with usable space on both sides must use a **cross-subject** composition whenever a valid overlap candidate exists. The renderer must not silently fall back to ordinary bottom/negative-space typography in that case.
+- Cross-subject text may intersect multiple detected players. Each detected player is restored above the intersecting glyphs, while genuine gaps between players remain available for visible headline text.
+- Side subjects may use normally oriented vertical headline stacks in the strongest opposite-side copy space, with the same foreground-over-type treatment when the headline intentionally intrudes toward the subject.
+- Upper/lower negative-space layouts remain valid when the subject geometry clearly calls for them and there is no required centered cross-subject composition.
+- Subject Cutout must **not silently fall back** to a normal editorial card when subject extraction or subject-aware layout fails. The Test UI should surface the specific failure so it cannot appear as though Subject Cutout succeeded.
+- Regression tests must verify actual pixels: player-colored foreground pixels replace headline pixels where the player intersects the headline, and headline pixels remain visible in genuine gaps between multiple players.
 - Test and Live consume the same Top-5 renderer/asset contracts. Subject Cutout remains Test-only until explicitly approved.
 
-Status: **Top-5 editorial typography, negative-space scaling and real player-over-text occlusion under active Test refinement.**
+Status: **Top-5 editorial typography, real negative-space scaling and actual player-over-text occlusion under active Test refinement.**
 
 ### Production Line 03 — On This Day
 
