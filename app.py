@@ -5849,7 +5849,168 @@ elif st.session_state.app_mode == "test":
 
             script = st.session_state.get("test_top5_script_handoff")
             if not isinstance(script, dict) or script.get("schema") != "final-shorts.top5-script.v1":
-                st.info("Approve the Top-5 Scriptwriter result before reviewing its six visuals.")
+                if "test_top5_visual_playground_headline" not in st.session_state:
+                    st.session_state.test_top5_visual_playground_headline = "TOP FIVE CRICKET STORIES YOU NEED TO KNOW TODAY"
+                if "test_top5_visual_playground_body" not in st.session_state:
+                    st.session_state.test_top5_visual_playground_body = (
+                        "This preview body demonstrates how longer supporting copy can sit naturally beneath the headline while using the lower half of the Short. "
+                        "It is intentionally filler text for the visual test, so you can judge the font, spacing, placement and letter-level fade without waiting for a real script. "
+                        "Replace it with your own copy later and the renderer will keep the same image-first editorial treatment. "
+                        "This keeps the lower area purposeful and easy to inspect."
+                    )
+                if "test_top5_visual_playground_image" not in st.session_state:
+                    st.session_state.test_top5_visual_playground_image = None
+                if "test_top5_visual_playground_source" not in st.session_state:
+                    st.session_state.test_top5_visual_playground_source = "Test green canvas"
+                if "test_top5_visual_playground_results" not in st.session_state:
+                    st.session_state.test_top5_visual_playground_results = []
+                if "test_top5_visual_playground_render" not in st.session_state:
+                    st.session_state.test_top5_visual_playground_render = None
+
+                st.markdown(
+                    '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
+                    '<div class="section-title">Standalone visual test</div>'
+                    '<div class="canvas-copy">No Scriptwriter approval is required here. Test the Top-5 editorial card directly on a green canvas or a real image.</div></div>'
+                    '<div class="section-count">renderer playground</div></div>',
+                    unsafe_allow_html=True,
+                )
+
+                current_image = st.session_state.test_top5_visual_playground_image
+                if current_image is None:
+                    current_image = Image.new("RGB", (1080, 1920), (34, 122, 70))
+                    current_source = "Test green canvas"
+                else:
+                    current_source = st.session_state.test_top5_visual_playground_source
+
+                image_col, editor_col = st.columns([.9, 1.1], gap="large")
+                with image_col:
+                    st.markdown('<div class="mini-label">CURRENT IMAGE</div>', unsafe_allow_html=True)
+                    st.image(current_image, width=320)
+                    st.caption(current_source)
+
+                with editor_col:
+                    st.markdown('<div class="mini-label">CARD COPY</div>', unsafe_allow_html=True)
+                    st.text_area(
+                        "Headline",
+                        key="test_top5_visual_playground_headline",
+                        height=82,
+                    )
+                    st.text_area(
+                        "Body",
+                        key="test_top5_visual_playground_body",
+                        height=170,
+                    )
+
+                    if st.button(
+                        "Render Now",
+                        type="primary",
+                        width="stretch",
+                        key="test-top5-visual-playground-render",
+                    ):
+                        from renderer import build_top5_card_preview
+
+                        try:
+                            st.session_state.test_top5_visual_playground_render = build_top5_card_preview(
+                                current_image,
+                                st.session_state.test_top5_visual_playground_headline,
+                                st.session_state.test_top5_visual_playground_body,
+                                story_number=1,
+                                total_stories=5,
+                                source_label=current_source,
+                            )
+                        except (ValueError, OSError) as exc:
+                            st.session_state.test_top5_visual_playground_render = None
+                            st.error(str(exc))
+
+                st.markdown('<div class="section-head"><div><div class="eyebrow">REAL IMAGE SEARCH</div>'
+                            '<div class="section-title">Find an image to test the card on</div></div>'
+                            '<div class="section-count">real images only</div></div>',
+                            unsafe_allow_html=True)
+                search_col, search_button_col = st.columns([1.4, .6], gap="small")
+                with search_col:
+                    query = st.text_input(
+                        "Real-image query",
+                        placeholder="e.g. Virat Kohli batting · India cricket team",
+                        key="test-top5-visual-playground-query",
+                    )
+                with search_button_col:
+                    search_clicked = st.button(
+                        "Search real images",
+                        type="primary",
+                        width="stretch",
+                        key="test-top5-visual-playground-search",
+                    )
+
+                if search_clicked:
+                    query = query.strip()
+                    if not query:
+                        st.warning("Enter a search query first.")
+                    else:
+                        with st.spinner("Searching real-image sources…"):
+                            try:
+                                from visual_search import search_images
+
+                                result = search_images(query)
+                                st.session_state.test_top5_visual_playground_results = list(
+                                    result.get("assets") or []
+                                )
+                                error = str(result.get("error") or "").strip()
+                                if error:
+                                    st.error(error)
+                            except Exception as exc:
+                                st.session_state.test_top5_visual_playground_results = []
+                                st.error(f"{type(exc).__name__}: {exc}")
+                        st.rerun()
+
+                assets = st.session_state.test_top5_visual_playground_results
+                if assets:
+                    for start in range(0, len(assets), 3):
+                        cols = st.columns(3, gap="medium")
+                        for offset, asset in enumerate(assets[start:start + 3]):
+                            index = start + offset
+                            with cols[offset]:
+                                raw = asset.get("bytes")
+                                preview = _top5_fit_preview(raw)
+                                if preview is not None:
+                                    st.image(preview, width="stretch")
+                                source = str(
+                                    asset.get("publisher")
+                                    or asset.get("source")
+                                    or "Web source"
+                                ).strip() or "Web source"
+                                label = str(
+                                    asset.get("article_title")
+                                    or asset.get("title")
+                                    or "Selected visual"
+                                ).strip() or "Selected visual"
+                                st.markdown(
+                                    f'<div class="visual-source">{source}</div>'
+                                    f'<div class="visual-detail">{label}</div>',
+                                    unsafe_allow_html=True,
+                                )
+                                if st.button(
+                                    "Use this image",
+                                    type="primary",
+                                    width="stretch",
+                                    key=f"test-top5-visual-playground-use-{index}",
+                                ):
+                                    image = _asset_to_image(raw)
+                                    if image is not None:
+                                        st.session_state.test_top5_visual_playground_image = image
+                                        st.session_state.test_top5_visual_playground_source = source
+                                        st.session_state.test_top5_visual_playground_render = None
+                                        st.rerun()
+                                    else:
+                                        st.warning("This image could not be decoded.")
+
+                rendered = st.session_state.test_top5_visual_playground_render
+                if rendered:
+                    st.markdown('<div class="section-head"><div><div class="eyebrow">RENDERED PREVIEW</div>'
+                                '<div class="section-title">Top-5 card on the current image</div></div>'
+                                '<div class="section-count">1080 × 1920</div></div>',
+                                unsafe_allow_html=True)
+                    st.image(rendered, width=420)
+
             else:
                 slides = list(script.get("slides") or [])
                 stories = list(script.get("stories") or [])
