@@ -348,8 +348,6 @@ def test_production_renderer_preserves_manual_subject_cutout(monkeypatch, tmp_pa
         "mode": "behind-subject",
         "text_box": (120, 680, 840, 500),
         "font_size": 140,
-        "x": 120,
-        "y": 760,
     }
     visuals = [{
         "bytes": visual_buffer.getvalue(),
@@ -898,31 +896,8 @@ def test_top5_manual_subject_cutout_accepts_both_modes():
             mode=mode,
             text_box=(60, 700, 960, 500),
             font_size=140,
-            x=60,
-            y=700,
         )
         assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
-
-
-def test_top5_manual_subject_cutout_uses_position_in_both_modes(monkeypatch):
-    background = Image.new("RGB", (1080, 1920), (240, 240, 240))
-    subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((380, 500, 700, 1500), fill=255)
-    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
-
-    for mode in ("negative-space", "behind-subject"):
-        frame = renderer._draw_top5_manual_subject_cutout(
-            background,
-            {
-                "headline": "India dominate the latest result",
-                "mode": mode,
-                "text_box": (80, 600, 920, 500),
-                "font_size": 120,
-                "x": 120,
-                "y": 900,
-            },
-        )
-        assert frame.size == (renderer.WIDTH, renderer.HEIGHT)
 
 
 def test_top5_manual_subject_cutout_negative_space_does_not_use_subject_mask(monkeypatch):
@@ -985,8 +960,6 @@ def test_top5_manual_subject_cutout_keeps_two_subjects_above_text(monkeypatch):
         mode="behind-subject",
         text_box=(120, 680, 840, 500),
         font_size=140,
-        x=120,
-        y=760,
     )
     image = Image.open(BytesIO(preview)).convert("RGB")
 
