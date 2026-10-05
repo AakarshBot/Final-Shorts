@@ -888,7 +888,11 @@ def test_top5_manual_subject_cutout_uses_barlow_condensed():
     assert image.size == (renderer.WIDTH, renderer.HEIGHT)
 
 
-def test_top5_manual_subject_cutout_accepts_both_modes():
+def test_top5_manual_subject_cutout_accepts_both_modes(monkeypatch):
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((360, 500, 720, 1500), fill=255)
+    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
+
     for mode in ("negative-space", "behind-subject"):
         preview = renderer.build_top5_manual_subject_cutout_preview(
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
