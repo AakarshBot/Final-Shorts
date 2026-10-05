@@ -500,15 +500,12 @@ def _top5_headline_layout(
         raise ValueError("Top-5 headline is below the readable size floor.")
 
     headline_fonts = _top5_headline_font_stack(headline_size, language)
-    try:
-        headline_lines = _top5_wrap_editorial_words(
-            probe,
-            clean_headline.upper(),
-            headline_fonts,
-            max_width,
-        )
-    except ValueError:
-        raise
+    headline_lines = _top5_wrap_editorial_words(
+        probe,
+        clean_headline.upper(),
+        headline_fonts,
+        max_width,
+    )
     if not headline_lines or len(headline_lines) > max_lines:
         raise ValueError("Top-5 headline cannot fit inside the editorial text area.")
 
