@@ -775,17 +775,8 @@ def _top5_editorial_layout(
             raise error
         raise ValueError("Top-5 headline cannot fit inside the editorial text area.")
 
-    ranked = sorted(candidates, key=lambda candidate: candidate["score"], reverse=True)
-    best = ranked[0]
-    confidence_gap = ranked[0]["score"] - ranked[1]["score"] if len(ranked) > 1 else 0.0
+    best = max(candidates, key=lambda candidate: candidate["score"])
     best["composition_score"] = best["score"]
-    best["composition_confident"] = (
-        source_image is None
-        or (
-            best["score"] >= TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
-            and confidence_gap >= 1.5
-        )
-    )
     return best
 def compress_top5_body(body: str, max_words: int) -> str:
     words = " ".join(str(body or "").split()).split()
