@@ -1141,7 +1141,6 @@ def _top5_editorial_layout(
             total_height,
             width,
             source_image,
-            headline_layout["headline_height"],
         ):
             candidates.append({
                 "score": score,
