@@ -290,12 +290,12 @@ Important:
 
 ### Top-5 standalone Visuals Test mode:
 - Test Stage 04 · Visuals is directly accessible even when the Top-5 Scriptwriter handoff does not exist.
-- When no approved Top-5 script is present, the stage opens as a standalone renderer playground rather than blocking on Scriptwriter.
-- The standalone playground starts with a green 1080 × 1920 test canvas, the existing filler headline and filler body, and exposes the current shared Top-5 renderer through Render Now.
-- The filler headline/body remain editable so typography, spacing, placement and localized readability treatment can be reviewed without waiting for a real script.
-- Standalone image retrieval exposes Real Image Search only. The user can search, select one real image, and press Render Now to see the exact shared Top-5 editorial treatment on that image.
-- Standalone rendering is preview-only. It does not create a Top-5 production handoff, bypass a production approval, or move the Test pipeline to a later stage.
-- Once an approved Scriptwriter handoff exists, the existing six-slide Top-5 Visual QC path remains available with its production image-selection and card-option behaviour, plus the body-rejection/edit/rewrite path described above.
+- When no approved Top-5 script is present, Stage 04 opens as the standalone Top-5 Visual QC and remains independent of prior approvals.
+- Standalone Visual QC exposes the full seven-option visual selector: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card, and Subject Cutout.
+- Standalone testing keeps the headline/body editable and allows each visual option to be exercised directly against the current image without waiting for Scriptwriter.
+- Options 1–4 build an image pool that can be used as the current slide image. Options 5–6 build their respective card previews from the current image. Option 7 runs the local BiRefNet subject-aware composition on the current image.
+- The standalone page shows the exact rendered Top-5 card preview for the currently tested treatment. It does not create a production handoff, bypass a production approval, or move Test to a later stage.
+- Once an approved Scriptwriter handoff exists, the existing six-slide Top-5 Visual QC path remains available with its production image-selection, card-option, crop/reposition and approval behaviour.
 
 Top-5 Live orchestration:
 - The user manually chooses and orders the five stories.
