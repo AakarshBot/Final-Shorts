@@ -603,7 +603,7 @@ def _top5_subject_geometry(subject_mask: Image.Image) -> dict | None:
             value > 128
             for value in binary.resize((90, 160), Image.Resampling.BOX).getdata()
         ) / 14400
-        if 0.003 <= coverage <= 0.82:
+        if 0.003 <= coverage <= 0.94:
             x1, y1, x2, y2 = bbox
             candidates.append({
                 "bbox": bbox,
@@ -718,14 +718,13 @@ def _top5_subject_layout(
                         subject_mask,
                         (x, y, x + width, y + headline_height),
                     )
-                    if overlap > 0.14:
-                        continue
                     score = (
                         size * 5.5
                         + (4 - abs(len(lines) - target_lines)) * 85.0
                         + (2 - singleton_lines) * 95.0
                         + min(side_space, width) * 0.12
-                        - abs(overlap - 0.035) * 850.0
+                        - abs(overlap - 0.035) * 1050.0
+                        - max(0.0, overlap - 0.12) * 900.0
                         - abs((y + headline_height / 2) - geometry["center_y"]) * 0.08
                     )
                     candidates.append({
@@ -805,8 +804,6 @@ def _top5_subject_layout(
                             subject_mask,
                             (x, y, x + width, y + height),
                         )
-                        if overlap > 0.18:
-                            continue
                         side_left = max(0, subject_x1 - text_left)
                         side_right = max(0, text_right - subject_x2)
                         side_balance = min(side_left, side_right)
@@ -816,7 +813,8 @@ def _top5_subject_layout(
                             + (190.0 if crosses_both_sides else 0.0)
                             + min(side_balance, 360) * 0.8
                             - abs(overlap_px - target_overlap) * 2.2
-                            - abs(overlap - 0.09) * 900.0
+                            - abs(overlap - 0.09) * 1100.0
+                            - max(0.0, overlap - 0.16) * 1000.0
                             - abs((y + height / 2) - target_y) * 0.06
                         )
                         candidates.append({
@@ -996,9 +994,6 @@ def _top5_editorial_layout(
         )
         if subject_layout is not None:
             return subject_layout
-        raise ValueError(
-            "Subject Cutout could not find a readable subject-aware composition for this image."
-        )
 
     source_image = _top5_full_frame_image(image) if image is not None else None
     candidates = []
@@ -1354,7 +1349,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
 
     if (
         subject_mask is not None
-        and layout.get("composition_mode") == "cross-subject"
+        and layout.get("composition_mode") in {"cross-subject", "vertical-left", "vertical-right"}
     ):
         headline_mask = Image.new("L", canvas.size, 0)
         headline_draw = ImageDraw.Draw(headline_mask)
