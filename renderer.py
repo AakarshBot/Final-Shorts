@@ -583,31 +583,60 @@ def _top5_editorial_layout(
                 ))
 
             if max_headline_lines >= 2 and len(words) > 2:
-                for split in range(1, len(words)):
-                    first = words[:split]
-                    second = words[split:]
-                    width_1, height_1 = _top5_editorial_measure(
+                if max_headline_lines == 2:
+                    for split in range(1, len(words)):
+                        first = words[:split]
+                        second = words[split:]
+                        width_1, height_1 = _top5_editorial_measure(
+                            probe,
+                            " ".join(first),
+                            fonts,
+                        )
+                        width_2, height_2 = _top5_editorial_measure(
+                            probe,
+                            " ".join(second),
+                            fonts,
+                        )
+                        width = max(width_1, width_2)
+                        height = (
+                            height_1
+                            + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+                            + height_2
+                        )
+                        if width <= region_width:
+                            options.append((
+                                [first, second],
+                                width,
+                                height,
+                            ))
+                else:
+                    lines = _top5_wrap_editorial_words(
                         probe,
-                        " ".join(first),
+                        clean_headline,
                         fonts,
+                        region_width,
                     )
-                    width_2, height_2 = _top5_editorial_measure(
-                        probe,
-                        " ".join(second),
-                        fonts,
-                    )
-                    width = max(width_1, width_2)
-                    height = (
-                        height_1
-                        + TOP5_EDITORIAL_HEADLINE_LINE_GAP
-                        + height_2
-                    )
-                    if width <= region_width:
-                        options.append((
-                            [first, second],
-                            width,
-                            height,
-                        ))
+                    if lines and len(lines) <= max_headline_lines:
+                        width = max(
+                            _top5_editorial_measure(
+                                probe,
+                                " ".join(line),
+                                fonts,
+                            )[0]
+                            for line in lines
+                        )
+                        height = sum(
+                            _top5_editorial_measure(
+                                probe,
+                                " ".join(line),
+                                fonts,
+                            )[1]
+                            for line in lines
+                        ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(
+                            0,
+                            len(lines) - 1,
+                        )
+                        options.append((lines, width, height))
 
             if len(options) > 1:
                 options.sort(
@@ -659,10 +688,8 @@ def _top5_editorial_layout(
                             max(1, int(round(size * scale))),
                             language,
                         )
-                        small_draw = ImageDraw.Draw(
-                            Image.new("L", (180, 320), 0)
-                        )
                         text_small = Image.new("L", (180, 320), 0)
+                        small_draw = ImageDraw.Draw(text_small)
                         cursor_y = int(round(y * 320 / HEIGHT))
                         for line in lines:
                             cursor_x = int(round(x * 180 / WIDTH))
