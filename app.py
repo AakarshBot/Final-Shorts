@@ -6097,31 +6097,50 @@ elif st.session_state.app_mode == "test":
                     cols = st.columns(min(3, len(assets) - start), gap="medium")
                     for offset, asset in enumerate(assets[start:start + 3]):
                         with cols[offset]:
+                            index = start + offset
                             raw = asset.get("bytes")
-                            preview = _top5_fit_preview(raw)
-                            if preview is not None:
-                                st.image(preview, width="stretch")
                             source = str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source").strip()
                             label = str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual").strip()
+                            asset_key = _visual_asset_key(f"playground-{visual_option}", index, asset)
+                            cropped = st.session_state.test_top5_visual_crops.get(asset_key)
+                            preview_source = cropped if cropped else raw
+                            preview = _top5_fit_preview(preview_source)
+                            if preview is not None:
+                                st.image(preview, width="stretch")
                             st.markdown(
                                 f'<div class="visual-source">{source}</div>'
                                 f'<div class="visual-detail">{label}</div>',
                                 unsafe_allow_html=True,
                             )
-                            if st.button(
-                                "Use this image",
-                                type="primary",
-                                width="stretch",
-                                key=f"test-top5-playground-use-{visual_option}-{start + offset}",
-                            ):
-                                selected = _asset_to_image(raw)
-                                if selected is not None:
-                                    st.session_state.test_top5_visual_playground_image = selected
-                                    st.session_state.test_top5_visual_playground_source = source
-                                    st.session_state.test_top5_visual_playground_render = None
-                                    st.rerun()
-                                else:
-                                    st.warning("This image could not be decoded.")
+                            if cropped:
+                                st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
+                            choose_col, crop_col = st.columns(2, gap="small")
+                            with choose_col:
+                                if st.button(
+                                    "Use this image",
+                                    type="primary",
+                                    width="stretch",
+                                    key=f"test-top5-playground-use-{visual_option}-{index}",
+                                ):
+                                    selected_bytes = bytes(cropped) if cropped else bytes(raw or b"")
+                                    selected = _asset_to_image(selected_bytes)
+                                    if selected is not None:
+                                        st.session_state.test_top5_visual_playground_image = selected
+                                        st.session_state.test_top5_visual_playground_source = source
+                                        st.session_state.test_top5_visual_playground_render = None
+                                        st.rerun()
+                                    else:
+                                        st.warning("This image could not be decoded.")
+                            with crop_col:
+                                if st.button(
+                                    "Crop / reposition",
+                                    width="stretch",
+                                    key=f"test-top5-playground-crop-{visual_option}-{index}",
+                                ):
+                                    if isinstance(raw, (bytes, bytearray)):
+                                        _top5_crop_visual_dialog(asset_key, bytes(raw), label)
+                                    else:
+                                        st.warning("This image is not crop-ready.")
 
             if visual_option in TOP5_VISUAL_OPTIONS[:4] and current_image is not None:
                 if st.button("Render current image with card typography", type="primary", width="stretch", key="test-top5-playground-render-current"):
@@ -6206,7 +6225,6 @@ elif st.session_state.app_mode == "test":
                     visual_option = st.pills(
                         "Visual source",
                         TOP5_VISUAL_OPTIONS,
-                        default=st.session_state.get("test_top5_visual_option", TOP5_VISUAL_OPTIONS[0]),
                         key="test_top5_visual_option",
                         label_visibility="collapsed",
                     ) or TOP5_VISUAL_OPTIONS[0]
