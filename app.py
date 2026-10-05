@@ -6661,7 +6661,7 @@ elif st.session_state.app_mode == "test":
                         else:
                             st.warning(
                                 rejection.get("reason")
-                                or "The body does not fit the fixed text zone."
+                                or "The body does not fit the editorial text area."
                             )
 
                         rejected_body_key = f"test-top5-rejected-body-{active_slide}"
