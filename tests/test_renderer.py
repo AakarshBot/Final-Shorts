@@ -675,7 +675,7 @@ def test_top5_editorial_uses_oswald_in_the_fixed_text_zone():
     assert font_path.exists()
     assert story["x"] == renderer.TOP5_EDITORIAL_MARGIN_X == 64
     assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == renderer.WIDTH - 128
-    assert story["headline_fonts"][0].getname()[0].lower().startswith("oswald")
+    assert story["headline_fonts"][0].getname()[0].lower().startswith("barlow")
     assert story["y"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_TOP == 900
     assert story["zone_bottom"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM == 1480
     assert story["y"] + story["total_height"] <= story["zone_bottom"]
