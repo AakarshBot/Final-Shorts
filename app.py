@@ -6105,6 +6105,8 @@ elif st.session_state.app_mode == "test":
                         card_type="editorial",
                         card_data=None,
                         preview_bytes=None,
+                        headline_text=None,
+                        body_text=None,
                     ):
                         image = _asset_to_image(source_bytes)
                         if image is None:
@@ -6114,6 +6116,8 @@ elif st.session_state.app_mode == "test":
                         buffer = BytesIO()
                         image.save(buffer, format="JPEG", quality=94, optimize=True)
                         selected_bytes = buffer.getvalue()
+                        selected_headline = str(headline_text if headline_text is not None else headline).strip()
+                        selected_body = str(body_text if body_text is not None else body).strip()
                         story_number = 0 if active_slide == 1 else active_slide - 1
                         assignment = {
                             "asset_key": str(
@@ -6133,8 +6137,8 @@ elif st.session_state.app_mode == "test":
                             assignment["card_layout"] = dict(card_data.get("layout") or {})
                         else:
                             assignment["top5_card"] = {
-                                "headline": headline,
-                                "body": body,
+                                "headline": selected_headline,
+                                "body": selected_body,
                                 "story_number": story_number,
                                 "total_stories": 5,
                                 "language": str(script.get("language_used") or "english").casefold(),
@@ -6145,8 +6149,8 @@ elif st.session_state.app_mode == "test":
                                 if card_type == "editorial":
                                     preview_bytes = build_top5_card_preview(
                                         selected_bytes,
-                                        headline,
-                                        body,
+                                        selected_headline,
+                                        selected_body,
                                         story_number=story_number,
                                         total_stories=5,
                                         source_label=source,
@@ -6649,7 +6653,7 @@ elif st.session_state.app_mode == "test":
                             width="stretch",
                             key=f"test-top5-render-rejected-body-{active_slide}",
                         ):
-                            success = _top5_store_assignment(
+                            _top5_store_assignment(
                                 {
                                     "asset_key": rejection.get("asset_key"),
                                 },
@@ -6657,6 +6661,7 @@ elif st.session_state.app_mode == "test":
                                 rejection.get("result_key") or "visual",
                                 rejection.get("source") or "Visual",
                                 rejection.get("label") or "Selected visual",
+                                body_text=edited_body,
                             )
                             st.rerun()
 
