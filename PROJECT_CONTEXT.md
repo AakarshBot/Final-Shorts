@@ -275,21 +275,16 @@ Important:
 - Preserve the already-approved function contracts.
 
 ### Top-5 editorial card design — current Test redesign:
-- Top-5 uses a static 9:16 editorial composition. The selected photograph remains full-bleed and the renderer adds no white panel, lower-third, card, strip, broad image wash, rounded container, fake UI or permanent gradient.
-- The historical reference for this redesign is the 83b3ee7 editorial treatment: direct typography over the photograph with readability created from the actual text glyphs, not from a broad photo scrim or card.
+- Top-5 uses a static 9:16 editorial composition. The selected photograph remains full-bleed.
 - English Top-5 headlines use the bundled Oswald-Bold.ttf display treatment.
-- The headline is the dominant element: uppercase, heavy and condensed, left-aligned in a wide 968px editorial column with a 56px left margin.
-- Headline size, wrapping and the complete headline + body block are fitted dynamically against the available vertical space.
-- Supporting body copy uses the regular sans-serif treatment at an adaptive readable size between 18px and 36px. There is no artificial card height or fixed story-slide y-position.
-- The readability treatment is Fade v2: a mask is generated directly from the rendered headline/body glyphs, blurred with GaussianBlur(5), reduced to 120 alpha and composited immediately behind those letters. This is the same glyph-derived treatment as the historical reference, with stronger visibility so the soft shadow/fade is clearly perceptible. The photograph itself is not faded or washed.
-- Text colour remains adaptive to the rendered text region so the typography stays legible on both light and dark photographs.
-- The important text block occupies the lower safe area dynamically. The bottom of the completed headline + body block is anchored to y=1420, while the block moves upward as needed when the content becomes taller. The working safe area begins at y=230.
-- The renderer therefore uses the lower half of the Shorts frame without placing important headline/body copy inside the conservative bottom 500px YouTube Shorts UI exclusion zone.
-- The background photograph still occupies the full 1080 × 1920 frame, including UI-danger regions; only important text is protected.
-- The composition is completely static. There is no headline-then-body motion, word animation, slide-in, bounce, blur-in animation or platform-style interaction treatment.
-- Preserve the existing manual image selection, crop/reposition, Test preview, Render Now button, logo and source-label handoffs. The Test Render Now button uses the shared build_top5_card_preview() renderer directly.
+- Headline and body placement are dynamically fitted within the lower safe area while protecting the conservative bottom Shorts UI exclusion zone.
+- Current work is focused on **improving the text treatment on the visuals**. The exact final typography/readability treatment is **not yet approved**.
+- Do not treat the current text styling, shadow/fade strength, or other text-readability details as final.
+- No motion, word animation, fake UI, cards, broad image washes, or permanent gradients should be reintroduced while refining the text treatment.
+- Preserve the existing manual image selection, crop/reposition, Test preview, Render Now button, logo and source-label handoffs.
+- The Test Render Now button uses the shared build_top5_card_preview() renderer directly.
 - The generic/non-Top-5 renderer path and the approved Cricket Visual Fetcher remain untouched.
-- Test preview remains the acceptance point. This treatment is not approved for Live until the user manually reviews it in Test.
+- Test preview remains the acceptance point. This text treatment is not approved for Live until the user manually reviews it in Test.
 
 ### Top-5 standalone Visuals Test mode:
 - Test Stage 04 · Visuals is directly accessible even when the Top-5 Scriptwriter handoff does not exist.
