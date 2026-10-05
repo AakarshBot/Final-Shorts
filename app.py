@@ -1630,7 +1630,6 @@ def _render_quote_card(live: bool = False, slide_count: int = 0):
             st.session_state.approved_visuals = None
         st.rerun()
 
-@lru_cache(maxsize=96)
 def _top5_fit_preview(value, width=300, height=533):
     from PIL import Image
     image = _asset_to_image(value)
