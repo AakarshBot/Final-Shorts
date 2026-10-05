@@ -5859,11 +5859,12 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_headline",
                     height=82,
                 )
-                st.text_area(
-                    "Body",
-                    key="test_top5_visual_playground_body",
-                    height=140,
-                )
+                if visual_option != "Option 7 · Subject Cutout":
+                    st.text_area(
+                        "Body",
+                        key="test_top5_visual_playground_body",
+                        height=140,
+                    )
 
             assets = []
             if visual_option == "Option 1 · Automatic Scraper":
