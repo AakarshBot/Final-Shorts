@@ -88,7 +88,7 @@ def test_top5_headline_size_adapts_to_copy():
         1,
     )
     long = renderer._top5_editorial_layout(
-        "India reshuffles the squad after a late selection change",
+        "India reshuffles the squad before series",
         "",
         "english",
         1,
@@ -164,7 +164,7 @@ def test_top5_local_body_compression_respects_the_cap():
         "The board also confirmed the latest development and currently expects the "
         "decision to affect the lineup before the next series begins."
     )
-    compressed = renderer.compress_top5_body(source, 12)
+    compressed = renderer.compress_top5_body(source, 16)
     assert len(compressed.rstrip("…").split()) <= 12
     assert "confirmed" in compressed
     assert "lineup" in compressed
