@@ -2700,7 +2700,7 @@ def _render_live_visuals(slide_count: int):
 
                     marker = st_cropper(
                         marker_image,
-                        realtime_update=True,
+                        realtime_update=False,
                         default_coords=default_coords,
                         aspect_ratio=None,
                         return_type="box",
