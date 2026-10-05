@@ -5891,6 +5891,14 @@ elif st.session_state.app_mode == "test":
                 unsafe_allow_html=True,
             )
 
+            st.markdown('<div class="mini-label">7 VISUAL OPTIONS</div>', unsafe_allow_html=True)
+            visual_option = st.pills(
+                "Visual source",
+                TOP5_VISUAL_OPTIONS,
+                key="test_top5_visual_playground_option",
+                label_visibility="collapsed",
+            ) or TOP5_VISUAL_OPTIONS[2]
+
             image_col, editor_col = st.columns([.85, 1.15], gap="large")
             with image_col:
                 current_image = st.session_state.test_top5_visual_playground_image
@@ -5915,13 +5923,6 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_body",
                     height=140,
                 )
-
-            visual_option = st.pills(
-                "Visual source",
-                TOP5_VISUAL_OPTIONS,
-                key="test_top5_visual_playground_option",
-                label_visibility="collapsed",
-            ) or TOP5_VISUAL_OPTIONS[2]
 
             assets = []
             if visual_option == "Option 1 · Automatic Scraper":
