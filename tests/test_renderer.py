@@ -710,6 +710,36 @@ def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
         Image.open(BytesIO(normal)).convert("RGB"),
     ).getbbox() is not None
 
+
+def test_top5_subject_mask_uses_rmbg_via_hugging_face(monkeypatch):
+    import huggingface_hub
+
+    calls = []
+
+    class FakeClient:
+        def __init__(self, provider, api_key):
+            calls.append(("client", provider, api_key))
+
+        def image_segmentation(self, image, model):
+            calls.append(("segmentation", image.size, model))
+            mask = Image.new("L", image.size, 0)
+            ImageDraw.Draw(mask).rectangle((100, 900, 600, 1160), fill=255)
+            return [{"mask": mask}]
+
+    monkeypatch.setattr(huggingface_hub, "InferenceClient", FakeClient)
+    monkeypatch.setenv("HF_TOKEN", "test-token")
+    renderer._top5_subject_mask.cache_clear()
+
+    source = BytesIO()
+    Image.new("RGB", (1080, 1920), (20, 24, 30)).save(source, format="PNG")
+    mask = renderer._top5_subject_mask(source.getvalue())
+
+    assert mask is not None
+    assert mask.size == (1080, 1920)
+    assert ("client", "fal-ai", "test-token") in calls
+    assert ("segmentation", (1080, 1920), "briaai/RMBG-2.0") in calls
+
+
 def test_top5_editorial_body_rejects_copy_below_readable_floor():
     body = " ".join(
         [
