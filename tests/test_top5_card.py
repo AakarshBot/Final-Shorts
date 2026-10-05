@@ -1,5 +1,6 @@
 from io import BytesIO
 
+import pytest
 from PIL import Image
 
 import renderer
@@ -53,7 +54,7 @@ def test_top5_preview_does_not_add_a_readability_panel():
     assert image.getpixel((20, 1800)) == background
 
 
-def test_top5_layout_fills_to_the_lower_safe_boundary():
+def test_top5_layout_uses_one_fixed_text_zone():
     layout = renderer._top5_editorial_layout(
         "India make a major selection change",
         "The board confirmed the move. The decision changes the lineup.",
@@ -62,11 +63,12 @@ def test_top5_layout_fills_to_the_lower_safe_boundary():
     )
 
     assert layout["x"] == renderer.TOP5_EDITORIAL_MARGIN_X
-    assert layout["y"] >= renderer.TOP5_EDITORIAL_SAFE_TOP
-    assert layout["y"] + layout["total_height"] == renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
+    assert layout["y"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_TOP
+    assert layout["zone_bottom"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
+    assert layout["y"] + layout["total_height"] <= renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
 
 
-def test_top5_opener_uses_the_same_dynamic_safe_boundary():
+def test_top5_opener_uses_the_same_fixed_text_zone():
     layout = renderer._top5_editorial_layout(
         "Top 5 Cricket News Today",
         "",
@@ -74,8 +76,8 @@ def test_top5_opener_uses_the_same_dynamic_safe_boundary():
         0,
     )
 
-    assert layout["y"] >= renderer.TOP5_EDITORIAL_SAFE_TOP
-    assert layout["y"] + layout["total_height"] == renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
+    assert layout["y"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_TOP
+    assert layout["y"] + layout["total_height"] <= renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
 
 
 def test_top5_headline_size_adapts_to_copy():
@@ -86,7 +88,7 @@ def test_top5_headline_size_adapts_to_copy():
         1,
     )
     long = renderer._top5_editorial_layout(
-        "India reshuffles the squad after a late selection change before the series",
+        "India reshuffles the squad after a late selection change",
         "",
         "english",
         1,
@@ -95,13 +97,14 @@ def test_top5_headline_size_adapts_to_copy():
     assert short["headline_fonts"][0].size >= long["headline_fonts"][0].size
     assert long["headline_lines"]
     assert short["headline_lines"]
+    assert len(short["headline_lines"]) <= renderer.TOP5_EDITORIAL_HEADLINE_MAX_LINES
+    assert len(long["headline_lines"]) <= renderer.TOP5_EDITORIAL_HEADLINE_MAX_LINES
 
 
-def test_top5_body_preserves_all_copy_without_sentence_cap():
+def test_top5_body_preserves_all_copy_while_it_fits():
     body = (
         "The board confirmed the move after the latest result. "
-        "The decision changes the lineup for the next series. "
-        "Officials also confirmed the timing of the next review."
+        "The decision changes the lineup for the next series."
     )
     layout = renderer._top5_editorial_layout(
         "Selection change",
@@ -115,12 +118,27 @@ def test_top5_body_preserves_all_copy_without_sentence_cap():
         for line in layout["body_lines"]
         for word in line
     )
-    assert "Officials" in rendered_words
-    assert "review." in rendered_words
+    assert "confirmed" in rendered_words
+    assert "lineup" in rendered_words
     assert renderer.TOP5_EDITORIAL_BODY_MIN_SIZE <= layout["body_font"].size <= renderer.TOP5_EDITORIAL_BODY_MAX_SIZE
 
 
-def test_top5_card_uses_a_subtle_letter_fade(monkeypatch):
+def test_top5_body_rejection_reports_a_strict_word_cap():
+    body = " ".join(["The board confirmed the latest development for the next series."] * 12)
+
+    with pytest.raises(ValueError) as error:
+        renderer._top5_editorial_layout(
+            "Selection change",
+            body,
+            "english",
+            1,
+        )
+
+    assert "maximum" in str(error.value)
+    assert 0 < error.value.top5_max_words < len(body.split())
+
+
+def test_top5_local_readability_uses_visible_local_treatments(monkeypatch):
     calls = []
     original = renderer.ImageFilter.GaussianBlur
 
@@ -136,10 +154,20 @@ def test_top5_card_uses_a_subtle_letter_fade(monkeypatch):
         story_number=1,
     )
 
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR == 5
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 120
+    assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_BLUR in calls
+    assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_BLUR in calls
+    assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA > renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA - 100
 
+
+def test_top5_local_body_compression_respects_the_cap():
+    source = (
+        "The board also confirmed the latest development and currently expects the "
+        "decision to affect the lineup before the next series begins."
+    )
+    compressed = renderer.compress_top5_body(source, 12)
+    assert len(compressed.rstrip("…").split()) <= 12
+    assert "confirmed" in compressed
+    assert "lineup" in compressed
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
     audio_file = tmp_path / "scene1.mp3"
