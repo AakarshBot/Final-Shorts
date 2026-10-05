@@ -745,7 +745,7 @@ def test_top5_editorial_body_rejects_copy_below_readable_floor():
         [
             "The board confirmed the move after reviewing the latest result and selection options.",
             "The decision changes the lineup ahead of the next match and follows the latest update from officials.",
-        ] * 3
+        ] * 7
     )
 
     with pytest.raises(ValueError) as error:
