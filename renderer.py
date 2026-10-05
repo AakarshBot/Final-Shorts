@@ -771,41 +771,65 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
     font_path = Path(__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     if not font_path.exists():
         raise RuntimeError("Manual Subject Cutout requires the existing Barlow Condensed Black font.")
-    font = ImageFont.truetype(str(font_path), font_size)
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
-    words = headline.split()
-    lines = []
-    current = []
-    for word in words:
-        trial = " ".join(current + [word])
-        width = probe.textbbox(
+    def fit_font_and_lines(size: int):
+        font = ImageFont.truetype(str(font_path), size)
+        words = headline.split()
+        lines = []
+        current = []
+        for word in words:
+            trial = " ".join(current + [word])
+            bbox = probe.textbbox(
+                (0, 0),
+                trial,
+                font=font,
+                stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
+            )
+            width = bbox[2] - bbox[0]
+            if current and width > box_width:
+                lines.append(" ".join(current))
+                current = [word]
+            else:
+                current.append(word)
+        if current:
+            lines.append(" ".join(current))
+
+        line_box = probe.textbbox(
             (0, 0),
-            trial,
+            "Ag",
             font=font,
             stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
-        )[2]
-        if current and width > box_width:
-            lines.append(" ".join(current))
-            current = [word]
-        else:
-            current.append(word)
-    if current:
-        lines.append(" ".join(current))
-
-    line_box = probe.textbbox(
-        (0, 0),
-        "Ag",
-        font=font,
-        stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
-    )
-    line_height = line_box[3] - line_box[1]
-    total_height = line_height * len(lines) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
-    if total_height > box_height:
-        raise ValueError(
-            "The headline does not fit the Manual Subject Cutout text box at this font size. "
-            "Reduce the font size or make the text box taller."
         )
+        line_height = line_box[3] - line_box[1]
+        total_height = (
+            line_height * len(lines)
+            + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
+        )
+        widest = 0
+        for line in lines:
+            bbox = probe.textbbox(
+                (0, 0),
+                line,
+                font=font,
+                stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
+            )
+            widest = max(widest, bbox[2] - bbox[0])
+        return font, lines, line_height, total_height, widest
+
+    fit = None
+    for size in range(font_size, TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE - 1, -1):
+        candidate = fit_font_and_lines(size)
+        if candidate[3] <= box_height and candidate[4] <= box_width:
+            fit = candidate
+            break
+    if fit is None:
+        raise ValueError(
+            "The selected text rectangle is too small for this headline. "
+            "Make the rectangle larger."
+        )
+
+    font, lines, line_height, total_height, _ = fit
 
     canvas = _top5_full_frame_image(base).convert("RGBA")
     if mode == "behind-subject":
