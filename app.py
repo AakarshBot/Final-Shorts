@@ -6038,6 +6038,11 @@ elif st.session_state.app_mode == "test":
                 ) or "Negative Space"
 
                 rendered_config = st.session_state.get("test-top5-manual-subject-playground-config")
+                selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
+                if rendered_config and rendered_config.get("mode") != selected_mode:
+                    st.session_state["test-top5-manual-subject-playground-config"] = None
+                    st.session_state.test_top5_visual_playground_render = None
+                    rendered_config = None
                 if not rendered_config:
                     marker_image = _top5_fit_preview(current_image, 1080, 1920)
                     marker = st_cropper(
@@ -6726,8 +6731,14 @@ elif st.session_state.app_mode == "test":
                                     key=f"test-top5-manual-subject-mode-{active_slide}",
                                 ) or "Negative Space"
 
-                                from streamlit_cropper import st_cropper
+                                selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
                                 rendered_config = state.get("rendered_config")
+                                if rendered_config and rendered_config.get("mode") != selected_mode:
+                                    state.pop("rendered_config", None)
+                                    state.pop("rendered_preview", None)
+                                    rendered_config = None
+
+                                from streamlit_cropper import st_cropper
                                 if not rendered_config:
                                     st.caption(
                                         "Draw a free-size rectangle over the image to show exactly where the headline should sit."
