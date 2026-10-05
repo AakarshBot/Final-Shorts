@@ -276,8 +276,8 @@ Important:
 
 ### Top-5 editorial card design — current Test state:
 - Top-5 uses a static 9:16 editorial composition. The selected photograph remains full-bleed.
-- English Top-5 headlines use bundled **Barlow Condensed Black**, rendered **ALL CAPS**, with a maximum of two lines. Body copy uses **Barlow Regular**.
-- The renderer dynamically evaluates multiple text widths and left/center/right placements plus multiple vertical positions inside the editorial safe area **y=620–1650**. It scores the actual image for calm copy space, local contrast and composition instead of using one fixed text position.
+- English Top-5 headlines use bundled **Barlow Condensed Black**, rendered **ALL CAPS**. Normal editorial cards use a maximum of two horizontal lines; Subject Cutout may intentionally use more lines when a side-positioned subject creates a strong vertical composition. Body copy uses **Barlow Regular**.
+- Normal Top-5 rendering dynamically evaluates multiple text widths, horizontal placements and vertical positions inside the editorial safe area **y=620–1650**. It scores the actual image for calm copy space, local contrast and composition instead of using one fixed text position.
 - The text treatment is opaque editorial type. It uses a restrained directional shadow and a thin contrast-aware outline; there is no transparent/faded text, broad scrim, full-frame wash, permanent panel, border, line or decorative UI treatment.
 - Body copy can vary in length, but it must fit the readable card area. Renderer rejects copy that cannot fit at the readable floor rather than shrinking it into illegibility.
 - The approved Test visual handoff keeps the existing image selection, crop/reposition, rendered-preview and source-label behaviour.
@@ -293,19 +293,20 @@ Important:
   5. Stats Card
   6. Quote Card
   7. Subject Cutout
-- Options 1–4 retrieve an image pool and let the user choose the current source image. Options 5–6 build the corresponding card treatment from that image. Option 7 runs local subject extraction and renders the Top-5 editorial composition with the detected foreground subject in front of the headline.
+- Options 1–4 retrieve an image pool and let the user choose the current source image. Options 5–6 build the corresponding card treatment from that image. Option 7 runs local subject extraction and renders the Top-5 editorial composition with deliberate subject-aware typography and optional foreground occlusion.
 - The standalone selector and controls must remain usable even when no approved Top-5 script exists. It must never fall through into six-slide production QC code or require an upstream handoff.
 - The current headline and body remain editable in standalone mode so typography and visual treatments can be tested independently.
 - When a full Top-5 Scriptwriter handoff exists, the six-slide production Visual QC remains available and uses the same shared renderer/visual assignment contracts.
 
 ### Top-5 Subject Cutout — current Test experiment:
 - Subject Cutout is **Option 7**, not the default treatment. Normal Top-5 slides do not invoke BiRefNet.
-- It uses **ZhengPeng7/BiRefNet_lite** locally through PyTorch/Transformers, with the foreground mask cached per source image.
-- The renderer uses the detected subject spatially: when Option 7 is selected, candidate headline placements are explicitly generated around the detected subject bounding box and strongly scored for meaningful subject/headline overlap.
-- The overlap target is deliberately stronger than ordinary copy-space scoring so the composition visibly produces **text behind the player/subject** rather than merely placing the headline somewhere on the same photograph.
-- The subject mask is thresholded and slightly expanded before compositing so the foreground subject cleanly occludes the headline. Only the intersection of the subject mask and headline mask is composited above the type; body copy remains unobstructed.
-- The intended visual result is an editorial sports-desk composition where the headline can pass behind a player/subject when the photograph supports it. It is not forced onto every image.
-- This is still a **Test-only** visual experiment pending the user's approval. Do not promote it to Live until the user explicitly approves the rendered result.
+- It uses **ZhengPeng7/BiRefNet_lite** locally through PyTorch/Transformers. The foreground mask is cached per source image.
+- The renderer first determines the subject's spatial geometry from the mask instead of merely looking for generic visual detail.
+- When a clear subject is positioned on one side and the opposite side contains enough usable copy space, the headline becomes a **large, normally oriented vertical text block** on the empty side. The line breaks are dynamic: words are grouped for readability rather than forced into one-word-per-line stacking.
+- When a subject is centered and there is meaningful space on both sides, the renderer prefers a **large horizontal cross-subject headline** positioned through the subject's vertical center. The headline is deliberately allowed to pass behind the foreground subject, but the placement is scored so the overlap is controlled rather than being added purely for effect.
+- The cross-subject treatment is selected only when the geometry supports readable type and meaningful overlap. If the photograph does not provide a good composition, the renderer falls back to the normal editorial layout instead of forcing the effect.
+- Only the portion of the headline intersecting the detected foreground mask is occluded by the subject pixels. Body copy is not placed behind the subject as part of this treatment.
+- This remains a **Test-only** visual experiment pending the user's approval. Do not promote it to Live until the rendered result is explicitly approved.
 
 ### Top-5 Live orchestration:
 - The user manually chooses and orders the five stories.
@@ -318,9 +319,9 @@ Important:
 
 ### Top-5 status:
 - Test pipeline/framework: approved.
-- Standalone seven-option Top-5 Visual QC: implemented; currently being visually refined.
-- Dynamic editorial typography: implemented in the shared renderer.
-- Optional Subject Cutout: implemented in Test with local BiRefNet, with aggressive subject-aware headline placement and foreground occlusion.
+- Standalone seven-option Top-5 Visual QC: implemented.
+- Normal dynamic editorial typography: implemented in the shared renderer.
+- Optional Subject Cutout: **under active visual refinement in Test**. The current redesign uses BiRefNet subject geometry to choose side-vertical or center-cross-subject headline compositions and only applies foreground occlusion when the central composition supports it.
 - Live promotion: blocked until the current Test visual result is explicitly approved.
 
 ### Production Line 03 — On This Day
@@ -342,15 +343,13 @@ Current audit state:
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and the Test-only Subject Cutout treatment.
-- The Top-5 renderer uses the full-bleed photograph as the primary visual field and automatically evaluates multiple editorial text compositions inside a 620–1650 safe area instead of using one fixed y-position.
-- Candidate compositions vary text width and left/center/right alignment, score copy space using local detail, luminance variation and saturation, and receive a modest rule-of-thirds preference. The renderer chooses the highest-scoring valid composition and never lets text exceed the safe area.
-- Top-5 headlines use Barlow Condensed Black in ALL CAPS with a two-line maximum and a readable minimum size; body copy uses Barlow Regular with a readable minimum size.
-- Text treatment uses opaque black/white type chosen from the local image luminance, a restrained directional shadow, and a thin contrasting outline. There is no broad photo wash, full-frame panel, or transparent text.
-- Optional Subject Cutout uses ZhengPeng7/BiRefNet_lite locally through PyTorch/Transformers. The model runs only when the user selects Option 7; normal Top-5 rendering does not invoke it. Foreground extraction is cached per source image. The subject pixels that overlap the headline are composited above the type; the body remains unobstructed.
-- The local BiRefNet path adds the model runtime dependencies from the model's documented requirements; no hosted inference API or paid background-removal service is used.
+- The Top-5 renderer uses the full-bleed photograph as the primary visual field. Normal cards use dynamic copy-space scoring; Subject Cutout uses the local foreground mask to reason about subject position before choosing the headline composition.
+- Subject Cutout has two intentional layouts: a vertical headline in strong empty side space when the subject is off-center, or a large horizontal headline crossing the subject when the subject is centered and the overlap remains readable.
+- Text treatment remains opaque black/white type chosen from the local image luminance, with a restrained directional shadow and thin contrasting outline. There is no broad photo wash, full-frame panel or transparent text.
+- Optional Subject Cutout uses ZhengPeng7/BiRefNet_lite locally through the existing PyTorch/Transformers dependencies. The model runs only when the user selects Option 7; normal Top-5 rendering does not invoke it. Foreground extraction is cached per source image.
 - Body copy is rejected when it cannot fit at the minimum readable size. Renderer exposes the strict maximum word count; Visual QC shows the rejected body as editable copy and offers deterministic local compression to that cap.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
-- No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
+- No wrapper or compatibility layer was introduced for the Subject Cutout redesign.
 - Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.
 - Live Top-5 starts automatic visual crawling at Stage 1 approval and streams page results into its existing Visual QC state.
 - Test remains manually stageable; Live remains approval-triggered.
