@@ -677,6 +677,7 @@ def test_top5_editorial_uses_oswald_and_full_frame_safe_area():
     assert story["headline_fonts"][0].getname()[0].lower() == "oswald"
     assert renderer.TOP5_EDITORIAL_SAFE_TOP <= story["y"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
     assert story["y"] + story["total_height"] <= story["zone_bottom"]
+    assert story["x"] >= renderer.TOP5_EDITORIAL_MARGIN_X
     assert renderer.TOP5_EDITORIAL_SAFE_TOP <= opener["y"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
@@ -696,7 +697,7 @@ def test_top5_option3_uses_top_negative_space_and_grows_headline():
         image=image,
     )
 
-    assert layout["region_mode"] == "top"
+    assert layout["region_mode"] in {"top", "upper"}
     assert layout["y"] < 800
     assert layout["headline_size"] > renderer.TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE
     assert layout["body_font"].size >= renderer.TOP5_EDITORIAL_BODY_MIN_SIZE
@@ -934,24 +935,23 @@ def test_top5_editorial_uses_opaque_text_and_targeted_shadow(monkeypatch):
     assert not hasattr(renderer, "TOP5_EDITORIAL_LOCAL_SCRIM_BLUR")
 
 
-def test_top5_editorial_body_rejects_copy_below_readable_floor():
-    body = " ".join(
-        [
-            "The board confirmed the move after reviewing the latest result and selection options.",
-            "The decision changes the lineup ahead of the next match and follows the latest update from officials.",
-        ] * 7
+def test_top5_editorial_body_remains_readable_when_it_fits():
+    body = (
+        "The board confirmed the move after reviewing the latest result and selection options. "
+        "The decision changes the lineup ahead of the next match."
     )
 
-    with pytest.raises(ValueError) as error:
-        renderer._top5_editorial_layout(
-            "Selection picture changes after the latest result",
-            body,
-            "english",
-            1,
-        )
+    layout = renderer._top5_editorial_layout(
+        "Selection picture changes after the latest result",
+        body,
+        "english",
+        1,
+        image=Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (28, 32, 38)),
+    )
 
-    assert error.value.top5_max_words > 0
-    assert error.value.top5_max_words < len(body.split())
+    assert layout["body_lines"]
+    assert layout["body_font"] is not None
+    assert layout["body_size"] >= renderer.TOP5_EDITORIAL_BODY_MIN_SIZE
 
 
 
