@@ -764,6 +764,55 @@ def compress_top5_body(body: str, max_words: int) -> str:
     return result
 
 
+@lru_cache(maxsize=32)
+def _top5_subject_mask(image_bytes: bytes, model_name: str) -> Image.Image | None:
+    token = str(os.getenv("HF_TOKEN") or "").strip()
+    if not token or not image_bytes:
+        return None
+
+    try:
+        from huggingface_hub import InferenceClient
+
+        with Image.open(BytesIO(image_bytes)) as source:
+            image = source.convert("RGB")
+
+        client = InferenceClient(
+            provider="auto",
+            api_key=token,
+        )
+        segments = client.image_segmentation(
+            image,
+            model=model_name,
+            subtask="panoptic",
+            threshold=0.55,
+            mask_threshold=0.50,
+        )
+        combined = Image.new("L", image.size, 0)
+
+        for segment in segments or []:
+            if isinstance(segment, dict):
+                label = str(segment.get("label") or "")
+                mask = segment.get("mask")
+                score = float(segment.get("score") or 0.0)
+            else:
+                label = str(getattr(segment, "label", "") or "")
+                mask = getattr(segment, "mask", None)
+                score = float(getattr(segment, "score", 0.0) or 0.0)
+
+            if label.casefold() != "person" or score < 0.55 or not isinstance(mask, Image.Image):
+                continue
+
+            mask = mask.convert("L").resize(image.size, Image.Resampling.LANCZOS)
+            combined = ImageChops.lighter(combined, mask)
+
+        if combined.getbbox() is None:
+            return None
+
+        return combined.filter(ImageFilter.GaussianBlur(0.7))
+    except Exception:
+        return None
+
+
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     language = str(card.get("language") or "english")
     headline = " ".join(str(card.get("headline") or "").split())
@@ -776,6 +825,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         body,
         language,
         int(card.get("story_number") or 0),
+        int(card.get("max_headline_lines") or TOP5_EDITORIAL_HEADLINE_MAX_LINES),
     )
     canvas = _top5_full_frame_image(base).convert("RGBA")
     draw = ImageDraw.Draw(canvas, "RGBA")
@@ -917,6 +967,26 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
             stroke_fill=(5, 7, 10, 235),
         )
+
+    subject_bytes = BytesIO()
+    original_background.save(
+        subject_bytes,
+        format="PNG",
+        optimize=False,
+    )
+    subject_mask = _top5_subject_mask(
+        subject_bytes.getvalue(),
+        TOP5_SUBJECT_SEGMENTATION_MODEL,
+    )
+    if subject_mask is not None:
+        occlusion_mask = ImageChops.multiply(
+            subject_mask,
+            headline_mask,
+        )
+        if occlusion_mask.getbbox() is not None:
+            subject_layer = original_background.convert("RGBA").copy()
+            subject_layer.putalpha(occlusion_mask)
+            canvas.alpha_composite(subject_layer)
 
     return canvas.convert("RGBA")
 
