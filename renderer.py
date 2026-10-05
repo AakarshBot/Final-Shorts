@@ -74,16 +74,26 @@ TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE = 72
 TOP5_MANUAL_SUBJECT_MAX_FONT_SIZE = 260
 TOP5_MANUAL_SUBJECT_DEFAULT_FONT_SIZE = 150
 TOP5_MANUAL_SUBJECT_FONT_OPTIONS = {
-    "Barlow Condensed": "BarlowCondensed-Black.ttf",
-    "Anton": "Anton-Regular.ttf",
-    "Oswald": "Oswald-Bold.ttf",
-    "Barlow": "Barlow-Regular.ttf",
+    "Barlow Condensed": {"file": "BarlowCondensed-Black.ttf"},
+    "Anton": {"file": "Anton-Regular.ttf"},
+    "Oswald": {"file": "Oswald-Bold.ttf"},
+    "Barlow": {"file": "Barlow-Regular.ttf"},
+    "Bebas Neue": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf"},
+    "Teko": {"url": "https://raw.githubusercontent.com/itfoundry/teko/master/build/Teko-Bold.otf"},
+    "Khand": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/khand/Khand-Bold.ttf"},
+    "Kanit": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/kanit/Kanit-Black.ttf"},
+    "Fjalla One": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/fjallaone/FjallaOne-Regular.ttf"},
 }
 TOP5_MANUAL_SUBJECT_STYLE_OPTIONS = (
     "Crisp Outline",
     "Soft Halo",
     "Long Fade",
     "Editorial Offset",
+    "Heavy Drop",
+    "Double Edge",
+    "Split Shadow",
+    "3D Extrusion",
+    "Chromatic Echo",
 )
 
 
@@ -744,6 +754,24 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     return canvas
 
 
+@lru_cache(maxsize=16)
+def _top5_manual_subject_font_bytes(font_name: str) -> bytes:
+    source = TOP5_MANUAL_SUBJECT_FONT_OPTIONS.get(font_name)
+    if not source:
+        raise ValueError("Manual Subject Cutout has an invalid font.")
+    if source.get("file"):
+        path = Path(__file__).resolve().parent / "fonts" / str(source["file"])
+        if not path.exists():
+            raise RuntimeError(f"Manual Subject Cutout requires the bundled {font_name} font.")
+        return path.read_bytes()
+    from urllib.request import urlopen
+    try:
+        with urlopen(str(source["url"]), timeout=20) as response:
+            return response.read()
+    except Exception as exc:
+        raise RuntimeError(f"Manual Subject Cutout could not load the {font_name} font.") from exc
+
+
 def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
     headline = " ".join(str(config.get("headline") or "").split()).upper()
     if not headline:
@@ -770,59 +798,32 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
         raise ValueError("Manual Subject Cutout has an invalid composition mode.")
 
     font_name = str(config.get("font") or "Barlow Condensed").strip()
-    font_file = TOP5_MANUAL_SUBJECT_FONT_OPTIONS.get(font_name)
-    if not font_file:
+    if font_name not in TOP5_MANUAL_SUBJECT_FONT_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid font.")
 
     style = str(config.get("style") or "Crisp Outline").strip()
     if style not in TOP5_MANUAL_SUBJECT_STYLE_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid text style.")
 
-    style_values = {
-        "Crisp Outline": {
-            "stroke": 4,
-            "shadow_blur": 5,
-            "shadow_alpha": 215,
-            "shadow_offset": (0, 6),
-            "halo_blur": 0,
-            "halo_alpha": 0,
-        },
-        "Soft Halo": {
-            "stroke": 2,
-            "shadow_blur": 16,
-            "shadow_alpha": 175,
-            "shadow_offset": (0, 4),
-            "halo_blur": 24,
-            "halo_alpha": 80,
-        },
-        "Long Fade": {
-            "stroke": 2,
-            "shadow_blur": 7,
-            "shadow_alpha": 0,
-            "shadow_offset": (0, 5),
-            "halo_blur": 0,
-            "halo_alpha": 0,
-        },
-        "Editorial Offset": {
-            "stroke": 2,
-            "shadow_blur": 5,
-            "shadow_alpha": 110,
-            "shadow_offset": (0, 4),
-            "halo_blur": 0,
-            "halo_alpha": 0,
-        },
-    }[style]
-    stroke_width = style_values["stroke"]
-
     x = max(0, min(WIDTH - box_width, box_left))
     y = max(0, min(HEIGHT - box_height, box_top))
-    font_path = Path(__file__).resolve().parent / "fonts" / font_file
-    if not font_path.exists():
-        raise RuntimeError(f"Manual Subject Cutout requires the bundled {font_name} font.")
+    font_data = _top5_manual_subject_font_bytes(font_name)
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
+    stroke_width = {
+        "Crisp Outline": 4,
+        "Soft Halo": 2,
+        "Long Fade": 2,
+        "Editorial Offset": 2,
+        "Heavy Drop": 3,
+        "Double Edge": 9,
+        "Split Shadow": 3,
+        "3D Extrusion": 3,
+        "Chromatic Echo": 3,
+    }[style]
+
     def fit_font_and_lines(size: int):
-        font = ImageFont.truetype(str(font_path), size)
+        font = ImageFont.truetype(BytesIO(font_data), size)
         words = headline.split()
         lines = []
         current = []
@@ -917,37 +918,43 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
         )
         cursor_y += line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
 
-    if style_values["halo_alpha"]:
-        halo = text_mask.filter(ImageFilter.GaussianBlur(style_values["halo_blur"]))
-        halo = halo.point(lambda value: value * style_values["halo_alpha"] // 255)
-        halo_layer = Image.new("RGBA", canvas.size, DARK + (0,))
-        halo_layer.putalpha(halo)
-        canvas.alpha_composite(halo_layer)
+    def shifted_layer(offset_x: int, offset_y: int, alpha: int, blur: int = 0, fill=DARK) -> None:
+        layer_mask = text_mask.filter(ImageFilter.GaussianBlur(blur)) if blur else text_mask
+        layer_mask = layer_mask.point(lambda value: value * alpha // 255)
+        layer = Image.new("RGBA", canvas.size, fill + (0,))
+        layer.putalpha(layer_mask)
+        canvas.alpha_composite(layer, dest=(offset_x, offset_y))
 
-    if style == "Long Fade":
-        for offset_y, alpha in ((4, 115), (8, 90), (12, 65), (16, 40)):
-            fade = text_mask.filter(ImageFilter.GaussianBlur(style_values["shadow_blur"]))
-            fade = fade.point(lambda value, alpha=alpha: value * alpha // 255)
-            fade_layer = Image.new("RGBA", canvas.size, DARK + (0,))
-            fade_layer.putalpha(fade)
-            canvas.alpha_composite(fade_layer, dest=(0, offset_y))
-    else:
-        shadow = text_mask.filter(ImageFilter.GaussianBlur(style_values["shadow_blur"]))
-        shadow = shadow.point(
-            lambda value: value * style_values["shadow_alpha"] // 255
-        )
-        shadow_layer = Image.new("RGBA", canvas.size, DARK + (0,))
-        shadow_layer.putalpha(shadow)
-        canvas.alpha_composite(
-            shadow_layer,
-            dest=style_values["shadow_offset"],
-        )
-
-    if style == "Editorial Offset":
-        accent = text_mask.point(lambda value: value * 155 // 255)
-        accent_layer = Image.new("RGBA", canvas.size, ACCENT + (0,))
-        accent_layer.putalpha(accent)
-        canvas.alpha_composite(accent_layer, dest=(5, 6))
+    if style == "Soft Halo":
+        shifted_layer(0, 0, 80, 24)
+        shifted_layer(0, 4, 175, 16)
+    elif style == "Long Fade":
+        shifted_layer(0, 4, 115, 7)
+        shifted_layer(0, 8, 90, 7)
+        shifted_layer(0, 12, 65, 7)
+        shifted_layer(0, 16, 40, 7)
+    elif style == "Editorial Offset":
+        shifted_layer(5, 6, 155, 2, ACCENT)
+        shifted_layer(0, 5, 110, 5)
+    elif style == "Heavy Drop":
+        shifted_layer(4, 8, 235)
+        shifted_layer(8, 14, 170)
+        shifted_layer(12, 19, 90, 1)
+    elif style == "Double Edge":
+        shifted_layer(0, 4, 210, 3)
+    elif style == "Split Shadow":
+        shifted_layer(-7, 5, 145, 2, ACCENT)
+        shifted_layer(6, 8, 220, 5)
+    elif style == "3D Extrusion":
+        shifted_layer(3, 4, 245)
+        shifted_layer(6, 8, 225)
+        shifted_layer(9, 12, 195)
+        shifted_layer(12, 16, 150)
+        shifted_layer(15, 20, 105, 1)
+    elif style == "Chromatic Echo":
+        shifted_layer(-7, 5, 175, 1, ACCENT)
+        shifted_layer(7, -4, 130, 2)
+        shifted_layer(0, 6, 145, 5)
 
     draw = ImageDraw.Draw(canvas, "RGBA")
     cursor_y = y + (box_height - total_height) // 2
@@ -960,14 +967,33 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
         )
         line_width = bbox[2] - bbox[0]
         cursor_x = x + (box_width - line_width) // 2
-        draw.text(
-            (cursor_x - bbox[0], cursor_y - bbox[1]),
-            line,
-            font=font,
-            fill=WHITE + (255,),
-            stroke_width=stroke_width,
-            stroke_fill=DARK + (245,),
-        )
+
+        if style == "Double Edge":
+            draw.text(
+                (cursor_x - bbox[0], cursor_y - bbox[1]),
+                line,
+                font=font,
+                fill=WHITE + (255,),
+                stroke_width=9,
+                stroke_fill=DARK + (255,),
+            )
+            draw.text(
+                (cursor_x - bbox[0], cursor_y - bbox[1]),
+                line,
+                font=font,
+                fill=WHITE + (255,),
+                stroke_width=2,
+                stroke_fill=DARK + (245,),
+            )
+        else:
+            draw.text(
+                (cursor_x - bbox[0], cursor_y - bbox[1]),
+                line,
+                font=font,
+                fill=WHITE + (255,),
+                stroke_width=stroke_width,
+                stroke_fill=DARK + (245,),
+            )
         cursor_y += line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
 
     if subject_mask is not None:
