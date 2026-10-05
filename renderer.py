@@ -51,20 +51,23 @@ WHITE = (249, 250, 252)
 DARK = (5, 7, 10)
 
 
-TOP5_EDITORIAL_MARGIN_X = 56
+TOP5_EDITORIAL_MARGIN_X = 64
 TOP5_EDITORIAL_MAX_WIDTH = WIDTH - (TOP5_EDITORIAL_MARGIN_X * 2)
-TOP5_EDITORIAL_SAFE_TOP = 230
-TOP5_EDITORIAL_SAFE_BOTTOM = 500
-TOP5_EDITORIAL_HEADLINE_MAX_SIZE = 124
-TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 28
-TOP5_EDITORIAL_HEADLINE_LINE_GAP = 4
-TOP5_EDITORIAL_BODY_MAX_SIZE = 36
-TOP5_EDITORIAL_BODY_MIN_SIZE = 18
-TOP5_EDITORIAL_BODY_LINE_GAP = 8
-TOP5_EDITORIAL_HEADLINE_BODY_GAP = 22
+TOP5_EDITORIAL_TEXT_ZONE_TOP = 900
+TOP5_EDITORIAL_TEXT_ZONE_BOTTOM = 1480
+TOP5_EDITORIAL_HEADLINE_MAX_SIZE = 118
+TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 72
+TOP5_EDITORIAL_HEADLINE_MAX_LINES = 2
+TOP5_EDITORIAL_HEADLINE_LINE_GAP = 6
+TOP5_EDITORIAL_BODY_MAX_SIZE = 40
+TOP5_EDITORIAL_BODY_MIN_SIZE = 28
+TOP5_EDITORIAL_BODY_LINE_GAP = 10
+TOP5_EDITORIAL_HEADLINE_BODY_GAP = 24
 TOP5_EDITORIAL_STROKE_WIDTH = 2
-TOP5_EDITORIAL_TEXT_FADE_BLUR = 5
-TOP5_EDITORIAL_TEXT_FADE_ALPHA = 120
+TOP5_EDITORIAL_LOCAL_SCRIM_BLUR = 22
+TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA = 150
+TOP5_EDITORIAL_TEXT_SHADOW_BLUR = 6
+TOP5_EDITORIAL_TEXT_SHADOW_ALPHA = 205
 
 
 @lru_cache(maxsize=256)
@@ -431,21 +434,14 @@ def _top5_wrap_editorial_words(
     return lines
 
 
-def _top5_editorial_layout(
+def _top5_headline_layout(
     headline: str,
-    body: str,
     language: str,
-    story_number: int,
+    probe: ImageDraw.ImageDraw,
 ) -> dict:
     clean_headline = " ".join(str(headline or "").split())
-    clean_body = " ".join(str(body or "").split())
     if not clean_headline:
         raise ValueError("Top-5 card requires a headline.")
-
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    safe_top = TOP5_EDITORIAL_SAFE_TOP
-    safe_bottom = HEIGHT - TOP5_EDITORIAL_SAFE_BOTTOM
-    available_height = safe_bottom - safe_top
 
     for headline_size in range(
         TOP5_EDITORIAL_HEADLINE_MAX_SIZE,
@@ -463,6 +459,9 @@ def _top5_editorial_layout(
         except ValueError:
             continue
 
+        if not headline_lines or len(headline_lines) > TOP5_EDITORIAL_HEADLINE_MAX_LINES:
+            continue
+
         headline_height = sum(
             _top5_editorial_measure(
                 probe,
@@ -474,85 +473,240 @@ def _top5_editorial_layout(
             0,
             len(headline_lines) - 1,
         )
-
-        body_font = None
-        body_lines = []
-        body_height = 0
-
-        if clean_body:
-            remaining = (
-                available_height
-                - headline_height
-                - TOP5_EDITORIAL_HEADLINE_BODY_GAP
-            )
-            if remaining <= 0:
-                continue
-
-            for body_size in range(
-                TOP5_EDITORIAL_BODY_MAX_SIZE,
-                TOP5_EDITORIAL_BODY_MIN_SIZE - 1,
-                -1,
-            ):
-                candidate_body_font = _top5_body_font(body_size, language)
-                try:
-                    wrapped_body = _top5_wrap_editorial_words(
-                        probe,
-                        clean_body,
-                        (candidate_body_font,),
-                        TOP5_EDITORIAL_MAX_WIDTH,
-                    )
-                except ValueError:
-                    continue
-
-                body_box = probe.textbbox(
-                    (0, 0),
-                    "Ag",
-                    font=candidate_body_font,
-                    stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-                )
-                candidate_height = (
-                    (body_box[3] - body_box[1]) * len(wrapped_body)
-                    + TOP5_EDITORIAL_BODY_LINE_GAP * max(
-                        0,
-                        len(wrapped_body) - 1,
-                    )
-                )
-                if candidate_height <= remaining:
-                    body_font = candidate_body_font
-                    body_lines = wrapped_body
-                    body_height = candidate_height
-                    break
-
-            if body_font is None:
-                continue
-
-        total_height = headline_height + (
-            TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height
-            if body_lines
-            else 0
-        )
-        if total_height > available_height:
-            continue
-
-        content_top = max(
-            safe_top,
-            safe_bottom - total_height,
-        )
-
         return {
-            "x": TOP5_EDITORIAL_MARGIN_X,
-            "y": content_top,
-            "width": TOP5_EDITORIAL_MAX_WIDTH,
             "headline_fonts": headline_fonts,
             "headline_lines": headline_lines,
-            "body_font": body_font,
-            "body_lines": body_lines,
             "headline_height": headline_height,
-            "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
-            "total_height": total_height,
         }
 
-    raise ValueError("Top-5 text cannot fit inside the available frame.")
+    raise ValueError("Top-5 headline cannot fit inside the fixed text zone.")
+
+
+def _top5_body_fits(
+    body: str,
+    headline_height: int,
+    body_size: int,
+    language: str,
+    probe: ImageDraw.ImageDraw,
+) -> tuple[list[list[str]], int]:
+    clean_body = " ".join(str(body or "").split())
+    if not clean_body:
+        return [], 0
+
+    available_height = (
+        TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
+        - TOP5_EDITORIAL_TEXT_ZONE_TOP
+        - headline_height
+        - TOP5_EDITORIAL_HEADLINE_BODY_GAP
+    )
+    if available_height <= 0:
+        return [], 0
+
+    body_font = _top5_body_font(body_size, language)
+    body_lines = _top5_wrap_editorial_words(
+        probe,
+        clean_body,
+        (body_font,),
+        TOP5_EDITORIAL_MAX_WIDTH,
+    )
+    body_box = probe.textbbox(
+        (0, 0),
+        "Ag",
+        font=body_font,
+        stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
+    )
+    line_height = body_box[3] - body_box[1]
+    body_height = (
+        line_height * len(body_lines)
+        + TOP5_EDITORIAL_BODY_LINE_GAP * max(0, len(body_lines) - 1)
+    )
+    return body_lines, body_height
+
+
+def _top5_body_word_cap(
+    body: str,
+    headline_height: int,
+    language: str,
+    probe: ImageDraw.ImageDraw,
+) -> int:
+    words = " ".join(str(body or "").split()).split()
+    if not words:
+        return 0
+
+    available_height = (
+        TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
+        - TOP5_EDITORIAL_TEXT_ZONE_TOP
+        - headline_height
+        - TOP5_EDITORIAL_HEADLINE_BODY_GAP
+    )
+    low = 0
+    high = len(words)
+    while low < high:
+        count = (low + high + 1) // 2
+        try:
+            _, body_height = _top5_body_fits(
+                " ".join(words[:count]),
+                headline_height,
+                TOP5_EDITORIAL_BODY_MIN_SIZE,
+                language,
+                probe,
+            )
+        except ValueError:
+            body_height = available_height + 1
+        if body_height <= available_height:
+            low = count
+        else:
+            high = count - 1
+    return low
+
+
+def _top5_editorial_layout(
+    headline: str,
+    body: str,
+    language: str,
+    story_number: int,
+) -> dict:
+    clean_headline = " ".join(str(headline or "").split())
+    clean_body = " ".join(str(body or "").split())
+    if not clean_headline:
+        raise ValueError("Top-5 card requires a headline.")
+
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    headline_layout = _top5_headline_layout(
+        clean_headline,
+        language,
+        probe,
+    )
+
+    body_font = None
+    body_lines = []
+    body_height = 0
+
+    if clean_body:
+        for body_size in range(
+            TOP5_EDITORIAL_BODY_MAX_SIZE,
+            TOP5_EDITORIAL_BODY_MIN_SIZE - 1,
+            -1,
+        ):
+            try:
+                candidate_lines, candidate_height = _top5_body_fits(
+                    clean_body,
+                    headline_layout["headline_height"],
+                    body_size,
+                    language,
+                    probe,
+                )
+            except ValueError:
+                continue
+
+            available_height = (
+                TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
+                - TOP5_EDITORIAL_TEXT_ZONE_TOP
+                - headline_layout["headline_height"]
+                - TOP5_EDITORIAL_HEADLINE_BODY_GAP
+            )
+            if candidate_height <= available_height:
+                body_font = _top5_body_font(body_size, language)
+                body_lines = candidate_lines
+                body_height = candidate_height
+                break
+
+        if body_font is None:
+            max_words = _top5_body_word_cap(
+                clean_body,
+                headline_layout["headline_height"],
+                language,
+                probe,
+            )
+            error = ValueError(
+                f"Top-5 body is {len(clean_body.split())} words long; "
+                f"maximum {max_words} words at the minimum readable size."
+            )
+            error.top5_max_words = max_words
+            raise error
+
+    total_height = headline_layout["headline_height"] + (
+        TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height
+        if body_lines
+        else 0
+    )
+    zone_height = TOP5_EDITORIAL_TEXT_ZONE_BOTTOM - TOP5_EDITORIAL_TEXT_ZONE_TOP
+    if total_height > zone_height:
+        max_words = _top5_body_word_cap(
+            clean_body,
+            headline_layout["headline_height"],
+            language,
+            probe,
+        )
+        error = ValueError(
+            f"Top-5 body is {len(clean_body.split())} words long; "
+            f"maximum {max_words} words at the minimum readable size."
+        )
+        error.top5_max_words = max_words
+        raise error
+
+    return {
+        "x": TOP5_EDITORIAL_MARGIN_X,
+        "y": TOP5_EDITORIAL_TEXT_ZONE_TOP,
+        "width": TOP5_EDITORIAL_MAX_WIDTH,
+        "headline_fonts": headline_layout["headline_fonts"],
+        "headline_lines": headline_layout["headline_lines"],
+        "body_font": body_font,
+        "body_lines": body_lines,
+        "headline_height": headline_layout["headline_height"],
+        "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
+        "total_height": total_height,
+        "zone_bottom": TOP5_EDITORIAL_TEXT_ZONE_BOTTOM,
+    }
+
+
+def compress_top5_body(body: str, max_words: int) -> str:
+    words = " ".join(str(body or "").split()).split()
+    if max_words <= 0 or len(words) <= max_words:
+        return " ".join(words)
+
+    filler = {
+        "actually", "also", "currently", "just", "now", "really",
+        "still", "then", "very", "already", "simply",
+    }
+    reduced = [
+        word for word in words
+        if word.casefold().strip(".,!?;:") not in filler
+    ]
+
+    if len(reduced) <= max_words:
+        return " ".join(reduced)
+
+    sentences = []
+    current = []
+    for word in reduced:
+        current.append(word)
+        if word.endswith((".", "!", "?")):
+            sentences.append(" ".join(current))
+            current = []
+    if current:
+        sentences.append(" ".join(current))
+
+    kept = []
+    count = 0
+    for sentence in sentences:
+        sentence_words = sentence.split()
+        if count + len(sentence_words) > max_words:
+            break
+        kept.extend(sentence_words)
+        count += len(sentence_words)
+
+    remaining = max_words - len(kept)
+    if remaining > 0 and len(kept) < len(reduced):
+        kept.extend(reduced[len(kept):len(kept) + remaining])
+
+    if not kept:
+        kept = reduced[:max_words]
+
+    result = " ".join(kept).strip()
+    if result and not result.endswith((".", "!", "?")):
+        result += "…"
+    return result
 
 
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
@@ -606,10 +760,9 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         )
         line_height = line_box[3] - line_box[1]
         for line_words in layout["body_lines"]:
-            line = " ".join(line_words)
             commands.append(
                 (
-                    line,
+                    " ".join(line_words),
                     layout["body_font"],
                     TOP5_EDITORIAL_MARGIN_X,
                     cursor_y,
@@ -617,40 +770,16 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             )
             cursor_y += line_height + TOP5_EDITORIAL_BODY_LINE_GAP
 
-    content_bottom = layout["y"] + layout["total_height"]
-    sample = canvas.crop(
-        (
-            TOP5_EDITORIAL_MARGIN_X,
-            max(0, layout["y"] - 20),
-            min(
-                WIDTH,
-                TOP5_EDITORIAL_MARGIN_X + TOP5_EDITORIAL_MAX_WIDTH,
-            ),
-            min(HEIGHT, content_bottom + 20),
-        )
-    ).convert("L")
-    luminance = sample.resize(
-        (1, 1),
-        Image.Resampling.BOX,
-    ).getpixel((0, 0))
-
-    if luminance >= 150:
-        text_fill = (12, 14, 18, 255)
-        stroke_fill = (249, 250, 252, 205)
-    else:
-        text_fill = (249, 250, 252, 255)
-        stroke_fill = (5, 7, 10, 210)
-
-    shadow_mask = Image.new("L", canvas.size, 0)
-    shadow_draw = ImageDraw.Draw(shadow_mask)
+    text_mask = Image.new("L", canvas.size, 0)
+    mask_draw = ImageDraw.Draw(text_mask)
     for text, font, x_pos, y_pos in commands:
-        box = shadow_draw.textbbox(
+        box = mask_draw.textbbox(
             (0, 0),
             text,
             font=font,
             stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
         )
-        shadow_draw.text(
+        mask_draw.text(
             (x_pos - box[0], y_pos - box[1]),
             text,
             font=font,
@@ -659,10 +788,21 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             stroke_fill=255,
         )
 
-    shadow_alpha = shadow_mask.filter(
-        ImageFilter.GaussianBlur(TOP5_EDITORIAL_TEXT_FADE_BLUR)
+    localized_mask = text_mask.filter(
+        ImageFilter.MaxFilter(19)
+    ).filter(
+        ImageFilter.GaussianBlur(TOP5_EDITORIAL_LOCAL_SCRIM_BLUR)
     ).point(
-        lambda value: value * TOP5_EDITORIAL_TEXT_FADE_ALPHA // 255
+        lambda value: value * TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA // 255
+    )
+    local_scrim = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    local_scrim.putalpha(localized_mask)
+    canvas.alpha_composite(local_scrim)
+
+    shadow_alpha = text_mask.filter(
+        ImageFilter.GaussianBlur(TOP5_EDITORIAL_TEXT_SHADOW_BLUR)
+    ).point(
+        lambda value: value * TOP5_EDITORIAL_TEXT_SHADOW_ALPHA // 255
     )
     shadow_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
     shadow_layer.putalpha(shadow_alpha)
@@ -680,185 +820,13 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             (x_pos - box[0], y_pos - box[1]),
             text,
             font=font,
-            fill=text_fill,
+            fill=(249, 250, 252, 255),
             stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-            stroke_fill=stroke_fill,
+            stroke_fill=(5, 7, 10, 235),
         )
 
-    return canvas
+    return canvas.convert("RGBA")
 
-
-def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
-    quote = " ".join(str(card.get("quote") or "").split())
-    attribution = " ".join(str(card.get("attribution") or "").split())
-    if not quote:
-        raise ValueError("Quote Card requires quote text.")
-    if not attribution:
-        raise ValueError("Quote Card requires an attribution.")
-
-    return _draw_top5_editorial_card(
-        base,
-        {
-            "headline": quote,
-            "body": f"— {attribution}",
-            "language": str(card.get("language") or "english"),
-            "max_headline_lines": 4,
-        },
-    )
-
-def build_quote_card_preview(
-    source_image: bytes | bytearray | Image.Image,
-    quote: str,
-    attribution: str,
-    source_label: str | None = None,
-) -> bytes:
-    """Render a static Quote Card using the direct editorial card renderer."""
-    frame = _draw_quote_card(
-        _top5_full_frame_image(source_image),
-        {
-            "quote": quote,
-            "attribution": attribution,
-        },
-    )
-    _paste_logo(frame)
-    _paste_top5_source(frame, source_label)
-    buffer = BytesIO()
-    frame.convert("RGB").save(buffer, format="PNG", optimize=True)
-    return buffer.getvalue()
-
-
-def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
-    label = str(source_label or "Commons").strip() or "Commons"
-    draw = ImageDraw.Draw(base)
-    font = _font((), 20)
-    box = draw.textbbox((0, 0), label, font=font)
-    draw.text(
-        (
-            WIDTH - TOP5_EDITORIAL_MARGIN_X - (box[2] - box[0]),
-            HEIGHT - 48,
-        ),
-        label,
-        font=font,
-        fill=(86, 91, 100),
-    )
-
-
-def build_top5_card_preview(
-    source_image: bytes | bytearray | Image.Image,
-    headline: str,
-    body: str = "",
-    story_number: int = 0,
-    total_stories: int = 5,
-    source_label: str | None = None,
-) -> bytes:
-    "Render one static Top-5 slide with full-bleed photography and lower editorial typography."
-    frame = _draw_top5_editorial_card(source_image, {
-        "headline": headline,
-        "body": body,
-        "story_number": story_number,
-        "total_stories": total_stories,
-    })
-    _paste_logo(frame)
-    _paste_top5_source(frame, source_label)
-    buffer = BytesIO()
-    frame.convert("RGB").save(buffer, format="PNG", optimize=True)
-    return buffer.getvalue()
-
-
-def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
-    primary_font, clean, lines = _fit_headline_font(text, language)
-    fonts = _headline_font_stack(primary_font.size, language)
-    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-
-    line_boxes = [
-        (
-            0,
-            0,
-            *_measure_headline_text(
-                draw,
-                " ".join(line),
-                fonts,
-            ),
-        )
-        for line in lines
-    ]
-    line_widths = [box[2] for box in line_boxes]
-    line_heights = [box[3] for box in line_boxes]
-
-    text_block_width = max(line_widths)
-    text_block_height = (
-        sum(line_heights) + HEADLINE_LINE_GAP * max(0, len(lines) - 1)
-    )
-    group_width = HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP + text_block_width
-
-    progress = min(1.0, max(0.0, t / 0.45))
-    eased = 1 - (1 - progress) ** 3
-    start_group_x = -group_width - 80
-    final_group_x = (WIDTH - group_width) // 2
-    group_x = int(
-        start_group_x + (final_group_x - start_group_x) * eased
-    )
-
-    marker_x = group_x
-    text_x = group_x + HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP
-    y = 560
-
-    first_height = line_heights[0]
-    line_y = y + max(8, (first_height - HEADLINE_MARKER_HEIGHT) // 2)
-    split = int(HEADLINE_MARKER_WIDTH * 0.58)
-    draw.rectangle(
-        (
-            marker_x,
-            line_y,
-            marker_x + split,
-            line_y + HEADLINE_MARKER_HEIGHT,
-        ),
-        fill=BRAND_BLUE,
-    )
-    draw.rectangle(
-        (
-            marker_x + split,
-            line_y,
-            marker_x + HEADLINE_MARKER_WIDTH,
-            line_y + HEADLINE_MARKER_HEIGHT,
-        ),
-        fill=ACCENT,
-    )
-
-    cursor_y = y
-    for row, line in enumerate(lines):
-        line_text = " ".join(line)
-        line_width = line_widths[row]
-        line_x = text_x + (text_block_width - line_width) // 2
-        runs = _headline_runs(line_text, fonts)
-        cursor_x = line_x
-        for run, font in runs:
-            box = draw.textbbox(
-                (0, 0),
-                run,
-                font=font,
-                stroke_width=HEADLINE_STROKE_WIDTH,
-            )
-            run_height = box[3] - box[1]
-            run_y = cursor_y + (line_heights[row] - run_height) // 2
-            draw.text(
-                (cursor_x - box[0], run_y - box[1]),
-                run,
-                font=font,
-                fill=WHITE,
-                stroke_width=HEADLINE_STROKE_WIDTH,
-                stroke_fill=DARK,
-            )
-            cursor_x += box[2] - box[0]
-        cursor_y += line_heights[row] + HEADLINE_LINE_GAP
-
-    if t < 0.68 and progress < 1.0:
-        layer = layer.filter(
-            ImageFilter.GaussianBlur(radius=max(0.0, 2.5 * (1 - progress)))
-        )
-
-    base.paste(layer, (0, 0), layer)
 def _cue_at_time(subtitle_data: dict, t: float):
     for cue in subtitle_data.get("cues") or []:
         try:
