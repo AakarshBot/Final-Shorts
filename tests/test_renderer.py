@@ -723,7 +723,7 @@ def test_top5_editorial_uses_fade_v2_letter_mask(monkeypatch):
     assert preview
     assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR == 5
     assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 60
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 120
 
 
 def test_top5_card_preview_renders_the_shared_editorial_treatment():
