@@ -138,7 +138,7 @@ def test_top5_card_uses_a_subtle_letter_fade(monkeypatch):
 
     assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR == 5
     assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 60
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 120
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
