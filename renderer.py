@@ -1446,6 +1446,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
                 stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
                 stroke_fill=255,
             )
+        headline_mask = headline_mask.filter(ImageFilter.MaxFilter(7))
         occlusion_mask = ImageChops.multiply(subject_mask, headline_mask)
         if occlusion_mask.getbbox() is not None:
             subject_layer = source_image.convert("RGBA")
