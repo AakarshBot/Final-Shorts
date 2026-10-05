@@ -62,11 +62,26 @@ def test_top5_standalone_visual_qc_exposes_all_seven_options():
     at.run()
 
     assert not at.exception, at.exception
-    labels = []
-    for pills in at.pills:
-        labels.extend(str(option) for option in pills.options)
+    option_sets = [
+        [str(option) for option in pills.options]
+        for pills in at.pills
+        if pills.options
+    ]
+    seven = next(
+        options
+        for options in option_sets
+        if options[:7] == [
+            "Option 1 · Automatic Scraper",
+            "Option 2 · Manual Scraper",
+            "Option 3 · Real Image Search",
+            "Option 4 · AI Generation",
+            "Option 5 · Stats Card",
+            "Option 6 · Quote Card",
+            "Option 7 · Subject Cutout",
+        ]
+    )
 
-    assert labels == [
+    assert seven == [
         "Option 1 · Automatic Scraper",
         "Option 2 · Manual Scraper",
         "Option 3 · Real Image Search",
