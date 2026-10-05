@@ -1002,6 +1002,9 @@ def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
         "_top5_manual_subject_font_bytes",
         lambda _font_name: local_font,
     )
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((390, 500, 690, 1500), fill=255)
+    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
 
     polygon = (
         (80, 660),
@@ -1011,20 +1014,20 @@ def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
         (320, 1180),
         (80, 930),
     )
-    preview = renderer.build_top5_manual_subject_cutout_preview(
-        Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        "India dominate the latest result",
-        mode="negative-space",
-        text_box=(80, 660, 920, 520),
-        text_polygon=polygon,
-        font_size=140,
-        font="Barlow Condensed",
-        style="Crisp Outline",
-        include_overlays=False,
-    )
-
-    image = Image.open(BytesIO(preview))
-    assert image.size == (renderer.WIDTH, renderer.HEIGHT)
+    for mode in ("negative-space", "behind-subject"):
+        preview = renderer.build_top5_manual_subject_cutout_preview(
+            Image.new("RGB", (1080, 1920), (40, 40, 40)),
+            "India dominate the latest result",
+            mode=mode,
+            text_box=(80, 660, 920, 520),
+            text_polygon=polygon,
+            font_size=140,
+            font="Barlow Condensed",
+            style="Crisp Outline",
+            include_overlays=False,
+        )
+        image = Image.open(BytesIO(preview))
+        assert image.size == (renderer.WIDTH, renderer.HEIGHT)
 
 def test_top5_manual_subject_cutout_uses_barlow_condensed():
     preview = renderer.build_top5_manual_subject_cutout_preview(
