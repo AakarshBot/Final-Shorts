@@ -297,29 +297,27 @@ Important:
 
 ### Top-5 current implementation checkpoint
 
-- Top-5 Visuals Test remains independently runnable and exposes exactly seven options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
-- Crop / Reposition remains the existing component and is applied before the chosen image is handed to the card renderer. No separate crop system is introduced.
-- **Option 3 · Real Image Search card is a complete rewrite.** It is a static full-bleed 9:16 editorial card that analyzes the actual image for quiet/negative regions across the full usable frame instead of using a fixed text-safe band or a composition score tied to a default font size.
-- Option 3 proposes several real top, upper, middle, lower, left and right regions, measures local visual busyness from the image itself, and evaluates headline size against the region. A genuinely quiet region directly earns larger headline type.
-- Option 3 headline uses **Oswald** and can grow materially beyond the 118px baseline when the real image supports it. The headline remains a large editorial element, with the body fitted beneath it.
-- Option 3 body copy is always preserved when it fits at the readable floor. It uses the same visual language as Option 7, but remains smaller and clearer for reading: opaque type, controlled stroke, and strong soft shadow/fade treatment. No opaque/transparent text panel is introduced.
-- Option 3 does not run subject segmentation and does not use the Subject Cutout model. Its placement comes from image negative-space analysis only.
-- **Option 7 · Subject Cutout card is a complete rewrite.** It is headline-only; the Test UI hides the body field and the renderer ignores any upstream body data so Option 7 can never render body copy.
-- Option 7 runs the existing local **ZhengPeng7/BiRefNet** inference path only when Subject Cutout is selected. No new Python package or separate runtime is introduced.
-- Option 7 keeps the original foreground image as the restoration layer and places the headline between background and foreground, following the proven text-behind-subject compositing pattern.
-- Option 7 uses the actual foreground matte, not a subject bounding box, to determine the visual result. The headline itself is rendered into a pixel mask and the foreground matte is composited above those headline pixels.
-- For a centered subject with meaningful negative space on both sides, Option 7 prioritizes a **large horizontal cross-subject headline**: the headline begins outside the left side of the subject region and extends beyond the right side, so the player visibly hides the middle of the text while the headline remains visible on both sides.
-- The headline is never intentionally anchored inside a gap between subjects. For multiple subjects, the combined foreground matte naturally hides the headline over each player while genuine gaps in the matte leave the headline visible.
-- When a centered cross-subject composition cannot be made valid, Option 7 chooses the strongest actual negative-space region around the subject. Side subjects may produce a tall editorial stack with one or two large words per line to make the available space feel intentional.
-- Option 7 does not silently turn into the normal Option 3 card. Subject extraction/layout failure surfaces as a real error.
-- The final occlusion pass applies **only to headline pixels and the headline shadow/stroke**, never to body text. Option 7 has no body by design; Option 3 has no foreground occlusion.
-- Both options keep the shared editorial treatment: Oswald headline, opaque type, controlled outline, strong soft shadow/fade, no motion, no borders, no dots, no universal gradient and no text panel.
-- The old Top-5 candidate system based on fixed safe-area placement, bounding-box overlap scoring, forced 118px support sizing and generic subject-layout fallback is deleted and is not part of the new implementation.
-- Regression tests must verify the actual requirements rather than the old internals: Option 3 grows into genuinely quiet top space and shrinks on busy imagery; Option 7 crosses centered subjects, restores foreground pixels above headline pixels, preserves visible headline through multi-subject gaps, and never accepts body copy.
-- Test and Live continue using the same renderer/asset contracts. Subject Cutout remains an explicit Option 7 choice and is never automatically applied to normal Top-5 cards.
+- Top-5 Visuals Test remains independently runnable with exactly seven visual options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
+- The existing Crop / Reposition component remains the only crop path. Its cropped result is handed directly to the selected card renderer.
+- **Option 3 · Real Image Search is a fresh card implementation.** It is a static full-bleed 9:16 editorial card with no subject detection.
+- Option 3 scans the actual frame for quiet/negative regions instead of using the old fixed safe band or a generic composition score. Candidate regions cover the frame, including genuine top, upper, middle, lower and side spaces.
+- Option 3 first measures local visual busyness, converts that into an allowable headline-size ceiling, then chooses the **largest headline that physically fits** that region. Quiet space therefore directly permits materially larger type; busy imagery naturally restricts type size.
+- Option 3 uses **Oswald** for the headline. Headline line breaking is solved from the actual measured text widths rather than inherited fixed-size wrapping.
+- Option 3 body copy remains readable and visible beneath the headline when it fits. Body text uses the same editorial language as Option 7—opaque type, controlled outline and strong soft shadow/fade—while remaining sized for comfortable reading.
+- **Option 7 · Subject Cutout is a fresh card implementation and is headline-only.** The Test UI hides the body field and the renderer ignores any upstream body data for this option.
+- Option 7 runs the existing local **ZhengPeng7/BiRefNet** inference path only when Option 7 is selected. No new Python dependency or runtime layer is introduced. The current general BiRefNet model is retained rather than adding another segmentation model.
+- Option 7 identifies separate connected foreground components from the returned matte before deciding whether a composition is centered. The renderer no longer treats a multi-player image as one undifferentiated subject box for composition decisions.
+- For a centered subject or centered group of players with real space on both sides, Option 7 constructs a **cross-subject headline** that starts outside the leftmost subject, passes behind the foreground subject(s), and exits outside the rightmost subject.
+- The headline is rendered into a real pixel mask for composition analysis. Candidate positions are accepted only when the actual headline pixels are visible outside both sides and a controlled portion intersects the foreground matte.
+- With multiple players, the union of the real foreground components is used for occlusion. Headline pixels naturally remain visible through genuine gaps between players. The headline is never intentionally positioned so that it starts inside a gap.
+- For non-centered subjects, Option 7 uses the strongest actual negative space around the foreground. Side compositions can become tall editorial stacks with one or two large words per line.
+- Foreground restoration happens after text rendering, so the player visibly sits above the headline. The occlusion pass targets the headline pixels and their shadow/stroke only.
+- Option 7 never silently falls back to the normal Option 3 card. Extraction/layout failure is surfaced in Test.
+- The old Top-5 card architecture—fixed 620px headline-safe start, indirect size scoring, global subject bounding-box overlap scoring, repeated subject-layout helpers and silent normal-card fallback—is deleted.
+- Regression tests now target user-visible contracts: Option 3 must choose the largest fitting headline in genuinely quiet space and a smaller one on busy imagery; Option 7 must cross centered subjects, preserve multi-player gaps, restore foreground pixels over the headline and remain headline-only.
+- Test and Live continue to consume the same card renderer/asset contract. Option 7 remains an explicit visual-option choice and is never automatically applied to normal Top-5 cards.
 
-Status: **Top-5 Option 3 and Option 7 card renderers rewritten from scratch on an isolated branch; CI validation pending before promotion to main.**
-
+Status: **Option 3 and Option 7 card renderers have been rewritten from scratch on isolated branch rewrite-top5-option3-option7; validation is still required before any promotion to main.**
 ### Production Line 03 — On This Day
 
 Purpose:
