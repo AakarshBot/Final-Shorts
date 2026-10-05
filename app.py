@@ -1767,7 +1767,10 @@ def _render_app_sidebar():
                 "deep_dive": "Deep-Dive",
                 "top_5": "Top-5",
                 "otd": "OTD",
-            }[st.session_state.test_production_line]
+            }.get(
+                st.session_state.test_production_line,
+                str(st.session_state.test_production_line).replace("_", " ").title(),
+            )
             st.markdown(
                 f'<div class="nav-sub" style="margin-top:12px;">{line_name} · Test stages</div>',
                 unsafe_allow_html=True,
