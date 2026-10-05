@@ -297,46 +297,22 @@ Important:
 - Do not add new factory logic while doing dashboard UI work unless required to support an existing completed handoff.
 - Preserve the already-approved function contracts.
 
-### Top-5 visual design — current Test state
+### Top-5 current implementation checkpoint
 
-- Top-5 uses a static 9:16 full-bleed editorial photograph.
-- English headlines use bundled **Barlow Condensed Black**, rendered **ALL CAPS**. Normal cards use dynamic horizontal editorial wrapping. Body copy uses **Barlow Regular**.
-- Normal Top-5 composition evaluates the actual photograph for copy space, local contrast and vertical placement inside the editorial safe area **y=620–1650**. It does not pin every headline to the bottom third.
-- Text is opaque. Readability uses a restrained directional shadow and thin contrast-aware outline. There is no transparent/faded type, broad scrim, universal panel, permanent border, decorative dots or headline motion.
-- Body copy remains variable-length but must fit the readable card area.
-- Every Top-5 image pool uses the factory's existing **9:16 Crop / Reposition** interaction. Crops are stored per asset, shown as applied, used for selection and passed into rendering/Subject Cutout.
+- Top-5 Visuals Test is independently runnable and exposes exactly seven options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
+- Top-5 image pools retain the factory's existing 9:16 Crop / Reposition interaction. Cropped framing is used consistently for selection, preview, rendering and Subject Cutout analysis.
+- Normal Top-5 cards remain static full-bleed editorial cards with adaptive opaque Oswald typography.
+- Subject Cutout is an optional Test-only treatment using local ZhengPeng7/BiRefNet_lite through the existing PyTorch/Transformers dependencies.
+- Subject Cutout is explicitly image-driven:
+  - Bottom subject + substantial top negative space → large horizontal headline filling roughly 80% of the top copy space.
+  - Left/right subject + meaningful opposite-side space → large normally oriented vertical headline stack filling roughly 80% of that side space, with intelligent multi-word grouping rather than one-word lines.
+  - Central subject → large horizontal headline crossing the foreground subject, preferably one line, with the headline disappearing behind the subject and remaining visible in any gap between multiple subjects.
+  - Weak segmentation → ordinary negative-space typography instead of an error.
+- Headline size, line grouping and position change with the actual image; the renderer must never reuse one fixed size/position simply because the Subject Cutout option was selected.
+- Foreground pixels are composited above intersecting headline glyphs only. This is the actual depth effect; transparency, broad panels, universal gradients, decorative borders and headline motion are not used.
+- Subject Cutout remains blocked from Live until the Test treatment is explicitly approved.
 
-### Top-5 standalone Visuals Test mode
-
-- Stage 04 · Visuals is independently testable without Scriptwriter or Audio approval.
-- It exposes exactly **seven visual options**: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
-- The standalone page remains active without an upstream script handoff and does not fall through into six-slide QC unless an actual Top-5 Scriptwriter handoff exists.
-- Options 1–4 retrieve image pools; Options 5–6 build card treatments from an existing image; Option 7 reuses an existing image pool and renders the Subject Cutout treatment locally.
-- The standalone pool uses the same **Crop / Reposition** control as the rest of the factory. Option 7 previews the composed result on each source image, not merely the raw photograph.
-
-### Top-5 Subject Cutout — active Test experiment
-
-- **Option 7 is optional and user-selected.** Normal Top-5 rendering never runs subject extraction.
-- Subject Cutout uses **ZhengPeng7/BiRefNet_lite** locally through the existing PyTorch/Transformers stack. Model weights and image masks are cached locally.
-- Subject Cutout is **image-driven**. BiRefNet's foreground mask determines subject geometry; the renderer searches headline scale, line grouping, direction, vertical position and subject overlap for the specific photograph.
-- **Subject on the left or right:** use the strongest opposite-side copy space and form a large, normally oriented **vertical headline stack**, dynamically wrapped across roughly 2–4 lines. It avoids crude one-word-per-line stacking. A small controlled intrusion toward the subject is allowed so the foreground layer can naturally cover part of the type.
-- **Subject in the middle:** search for a large **horizontal headline crossing the player**. Prefer one line when the complete headline can stay large and readable. The line begins in left copy space, passes behind a small controlled portion of the player, and emerges into right copy space. A second line is used only when a single line would become too small or otherwise unreadable.
-- Subject overlap is **optimized rather than binary**. Candidates are scored for large type, readable copy space on both sides, useful subject intrusion and sensible vertical alignment. A candidate is not discarded merely because the player occupies more of the headline band than the ideal target.
-- The foreground image is composited **above the actual headline glyphs** using the BiRefNet mask. Only the intersection between the foreground mask and headline type is composited back, creating the real text-behind-player effect.
-- The same foreground-over-type treatment is available for the side-positioned vertical layout.
-- The subject search evaluates multiple thresholds of the soft BiRefNet mask so a broad or soft segmentation does not automatically invalidate an otherwise usable subject.
-- Subject-aware candidate selection also checks body-copy fit across alternate headline candidates instead of failing after one layout attempt.
-- If BiRefNet itself cannot produce a usable foreground mask, Subject Cutout falls back to the normal editorial renderer rather than crashing the Visuals desk. The old "could not find a readable subject-aware composition" failure is no longer surfaced.
-- This remains **Test-only** until explicit visual approval.
-
-### Top-5 status
-
-- Test pipeline/framework: approved.
-- Seven-option standalone Visual QC: implemented.
-- Normal dynamic editorial typography: implemented.
-- Factory Crop / Reposition in Top-5: restored across image-selection steps.
-- Optional Subject Cutout: **under active visual refinement in Test**.
-- Live promotion of Subject Cutout remains blocked until explicit Test approval.
+Status: **Top-5 Subject Cutout under active Test visual refinement.**
 
 ### Production Line 03 — On This Day
 
