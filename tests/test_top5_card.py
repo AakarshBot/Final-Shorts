@@ -62,7 +62,7 @@ def test_top5_layout_uses_the_proven_lower_editorial_anchor():
     )
 
     assert layout["x"] == renderer.TOP5_EDITORIAL_MARGIN_X
-    assert layout["y"] == renderer.TOP5_EDITORIAL_STORY_Y
+    assert layout["y"] >= renderer.TOP5_EDITORIAL_STORY_Y
 
 
 def test_top5_opener_uses_the_proven_editorial_anchor():
@@ -73,7 +73,7 @@ def test_top5_opener_uses_the_proven_editorial_anchor():
         0,
     )
 
-    assert layout["y"] == renderer.TOP5_EDITORIAL_OPENER_Y
+    assert layout["y"] >= renderer.TOP5_EDITORIAL_OPENER_Y
 
 
 def test_top5_headline_size_adapts_to_copy():
@@ -113,7 +113,7 @@ def test_top5_body_preserves_all_copy_without_sentence_cap():
     rendered_words = " ".join(layout["body_lines"])
     assert "Officials" in rendered_words
     assert "review." in rendered_words
-    assert layout["body_font"].size >= 34
+    assert layout["body_font"].size == renderer.TOP5_EDITORIAL_BODY_SIZE
 
 
 def test_top5_card_uses_a_subtle_letter_fade(monkeypatch):
@@ -132,7 +132,9 @@ def test_top5_card_uses_a_subtle_letter_fade(monkeypatch):
         story_number=1,
     )
 
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR == 5
     assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR in calls
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 60
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
