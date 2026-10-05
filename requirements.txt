@@ -12,3 +12,14 @@ google-auth>=2,<3
 streamlit-cropper>=0.3.1,<0.4
 trafilatura>=2.2,<3
 rapidfuzz>=3,<4
+torch==2.5.1
+torchvision==0.20.1
+transformers>=5,<6
+timm>=1,<2
+numpy>=1.26,<2
+opencv-python>=4.10,<5
+scipy>=1.11,<2
+scikit-image>=0.24,<1
+kornia>=0.7,<1
+einops>=0.8,<1
+accelerate>=1,<2
