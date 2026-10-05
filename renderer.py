@@ -796,12 +796,13 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
     if current:
         lines.append(" ".join(current))
 
-    line_height = probe.textbbox(
+    line_box = probe.textbbox(
         (0, 0),
         "Ag",
         font=font,
         stroke_width=TOP5_MANUAL_SUBJECT_STROKE_WIDTH,
-    )[3]
+    )
+    line_height = line_box[3] - line_box[1]
     total_height = line_height * len(lines) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
     if total_height > box_height:
         raise ValueError(
