@@ -340,6 +340,8 @@ def _top5_body_font(size: int, language: str = "english"):
         candidates.extend([
             root / "NotoSansTelugu-Regular.ttf",
         ])
+    else:
+        candidates.append(root / "Barlow-Regular.ttf")
     candidates.extend([
         Path("C:/Windows/Fonts/arial.ttf"),
         Path("C:/Windows/Fonts/segoeui.ttf"),
@@ -434,6 +436,41 @@ def _top5_wrap_editorial_words(
     return lines
 
 
+@lru_cache(maxsize=256)
+def _top5_headline_font_stack(size: int, language: str) -> tuple[object, ...]:
+    language = str(language or "english").casefold()
+    root = Path(__file__).resolve().parent / "fonts"
+    candidates = []
+    if language == "hindi":
+        candidates.extend([
+            root / "NotoSansDevanagari-CondensedBlack.ttf",
+            root / "NotoSansDevanagari-Black.ttf",
+        ])
+    elif language == "telugu":
+        candidates.extend([
+            root / "NotoSansTelugu-CondensedBlack.ttf",
+            root / "NotoSansTelugu-Black.ttf",
+        ])
+    else:
+        candidates.append(root / "BarlowCondensed-Black.ttf")
+    candidates.extend(_headline_font_stack(size, language))
+
+    fonts = []
+    seen = set()
+    for path in candidates:
+        key = str(path).casefold()
+        if key in seen or not path.exists():
+            continue
+        seen.add(key)
+        try:
+            fonts.append(ImageFont.truetype(str(path), size))
+        except OSError:
+            continue
+    if not fonts:
+        fonts.append(ImageFont.load_default())
+    return tuple(fonts)
+
+
 def _top5_headline_layout(
     headline: str,
     language: str,
@@ -448,7 +485,7 @@ def _top5_headline_layout(
         TOP5_EDITORIAL_HEADLINE_MIN_SIZE - 1,
         -1,
     ):
-        headline_fonts = _headline_font_stack(headline_size, language)
+        headline_fonts = _top5_headline_font_stack(headline_size, language)
         try:
             headline_lines = _top5_wrap_editorial_words(
                 probe,
