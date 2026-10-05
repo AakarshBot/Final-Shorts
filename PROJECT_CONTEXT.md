@@ -275,18 +275,19 @@ Important:
 - Preserve the already-approved function contracts.
 
 ### Top-5 editorial card design — current Test redesign:
-- Top-5 is a static 9:16 editorial composition. The selected photograph remains full-bleed and the renderer adds no white panel, lower-third, card, strip, broad image wash, rounded container, fake UI or permanent gradient.
-- The English Top-5 headline uses the bundled **Oswald-Bold.ttf** treatment that was established in the approved editorial reference. Oswald is the current display-font baseline for this Test candidate.
-- The headline is the dominant element: uppercase, heavy and condensed, left-aligned in the established 860px editorial column with a 72px left margin.
-- Headline fitting remains dynamic and supports a maximum of two lines without changing the established typography hierarchy.
-- Supporting body copy uses the regular sans-serif treatment at an adaptive readable size between 24px and 36px, so longer factual copy can fit without creating a template-like card.
-- The readability treatment is **Fade v2** from the approved reference implementation: a mask is generated directly from the actual headline/body glyphs, blurred with GaussianBlur(5), reduced to 60 alpha and composited immediately behind those letters. The photograph itself is not faded or washed.
-- Text colour remains adaptive to the local rendered text block so the editorial typography stays legible on both light and dark photographs.
-- The complete headline + body composition is laid out as one block. Normal story slides start at the established lower editorial anchor of y=880; Slide 1 opener starts at y=760. The block moves upward only when the available safe area requires it.
-- The renderer reserves the **bottom 500px** of the 1080 × 1920 frame as the working Shorts UI exclusion zone. Important Top-5 headline/body text must end at or above y=1420.
-- The background photograph is still allowed to occupy the full 1080 × 1920 frame, including UI-danger regions; only the important text is protected.
+- Top-5 uses a static 9:16 editorial composition. The selected photograph remains full-bleed and the renderer adds no white panel, lower-third, card, strip, broad image wash, rounded container, fake UI or permanent gradient.
+- The historical reference for this redesign is the 83b3ee7 editorial treatment: direct typography over the photograph with readability created from the actual text glyphs, not from a broad photo scrim or card.
+- English Top-5 headlines use the bundled Oswald-Bold.ttf display treatment.
+- The headline is the dominant element: uppercase, heavy and condensed, left-aligned in a wide 968px editorial column with a 56px left margin.
+- Headline size, wrapping and the complete headline + body block are fitted dynamically against the available vertical space.
+- Supporting body copy uses the regular sans-serif treatment at an adaptive readable size between 18px and 36px. There is no artificial card height or fixed story-slide y-position.
+- The readability treatment is Fade v2: a mask is generated directly from the rendered headline/body glyphs, blurred with GaussianBlur(5), reduced to 60 alpha and composited immediately behind those letters. The photograph itself is not faded or washed.
+- Text colour remains adaptive to the rendered text region so the typography stays legible on both light and dark photographs.
+- The important text block occupies the lower safe area dynamically. The bottom of the completed headline + body block is anchored to y=1420, while the block moves upward as needed when the content becomes taller. The working safe area begins at y=230.
+- The renderer therefore uses the lower half of the Shorts frame without placing important headline/body copy inside the conservative bottom 500px YouTube Shorts UI exclusion zone.
+- The background photograph still occupies the full 1080 × 1920 frame, including UI-danger regions; only important text is protected.
 - The composition is completely static. There is no headline-then-body motion, word animation, slide-in, bounce, blur-in animation or platform-style interaction treatment.
-- Preserve the existing manual image selection, crop/reposition, Test preview, logo and source-label handoffs. This typography work does not alter those flows.
+- Preserve the existing manual image selection, crop/reposition, Test preview, Render Now button, logo and source-label handoffs. The Test Render Now button uses the shared build_top5_card_preview() renderer directly.
 - The generic/non-Top-5 renderer path and the approved Cricket Visual Fetcher remain untouched.
 - Test preview remains the acceptance point. This treatment is not approved for Live until the user manually reviews it in Test.
 
@@ -295,7 +296,7 @@ Important:
 - When no approved Top-5 script is present, the stage opens as a standalone renderer playground rather than blocking on Scriptwriter.
 - The standalone playground starts with a green 1080 × 1920 test canvas, an 9-word filler headline (TOP FIVE CRICKET STORIES YOU NEED TO KNOW TODAY) and approximately 70 words of filler body copy.
 - The filler headline/body are the defaults used by Render Now and remain editable.
-- Standalone image retrieval exposes Real Image Search only. The user can search, select one real image, and press Render Now to see the actual Top-5 card treatment on that image.
+- Standalone image retrieval exposes Real Image Search only. The user can search, select one real image, and press Render Now to see the exact shared Top-5 editorial treatment on that image.
 - Standalone rendering is preview-only. It does not create a Top-5 production handoff, bypass a production approval, or move the Test pipeline to a later stage.
 - Once an approved Scriptwriter handoff exists, the existing six-slide Top-5 Visual QC path remains unchanged, including its production image-selection and card-option behaviour.
 
@@ -317,7 +318,7 @@ Top-5 Upload:
 Top-5 status:
 - Test pipeline/framework: approved.
 - Standalone Top-5 Visuals renderer playground: implemented in Test; pending user visual approval.
-- Fade v2 + Oswald treatment: implemented in the shared renderer; pending user Test review.
+- Oswald + Fade v2 with dynamic lower-safe placement: implemented in the shared renderer; pending user Test review.
 - Live implementation: existing pipeline remains in production testing, but the current Oswald/Fade v2 redesign is not approved for Live until Test review succeeds.
 ### Production Line 03 — On This Day
 
@@ -338,10 +339,10 @@ Current audit state:
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
-- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in the established lower editorial anchor.
+- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in one dynamically fitted lower-safe block that ends at y=1420.
 - Top-5 headlines use the Oswald display treatment; Top-5 body copy uses an adaptive regular sans-serif treatment.
 - Top-5 readability uses Fade v2: a blurred mask generated directly from the actual letters with GaussianBlur(5) and 60 alpha, not a broad photo wash.
-- Body copy is not constrained by an artificial card and stays within the working bottom 500px Shorts UI exclusion zone; longer compositions move upward rather than being bottom-pinned.
+- Body copy is not constrained by an artificial card or fixed story anchor; the complete block is bottom-anchored to the y=1420 safe boundary and moves upward as the content gets taller.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
 - Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.
@@ -364,7 +365,7 @@ Status: **Architecture cleanup in progress.**
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is approved; the current Oswald + Fade v2 visual treatment remains in Test until the user approves it**.
+- **Top-5 production framework is approved; the current Oswald + Fade v2 dynamic lower-safe visual treatment remains in Test until the user approves it**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
