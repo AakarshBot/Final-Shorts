@@ -1,4 +1,5 @@
 from __future__ import annotations
+import base64
 import hashlib
 import json
 from io import BytesIO
@@ -2585,12 +2586,12 @@ def _render_live_visuals(slide_count: int):
                 TOP5_MANUAL_SUBJECT_STYLE_OPTIONS,
                 build_top5_manual_subject_cutout_preview,
             )
-    
+
             st.caption(
                 "English only. Select an existing image, draw the complete text area directly on the 1080 × 1920 frame, "
-                "then Render Now. The rendered frame can be attached to any slide."
+                "then Render Now. Drag polygon points to shape the text area; click an edge to add a point."
             )
-    
+
             entries = _stats_card_pool_entries(live=True)
             if not entries:
                 st.info("Run one of the existing visual options first so Text Cutout has an image to work from.")
@@ -2671,7 +2672,7 @@ def _render_live_visuals(slide_count: int):
                                         st.session_state.live_text_cutout_config = None
                                         st.session_state.live_text_cutout_render = None
                                         st.session_state.live_text_cutout_font_size = 150
-    
+
                 selected = st.session_state.live_text_cutout_image_selection
                 if isinstance(selected, dict):
                     selected_asset_key = str(selected.get("asset_key") or "")
@@ -2700,7 +2701,7 @@ def _render_live_visuals(slide_count: int):
                             label_visibility="collapsed",
                         ) or st.session_state.live_text_cutout_mode
                         selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
-    
+
                         font = st.pills(
                             "Font",
                             list(TOP5_MANUAL_SUBJECT_FONT_OPTIONS),
@@ -2715,43 +2716,197 @@ def _render_live_visuals(slide_count: int):
                             key="live_text_cutout_style",
                             label_visibility="collapsed",
                         ) or st.session_state.live_text_cutout_style
-    
+
                         rendered_config = st.session_state.get("live_text_cutout_config")
                         if rendered_config and rendered_config.get("mode") != selected_mode:
                             st.session_state.live_text_cutout_config = None
                             st.session_state.live_text_cutout_render = None
                             st.session_state.live_text_cutout_font_size = 150
                             rendered_config = None
-    
-                        marker_image = _top5_fit_preview(source_image, 1080, 1920)
-                        default_coords = None
+
+                        default_polygon = [
+                            (120, 700),
+                            (960, 700),
+                            (960, 1200),
+                            (120, 1200),
+                        ]
+                        if rendered_config and rendered_config.get("text_polygon"):
+                            try:
+                                default_polygon = [
+                                    (int(point[0]), int(point[1]))
+                                    for point in rendered_config["text_polygon"]
+                                ]
+                            except (TypeError, ValueError, IndexError):
+                                pass
+
+                        polygon_key = f"live-text-cutout-polygon-{selected_asset_key}-{selected_mode}"
+                        polygon_input = st.text_input(
+                            "Polygon points",
+                            value=json.dumps(default_polygon),
+                            key=polygon_key,
+                            label_visibility="collapsed",
+                        )
+                        try:
+                            polygon_points = [
+                                (int(point[0]), int(point[1]))
+                                for point in json.loads(polygon_input)
+                            ]
+                            if len(polygon_points) < 3:
+                                raise ValueError
+                        except (TypeError, ValueError, IndexError, json.JSONDecodeError):
+                            polygon_points = default_polygon
+
+                        image_buffer = BytesIO()
+                        source_image.convert("RGB").save(image_buffer, format="JPEG", quality=88, optimize=True)
+                        image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+                        editor_points = json.dumps(polygon_points)
+                        editor_html = f"""
+<div id="live-text-cutout-editor" style="max-width:520px;">
+  <div style="position:relative;width:100%;aspect-ratio:9/16;background:#111;border-radius:12px;overflow:hidden;border:1px solid #d4d4cc;">
+    <svg id="live-text-cutout-svg" viewBox="0 0 1080 1920" style="width:100%;height:100%;display:block;cursor:crosshair;touch-action:none;" aria-label="Text Cutout polygon editor">
+      <image href="data:image/jpeg;base64,{image_data}" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
+      <polygon id="live-text-cutout-polygon" points="" fill="rgba(47,98,85,.14)" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
+      <g id="live-text-cutout-handles"></g>
+    </svg>
+  </div>
+  <div style="font:600 12px Inter,ui-sans-serif,sans-serif;color:#52574f;margin-top:7px;">
+    Drag points to shape the text area. Click any edge to add a point.
+  </div>
+</div>
+<script>
+(() => {{
+  const root = document.getElementById("live-text-cutout-editor");
+  const svg = document.getElementById("live-text-cutout-svg");
+  const polygon = document.getElementById("live-text-cutout-polygon");
+  const handles = document.getElementById("live-text-cutout-handles");
+  const input = Array.from(document.querySelectorAll("input")).find(
+    (element) => element.getAttribute("aria-label") === "Polygon points"
+  );
+  if (!root || !svg || !polygon || !handles || !input) return;
+
+  const inputWrap = input.closest('[data-testid="stTextInput"]');
+  if (inputWrap) inputWrap.style.display = "none";
+
+  let points = {editor_points};
+  let handleEls = [];
+  let dragged = false;
+
+  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+
+  const svgPoint = (event) => {{
+    const rect = svg.getBoundingClientRect();
+    return {{
+      x: clamp((event.clientX - rect.left) / rect.width * 1080, 0, 1080),
+      y: clamp((event.clientY - rect.top) / rect.height * 1920, 0, 1920),
+    }};
+  }};
+
+  const nearestEdge = (point) => {{
+    let best = null;
+    points.forEach((start, index) => {{
+      const end = points[(index + 1) % points.length];
+      const dx = end[0] - start[0];
+      const dy = end[1] - start[1];
+      const length2 = dx * dx + dy * dy;
+      const t = length2 ? clamp(((point.x - start[0]) * dx + (point.y - start[1]) * dy) / length2, 0, 1) : 0;
+      const projection = {{
+        x: start[0] + t * dx,
+        y: start[1] + t * dy,
+      }};
+      const distance = Math.hypot(point.x - projection.x, point.y - projection.y);
+      if (!best || distance < best.distance) {{
+        best = {{
+          index,
+          distance,
+          point: projection,
+        }};
+      }}
+    }});
+    return best;
+  }};
+
+  const setStreamlitValue = () => {{
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    setter.call(input, JSON.stringify(points));
+    input.dispatchEvent(new Event("input", {{bubbles:true}}));
+    input.dispatchEvent(new Event("change", {{bubbles:true}}));
+  }};
+
+  const render = () => {{
+    polygon.setAttribute("points", points.map((point) => point.join(",")).join(" "));
+    points.forEach((point, index) => {{
+      let handle = handleEls[index];
+      if (!handle) {{
+        handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+        handle.setAttribute("class", "handle");
+        handle.setAttribute("r", "13");
+        handle.setAttribute("fill", "#ffffff");
+        handle.setAttribute("stroke", "#2f6255");
+        handle.setAttribute("stroke-width", "4");
+        handle.setAttribute("vector-effect", "non-scaling-stroke");
+        handle.style.cursor = "move";
+        handles.appendChild(handle);
+        handle.addEventListener("pointerdown", (event) => {{
+          event.preventDefault();
+          event.stopPropagation();
+          const activeIndex = Number(handle.dataset.index);
+          dragged = false;
+          handle.setPointerCapture(event.pointerId);
+          const move = (moveEvent) => {{
+            const next = svgPoint(moveEvent);
+            if (!dragged && Math.hypot(next.x - points[activeIndex][0], next.y - points[activeIndex][1]) > 2) {{
+              dragged = true;
+            }}
+            points[activeIndex] = [Math.round(next.x), Math.round(next.y)];
+            render();
+          }};
+          const up = () => {{
+            handle.removeEventListener("pointermove", move);
+            handle.removeEventListener("pointerup", up);
+            if (dragged) setStreamlitValue();
+          }};
+          handle.addEventListener("pointermove", move);
+          handle.addEventListener("pointerup", up, {{once:true}});
+        }});
+        handleEls.push(handle);
+      }}
+      handle.dataset.index = String(index);
+      handle.setAttribute("cx", point[0]);
+      handle.setAttribute("cy", point[1]);
+      handle.style.display = "";
+    }});
+    while (handleEls.length > points.length) {{
+      const handle = handleEls.pop();
+      handle.remove();
+    }}
+  }};
+
+  svg.addEventListener("click", (event) => {{
+    if (dragged) {{
+      dragged = false;
+      return;
+    }}
+    if (event.target.classList && event.target.classList.contains("handle")) return;
+    const point = svgPoint(event);
+    const edge = nearestEdge(point);
+    if (!edge || edge.distance > 32) return;
+    points.splice(edge.index + 1, 0, [Math.round(edge.point.x), Math.round(edge.point.y)]);
+    render();
+    setStreamlitValue();
+  }});
+
+  render();
+}})();
+</script>
+"""
+                        st.html(editor_html, width=520, unsafe_allow_javascript=True)
+
                         if rendered_config:
-                            bx, by, bw, bh = [int(value) for value in rendered_config["text_box"]]
-                            default_coords = (bx, bx + bw, by, by + bh)
                             st.caption(
-                                f"Last rendered text area: {bw} × {bh}. "
-                                "Resize or move the rectangle, change the text size, then press Render Now."
+                                f'Last rendered polygon: {len(rendered_config.get("text_polygon") or [])} points. '
+                                "Move points or add points, change the text size, then press Render Now."
                             )
-    
-                        from streamlit_cropper import st_cropper
-    
-                        marker = st_cropper(
-                            marker_image,
-                            realtime_update=True,
-                            default_coords=default_coords,
-                            aspect_ratio=None,
-                            return_type="box",
-                            box_color="#2f6255",
-                            stroke_width=2,
-                            key=f"live-text-cutout-marker-{selected_asset_key}-{selected_mode}",
-                        )
-                        box = (
-                            int(marker["left"]),
-                            int(marker["top"]),
-                            int(marker["width"]),
-                            int(marker["height"]),
-                        )
-    
+
                         if rendered_config:
                             font_size = st.slider(
                                 "Text size",
@@ -2763,7 +2918,7 @@ def _render_live_visuals(slide_count: int):
                             )
                         else:
                             font_size = 150
-    
+
                         if st.button(
                             "Render Now",
                             type="primary",
@@ -2771,10 +2926,14 @@ def _render_live_visuals(slide_count: int):
                             key="live-text-cutout-render",
                         ):
                             try:
+                                box_left = min(point[0] for point in polygon_points)
+                                box_top = min(point[1] for point in polygon_points)
+                                box_right = max(point[0] for point in polygon_points)
+                                box_bottom = max(point[1] for point in polygon_points)
                                 rendered_config = {
                                     "headline": headline,
                                     "mode": selected_mode,
-                                    "text_box": tuple(box),
+                                    "text_polygon": tuple(polygon_points),
                                     "font_size": int(font_size),
                                     "font": font,
                                     "style": style,
@@ -2784,7 +2943,13 @@ def _render_live_visuals(slide_count: int):
                                     source_image,
                                     headline,
                                     mode=selected_mode,
-                                    text_box=rendered_config["text_box"],
+                                    text_box=(
+                                        box_left,
+                                        box_top,
+                                        box_right - box_left,
+                                        box_bottom - box_top,
+                                    ),
+                                    text_polygon=rendered_config["text_polygon"],
                                     font_size=rendered_config["font_size"],
                                     font=rendered_config["font"],
                                     style=rendered_config["style"],
@@ -2795,7 +2960,7 @@ def _render_live_visuals(slide_count: int):
                             except (ValueError, OSError, RuntimeError, ImportError) as exc:
                                 st.session_state.live_text_cutout_render = None
                                 st.error(str(exc))
-    
+
                         rendered = st.session_state.get("live_text_cutout_render")
                         if rendered:
                             st.markdown(

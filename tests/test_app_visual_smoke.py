@@ -162,6 +162,7 @@ def test_live_cricket_text_cutout_loads_and_switches_images():
         "Option 7 · Text Cutout",
     ] in option_sets
     assert len([button for button in at.button if button.label == "Crop / reposition"]) == 2
+    assert any("Polygon points" == field.label for field in at.text_input)
     assert len([button for button in at.button if button.label == "Select image"]) == 2
 
     select_buttons = [button for button in at.button if button.label == "Select image"]

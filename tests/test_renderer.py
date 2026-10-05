@@ -990,6 +990,42 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
 
 
 
+
+def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
+    local_font = (
+        renderer.Path(__file__).resolve().parents[1]
+        / "fonts"
+        / "BarlowCondensed-Black.ttf"
+    ).read_bytes()
+    monkeypatch.setattr(
+        renderer,
+        "_top5_manual_subject_font_bytes",
+        lambda _font_name: local_font,
+    )
+
+    polygon = (
+        (80, 660),
+        (1000, 660),
+        (1000, 930),
+        (760, 1180),
+        (320, 1180),
+        (80, 930),
+    )
+    preview = renderer.build_top5_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India dominate the latest result",
+        mode="negative-space",
+        text_box=(80, 660, 920, 520),
+        text_polygon=polygon,
+        font_size=140,
+        font="Barlow Condensed",
+        style="Crisp Outline",
+        include_overlays=False,
+    )
+
+    image = Image.open(BytesIO(preview))
+    assert image.size == (renderer.WIDTH, renderer.HEIGHT)
+
 def test_top5_manual_subject_cutout_uses_barlow_condensed():
     preview = renderer.build_top5_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)),

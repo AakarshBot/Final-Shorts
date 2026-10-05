@@ -778,16 +778,46 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
         raise ValueError("Manual Subject Cutout requires a headline.")
 
     box = config.get("text_box")
-    if not isinstance(box, (list, tuple)) or len(box) != 4:
-        raise ValueError("Manual Subject Cutout requires a text box.")
+    polygon = config.get("text_polygon")
+    if polygon is not None:
+        try:
+            polygon_points = [
+                (int(point[0]), int(point[1]))
+                for point in polygon
+            ]
+        except (TypeError, ValueError, IndexError) as exc:
+            raise ValueError("Manual Subject Cutout has invalid polygon points.") from exc
+        if len(polygon_points) < 3:
+            raise ValueError("Manual Subject Cutout requires at least three polygon points.")
+        polygon_points = [
+            (
+                max(0, min(WIDTH, x)),
+                max(0, min(HEIGHT, y)),
+            )
+            for x, y in polygon_points
+        ]
+        box_left = min(x for x, _ in polygon_points)
+        box_top = min(y for _, y in polygon_points)
+        box_right = max(x for x, _ in polygon_points)
+        box_bottom = max(y for _, y in polygon_points)
+        box_width = box_right - box_left
+        box_height = box_bottom - box_top
+    else:
+        if not isinstance(box, (list, tuple)) or len(box) != 4:
+            raise ValueError("Manual Subject Cutout requires a text box.")
+        try:
+            box_left, box_top, box_width, box_height = [int(value) for value in box]
+            polygon_points = None
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Manual Subject Cutout has invalid layout values.") from exc
+
     try:
-        box_left, box_top, box_width, box_height = [int(value) for value in box]
         font_size = int(config.get("font_size") or TOP5_MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
     except (TypeError, ValueError) as exc:
         raise ValueError("Manual Subject Cutout has invalid layout values.") from exc
 
     if box_width <= 0 or box_height <= 0:
-        raise ValueError("Manual Subject Cutout text box must have positive dimensions.")
+        raise ValueError("Manual Subject Cutout text area must have positive dimensions.")
     font_size = max(
         TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE,
         min(TOP5_MANUAL_SUBJECT_MAX_FONT_SIZE, font_size),
@@ -822,27 +852,32 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
         "Chromatic Echo": 3,
     }[style]
 
+    def polygon_intervals(y_value: float) -> list[tuple[int, int]]:
+        if polygon_points is None:
+            return [(x, x + box_width)]
+        y_value = max(0.0, min(HEIGHT - 0.001, y_value))
+        intersections = []
+        for index, (x1, y1) in enumerate(polygon_points):
+            x2, y2 = polygon_points[(index + 1) % len(polygon_points)]
+            if y1 == y2:
+                continue
+            if (y1 <= y_value < y2) or (y2 <= y_value < y1):
+                intersections.append(x1 + (y_value - y1) * (x2 - x1) / (y2 - y1))
+        intersections.sort()
+        return [
+            (int(round(intersections[index])), int(round(intersections[index + 1])))
+            for index in range(0, len(intersections) - 1, 2)
+            if intersections[index + 1] > intersections[index]
+        ]
+
+    def available_interval(y_value: float) -> tuple[int, int] | None:
+        intervals = polygon_intervals(y_value)
+        if not intervals:
+            return None
+        return max(intervals, key=lambda interval: interval[1] - interval[0])
+
     def fit_font_and_lines(size: int):
         font = ImageFont.truetype(BytesIO(font_data), size)
-        words = headline.split()
-        lines = []
-        current = []
-        for word in words:
-            trial = " ".join(current + [word])
-            bbox = probe.textbbox(
-                (0, 0),
-                trial,
-                font=font,
-                stroke_width=stroke_width,
-            )
-            if current and bbox[2] - bbox[0] > box_width:
-                lines.append(" ".join(current))
-                current = [word]
-            else:
-                current.append(word)
-        if current:
-            lines.append(" ".join(current))
-
         line_box = probe.textbbox(
             (0, 0),
             "Ag",
@@ -850,6 +885,72 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
             stroke_width=stroke_width,
         )
         line_height = line_box[3] - line_box[1]
+
+        if polygon_points is None:
+            available_width = box_width
+            words = headline.split()
+            lines = []
+            current = []
+            for word in words:
+                trial = " ".join(current + [word])
+                bbox = probe.textbbox(
+                    (0, 0),
+                    trial,
+                    font=font,
+                    stroke_width=stroke_width,
+                )
+                if current and bbox[2] - bbox[0] > available_width:
+                    lines.append(" ".join(current))
+                    current = [word]
+                else:
+                    current.append(word)
+            if current:
+                lines.append(" ".join(current))
+        else:
+            lines = headline.split()
+            for _ in range(4):
+                total_height = (
+                    line_height * len(lines)
+                    + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
+                )
+                start_y = box_top + (box_height - total_height) // 2
+                wrapped = []
+                current = []
+                cursor_y = start_y
+                for word in headline.split():
+                    interval = available_interval(cursor_y + line_height / 2)
+                    available_width = (
+                        interval[1] - interval[0]
+                        if interval is not None
+                        else 0
+                    )
+                    trial = " ".join(current + [word])
+                    trial_box = probe.textbbox(
+                        (0, 0),
+                        trial,
+                        font=font,
+                        stroke_width=stroke_width,
+                    )
+                    if current and trial_box[2] - trial_box[0] > available_width:
+                        wrapped.append(" ".join(current))
+                        current = [word]
+                    else:
+                        current.append(word)
+                    if current and len(current) == 1:
+                        word_box = probe.textbbox(
+                            (0, 0),
+                            current[0],
+                            font=font,
+                            stroke_width=stroke_width,
+                        )
+                        if word_box[2] - word_box[0] > available_width:
+                            return None
+                if current:
+                    wrapped.append(" ".join(current))
+                if wrapped == lines:
+                    break
+                lines = wrapped
+
         total_height = (
             line_height * len(lines)
             + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
@@ -862,18 +963,39 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
                 font=font,
                 stroke_width=stroke_width,
             )
-            widest = max(widest, bbox[2] - bbox[0])
+            line_width = bbox[2] - bbox[0]
+            widest = max(widest, line_width)
+
+        if total_height > box_height:
+            return None
+
+        cursor_y = box_top + (box_height - total_height) // 2
+        for line in lines:
+            bbox = probe.textbbox(
+                (0, 0),
+                line,
+                font=font,
+                stroke_width=stroke_width,
+            )
+            line_width = bbox[2] - bbox[0]
+            interval = available_interval(cursor_y + line_height / 2)
+            if interval is None or line_width > interval[1] - interval[0]:
+                return None
+            cursor_y += line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
         return font, lines, line_height, total_height, widest
 
     fit = None
     for size in range(font_size, TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE - 1, -1):
         candidate = fit_font_and_lines(size)
-        if candidate[3] <= box_height and candidate[4] <= box_width:
+        if candidate is not None:
             fit = candidate
             break
     if fit is None:
         raise ValueError(
-            "The selected text rectangle is too small for this headline. "
+            "The selected text polygon is too small for this headline. "
+            "Make the polygon larger."
+            if polygon_points is not None
+            else "The selected text rectangle is too small for this headline. "
             "Make the rectangle larger."
         )
 
@@ -898,7 +1020,7 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
 
     text_mask = Image.new("L", canvas.size, 0)
     text_draw = ImageDraw.Draw(text_mask)
-    cursor_y = y + (box_height - total_height) // 2
+    cursor_y = box_top + (box_height - total_height) // 2
     for line in lines:
         bbox = text_draw.textbbox(
             (0, 0),
@@ -907,7 +1029,10 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
             stroke_width=stroke_width,
         )
         line_width = bbox[2] - bbox[0]
-        cursor_x = x + (box_width - line_width) // 2
+        interval = available_interval(cursor_y + line_height / 2)
+        if interval is None:
+            raise ValueError("The selected text polygon does not contain enough usable space.")
+        cursor_x = interval[0] + (interval[1] - interval[0] - line_width) // 2
         text_draw.text(
             (cursor_x - bbox[0], cursor_y - bbox[1]),
             line,
@@ -957,7 +1082,7 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
         shifted_layer(0, 6, 145, 5)
 
     draw = ImageDraw.Draw(canvas, "RGBA")
-    cursor_y = y + (box_height - total_height) // 2
+    cursor_y = box_top + (box_height - total_height) // 2
     for line in lines:
         bbox = draw.textbbox(
             (0, 0),
@@ -966,7 +1091,10 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
             stroke_width=stroke_width,
         )
         line_width = bbox[2] - bbox[0]
-        cursor_x = x + (box_width - line_width) // 2
+        interval = available_interval(cursor_y + line_height / 2)
+        if interval is None:
+            raise ValueError("The selected text polygon does not contain enough usable space.")
+        cursor_x = interval[0] + (interval[1] - interval[0] - line_width) // 2
 
         if style == "Double Edge":
             draw.text(
@@ -1015,6 +1143,7 @@ def build_top5_manual_subject_cutout_preview(
     font_size: int,
     font: str = "Barlow Condensed",
     style: str = "Crisp Outline",
+    text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] | None = None,
     source_label: str | None = None,
     include_overlays: bool = True,
 ) -> bytes:
@@ -1024,6 +1153,7 @@ def build_top5_manual_subject_cutout_preview(
             "headline": headline,
             "mode": mode,
             "text_box": tuple(text_box),
+            "text_polygon": tuple(text_polygon) if text_polygon is not None else None,
             "font_size": int(font_size),
             "font": font,
             "style": style,
