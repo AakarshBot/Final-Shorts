@@ -6104,6 +6104,19 @@ elif st.session_state.app_mode == "test":
                             asset_key = _visual_asset_key(f"playground-{visual_option}", index, asset)
                             cropped = st.session_state.test_top5_visual_crops.get(asset_key)
                             preview_source = cropped if cropped else raw
+                            if visual_option == "Option 7 · Subject Cutout" and preview_source:
+                                try:
+                                    preview_source = build_top5_card_preview(
+                                        preview_source,
+                                        st.session_state.test_top5_visual_playground_headline,
+                                        st.session_state.test_top5_visual_playground_body,
+                                        story_number=1,
+                                        total_stories=5,
+                                        source_label=source,
+                                        subject_cutout=True,
+                                    )
+                                except (ValueError, OSError, RuntimeError, ImportError) as exc:
+                                    st.warning(str(exc))
                             preview = _top5_fit_preview(preview_source)
                             if preview is not None:
                                 st.image(preview, width="stretch")
