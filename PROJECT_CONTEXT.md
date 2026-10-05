@@ -283,30 +283,33 @@ Important:
 - The approved Test visual handoff keeps the existing image selection, crop/reposition, rendered-preview and source-label behaviour.
 
 ### Top-5 standalone Visuals Test mode:
-- **Stage 04 · Visuals can be opened directly without any Scriptwriter or Audio approval.**
-- The standalone page is a visual laboratory, not a production bypass.
-- It exposes exactly **seven visual options** immediately under the Visuals header:
-  1. Automatic Scraper
-  2. Manual Scraper
-  3. Real Image Search
-  4. AI Generation
-  5. Stats Card
-  6. Quote Card
-  7. Subject Cutout
-- Options 1–4 retrieve an image pool and let the user choose the current source image. Options 5–6 build the corresponding card treatment from that image. Option 7 runs local subject extraction and renders the Top-5 editorial composition with deliberate subject-aware typography and optional foreground occlusion.
-- The standalone selector and controls must remain usable even when no approved Top-5 script exists. It must never fall through into six-slide production QC code or require an upstream handoff.
-- The current headline and body remain editable in standalone mode so typography and visual treatments can be tested independently.
-- When a full Top-5 Scriptwriter handoff exists, the six-slide production Visual QC remains available and uses the same shared renderer/visual assignment contracts.
+- Stage 04 · Visuals is directly accessible without a Top-5 Scriptwriter or Audio approval.
+- It exposes exactly **seven visual options**: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card, and Subject Cutout.
+- The selector and standalone controls remain visible and usable without an upstream handoff. The standalone page must never fall through into six-slide production QC code.
+- Options 1–4 retrieve an image pool; the user selects a current image. Options 5–6 build their respective card treatments from that image. Option 7 runs local subject extraction and the shared Top-5 renderer on that image.
+- The current headline and body remain editable in standalone mode. Standalone rendering is preview-only and creates no production approval/handoff.
 
-### Top-5 Subject Cutout — current Test experiment:
-- Subject Cutout is **Option 7**, not the default treatment. Normal Top-5 slides do not invoke BiRefNet.
-- It uses **ZhengPeng7/BiRefNet_lite** locally through PyTorch/Transformers. The foreground mask is cached per source image.
-- The renderer first determines the subject's spatial geometry from the mask instead of merely looking for generic visual detail.
-- When a clear subject is positioned on one side and the opposite side contains enough usable copy space, the headline becomes a **large, normally oriented vertical text block** on the empty side. The line breaks are dynamic: words are grouped for readability rather than forced into one-word-per-line stacking.
-- When a subject is centered and there is meaningful space on both sides, the renderer prefers a **large horizontal cross-subject headline** positioned through the subject's vertical center. The headline is deliberately allowed to pass behind the foreground subject, but the placement is scored so the overlap is controlled rather than being added purely for effect.
-- The cross-subject treatment is selected only when the geometry supports readable type and meaningful overlap. If the photograph does not provide a good composition, the renderer falls back to the normal editorial layout instead of forcing the effect.
-- Only the portion of the headline intersecting the detected foreground mask is occluded by the subject pixels. Body copy is not placed behind the subject as part of this treatment.
-- This remains a **Test-only** visual experiment pending the user's approval. Do not promote it to Live until the rendered result is explicitly approved.
+### Top-5 Subject Cutout — active Test experiment:
+- **Option 7 is optional, not the default.** Normal Top-5 rendering never invokes BiRefNet.
+- Subject Cutout uses **ZhengPeng7/BiRefNet_lite** locally through the existing PyTorch/Transformers dependencies. The model and per-image masks are cached locally.
+- Subject Cutout is **image-driven, not a fixed template**. The renderer cleans the foreground mask, determines the subject's spatial geometry, and chooses the headline direction from that geometry.
+- **Side-positioned player:** when the player is clearly on one side and the opposite side has sufficient copy space, the headline becomes a large, normally oriented **vertical editorial stack** in the empty side. Line breaks are dynamic and group words for readability rather than forcing one word per line.
+- **Centered player:** when the player is centrally positioned with usable space on both sides, the renderer searches horizontal bands through the image for a readable crossing point. It prefers a large horizontal headline that starts in the left copy space, passes behind the player, and continues into the right copy space.
+- The centered treatment searches vertically for the subject cross-section that best supports readable type and a controlled overlap instead of using a fixed bottom-third position.
+- The subject must actually intersect the headline, and the text must remain visibly readable on both sides of the player. The overlap is deliberately limited to a small portion of the headline rather than covering the copy for effect alone.
+- The foreground player is composited above the headline only at the actual intersection of the cleaned BiRefNet mask and headline glyph mask. This is the real text-behind-player effect.
+- Subject Cutout does not silently fall back to a normal bottom headline. When the image cannot support a readable subject-aware treatment, the renderer returns an explicit error so the user can choose another image.
+- Body copy remains readable and is not placed behind the player.
+- Different images can therefore produce different headline direction, line grouping, font size and vertical position.
+- This remains Test-only until the user explicitly approves the visual result.
+
+### Top-5 status:
+- Test pipeline/framework: approved.
+- Seven-option standalone Visual QC: implemented.
+- Normal Top-5 editorial typography: implemented.
+- Optional Subject Cutout: **under active visual refinement in Test**.
+- Subject-aware composition quality is judged from the actual rendered result. A fixed normal bottom headline where a valid subject-aware treatment is available is a failure.
+- Live promotion remains blocked until Subject Cutout is explicitly approved.
 
 ### Top-5 Live orchestration:
 - The user manually chooses and orders the five stories.
