@@ -5803,7 +5803,6 @@ elif st.session_state.app_mode == "test":
         elif line_name == "Top-5" and stage == "04 · Visuals":
             from renderer import build_top5_card_preview, build_quote_card_preview
             from visual_fetcher import crawl_visuals, manual_crawl_visuals
-            from visual_search import search_images
             from visual_generator import generate_images
 
             if "test_top5_visual_playground_headline" not in st.session_state:
