@@ -299,22 +299,21 @@ Important:
 
 - Top-5 Visuals Test is independently runnable and exposes exactly seven visual options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
 - Every Top-5 image option uses the factory's existing 9:16 Crop / Reposition component. The crop is applied before selection, preview, rendering and Subject Cutout analysis; the original pool asset remains unchanged.
-- Normal Top-5 cards remain static full-bleed editorial cards. The headline uses a **118px baseline size** when no source image is available, but rendered cards are image-aware and can expand the headline up to **160px** when the actual copy region provides enough quiet negative space.
-- Normal-card headline sizing is tied directly to the sampled image composition of the candidate text box. The renderer evaluates multiple headline sizes against the same real image, and a larger size is only favored when the resulting text region remains sufficiently quiet and readable. This is the required **negative-space → larger type** behavior; the renderer must not enlarge text merely because a larger font exists.
-- Larger negative-space headlines are selected before settling the final x/y position for the card, and body-copy fit is evaluated against each headline size so a larger headline cannot silently break the remaining readable area.
-- The existing editorial safe area remains **y=620–1650**. Position still changes with the actual image; size and position are no longer treated as separate fixed defaults.
-- Subject Cutout remains an optional image-driven treatment used only when selected. It uses the local ZhengPeng7/BiRefNet_lite model through the existing PyTorch/Transformers dependency set and is not invoked for normal Top-5 cards.
-- Subject Cutout composition is determined from the actual foreground mask:
-  - Large subject in the lower part of the frame with meaningful space above → large horizontal headline in the upper negative space.
-  - Subject clearly on the left or right with usable opposite-side space → normally oriented vertical editorial stack with intelligent multi-word grouping.
-  - Subject centered with readable space on both sides → large horizontal cross-subject composition, with detected foreground restored above intersecting headline glyphs so text disappears behind people and remains visible through genuine gaps.
-  - Upper subject with meaningful space below is treated symmetrically using the lower negative space.
-  - Weak or unusable segmentation falls back to the normal editorial treatment.
-- The approved text treatment remains opaque editorial type with the existing shadow/outline treatment. No transparent text panels, broad scrims, universal gradients, decorative rails, borders, dots or headline motion are used.
-- The current refinement focus is **headline scale in relation to genuine negative space**. Do not regress this into a fixed 118px layout or a size increase that ignores the actual image.
-- Test and Live continue to consume the same Top-5 renderer/asset contracts. Subject Cutout remains a Test-only treatment until explicitly approved.
+- Normal Top-5 cards remain static full-bleed editorial cards. The headline uses a **118px baseline size** without an image and can grow to **160px** when the actual image provides enough quiet negative space.
+- Normal-card headline sizing is image-aware: the renderer evaluates multiple sizes against the real candidate text region, weighs image quietness, and lets genuinely large negative space justify a larger headline. Size and position are solved together; the renderer must not fall back to a fixed 118px treatment when the image supports materially larger type.
+- Body-copy fit is evaluated for each headline size so enlarging the headline cannot silently break the remaining readable area.
+- The approved editorial text treatment remains opaque Oswald-style type with the existing shadow/outline treatment. No transparent text panel, universal gradient, decorative rail, border, dot or headline motion is used.
+- Subject Cutout is an optional image-driven treatment used only when selected. It uses the existing local ZhengPeng7/BiRefNet_lite / PyTorch / Transformers stack and is not invoked for normal Top-5 cards.
+- **Player occlusion is a major required behavior, not a visual suggestion.** When a centered or multi-person subject composition is selected, the headline must be rendered first and the detected foreground subject must then be restored above the headline glyphs and shadow. The result must visibly read as **text going behind the player**.
+- For two or more detected people, the same shared foreground mask must occlude the headline over each person while preserving headline visibility through genuine gaps between them.
+- Centered subjects with meaningful left and right copy space must use the **cross-subject** composition when a valid overlap candidate exists. The renderer must not choose a separate negative-space composition merely because that scores higher.
+- Side subjects may use normally oriented vertical headline stacks in the strongest opposite-side copy space, with the same foreground-over-type treatment available when the headline intentionally intrudes toward the subject.
+- Upper/lower negative-space compositions remain valid when the subject geometry clearly calls for them and no centered cross-subject composition is required.
+- Weak or unusable segmentation falls back to the normal editorial treatment rather than crashing.
+- The occlusion implementation must be verified at the pixel level in Test. A visual-difference test alone is insufficient: regression coverage must prove that headline pixels over a detected player are restored to the original player image while headline pixels in a genuine gap remain visible.
+- Test and Live consume the same Top-5 renderer/asset contracts. Subject Cutout remains Test-only until explicitly approved.
 
-Status: **Top-5 editorial typography and negative-space scaling under active Test refinement.**
+Status: **Top-5 editorial typography, negative-space scaling and real player-over-text occlusion under active Test refinement.**
 
 ### Production Line 03 — On This Day
 
