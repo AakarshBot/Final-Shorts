@@ -299,22 +299,22 @@ Important:
 
 - Top-5 Visuals Test is independently runnable and exposes exactly seven visual options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
 - Every Top-5 image option uses the factory's existing 9:16 Crop / Reposition component. The crop is applied before selection, preview, rendering and Subject Cutout analysis; the original pool asset remains unchanged.
-- Normal Top-5 cards remain static full-bleed editorial cards. Subject Cutout is an optional image-driven treatment used only when selected.
-- Subject Cutout uses the local ZhengPeng7/BiRefNet_lite model through the existing PyTorch/Transformers dependency set. It is not a hosted inference service and it is not invoked for normal Top-5 cards.
-- Subject Cutout composition is determined from the actual foreground mask, not from a fixed text position:
-  - Large subject in the lower part of the frame with meaningful space above → the headline is placed in that upper negative space and sized to use roughly 80% of its usable area.
-  - Subject clearly on the left or right with usable opposite-side space → the headline switches to a normally oriented vertical editorial stack, grouping words intelligently instead of putting one word on every line; it fills roughly 80% of that side's usable area.
-  - Subject centered with readable space on both sides → the headline becomes a large horizontal cross-subject composition. The text is rendered first, then the detected foreground is restored over every intersecting letter, so the headline disappears behind every detected person and reappears through genuine gaps between multiple people.
+- Normal Top-5 cards remain static full-bleed editorial cards. The headline uses a **118px baseline size** when no source image is available, but rendered cards are image-aware and can expand the headline up to **160px** when the actual copy region provides enough quiet negative space.
+- Normal-card headline sizing is tied directly to the sampled image composition of the candidate text box. The renderer evaluates multiple headline sizes against the same real image, and a larger size is only favored when the resulting text region remains sufficiently quiet and readable. This is the required **negative-space → larger type** behavior; the renderer must not enlarge text merely because a larger font exists.
+- Larger negative-space headlines are selected before settling the final x/y position for the card, and body-copy fit is evaluated against each headline size so a larger headline cannot silently break the remaining readable area.
+- The existing editorial safe area remains **y=620–1650**. Position still changes with the actual image; size and position are no longer treated as separate fixed defaults.
+- Subject Cutout remains an optional image-driven treatment used only when selected. It uses the local ZhengPeng7/BiRefNet_lite model through the existing PyTorch/Transformers dependency set and is not invoked for normal Top-5 cards.
+- Subject Cutout composition is determined from the actual foreground mask:
+  - Large subject in the lower part of the frame with meaningful space above → large horizontal headline in the upper negative space.
+  - Subject clearly on the left or right with usable opposite-side space → normally oriented vertical editorial stack with intelligent multi-word grouping.
+  - Subject centered with readable space on both sides → large horizontal cross-subject composition, with detected foreground restored above intersecting headline glyphs so text disappears behind people and remains visible through genuine gaps.
   - Upper subject with meaningful space below is treated symmetrically using the lower negative space.
-  - Mixed geometry is resolved from the actual available space; no single fixed size or fixed vertical position is reused across images.
-- Negative space is a first-class layout region. The renderer searches headline sizes and line groupings against the real region and prefers the largest readable treatment that lands near the requested ~80% spatial fill. A larger negative-space treatment can therefore beat the normal default headline size.
-- Subject overlap is also optimized rather than added for decoration: the cross-subject composition only wins when the headline intersects the detected foreground by a controlled amount and remains readable. Multiple foreground people share the same mask, so text can remain visible in gaps between them.
-- Headline text remains opaque editorial type with the existing image-dependent contrast, restrained shadow and thin outline. No transparency-as-style, broad scrims, universal gradients, decorative rails, borders, dots or motion are used.
-- Body copy is normally omitted for Subject Cutout compositions. Standard Top-5 cards continue to support body copy and reject it only when it cannot fit at the minimum readable size.
-- Subject Cutout must degrade gracefully: unusable/weak segmentation falls back to the normal Top-5 editorial treatment instead of presenting a false "subject-aware" composition.
+  - Weak or unusable segmentation falls back to the normal editorial treatment.
+- The approved text treatment remains opaque editorial type with the existing shadow/outline treatment. No transparent text panels, broad scrims, universal gradients, decorative rails, borders, dots or headline motion are used.
+- The current refinement focus is **headline scale in relation to genuine negative space**. Do not regress this into a fixed 118px layout or a size increase that ignores the actual image.
 - Test and Live continue to consume the same Top-5 renderer/asset contracts. Subject Cutout remains a Test-only treatment until explicitly approved.
 
-Status: **Top-5 Subject Cutout under active Test visual refinement.**
+Status: **Top-5 editorial typography and negative-space scaling under active Test refinement.**
 
 ### Production Line 03 — On This Day
 
