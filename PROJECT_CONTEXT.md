@@ -274,18 +274,17 @@ Important:
 - Do not add new factory logic while doing dashboard UI work unless required to support an existing completed handoff.
 - Preserve the already-approved function contracts.
 
-### Top-5 editorial card design — restored approved text treatment:
-- The card is a static 9:16 editorial composition: the manually selected/repositioned photograph remains full-bleed and is the primary visual field.
-- Typography uses the approved lower editorial composition, not image-region scoring or free-floating placement. Ordinary story cards use the proven lower anchor around Y=880; the Slide 1 opener uses the established opener anchor around Y=760.
-- The headline remains the dominant element. Its current large condensed size range is preserved because the headline sizing was already right.
-- Body copy uses the restored larger readable range and remains visibly substantial beneath the headline.
-- The complete supplied body is preserved and wrapped to the available 9:16 editorial space. It is not truncated to an arbitrary sentence or word count.
-- Readability uses the approved subtle letter-level fade/shadow: a blurred mask is generated from the actual headline/body letters and placed immediately behind them, with a restrained stroke and adaptive light/dark text treatment.
-- There is no white haze, full-width gradient, panel, glass card, rounded container, lower-third box, image-region scoring or fixed left/right quiet-side selection.
-- The photograph is never recropped by the renderer; the manually selected/repositioned crop remains authoritative.
-- The composition remains completely static. There is no headline-then-body motion, word animation, slide-in, bounce or platform-style UI treatment.
-- The renderer uses the repository's existing bundled fonts and Pillow only; no new runtime dependency or segmentation service is introduced.
-- The text treatment is restored to the previously approved editorial style. Overall Test preview review remains the acceptance point for the current card.
+### Top-5 editorial card design — current Test redesign:
+- Top-5 is a static 9:16 editorial composition. The manually selected/repositioned photograph remains full-bleed and is never recropped by the renderer.
+- Typography is deliberately placed in the lower editorial area so it does not interfere with the YouTube Shorts interface. Ordinary story slides use the established anchor around Y=880; the Slide 1 package opener uses Y=760.
+- The headline uses **Montserrat ExtraBold** and remains the dominant element, left-aligned inside the established 860px lower safe column.
+- The body uses **Montserrat Regular**. There is no fixed body sentence count, line count, or content-card height. It uses the available lower-half space down toward the bottom safe boundary rather than being squeezed into a small panel.
+- Body text starts at 36px. It is only reduced as an emergency fit fallback when unusually long copy physically cannot fit before the bottom boundary; there is no arbitrary body-size target, sentence cap or line cap.
+- The approved readability treatment being restored is the **second fade style**: a mask is generated from the actual headline/body letters, blurred with the historical soft radius, reduced to restrained opacity and composited directly behind those letters. The photograph itself is not washed or faded.
+- Text is white with a restrained dark stroke. There is no white panel, full-width gradient, glass card, rounded rectangle, lower-third, image-region scoring, quiet-side selection or other readability container.
+- The composition is completely static. There is no headline-then-body motion, word animation, slide-in, bounce or platform-style UI treatment.
+- No new Python/package dependency is introduced. The Top-5 renderer uses the existing Pillow path plus Montserrat from the repository font location when present or the user's installed font location; Hindi/Telugu continue to use their existing Noto fallbacks.
+- Test preview remains the acceptance point. This treatment is **not approved until the user reviews it in Test**.
 
 Top-5 Live orchestration:
 - The user manually chooses and orders the five stories.
@@ -304,9 +303,9 @@ Top-5 Upload:
 - Public upload attempts to add the approved public comment; comment failure is reported without adding another approval gate.
 
 Top-5 status:
-- **Test pipeline: approved.**
-- **Visual treatment: redesign in Test; pending user approval.**
-- **Live implementation: complete in production testing, but the new editorial card treatment must not be treated as approved until Test review succeeds.**
+- **Test pipeline/framework: approved.**
+- **Current editorial card treatment: redesign in Test; pending user approval.**
+- **Live implementation: existing pipeline remains in production testing, but this new editorial typography treatment is not approved for Live until Test review succeeds.**
 
 ### Production Line 03 — On This Day
 
@@ -327,11 +326,11 @@ Current audit state:
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
-- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography with the restored lower editorial anchors.
-- Top-5 readability comes from a restrained blurred fade/shadow generated from the actual letters, not from a broad photo wash or image-region segmentation heuristic.
-- Top-5 body typography uses the restored larger body range and preserves all supplied copy that fits the 9:16 editorial space.
+- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in the deliberate lower Shorts-safe zone.
+- Top-5 headlines use Montserrat ExtraBold; Top-5 body copy uses Montserrat Regular.
+- Top-5 readability comes from the second letter-level fade style: a blurred mask generated directly from the actual letters, not a broad photo wash.
+- Body copy is not constrained by a sentence, line or card limit; it can use the available lower-half space down toward the bottom safe boundary.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
-- The renderer keeps the supplied body copy and fits headline/body typography to the chosen region without an artificial sentence or line-count cap.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
 - Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.
 - Live Top-5 starts automatic visual crawling at Stage 1 approval and streams page results into its existing Visual QC state.
