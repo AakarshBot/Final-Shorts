@@ -682,6 +682,9 @@ if "test_top5_visual_handoff" not in st.session_state:
     st.session_state.test_top5_visual_handoff = None
 if "test_top5_visual_card_results" not in st.session_state:
     st.session_state.test_top5_visual_card_results = {}
+                                st.session_state.test_top5_manual_subject_cutouts = {}
+if "test_top5_manual_subject_cutouts" not in st.session_state:
+    st.session_state.test_top5_manual_subject_cutouts = {}
 if "test_top5_rendered_video_path" not in st.session_state:
     st.session_state.test_top5_rendered_video_path = None
 if "test_top5_upload_qc_approved" not in st.session_state:
@@ -5258,6 +5261,7 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_visual_previews = {}
                 st.session_state.test_top5_visual_assignments = {}
                 st.session_state.test_top5_visual_card_results = {}
+                                st.session_state.test_top5_manual_subject_cutouts = {}
                 st.session_state.test_top5_visual_handoff = None
                 st.session_state.test_top5_rendered_video_path = None
                 st.session_state.test_top5_upload_qc_approved = False
@@ -5338,6 +5342,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
                                 st.session_state.test_top5_visual_card_results = {}
+                                st.session_state.test_top5_manual_subject_cutouts = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
@@ -5361,6 +5366,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
                                 st.session_state.test_top5_visual_card_results = {}
+                                st.session_state.test_top5_manual_subject_cutouts = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
@@ -5384,6 +5390,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
                                 st.session_state.test_top5_visual_card_results = {}
+                                st.session_state.test_top5_manual_subject_cutouts = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
                                 st.session_state.test_top5_upload_qc_approved = False
@@ -5691,6 +5698,7 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_top5_visual_previews = {}
                             st.session_state.test_top5_visual_assignments = {}
                             st.session_state.test_top5_visual_card_results = {}
+                                st.session_state.test_top5_manual_subject_cutouts = {}
                             st.session_state.test_top5_visual_handoff = None
                             st.session_state.test_top5_rendered_video_path = None
                             st.session_state.test_top5_upload_qc_approved = False
@@ -5836,7 +5844,7 @@ elif st.session_state.app_mode == "test":
                 '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
                 '<div class="section-title">Standalone Visual QC</div>'
                 '<div class="canvas-copy">Test every Top-5 visual option independently. No Scriptwriter approval or earlier stage is required.</div></div>'
-                '<div class="section-count">8 visual options</div></div>',
+                '<div class="section-count">9 visual options</div></div>',
                 unsafe_allow_html=True,
             )
 
