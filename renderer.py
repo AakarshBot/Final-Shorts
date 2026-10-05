@@ -467,6 +467,14 @@ def _top5_editorial_layout(
                 two = _top5_two_line_headline(draw, words, fonts)
                 if two[1] <= rw and two[2] <= rh:
                     return rx1 + (rw - two[1]) // 2, ry1 + (rh - two[2]) // 2, two[1], two[2], fonts, two[0], size
+            if max_headline_lines > 2:
+                lines = _top5_wrap_editorial_words(draw, clean_headline, fonts, rw)
+                if 1 <= len(lines) <= max_headline_lines:
+                    heights = [_top5_editorial_measure(draw, " ".join(line), fonts)[1] for line in lines]
+                    width = max(_top5_editorial_measure(draw, " ".join(line), fonts)[0] for line in lines)
+                    height = sum(heights) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * (len(lines) - 1)
+                    if width <= rw and height <= rh:
+                        return rx1 + (rw - width) // 2, ry1 + (rh - height) // 2, width, height, fonts, lines, size
         return None
 
     if subject_mask is None:
