@@ -6038,6 +6038,20 @@ elif st.session_state.app_mode == "test":
                     key="test-top5-manual-subject-playground-mode",
                 ) or "Negative Space"
                 selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
+                from renderer import TOP5_MANUAL_SUBJECT_FONT_OPTIONS, TOP5_MANUAL_SUBJECT_STYLE_OPTIONS
+
+                font = st.pills(
+                    "Font",
+                    list(TOP5_MANUAL_SUBJECT_FONT_OPTIONS),
+                    default="Barlow Condensed",
+                    key="test-top5-manual-subject-playground-font",
+                ) or "Barlow Condensed"
+                style = st.pills(
+                    "Text style",
+                    list(TOP5_MANUAL_SUBJECT_STYLE_OPTIONS),
+                    default="Crisp Outline",
+                    key="test-top5-manual-subject-playground-style",
+                ) or "Crisp Outline"
 
                 rendered_config = st.session_state.get("test-top5-manual-subject-playground-config")
                 if rendered_config and rendered_config.get("mode") != selected_mode:
@@ -6099,6 +6113,8 @@ elif st.session_state.app_mode == "test":
                             "mode": selected_mode,
                             "text_box": tuple(box),
                             "font_size": int(font_size),
+                            "font": font,
+                            "style": style,
                         }
                         st.session_state["test-top5-manual-subject-playground-config"] = rendered_config
                         st.session_state.test_top5_visual_playground_render = build_top5_manual_subject_cutout_preview(
@@ -6107,6 +6123,8 @@ elif st.session_state.app_mode == "test":
                             mode=rendered_config["mode"],
                             text_box=rendered_config["text_box"],
                             font_size=rendered_config["font_size"],
+                            font=rendered_config["font"],
+                            style=rendered_config["style"],
                             source_label=current_source,
                         )
                     except (ValueError, OSError, RuntimeError, ImportError) as exc:
@@ -6720,6 +6738,20 @@ elif st.session_state.app_mode == "test":
                                     key=f"test-top5-manual-subject-mode-{active_slide}",
                                 ) or "Negative Space"
                                 selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
+                                from renderer import TOP5_MANUAL_SUBJECT_FONT_OPTIONS, TOP5_MANUAL_SUBJECT_STYLE_OPTIONS
+
+                                font = st.pills(
+                                    "Font",
+                                    list(TOP5_MANUAL_SUBJECT_FONT_OPTIONS),
+                                    default="Barlow Condensed",
+                                    key=f"test-top5-manual-subject-font-{active_slide}",
+                                ) or "Barlow Condensed"
+                                style = st.pills(
+                                    "Text style",
+                                    list(TOP5_MANUAL_SUBJECT_STYLE_OPTIONS),
+                                    default="Crisp Outline",
+                                    key=f"test-top5-manual-subject-style-{active_slide}",
+                                ) or "Crisp Outline"
 
                                 rendered_config = state.get("rendered_config")
                                 if rendered_config and rendered_config.get("mode") != selected_mode:
@@ -6784,6 +6816,8 @@ elif st.session_state.app_mode == "test":
                                             "mode": selected_mode,
                                             "text_box": tuple(box),
                                             "font_size": int(font_size),
+                                            "font": font,
+                                            "style": style,
                                         }
                                         preview = build_top5_manual_subject_cutout_preview(
                                             working_image,
@@ -6791,6 +6825,8 @@ elif st.session_state.app_mode == "test":
                                             mode=rendered_config["mode"],
                                             text_box=rendered_config["text_box"],
                                             font_size=rendered_config["font_size"],
+                                            font=rendered_config["font"],
+                                            style=rendered_config["style"],
                                             source_label=_top5_asset_source(selected_image[1]),
                                         )
                                         state["image_index"] = int(selected_index)
