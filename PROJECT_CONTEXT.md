@@ -50,7 +50,7 @@ The factory's seven functional stages are **Approved** for the established Deep-
 The Dashboard UI/UX remains **WIP**.
 
 Production lines:
-1. **Top 5 cricket stories of the day** — **Test approved; Live implemented and now in production testing**
+1. **Top 5 cricket stories of the day** — **Test-only / WIP**
 2. **On This Day** — **Test-first / WIP**
 
 Top-5 Live uses the approved Top-5 writer, audio, visual treatments, renderer and uploader contracts. Live-specific code is limited to production orchestration: approval-triggered stage progression and concurrent automatic visual retrieval.
@@ -171,36 +171,32 @@ The standard Cricket/Deep-Dive Visuals desk contains four retrieval options:
 3. Manual real-image search.
 4. Manual AI image generation.
 
-Top-5 has seven visual options:
+Top-5 has seven visual options in Test:
 1. Automatic Scraper.
 2. Manual Scraper.
-3. Real Image Search.
+3. Real Image Search — **WIP only in Top-5**.
 4. AI Generation.
 5. Stats Card.
 6. Quote Card.
 7. Subject Cutout.
 
-Top-5 Visual QC is independently testable in Test. The standalone screen exposes all seven options without requiring Scriptwriter or Audio approval. The six-slide production Visual QC appears only after a real Top-5 Scriptwriter handoff exists.
+The established Cricket/Deep-Dive visual retrieval options remain unchanged. Top-5 Option 3 is deliberately removed from the Top-5 Test implementation and remains only as a dashboard WIP choice. It must not call the shared Cricket Real Image Search function.
 
-Every Top-5 image pool uses the same existing factory Crop / Reposition component. Crop state is stored per asset, visibly marked when applied, and the cropped bytes become the selected image used by preview, rendering and Subject Cutout analysis.
+Top-5 Test Visuals remains independently runnable. The six-slide production Visual QC uses the approved Top-5 Scriptwriter handoff, while the standalone Test playground can exercise visual functions without upstream approvals.
 
-Option 7 · Subject Cutout is optional and user-selected. It uses local ZhengPeng7/BiRefNet_lite through the existing PyTorch/Transformers dependency stack. It is not used by ordinary Top-5 cards.
+Crop / Reposition remains the existing shared crop path. Cropped bytes are the exact bytes passed to Top-5 preview, selection and Subject Cutout analysis.
 
-Subject Cutout is a dynamic image-composition treatment:
-- Segment the foreground subject field.
-- Measure the actual usable negative space above, below, left and right of that field.
-- Aim to use roughly 80% of the chosen negative-space dimension by dynamically changing headline size and line grouping.
-- A lower subject with substantial space above uses a large horizontal headline in that upper negative space.
-- An upper subject with substantial space below can use the lower negative space in the same way.
-- A left/right subject uses the opposite-side negative space with a large, normally oriented vertical headline stack. The renderer groups words intelligently across lines rather than creating one-word-per-line text just to look vertical.
-- A central subject with useful space on both sides uses a large horizontal headline spanning across the subject. Type begins in the left copy space, disappears behind the subject and reappears on the right.
-- Multiple subjects share one foreground mask, so one headline can disappear behind both subjects and naturally remain visible through any genuine gap between them.
-- The headline is scaled for legibility first. Subject overlap is a depth treatment, not the optimization target.
-- Weak segmentation falls back to ordinary editorial typography rather than producing a Subject Cutout composition error.
+Option 7 · Subject Cutout is optional and user-selected. It is implemented with the existing PyTorch, torchvision and Transformers dependencies and the local `ZhengPeng7/BiRefNet` model. No new Python dependency is introduced. Subject Cutout inference is CPU-only and always uses float32; the renderer never calls `.half()` for this path.
 
-No wrappers, duplicate pipelines, broad visual panels, universal gradients, transparent/faded type or headline motion are part of this design.
+Subject Cutout receives the selected/cropped image, builds one foreground mask, then chooses one composition directly from that mask:
+- Centered foreground with useful space on both sides: large horizontal headline crosses the subject field. Text starts outside the leftmost subject and continues outside the rightmost subject.
+- Subject predominantly on the right: two-word-per-line headline stack in the left negative space.
+- Subject predominantly on the left: two-word-per-line headline stack in the right negative space.
+- Otherwise: large headline in the larger top or bottom negative-space region.
 
-Status: Test implementation / visual refinement in progress.
+The original image is composited back through the foreground mask after the headline is drawn, so the detected foreground remains visibly above the text while real gaps in the mask keep the headline visible.
+
+Option 7 has no body copy. It uses the approved headline only. Normal Top-5 cards never run subject segmentation.
 
 ## Subtitles — Function 05
 
@@ -220,28 +216,26 @@ Status: **Approved.**
 Top-5 uses a static 9:16 full-bleed editorial-card treatment in the shared renderer.
 
 Normal Top-5 cards:
-- Use the established adaptive opaque editorial treatment.
+- Use the direct static editorial typography path.
+- No subject detection.
+- No image-busyness/negative-space search.
 - No broad scrim, transparent/faded type, universal gradient, permanent border, decorative dots/lines or headline motion.
 - Logo remains top-right; source label remains bottom-right.
+- English headlines use Oswald.
+
+Option 3 · Real Image Search is **WIP in Top-5** and has no active Top-5 renderer/retrieval path.
 
 Option 7 · Subject Cutout:
-- Uses local BiRefNet foreground segmentation only when selected.
-- The renderer makes a composition decision from the actual photograph rather than reusing one fixed headline position or font size.
-- It measures the available negative space and dynamically scales the headline to occupy roughly 80% of the selected copy dimension.
-- Lower subjects favor large upper negative space; upper subjects can favor lower negative space.
-- Side subjects favor the opposite-side negative space with a large balanced multi-word vertical stack.
-- Central subjects favor a large horizontal headline spanning both sides of the subject.
-- Multiple subjects are handled by one shared foreground mask, so the crossing headline sits behind every subject and remains visible through real gaps.
-- The headline must remain large enough to read even where a foreground subject hides part of a glyph.
-- Subject Cutout normally suppresses body copy so the headline can own the composition.
-- The original image is composited above the opaque headline only at the actual mask/glyph intersection.
-- Weak segmentation falls back to normal editorial layout instead of failing.
+- Runs local BiRefNet only when explicitly selected.
+- Uses CPU float32 inference with the existing dependency stack.
+- Suppresses all body copy.
+- Uses the actual foreground mask to keep players/subjects above headline pixels.
+- Centered compositions cross the foreground field; side compositions use the opposite-side negative space with two-word-per-line stacks; remaining compositions use the larger top/bottom negative space.
+- Multiple subjects are treated as one foreground field for the crossing headline, while genuine gaps in the mask remain visible.
+- The renderer never silently turns Subject Cutout into Option 3.
+- The same `build_top5_card_preview` / `_draw_top5_editorial_card` contract is used by Test and the eventual Live promotion.
 
-Crop:
-- Top-5 image pools use the factory Crop / Reposition component.
-- Applied crop is the exact framing passed to preview, selection, rendering and Subject Cutout.
-
-Status: Top-5 Subject Cutout test implementation / visual refinement in progress.
+The obsolete Top-5 image-busyness search, multi-stage subject scoring, SciPy connected-component path, body word-cap/rejection helper and FP16 CUDA inference path have been deleted.
 
 ## YouTube Upload — Function 07
 
@@ -297,25 +291,22 @@ Important:
 
 ### Top-5 current implementation checkpoint
 
-- Top-5 Visuals Test remains independently runnable with exactly seven visual options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
-- The existing Crop / Reposition component remains the only crop path. Its cropped result is handed directly to the selected card renderer.
-- **Option 3 · Real Image Search is a static full-bleed 9:16 editorial card with no subject detection.** It scans the actual image for a small set of purposeful quiet/negative regions rather than using a fixed headline-safe band.
-- Option 3 measures local visual busyness, derives a headline-size ceiling from that quietness, then selects the **largest headline that physically fits**. It is intentionally bounded to a small set of meaningful regions so preview rendering stays fast.
-- Option 3 uses **Oswald** for the English headline. Line breaking is based on actual measured text width; it does not rely on a fixed 118px rendering rule.
-- Option 3 body copy remains visible beneath the headline when it fits at the readable floor. It uses opaque editorial type, controlled outline and strong soft shadow/fade, with no text panel.
-- **Option 7 · Subject Cutout is headline-only.** The Test UI hides the body field and the renderer ignores any upstream body data for this option.
-- Option 7 runs the existing local **ZhengPeng7/BiRefNet** inference path only when Option 7 is selected. No new Python dependency or runtime layer is introduced.
-- Option 7 identifies separate connected foreground components from the matte before deciding composition. A centered single subject and a centered multi-subject group can both qualify for the cross-subject treatment when there is genuine space outside the outer subjects.
-- For a centered subject/group, the headline starts outside the leftmost subject, passes behind the foreground matte, and exits outside the rightmost subject. The actual matte—not a bounding-box approximation—controls which headline pixels are hidden or visible.
-- Multiple-player gaps remain real gaps in the matte, so headline pixels show through those gaps. The headline is never intentionally anchored so that it starts inside a gap.
-- For non-centered subjects, Option 7 uses the strongest available surrounding negative space. Side compositions may use **one or two large words per line** in a tall editorial stack.
-- Foreground restoration happens after headline rendering so players visibly sit above the text. Only headline pixels and their shadow/stroke are subject to foreground occlusion.
-- Option 7 never silently falls back to normal Option 3. Empty/invalid foreground extraction surfaces as a real Test error.
-- The old Top-5 architecture based on a fixed 620px safe start, global subject-bounding-box scoring, forced 118px support sizing and repeated fallback helpers is deleted.
-- Regression tests target user-visible behavior: quiet imagery permits larger Option 3 type than busy imagery; Option 7 crosses centered one- or multi-subject compositions, preserves gaps, restores foreground pixels and never renders body copy.
-- Test and Live continue to consume the same renderer/asset contract. Option 7 remains an explicit visual-option choice and is never automatically applied to normal Top-5 cards.
+- Top-5 Visuals Test remains independently runnable with exactly seven dashboard choices. Option 3 is visible only as **WIP**; it performs no Top-5 search or rendering.
+- Cricket's Option 3 / Real Image Search implementation is untouched and remains part of the approved Cricket visual pipeline.
+- Top-5 Option 7 has been rewritten from scratch to keep the implementation direct and small.
+- Option 7 uses the existing local `ZhengPeng7/BiRefNet` model through the already-installed PyTorch/torchvision/Transformers stack.
+- The current supported runtime is CPU-only. Model and input tensors remain float32; no CUDA branch or FP16 conversion is used.
+- The model is loaded once per process and the foreground mask is cached per selected image.
+- Option 7 analyzes the actual selected/cropped image. Normal Top-5 cards do not run segmentation.
+- The Subject Cutout renderer makes one direct composition choice from the foreground bbox and available space: cross-subject, vertical-left, vertical-right, top-negative-space or bottom-negative-space.
+- Cross-subject text is deliberately wider than the foreground field and therefore starts outside the first subject, disappears behind foreground, and reappears beyond the last subject.
+- Side layouts use at most two words per line and are always positioned inside the safe frame.
+- Foreground restoration is done directly with the returned mask after text rendering. This is what creates the real text-behind-subject effect and preserves text through genuine gaps.
+- Subject Cutout does not render body copy and ignores upstream body data.
+- Option 3's previous adaptive quiet-region code is deleted. Top-5's dashboard explicitly marks Option 3 as WIP until that option is intentionally rebuilt later.
+- No wrappers, compatibility layers, new dependencies or duplicate Subject Cutout pipelines are part of this implementation.
 
-Status: **Top-5 Option 3 and Option 7 are on the main line with the current regression fix prepared in PR #68. GitHub's main CI has confirmed the previous renderer regressions; PR #68 is the corrective change and must remain validated before any further visual iteration.**
+Status: **Top-5 Option 7 CPU rewrite in Test / WIP. Option 3 is WIP. Cricket pipeline is unchanged.**
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -328,41 +319,28 @@ Status: **Planned / Test framework WIP.**
 
 ### Test / Live architecture audit
 
-The factory must have one shared implementation of each production stage. Test and Live may differ in presentation and in whether an already-approved stage is triggered manually or automatically, but they must not drift into different stage logic, handoff contracts or asset contracts.
+The factory still follows one core implementation per production stage. Test and Live differ in orchestration, not in approved stage logic.
 
-Current audit state:
-- Topic Fetcher, Scriptwriter, Audio, Visuals, Subtitles, Renderer and YouTube Upload remain separate modules with shared underlying contracts.
-- Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
-- Test and Live Top-5 visuals consume the same approved image and assignment contracts.
-- Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and the Test-only Subject Cutout treatment.
-- The Top-5 renderer uses the full-bleed photograph as the primary visual field. Normal cards use adaptive copy-space placement; Subject Cutout uses the local foreground mask to choose a bottom/top, side/vertical, center/cross-subject or negative-space fallback composition.
-- Subject Cutout targets roughly 80% use of the available negative space and dynamically changes headline size and line grouping from the actual photograph.
-- Text treatment remains opaque editorial type chosen from the image luminance, with a restrained directional shadow and thin contrasting outline. There is no broad photo wash, full-frame panel or transparent text.
-- Optional Subject Cutout uses ZhengPeng7/BiRefNet_lite locally through the existing PyTorch/Transformers dependencies. The model runs only when the user selects Option 7; normal Top-5 rendering does not invoke it. Foreground extraction is cached per source image, and the normal factory crop is applied before analysis.
-- Body copy is rejected when it cannot fit at the minimum readable size. Renderer exposes the strict maximum word count; Visual QC shows the rejected body as editable copy and offers deterministic local compression to that cap.
-- Test and Live continue to consume the same shared Top-5 renderer implementation.
-- No wrapper, compatibility layer or duplicate Subject Cutout pipeline was introduced.
-- Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.
-- Live Top-5 starts automatic visual crawling at Stage 1 approval and streams page results into its existing Visual QC state.
-- Test remains manually stageable; Live remains approval-triggered.
+For Top-5 during the current WIP period:
+- Test is the only place where Option 7 is being developed and evaluated.
+- Option 3 is explicitly a dashboard WIP choice and has no Top-5 implementation.
+- The shared Top-5 card renderer remains the component that will be promoted to Live after Test approval.
+- Cricket's existing visual retrieval/rendering paths are outside this rewrite and must not be changed.
+- Subject Cutout segmentation is never invoked by normal Top-5 rendering.
+- No duplicate Live-only Subject Cutout implementation is permitted.
 
 Cleanup rules:
-- Do not add wrappers, compatibility layers, duplicate pipelines, parallel metadata systems or abstraction layers that make the code harder to follow.
-- Prefer one direct stage implementation with small explicit mode/presentation differences over two copies of the same logic.
-- Preserve the existing seven-stage order and all approved production requirements.
-- Do not change retrieval algorithms, story scoring, Scriptwriter generation requirements, audio behavior, subtitle behavior, renderer design or upload behavior unless required to remove a concrete Test/Live mismatch.
-- Test must remain the place where new behavior is designed and manually approved before Live uses it.
-- Live may automate already-approved transitions, but it must consume the same approved handoffs as Test.
-- Each cleanup step must be checked against the relevant tests and the actual Test/Live handoff path before merge.
-
-Status: **Architecture cleanup in progress.**
+- Delete obsolete Top-5 Option 3 and Subject Cutout code rather than layering patches around it.
+- Keep the active implementation direct and small.
+- Do not add new dependencies, wrappers, compatibility layers, fallback pipelines or parallel card renderers.
+- Do not change Cricket behavior while iterating on Top-5.
 
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is approved; the dynamic Oswald editorial typography and optional local Subject Cutout remain in Test until the user approves them**.
+- **Top-5 production framework is WIP in Test; Option 3 is WIP and Option 7 is being rewritten/tested before any Live promotion**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
@@ -538,9 +516,9 @@ Status: **Approved / cleaned.**
 ### Test baseline after cleanup
 
 - Python compile check passed.
-- Full test suite passed: **113 tests**.
-- Main branch CI passed after the cleanup merge.
-- The cleanup was intentionally limited to dead-code removal/simplification; generation rules and downstream handoffs were not redesigned as part of this cleanup.
+- The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
+- Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
+- Top-5 Option 7 must not be treated as approved or Live-ready until this rewrite passes the full suite and is manually verified in Test.
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
 
