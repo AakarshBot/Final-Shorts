@@ -682,7 +682,6 @@ if "test_top5_visual_handoff" not in st.session_state:
     st.session_state.test_top5_visual_handoff = None
 if "test_top5_visual_card_results" not in st.session_state:
     st.session_state.test_top5_visual_card_results = {}
-    st.session_state.test_top5_manual_subject_cutouts = {}
 if "test_top5_manual_subject_cutouts" not in st.session_state:
     st.session_state.test_top5_manual_subject_cutouts = {}
 if "test_top5_rendered_video_path" not in st.session_state:
