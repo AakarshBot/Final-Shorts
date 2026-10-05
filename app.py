@@ -666,6 +666,7 @@ if "test_top5_visual_previews" not in st.session_state:
     st.session_state.test_top5_visual_previews = {}
 if "test_top5_visual_assignments" not in st.session_state:
     st.session_state.test_top5_visual_assignments = {}
+if "test_top5_visual_rejections" not in st.session_state:
     st.session_state.test_top5_visual_rejections = {}
 if "test_top5_visual_handoff" not in st.session_state:
     st.session_state.test_top5_visual_handoff = None
