@@ -174,6 +174,13 @@ def test_live_cricket_text_cutout_loads_and_switches_images():
     assert not at.exception, at.exception
     assert at.session_state["live_text_cutout_image_selection"]["bytes"] == assets[1]["bytes"]
 
+    at.session_state["live_text_cutout_headline"] = "Alternate headline"
+    at.session_state["live_text_cutout_mode"] = "Behind Subject"
+    at.session_state["live_text_cutout_font"] = "Oswald"
+    at.session_state["live_text_cutout_style"] = "Long Fade"
+    at.run()
+    assert not at.exception, at.exception
+
 
 def test_live_text_cutout_prefers_the_existing_9x16_crop():
     asset = {
