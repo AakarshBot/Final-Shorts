@@ -6029,62 +6029,53 @@ elif st.session_state.app_mode == "test":
 
                 st.caption(
                     "English only. Draw a free-size rectangle over the image to show exactly where the headline should sit. "
-                    "The rectangle becomes the text area after the first render."
+                    "Press Render Now. After rendering, the same rectangle returns so you can reposition or resize it; "
+                    "the text-size slider controls only font size."
                 )
                 mode = st.pills(
                     "Composition",
                     ["Negative Space", "Behind Subject"],
                     key="test-top5-manual-subject-playground-mode",
                 ) or "Negative Space"
+                selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
 
                 rendered_config = st.session_state.get("test-top5-manual-subject-playground-config")
-                selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
                 if rendered_config and rendered_config.get("mode") != selected_mode:
                     st.session_state["test-top5-manual-subject-playground-config"] = None
                     st.session_state.test_top5_visual_playground_render = None
                     rendered_config = None
-                if not rendered_config:
-                    marker_image = _top5_fit_preview(current_image, 1080, 1920)
-                    marker = st_cropper(
-                        marker_image,
-                        realtime_update=True,
-                        aspect_ratio=None,
-                        return_type="box",
-                        box_color="#2f6255",
-                        stroke_width=2,
-                        key="test-top5-manual-subject-playground-marker",
-                    )
-                    box = (
-                        int(marker["left"]),
-                        int(marker["top"]),
-                        int(marker["width"]),
-                        int(marker["height"]),
-                    )
-                    st.caption(f"Selected text area: {box[2]} × {box[3]}")
-                    x = box[0]
-                    y = box[1]
-                    font_size = 150
-                else:
-                    box = tuple(int(value) for value in rendered_config["text_box"])
-                    max_x = max(0, 1080 - box[2])
-                    max_y = max(0, 1920 - box[3])
+
+                marker_image = _top5_fit_preview(current_image, 1080, 1920)
+                default_coords = None
+                if rendered_config:
+                    bx, by, bw, bh = [int(value) for value in rendered_config["text_box"]]
+                    default_coords = (bx, bx + bw, by, by + bh)
                     st.caption(
-                        f"Selected text area locked at {box[2]} × {box[3]}. "
-                        "Adjust the headline and its position or size, then press Render Now."
+                        f"Last rendered text area: {bw} × {bh}. "
+                        "Resize or move the rectangle, change the text size, then press Render Now."
                     )
 
-                    x_key = "test-top5-manual-subject-playground-x"
-                    y_key = "test-top5-manual-subject-playground-y"
+                marker = st_cropper(
+                    marker_image,
+                    realtime_update=True,
+                    default_coords=default_coords,
+                    aspect_ratio=None,
+                    return_type="box",
+                    box_color="#2f6255",
+                    stroke_width=2,
+                    key=f"test-top5-manual-subject-playground-marker-{selected_mode}",
+                )
+                box = (
+                    int(marker["left"]),
+                    int(marker["top"]),
+                    int(marker["width"]),
+                    int(marker["height"]),
+                )
+
+                if rendered_config:
                     size_key = "test-top5-manual-subject-playground-font-size"
-                    if x_key not in st.session_state:
-                        st.session_state[x_key] = min(max_x, max(0, int(rendered_config.get("x", box[0]))))
-                    if y_key not in st.session_state:
-                        st.session_state[y_key] = min(max_y, max(0, int(rendered_config.get("y", box[1]))))
                     if size_key not in st.session_state:
                         st.session_state[size_key] = int(rendered_config.get("font_size", 150))
-
-                    x = st.slider("Horizontal position", 0, max_x, key=x_key)
-                    y = st.slider("Vertical position", 0, max_y, key=y_key)
                     font_size = st.slider(
                         "Text size",
                         min_value=72,
@@ -6092,6 +6083,8 @@ elif st.session_state.app_mode == "test":
                         step=2,
                         key=size_key,
                     )
+                else:
+                    font_size = 150
 
                 if st.button(
                     "Render Now",
@@ -6103,11 +6096,9 @@ elif st.session_state.app_mode == "test":
                         from renderer import build_top5_manual_subject_cutout_preview
                         rendered_config = {
                             "headline": st.session_state.test_top5_visual_playground_headline,
-                            "mode": "behind-subject" if mode == "Behind Subject" else "negative-space",
+                            "mode": selected_mode,
                             "text_box": tuple(box),
                             "font_size": int(font_size),
-                            "x": int(x),
-                            "y": int(y),
                         }
                         st.session_state["test-top5-manual-subject-playground-config"] = rendered_config
                         st.session_state.test_top5_visual_playground_render = build_top5_manual_subject_cutout_preview(
@@ -6116,8 +6107,6 @@ elif st.session_state.app_mode == "test":
                             mode=rendered_config["mode"],
                             text_box=rendered_config["text_box"],
                             font_size=rendered_config["font_size"],
-                            x=rendered_config["x"],
-                            y=rendered_config["y"],
                             source_label=current_source,
                         )
                     except (ValueError, OSError, RuntimeError, ImportError) as exc:
@@ -6730,8 +6719,8 @@ elif st.session_state.app_mode == "test":
                                     default="Negative Space",
                                     key=f"test-top5-manual-subject-mode-{active_slide}",
                                 ) or "Negative Space"
-
                                 selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
+
                                 rendered_config = state.get("rendered_config")
                                 if rendered_config and rendered_config.get("mode") != selected_mode:
                                     state.pop("rendered_config", None)
@@ -6739,56 +6728,40 @@ elif st.session_state.app_mode == "test":
                                     rendered_config = None
 
                                 from streamlit_cropper import st_cropper
-                                if not rendered_config:
+                                default_coords = None
+                                if rendered_config:
+                                    bx, by, bw, bh = [int(value) for value in rendered_config["text_box"]]
+                                    default_coords = (bx, bx + bw, by, by + bh)
+                                    st.caption(
+                                        f"Last rendered text area: {bw} × {bh}. "
+                                        "Resize or move the rectangle, change the text size, then press Render Now."
+                                    )
+                                else:
                                     st.caption(
                                         "Draw a free-size rectangle over the image to show exactly where the headline should sit."
                                     )
-                                    marker_image = _top5_fit_preview(working_bytes, 1080, 1920)
-                                    marker = st_cropper(
-                                        marker_image,
-                                        realtime_update=True,
-                                        aspect_ratio=None,
-                                        return_type="box",
-                                        box_color="#2f6255",
-                                        stroke_width=2,
-                                        key=f"test-top5-manual-subject-marker-{active_slide}",
-                                    )
-                                    box = (
-                                        int(marker["left"]),
-                                        int(marker["top"]),
-                                        int(marker["width"]),
-                                        int(marker["height"]),
-                                    )
-                                    x = box[0]
-                                    y = box[1]
-                                    font_size = 150
-                                else:
-                                    box = tuple(int(value) for value in rendered_config["text_box"])
-                                    max_x = max(0, 1080 - box[2])
-                                    max_y = max(0, 1920 - box[3])
-                                    st.caption(
-                                        f"Selected text area locked at {box[2]} × {box[3]}. "
-                                        "Adjust the headline and its position or size, then press Render Now."
-                                    )
 
-                                    x_key = f"test-top5-manual-subject-x-{active_slide}"
-                                    y_key = f"test-top5-manual-subject-y-{active_slide}"
+                                marker = st_cropper(
+                                    _top5_fit_preview(working_bytes, 1080, 1920),
+                                    realtime_update=True,
+                                    default_coords=default_coords,
+                                    aspect_ratio=None,
+                                    return_type="box",
+                                    box_color="#2f6255",
+                                    stroke_width=2,
+                                    key=f"test-top5-manual-subject-marker-{active_slide}-{selected_mode}",
+                                )
+                                box = (
+                                    int(marker["left"]),
+                                    int(marker["top"]),
+                                    int(marker["width"]),
+                                    int(marker["height"]),
+                                )
+
+                                if rendered_config:
                                     size_key = f"test-top5-manual-subject-size-{active_slide}"
-                                    if x_key not in st.session_state:
-                                        st.session_state[x_key] = min(
-                                            max_x,
-                                            max(0, int(rendered_config.get("x", box[0]))),
-                                        )
-                                    if y_key not in st.session_state:
-                                        st.session_state[y_key] = min(
-                                            max_y,
-                                            max(0, int(rendered_config.get("y", box[1]))),
-                                        )
                                     if size_key not in st.session_state:
                                         st.session_state[size_key] = int(rendered_config.get("font_size", 150))
-
-                                    x = st.slider("Horizontal position", 0, max_x, key=x_key)
-                                    y = st.slider("Vertical position", 0, max_y, key=y_key)
                                     font_size = st.slider(
                                         "Text size",
                                         min_value=72,
@@ -6796,6 +6769,8 @@ elif st.session_state.app_mode == "test":
                                         step=2,
                                         key=size_key,
                                     )
+                                else:
+                                    font_size = 150
 
                                 if st.button(
                                     "Render Now",
@@ -6806,11 +6781,9 @@ elif st.session_state.app_mode == "test":
                                     try:
                                         rendered_config = {
                                             "headline": headline,
-                                            "mode": "behind-subject" if mode == "Behind Subject" else "negative-space",
+                                            "mode": selected_mode,
                                             "text_box": tuple(box),
                                             "font_size": int(font_size),
-                                            "x": int(x),
-                                            "y": int(y),
                                         }
                                         preview = build_top5_manual_subject_cutout_preview(
                                             working_image,
@@ -6818,8 +6791,6 @@ elif st.session_state.app_mode == "test":
                                             mode=rendered_config["mode"],
                                             text_box=rendered_config["text_box"],
                                             font_size=rendered_config["font_size"],
-                                            x=rendered_config["x"],
-                                            y=rendered_config["y"],
                                             source_label=_top5_asset_source(selected_image[1]),
                                         )
                                         state["image_index"] = int(selected_index)
