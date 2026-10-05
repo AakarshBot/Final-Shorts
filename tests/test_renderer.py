@@ -681,7 +681,7 @@ def test_top5_editorial_uses_oswald_and_full_frame_safe_area():
     assert renderer.TOP5_EDITORIAL_SAFE_TOP <= opener["y"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
-def test_top5_option7_side_subject_uses_compact_vertical_lines():
+def test_top5_option7_uses_full_frame_for_editorial_overlap():
     subject = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(subject).rectangle((650, 520, 1010, 1650), fill=255)
 
@@ -694,33 +694,15 @@ def test_top5_option7_side_subject_uses_compact_vertical_lines():
         subject_mask=subject,
     )
 
-    assert layout["composition_mode"] == "vertical-left"
+    assert layout["composition_mode"] == "subject-cutout"
+    assert layout["region_mode"] == "hero-overlay"
     assert layout["x"] >= renderer.TOP5_EDITORIAL_MARGIN_X
-    assert all(1 <= len(line) <= 2 for line in layout["headline_lines"])
-    assert layout["headline_size"] >= renderer.TOP5_SUBJECT_HEADLINE_MIN_SIZE
-
-
-def test_top5_option7_crosses_center_subject_with_headline_on_both_sides():
-    subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((390, 570, 690, 1490), fill=255)
-
-    layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
-        "",
-        "english",
-        1,
-        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        subject_mask=subject,
-    )
-
-    assert layout["composition_mode"] == "cross-subject"
-    assert layout["x"] < 390
-    assert layout["x"] + layout["width"] > 690
+    assert layout["x"] + layout["width"] <= renderer.WIDTH - renderer.TOP5_EDITORIAL_MARGIN_X
     assert layout["headline_size"] >= 120
     assert layout["subject_overlap"] > 0
 
 
-def test_top5_option7_crosses_two_subjects_and_keeps_gap_visible(monkeypatch):
+def test_top5_option7_two_subjects_remain_above_headline(monkeypatch):
     background = Image.new("RGB", (1080, 1920), (20, 24, 30))
     player_color = (180, 90, 60)
     draw = ImageDraw.Draw(background)
@@ -750,20 +732,19 @@ def test_top5_option7_crosses_two_subjects_and_keeps_gap_visible(monkeypatch):
         subject_mask=subject,
     )
 
-    assert layout["composition_mode"] == "cross-subject"
-    assert layout["x"] < 170
-    assert layout["x"] + layout["width"] > 910
-
+    assert layout["composition_mode"] == "subject-cutout"
+    assert layout["subject_overlap"] > 0
     assert any(
         image.getpixel((x, y)) == player_color
         for y in range(layout["y"], layout["y"] + layout["headline_height"])
         for x in range(170, 361)
     )
     assert any(
-        image.getpixel((x, y)) != background.getpixel((x, y))
+        image.getpixel((x, y)) == player_color
         for y in range(layout["y"], layout["y"] + layout["headline_height"])
-        for x in range(361, 720)
+        for x in range(720, 911)
     )
+
 
 
 def test_top5_option7_ignores_body_copy():
@@ -826,6 +807,7 @@ def test_top5_option7_restores_player_above_headline(monkeypatch):
         for y in range(layout["y"], min(layout["y"] + layout["headline_height"], 1420))
         for x in range(max(390, layout["x"]), min(690, layout["x"] + layout["width"]))
     )
+    assert image.getpixel((40, 40)) == (16, 19, 24)
 
 
 def test_top5_subject_mask_uses_local_birefnet_without_fp16(monkeypatch):
