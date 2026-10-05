@@ -2588,6 +2588,7 @@ def _render_live_visuals(slide_count: int):
                 st.info("Run one of the existing visual options first so Text Cutout has an image to work from.")
             else:
                 current_selection = st.session_state.live_text_cutout_image_selection
+                crop_store = st.session_state.get("live_visual_crops") or {}
                 st.markdown(
                     '<div class="section-head"><div><div class="eyebrow">SOURCE IMAGE</div>'
                     '<div class="section-title">Choose an existing visual</div></div>'
@@ -2620,29 +2621,53 @@ def _render_live_visuals(slide_count: int):
                                     f'<div class="visual-detail">{label}</div>',
                                     unsafe_allow_html=True,
                                 )
+                                if asset_key in crop_store:
+                                    st.markdown(
+                                        '<div class="visual-crop-label">CROP APPLIED</div>',
+                                        unsafe_allow_html=True,
+                                    )
                                 selected = (
                                     isinstance(current_selection, dict)
                                     and current_selection.get("asset_key") == asset_key
                                 )
-                                if st.button(
-                                    "Selected" if selected else "Select image",
-                                    type="primary" if selected else "secondary",
-                                    width="stretch",
-                                    key=f"live-text-cutout-select-{asset_key}",
-                                ):
-                                    st.session_state.live_text_cutout_image_selection = {
-                                        "asset_key": asset_key,
-                                        "source": source,
-                                        "label": label,
-                                        "bytes": image_bytes,
-                                    }
-                                    st.session_state.live_text_cutout_config = None
-                                    st.session_state.live_text_cutout_render = None
-                                    st.rerun()
+                                crop_col, select_col = st.columns(2, gap="small")
+                                with crop_col:
+                                    if st.button(
+                                        "Crop / reposition",
+                                        width="stretch",
+                                        key=f"live-text-cutout-crop-{asset_key}",
+                                    ):
+                                        raw = asset.get("bytes")
+                                        if isinstance(raw, (bytes, bytearray)):
+                                            _crop_visual_dialog(
+                                                asset_key,
+                                                bytes(raw),
+                                                source,
+                                                crop_store="live_visual_crops",
+                                            )
+                                        else:
+                                            st.warning("This visual does not have a crop-ready payload.")
+                                with select_col:
+                                    if st.button(
+                                        "Selected" if selected else "Select image",
+                                        type="primary" if selected else "secondary",
+                                        width="stretch",
+                                        key=f"live-text-cutout-select-{asset_key}",
+                                    ):
+                                        st.session_state.live_text_cutout_image_selection = {
+                                            "asset_key": asset_key,
+                                            "source": source,
+                                            "label": label,
+                                            "bytes": image_bytes,
+                                        }
+                                        st.session_state.live_text_cutout_config = None
+                                        st.session_state.live_text_cutout_render = None
     
                 selected = st.session_state.live_text_cutout_image_selection
                 if isinstance(selected, dict):
-                    source_image = _asset_to_image(selected.get("bytes"))
+                    selected_asset_key = str(selected.get("asset_key") or "")
+                    source_bytes = crop_store.get(selected_asset_key) or selected.get("bytes")
+                    source_image = _asset_to_image(source_bytes)
                     if source_image is None:
                         st.error("The selected image could not be opened.")
                     else:
@@ -2686,6 +2711,7 @@ def _render_live_visuals(slide_count: int):
                         if rendered_config and rendered_config.get("mode") != selected_mode:
                             st.session_state.live_text_cutout_config = None
                             st.session_state.live_text_cutout_render = None
+                            st.session_state.live_text_cutout_font_size = 150
                             rendered_config = None
     
                         marker_image = _top5_fit_preview(source_image, 1080, 1920)
@@ -2708,7 +2734,7 @@ def _render_live_visuals(slide_count: int):
                             return_type="box",
                             box_color="#2f6255",
                             stroke_width=2,
-                            key=f"live-text-cutout-marker-{selected_mode}",
+                            key=f"live-text-cutout-marker-{selected_asset_key}-{selected_mode}",
                         )
                         box = (
                             int(marker["left"]),
@@ -2793,7 +2819,7 @@ def _render_live_visuals(slide_count: int):
                                     "result_key": "text-cutout",
                                     "source": str(selected.get("source") or "Text Cutout"),
                                     "label": "Text Cutout",
-                                    "bytes": bytes(selected["bytes"]),
+                                    "bytes": bytes(source_bytes),
                                     "preview_bytes": bytes(rendered),
                                     "manual_subject_cutout": config,
                                 }
