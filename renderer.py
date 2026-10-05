@@ -678,11 +678,6 @@ def _top5_subject_layout(
     safe_top = TOP5_EDITORIAL_SAFE_TOP
     safe_bottom = TOP5_EDITORIAL_SAFE_BOTTOM
 
-    headline_layout = None
-    chosen_x = 0
-    chosen_y = 0
-    composition_score = -10_000.0
-
     if mode.startswith("vertical"):
         if mode == "vertical-right":
             available_width = geometry["right_space"] - 36
@@ -691,18 +686,15 @@ def _top5_subject_layout(
             available_width = geometry["left_space"] - 36
             column_x = TOP5_EDITORIAL_MARGIN_X
 
-        max_width = max(
-            300,
-            min(470, int(available_width)),
-        )
         if available_width < 300:
             return None
 
+        max_width = min(470, int(available_width))
         target_lines = min(
             5,
             max(2, math.ceil(len(clean_headline.split()) / 2)),
         )
-        candidates = []
+        headline_candidates = []
 
         for width in range(max_width, 299, -20):
             for size in range(168, 95, -2):
@@ -720,12 +712,6 @@ def _top5_subject_layout(
                     continue
 
                 multi_word_lines = sum(len(line) > 1 for line in lines)
-                score = (
-                    size * 2.0
-                    + multi_word_lines * 28.0
-                    - abs(len(lines) - target_lines) * 46.0
-                    - abs(width - max_width) * 0.12
-                )
                 headline_height = (
                     sum(
                         _top5_editorial_measure(
@@ -737,7 +723,13 @@ def _top5_subject_layout(
                     )
                     + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
                 )
-                candidates.append({
+                score = (
+                    size * 2.0
+                    + multi_word_lines * 28.0
+                    - abs(len(lines) - target_lines) * 46.0
+                    - abs(width - max_width) * 0.12
+                )
+                headline_candidates.append({
                     "score": score,
                     "headline_fonts": fonts,
                     "headline_lines": lines,
@@ -747,15 +739,17 @@ def _top5_subject_layout(
                     "x": column_x,
                 })
 
-        if not candidates:
+        if not headline_candidates:
             return None
 
-        headline_layout = max(candidates, key=lambda item: item["score"])
+        headline_layout = max(headline_candidates, key=lambda item: item["score"])
         chosen_x = int(headline_layout["x"])
+        composition_score = headline_layout["score"]
+        target_y_factor = 0.46
 
     else:
-        geometry_center = geometry["center_x"]
         max_width = WIDTH - TOP5_EDITORIAL_MARGIN_X * 2
+        headline_candidates = []
 
         for size in range(204, 108, -2):
             fonts = _top5_headline_font_stack(size, language)
@@ -767,39 +761,51 @@ def _top5_subject_layout(
             if width > max_width:
                 continue
 
-            base_x = int(round(geometry_center - width / 2))
-            for shift in (-120, -80, -40, 0, 40, 80, 120):
+            base_x = int(round(geometry["center_x"] - width / 2))
+            for shift in (-140, -100, -60, -20, 20, 60, 100, 140):
                 x = max(
                     TOP5_EDITORIAL_MARGIN_X,
-                    min(WIDTH - TOP5_EDITORIAL_MARGIN_X - width, base_x + shift),
+                    min(
+                        WIDTH - TOP5_EDITORIAL_MARGIN_X - width,
+                        base_x + shift,
+                    ),
+                )
+                y = max(
+                    safe_top,
+                    min(
+                        safe_bottom - height,
+                        int(round(geometry["center_y"] - height / 2)),
+                    ),
                 )
                 overlap = _top5_subject_overlap_ratio(
                     subject_mask,
-                    (x, safe_top, x + width, safe_bottom),
+                    (x, y, x + width, y + height),
                 )
-                overlap_score = (
-                    180.0
-                    - abs(overlap - 0.14) * 850.0
-                    if 0.05 <= overlap <= 0.30
-                    else -120.0
+                if not 0.04 <= overlap <= 0.30:
+                    continue
+                score = (
+                    size * 2.4
+                    + 190.0
+                    - abs(overlap - 0.13) * 900.0
+                    - abs(shift) * 0.03
                 )
-                score = size * 2.2 + overlap_score
-                if score > composition_score:
-                    headline_layout = {
-                        "headline_fonts": fonts,
-                        "headline_lines": [[word for word in clean_headline.upper().split()]],
-                        "headline_height": height,
-                        "headline_size": size,
-                        "width": width,
-                        "x": int(x),
-                        "y_center": geometry["center_y"],
-                    }
-                    composition_score = score
+                headline_candidates.append({
+                    "score": score,
+                    "headline_fonts": fonts,
+                    "headline_lines": [[word for word in clean_headline.upper().split()]],
+                    "headline_height": height,
+                    "headline_size": size,
+                    "width": width,
+                    "x": x,
+                    "y": y,
+                })
 
-            if headline_layout is not None and headline_layout["headline_size"] == size:
-                break
+            if headline_candidates:
+                best_size = max(item["headline_size"] for item in headline_candidates)
+                if best_size == size:
+                    break
 
-        if headline_layout is None:
+        if not headline_candidates:
             for size in range(186, 106, -2):
                 fonts = _top5_headline_font_stack(size, language)
                 try:
@@ -813,6 +819,14 @@ def _top5_subject_layout(
                     continue
                 if len(lines) != 2:
                     continue
+                width = max(
+                    _top5_editorial_measure(
+                        probe,
+                        " ".join(line),
+                        fonts,
+                    )[0]
+                    for line in lines
+                )
                 headline_height = (
                     sum(
                         _top5_editorial_measure(
@@ -824,31 +838,37 @@ def _top5_subject_layout(
                     )
                     + TOP5_EDITORIAL_HEADLINE_LINE_GAP
                 )
-                width = min(
-                    940,
-                    max(
-                        _top5_editorial_measure(
-                            probe,
-                            " ".join(line),
-                            fonts,
-                        )[0]
-                        for line in lines
+                x = (WIDTH - width) // 2
+                y = max(
+                    safe_top,
+                    min(
+                        safe_bottom - headline_height,
+                        int(round(geometry["center_y"] - headline_height / 2)),
                     ),
                 )
-                headline_layout = {
+                overlap = _top5_subject_overlap_ratio(
+                    subject_mask,
+                    (x, y, x + width, y + headline_height),
+                )
+                headline_candidates.append({
+                    "score": size * 2.2 + 160.0 - abs(overlap - 0.13) * 700.0,
                     "headline_fonts": fonts,
                     "headline_lines": lines,
                     "headline_height": headline_height,
                     "headline_size": size,
                     "width": width,
-                    "x": (WIDTH - width) // 2,
-                    "y_center": geometry["center_y"],
-                }
+                    "x": x,
+                    "y": y,
+                })
                 break
 
-        if headline_layout is None:
+        if not headline_candidates:
             return None
+
+        headline_layout = max(headline_candidates, key=lambda item: item["score"])
         chosen_x = int(headline_layout["x"])
+        composition_score = headline_layout["score"]
+        target_y_factor = 0.50
 
     body_font = None
     body_lines = []
@@ -870,7 +890,12 @@ def _top5_subject_layout(
                 )
             except ValueError:
                 continue
-            available_height = safe_bottom - safe_top - headline_layout["headline_height"] - TOP5_EDITORIAL_HEADLINE_BODY_GAP
+            available_height = (
+                safe_bottom
+                - safe_top
+                - headline_layout["headline_height"]
+                - TOP5_EDITORIAL_HEADLINE_BODY_GAP
+            )
             if candidate_height <= available_height:
                 body_font = _top5_body_font(body_size, language)
                 body_lines = candidate_lines
@@ -882,29 +907,23 @@ def _top5_subject_layout(
     total_height = headline_layout["headline_height"] + (
         TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height if body_lines else 0
     )
+
     if mode.startswith("vertical"):
-        target_y = int(
-            round(
-                geometry["center_y"]
-                - total_height * 0.46
-            )
-        )
+        target_y = int(round(
+            geometry["center_y"] - total_height * target_y_factor
+        ))
+        chosen_x = int(headline_layout["x"])
     else:
-        target_y = int(
-            round(
-                geometry["center_y"]
-                - total_height * 0.50
-            )
-        )
+        target_y = int(headline_layout.get("y", round(
+            geometry["center_y"] - total_height * target_y_factor
+        )))
 
     chosen_y = max(
         safe_top,
         min(safe_bottom - total_height, target_y),
     )
 
-    if mode.startswith("vertical"):
-        composition_score = headline_layout["score"]
-    else:
+    if mode == "cross-subject":
         overlap = _top5_subject_overlap_ratio(
             subject_mask,
             (
@@ -914,10 +933,12 @@ def _top5_subject_layout(
                 chosen_y + headline_layout["headline_height"],
             ),
         )
+        if not 0.04 <= overlap <= 0.34:
+            return None
         composition_score = (
-            headline_layout["headline_size"] * 2.2
-            + 180.0
-            - abs(overlap - 0.14) * 850.0
+            headline_layout["score"]
+            + 80.0
+            - abs(overlap - 0.13) * 700.0
         )
 
     return {
