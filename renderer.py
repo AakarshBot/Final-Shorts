@@ -763,11 +763,8 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
     if mode not in {"negative-space", "behind-subject"}:
         raise ValueError("Manual Subject Cutout has an invalid composition mode.")
 
-    x = int(config.get("x") if config.get("x") is not None else box_left)
-    y = int(config.get("y") if config.get("y") is not None else box_top)
-    x = max(0, min(WIDTH - box_width, x))
-    y = max(0, min(HEIGHT - box_height, y))
-
+    x = max(0, min(WIDTH - box_width, box_left))
+    y = max(0, min(HEIGHT - box_height, box_top))
     font_path = Path(__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     if not font_path.exists():
         raise RuntimeError("Manual Subject Cutout requires the existing Barlow Condensed Black font.")
@@ -916,8 +913,6 @@ def build_top5_manual_subject_cutout_preview(
     mode: str,
     text_box: tuple[int, int, int, int],
     font_size: int,
-    x: int | None = None,
-    y: int | None = None,
     source_label: str | None = None,
 ) -> bytes:
     frame = _draw_top5_manual_subject_cutout(
@@ -927,8 +922,6 @@ def build_top5_manual_subject_cutout_preview(
             "mode": mode,
             "text_box": tuple(text_box),
             "font_size": int(font_size),
-            "x": x,
-            "y": y,
         },
     )
     _paste_logo(frame)
