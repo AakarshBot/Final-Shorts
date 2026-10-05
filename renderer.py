@@ -930,7 +930,7 @@ def _top5_subject_layout(
                         "y": int(y),
                         "subject_overlap": overlap,
                         "region_area": rw * rh,
-                        "mode_bonus": 1500.0,
+                        "mode_bonus": 1700.0 if 0.40 <= vertical_ratio <= 0.60 else 650.0,
                         "score": fit["score"] + overlap_quality * 360.0 + center_quality * 110.0 + center_x_quality * 80.0,
                     })
 
