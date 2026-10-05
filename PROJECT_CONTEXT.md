@@ -315,10 +315,13 @@ Top-5 Upload:
 Top-5 status:
 - Test pipeline/framework: approved.
 - Standalone Top-5 Visuals renderer playground: implemented in Test; pending user visual approval.
-- Fixed-zone Barlow Condensed + localized contrast-aware shadow typography: implemented in the shared renderer and wired into Visual QC; body shadow reduced; pending user Test review.
-- Headline subject-occlusion typography: implemented in the shared Top-5 renderer using the existing Hugging Face dependency path with `briaai/RMBG-2.0` through routed `fal-ai` image segmentation; pending user Test review and separate production-license suitability review.
-- Local body compression is implemented in the Visual QC path with no additional AI/API call or code dependency.
-- Live implementation: existing pipeline remains in production testing, but this typography/readability redesign is not approved for Live until Test review succeeds.
+- Dynamic editorial typography: implemented in the shared renderer and wired into the Top-5 Test Visual QC. The renderer evaluates multiple left/center/right and vertical placements against the actual image, prefers quiet copy space, keeps text inside the 620–1650 safe area, and adapts width to preserve readable type.
+- Top-5 English headlines use Barlow Condensed Black in ALL CAPS with a two-line maximum; body copy uses Barlow Regular with a readable minimum size.
+- Text treatment is opaque editorial type with a restrained directional shadow and contrast-aware black/white text. The previous transparent/scrim treatment has been removed.
+- Optional Subject Cutout is available as Top-5 Test Visual QC Option 7. It reuses an existing image pool and runs ZhengPeng7/BiRefNet_lite locally through PyTorch/Transformers only when selected. The model is MIT-licensed and approximately 178 MB.
+- BiRefNet foreground pixels are composited above the headline only, allowing deliberate player/subject occlusion while leaving body copy unobstructed.
+- Local body compression is implemented in the Visual QC path with no additional AI/API call.
+- Live implementation: this typography/Subject Cutout redesign remains Test-only until the user approves the Test result.
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -337,13 +340,13 @@ Current audit state:
 - Topic Fetcher, Scriptwriter, Audio, Visuals, Subtitles, Renderer and YouTube Upload remain separate modules with shared underlying contracts.
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
-- Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
-- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in one fixed text zone at x=64, y=900 through y=1480.
+- Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and the Test-only Subject Cutout treatment.
+- The Top-5 renderer uses the full-bleed photograph as the primary visual field and automatically evaluates multiple editorial text compositions inside a 620–1650 safe area instead of using one fixed y-position.
+- Candidate compositions vary text width and left/center/right alignment, score copy space using local detail, luminance variation and saturation, and receive a modest rule-of-thirds preference. The renderer chooses the highest-scoring valid composition and never lets text exceed the safe area.
 - Top-5 headlines use Barlow Condensed Black in ALL CAPS with a two-line maximum and a readable minimum size; body copy uses Barlow Regular with a readable minimum size.
-- Top-5 readability uses a localized dark scrim/halo derived from the actual text mask, plus separate contrast-aware headline/body shadows and a dark outline. The body shadow is intentionally lighter than the headline shadow. It does not use a broad photo wash or full-frame panel.
-- The Top-5 headline now supports **player/subject occlusion typography**: the selected photograph is sent through the existing Hugging Face integration using **briaai/RMBG-2.0** via the routed **fal-ai** image-segmentation provider, producing a foreground matte. Only the foreground pixels that overlap the headline are composited back above the type; the body copy remains unobstructed.
-- Foreground extraction is cached per source image. It uses the existing **HF_TOKEN** and the existing `huggingface_hub` dependency; no new Python dependency or paid background-removal service is introduced. Hugging Face currently provides monthly free Inference Provider credits to Free users, with additional usage requiring purchased credits.
-- **Production-license note:** BRIA publishes RMBG-2.0 for non-commercial use. This exact model is therefore a Test-stage implementation and must not be promoted into monetized Live production without replacing it with a commercially permitted foreground-removal model.
+- Text treatment uses opaque black/white type chosen from the local image luminance, a restrained directional shadow, and a thin contrasting outline. There is no broad photo wash, full-frame panel, or transparent text.
+- Optional Subject Cutout uses ZhengPeng7/BiRefNet_lite locally through PyTorch/Transformers. The model runs only when the user selects Option 7; normal Top-5 rendering does not invoke it. Foreground extraction is cached per source image. The subject pixels that overlap the headline are composited above the type; the body remains unobstructed.
+- The local BiRefNet path adds the model runtime dependencies from the model's documented requirements; no hosted inference API or paid background-removal service is used.
 - Body copy is rejected when it cannot fit at the minimum readable size. Renderer exposes the strict maximum word count; Visual QC shows the rejected body as editable copy and offers deterministic local compression to that cap.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
@@ -367,7 +370,7 @@ Status: **Architecture cleanup in progress.**
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is approved; the current fixed-zone Barlow + localized scrim/shadow visual treatment remains in Test until the user approves it**.
+- **Top-5 production framework is approved; the dynamic Barlow editorial typography and optional local Subject Cutout remain in Test until the user approves them**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
