@@ -165,24 +165,37 @@ Status: **Approved / manually tested.**
 
 Visual retrieval is complete for the current factory phase.
 
-The Visuals desk contains four independent options:
+The standard Cricket/Deep-Dive Visuals desk contains four retrieval options:
 1. Automatic scraper/crawler.
-2. Manual scraper using real-image sources.
+2. Manual scraper.
 3. Manual real-image search.
 4. Manual AI image generation.
 
-Key rules:
-- Visual retrieval remains manual-review driven.
-- No automatic visual-generation loop.
-- No AI visual-verification gate is required in the completed Visuals phases.
-- Option 1 is the automatic story-page/publisher-image crawler.
-- Option 2 performs manual-query retrieval, image download and basic image validation/deduplication, then displays the pool.
-- Option 3 is manual real-image search across configured sources.
-- Option 4 is manual AI image generation across configured providers.
-- Option 2 sources include Commons, DuckDuckGo, Wikipedia, Openverse and configured Pixabay/Pexels/Unsplash APIs.
-- Current AI providers include Hugging Face Inference Providers with FLUX.1-schnell and Cloudflare Workers AI with FLUX.1-schnell.
+Top-5 extends the visual desk to seven options:
+1. Automatic Scraper.
+2. Manual Scraper.
+3. Real Image Search.
+4. AI Generation.
+5. Stats Card.
+6. Quote Card.
+7. Subject Cutout.
 
-Status: **Approved.**
+Top-5 Visual QC is independently testable in Test without requiring Scriptwriter or Audio approval. The standalone Top-5 Visuals screen always exposes all seven options and must not fall through into the six-slide production QC when no Scriptwriter handoff exists.
+
+The image-selection workflow uses the factory's existing image-pool interaction. Every Top-5 source-image pool supports Crop / Reposition through the shared factory crop dialog and stores the resulting 9:16 framing per asset. The same cropped bytes are used for selection, preview and Subject Cutout analysis.
+
+Option 7 · Subject Cutout is an optional treatment, not a default applied to every image. It runs local ZhengPeng7/BiRefNet_lite subject segmentation. No hosted inference service is used for this treatment.
+
+Subject Cutout composition is spatially driven:
+- A subject predominantly on the left or right creates a vertical headline stack in the available opposite-side copy space. The stack remains normally oriented/readable, but dynamically wraps into balanced 2–4 horizontal lines rather than forcing one word per line.
+- A subject occupying the middle creates a large horizontal cross-subject headline. The headline is centered and positioned through the detected subject band so the type visibly passes behind the foreground subject and reappears on the other side where the image supports it.
+- Subject position, available copy space, headline length, font size, vertical position and readable subject overlap are evaluated together. The system is not allowed to use one fixed position or one fixed font size for every photograph.
+- The foreground subject is composited back over the headline only where the segmentation mask and headline intersect. This creates the genuine text-behind-subject depth effect rather than a simulated shadow or transparent-text treatment.
+- When a photograph does not benefit from the effect, Subject Cutout remains optional; normal Top-5 editorial cards continue to use ordinary adaptive copy-space placement.
+
+No extra visual panels, rails, universal gradients, transparent/faded type, headline animation or decorative UI treatments are part of the Subject Cutout design.
+
+Status: Test implementation / visual refinement in progress.
 
 ## Subtitles — Function 05
 
@@ -199,28 +212,37 @@ Status: **Approved.**
 
 ## Renderer — Function 06
 
-Canonical style:
-- **Editorial Highlight**.
-- Large Oswald Bold headline.
-- Headline dynamically fits and wraps to **one, two or three lines**.
-- Headline layout uses an explicit screen-safe margin and stroke-aware bounding boxes.
-- Long 3–6 word headings are supported through wrapping and dynamic font fitting.
-- A word that cannot fit within the safe width is rejected instead of being allowed to clip.
-- Moving blue/yellow brand marker remains part of the opening treatment.
-- Subtitles use a large bold sans-serif, dark outline, white inactive words and yellow active word.
-- Subtitle layout uses stroke-aware measurements and a dedicated screen-safe margin.
-- No caption background capsule.
-- Logo is the real local `logo.png`, top-right.
+Top-5 uses a separate static editorial-card treatment inside the shared renderer.
+
+Typography:
+- English headlines use Barlow Condensed Black, ALL CAPS.
+- Normal Top-5 cards dynamically fit a 1–2 line headline inside readable image copy space.
+- Top-5 Subject Cutout overrides the normal 1–2 line layout when the photograph supports a stronger spatial composition:
+  - side subjects use a balanced 2–4 line vertical stack in the opposite copy space;
+  - center subjects use a large horizontal headline that crosses the foreground subject.
+- Font size is chosen from the actual image geometry and headline fit, not kept constant across images.
+- Body text uses Barlow Regular and remains variable-length while fitting the readable visual area.
+
+Subject Cutout:
+- Subject segmentation is local using ZhengPeng7/BiRefNet_lite.
+- The subject mask determines foreground geometry, side-space availability, and the preferred composition mode.
+- Cross-subject layouts seek a meaningful readable crossing through the subject rather than placing the headline in an unrelated empty zone.
+- Side-subject layouts use the available opposite side as intentional copy space, while allowing a small controlled intrusion into the foreground.
+- The foreground subject is drawn over intersecting headline pixels only, preserving ordinary opaque type everywhere else.
+- Subject Cutout is an optional per-slide visual treatment chosen during Visual QC.
+
+Readability and styling:
+- Type remains opaque.
+- Readability uses a restrained directional shadow and thin contrast-aware outline.
+- There is no transparent/faded text, broad scrim, universal panel, permanent border, decorative dots/lines or headline motion.
+- Logo is the real local logo.png, top-right.
 - Source label is plain text, bottom-right.
-- No permanent border, glass panel, decorative dots/lines or universal Ken-Burns effect.
-- When the opening headline is enabled, subtitles remain hidden until the 1.15-second headline window ends.
 
-Renderer test:
-- Uses filler content only for the isolated preview desk.
-- The test reads the approved Scriptwriter heading when that handoff is available.
-- The Renderer still supports a fallback test headline when no approved Scriptwriter handoff exists.
+Crop:
+- Top-5 image pools use the same Crop / Reposition control as the rest of the factory.
+- The user's chosen crop becomes the selected slide framing and is the framing analyzed by Subject Cutout.
 
-Status: **Approved.**
+Status: Top-5 Subject Cutout test implementation / visual refinement in progress.
 
 ## YouTube Upload — Function 07
 
