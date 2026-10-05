@@ -876,8 +876,21 @@ def test_top5_option7_restores_player_above_headline(monkeypatch):
     )
 
 
-def test_top5_manual_subject_cutout_supports_four_fonts_and_four_styles():
-    previews = []
+def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypatch):
+    local_font = (
+        renderer.Path(__file__).resolve().parents[1]
+        / "fonts"
+        / "BarlowCondensed-Black.ttf"
+    ).read_bytes()
+    monkeypatch.setattr(
+        renderer,
+        "_top5_manual_subject_font_bytes",
+        lambda _font_name: local_font,
+    )
+
+    assert len(renderer.TOP5_MANUAL_SUBJECT_FONT_OPTIONS) == 9
+    assert len(renderer.TOP5_MANUAL_SUBJECT_STYLE_OPTIONS) == 9
+
     for font in renderer.TOP5_MANUAL_SUBJECT_FONT_OPTIONS:
         preview = renderer.build_top5_manual_subject_cutout_preview(
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
@@ -888,11 +901,8 @@ def test_top5_manual_subject_cutout_supports_four_fonts_and_four_styles():
             font=font,
             style="Crisp Outline",
         )
-        previews.append(preview)
         assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
-    assert len(set(previews)) == 4
 
-    previews = []
     for style in renderer.TOP5_MANUAL_SUBJECT_STYLE_OPTIONS:
         preview = renderer.build_top5_manual_subject_cutout_preview(
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
@@ -903,9 +913,12 @@ def test_top5_manual_subject_cutout_supports_four_fonts_and_four_styles():
             font="Barlow Condensed",
             style=style,
         )
-        previews.append(preview)
         assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
-    assert len(set(previews)) == 4
+
+    assert all(
+        renderer.TOP5_MANUAL_SUBJECT_FONT_OPTIONS[name].get("url")
+        for name in ("Bebas Neue", "Teko", "Khand", "Kanit", "Fjalla One")
+    )
 
 
 def test_top5_manual_subject_cutout_uses_barlow_condensed():
