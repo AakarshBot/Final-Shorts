@@ -591,9 +591,32 @@ def _top5_body_word_cap(
     return low
 
 
+def _top5_subject_overlap_score(
+    subject_mask: Image.Image,
+    x: int,
+    y: int,
+    width: int,
+    headline_height: int,
+) -> float:
+    region = subject_mask.crop((x, y, x + width, y + headline_height)).resize(
+        (48, 24),
+        Image.Resampling.BILINEAR,
+    )
+    coverage = sum(value > 80 for value in region.getdata()) / (48 * 24)
+    if coverage <= 0.02:
+        return -55.0
+    if coverage <= 0.18:
+        return coverage * 380.0
+    if coverage <= 0.36:
+        return 68.0 - abs(coverage - 0.26) * 120.0
+    return 24.0 - (coverage - 0.36) * 180.0
+
+
 def _top5_composition_score(
     image: Image.Image,
     box: tuple[int, int, int, int],
+    subject_mask: Image.Image | None = None,
+    headline_height: int | None = None,
 ) -> float:
     sample_width = 48
     sample_height = max(
@@ -630,13 +653,24 @@ def _top5_composition_score(
     thirds_distance = min(abs(center_y - 1 / 3), abs(center_y - 2 / 3))
     thirds_bonus = max(0.0, 1.0 - thirds_distance * 5.0)
     width_bonus = min(1.0, max(0.0, (box[2] - box[0] - 760) / 200))
-    return calmness * 68.0 + contrast * 22.0 + thirds_bonus * 7.0 + width_bonus * 3.0
+    score = calmness * 68.0 + contrast * 22.0 + thirds_bonus * 7.0 + width_bonus * 3.0
 
+    if subject_mask is not None and headline_height:
+        score += _top5_subject_overlap_score(
+            subject_mask,
+            box[0],
+            box[1],
+            box[2] - box[0],
+            headline_height,
+        )
+    return score
 
 def _top5_layout_candidates(
     total_height: int,
     width: int,
     image: Image.Image | None,
+    headline_height: int,
+    subject_mask: Image.Image | None = None,
 ) -> list[tuple[float, int, int, int]]:
     max_y = TOP5_EDITORIAL_SAFE_BOTTOM - total_height
     if max_y < TOP5_EDITORIAL_SAFE_TOP:
@@ -660,10 +694,14 @@ def _top5_layout_candidates(
         for x in x_values:
             x = max(0, min(WIDTH - width, x))
             box = (x, y, x + width, y + total_height)
-            score = _top5_composition_score(image, box) if image is not None else 0.0
+            score = _top5_composition_score(
+                image,
+                box,
+                subject_mask=subject_mask,
+                headline_height=headline_height,
+            ) if image is not None else 0.0
             candidates.append((score, x, y, width))
     return list(dict.fromkeys(candidates))
-
 
 def _top5_editorial_layout(
     headline: str,
@@ -672,6 +710,7 @@ def _top5_editorial_layout(
     story_number: int,
     max_headline_lines: int = TOP5_EDITORIAL_HEADLINE_MAX_LINES,
     image: bytes | bytearray | Image.Image | None = None,
+    subject_mask: Image.Image | None = None,
 ) -> dict:
     clean_headline = " ".join(str(headline or "").split())
     clean_body = " ".join(str(body or "").split())
@@ -746,6 +785,8 @@ def _top5_editorial_layout(
             total_height,
             width,
             source_image,
+            headline_layout["headline_height"],
+            subject_mask=subject_mask,
         ):
             candidates.append({
                 "score": score,
@@ -896,6 +937,11 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         raise ValueError("Top-5 card requires a headline.")
 
     canvas = _top5_full_frame_image(base).convert("RGBA")
+    subject_mask = None
+    if card.get("subject_cutout"):
+        source_bytes = BytesIO()
+        canvas.convert("RGB").save(source_bytes, format="PNG", optimize=False)
+        subject_mask = _top5_subject_mask(source_bytes.getvalue())
     layout = _top5_editorial_layout(
         headline,
         body,
@@ -903,6 +949,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         int(card.get("story_number") or 0),
         int(card.get("max_headline_lines") or TOP5_EDITORIAL_HEADLINE_MAX_LINES),
         image=canvas,
+        subject_mask=subject_mask,
     )
     draw = ImageDraw.Draw(canvas, "RGBA")
     commands = []
@@ -971,11 +1018,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             stroke_fill=stroke_fill,
         )
 
-    if card.get("subject_cutout"):
-        subject_bytes = BytesIO()
-        source_image.save(subject_bytes, format="PNG", optimize=False)
-        subject_mask = _top5_subject_mask(subject_bytes.getvalue())
-        if subject_mask is not None:
+    if subject_mask is not None:
             headline_mask = Image.new("L", canvas.size, 0)
             headline_draw = ImageDraw.Draw(headline_mask)
             for kind, text, font, x_pos, y_pos in commands:
