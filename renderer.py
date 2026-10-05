@@ -446,7 +446,6 @@ def _top5_editorial_layout(
     if not clean_headline:
         raise ValueError("Top-5 card requires a headline.")
 
-    frame = _top5_full_frame_image(image) if image is not None else Image.new("RGB", (WIDTH, HEIGHT), (24, 28, 34))
     draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     left = TOP5_EDITORIAL_MARGIN_X
     right = WIDTH - TOP5_EDITORIAL_MARGIN_X
@@ -663,6 +662,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         body,
         language,
         int(card.get("story_number") or 0),
+        int(card.get("max_headline_lines") or TOP5_EDITORIAL_HEADLINE_MAX_LINES),
         image=source_image,
         subject_mask=subject_mask,
     )
