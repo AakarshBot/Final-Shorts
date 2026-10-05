@@ -1016,6 +1016,7 @@ def build_top5_manual_subject_cutout_preview(
     font: str = "Barlow Condensed",
     style: str = "Crisp Outline",
     source_label: str | None = None,
+    include_overlays: bool = True,
 ) -> bytes:
     frame = _draw_top5_manual_subject_cutout(
         source_image,
@@ -1028,8 +1029,9 @@ def build_top5_manual_subject_cutout_preview(
             "style": style,
         },
     )
-    _paste_logo(frame)
-    _paste_top5_source(frame, source_label)
+    if include_overlays:
+        _paste_logo(frame)
+        _paste_top5_source(frame, source_label)
     buffer = BytesIO()
     frame.convert("RGB").save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
@@ -1697,11 +1699,12 @@ def render_production_video(
         static_frame = None
         if isinstance(manual_subject_cutout, dict):
             static_frame = _draw_top5_manual_subject_cutout(image, manual_subject_cutout)
-            _paste_logo(static_frame)
-            _paste_source(
-                static_frame,
-                str(visual.get("source") or source_label or "Commons").strip() or "Commons",
-            )
+            if bool(manual_subject_cutout.get("include_overlays", True)):
+                _paste_logo(static_frame)
+                _paste_source(
+                    static_frame,
+                    str(visual.get("source") or source_label or "Commons").strip() or "Commons",
+                )
             static_frame = static_frame.convert("RGB")
         elif isinstance(top5_card, dict):
             static_frame = _draw_top5_editorial_card(image, top5_card)
