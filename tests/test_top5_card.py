@@ -124,7 +124,7 @@ def test_top5_body_preserves_all_copy_while_it_fits():
 
 
 def test_top5_body_rejection_reports_a_strict_word_cap():
-    body = " ".join(["The board confirmed the latest development for the next series."] * 12)
+    body = " ".join(["The board confirmed the latest development for the next series."] * 40)
 
     with pytest.raises(ValueError) as error:
         renderer._top5_editorial_layout(
