@@ -3290,10 +3290,11 @@ def render_live_top5():
             label_visibility="collapsed",
         ) or VISUAL_OPTIONS[0]
 
-        if option in {
+        if option == "Option 3 · Real Image Search":
+            st.info("Option 3 · Real Image Search is WIP in the Top-5 pipeline.")
+        elif option in {
             "Option 1 · Automatic Scraper",
             "Option 2 · Manual Scraper",
-            "Option 3 · Real Image Search",
             "Option 4 · AI Generation",
         }:
             if option == "Option 1 · Automatic Scraper":
@@ -3327,20 +3328,7 @@ def render_live_top5():
                     st.error(result["error"])
                 assets = list(result.get("assets") or [])
                 result_key = "manual"
-            elif option == "Option 3 · Real Image Search":
-                with st.form(f"live-top5-real-{active_slide}"):
-                    query = st.text_input("Real-image query", value=specific_prompt, key=f"live-top5-real-query-{active_slide}")
-                    run = st.form_submit_button("Search real images", type="primary", width="stretch")
-                if run:
-                    query = query.strip()
-                    if query:
-                        try:
-                            from visual_search import search_images
-                            st.session_state.live_top5_real_image_results[active_slide] = search_images(query)
-                        except Exception as exc:
-                            st.session_state.live_top5_real_image_results[active_slide] = {"error": f"{type(exc).__name__}: {exc}"}
-                        st.rerun()
-                    else:
+            else:
                         st.warning("Enter a query first.")
                 result = st.session_state.live_top5_real_image_results.get(active_slide) or {}
                 if result.get("error"):
@@ -3400,7 +3388,7 @@ def render_live_top5():
                                         story_number=story_number,
                                         total_stories=5,
                                         source_label=source,
-                                        subject_cutout=subject_cutout,
+                                        subject_cutout=False,
                                     ),
                                     "top5_card": {
                                         "headline": headline,
