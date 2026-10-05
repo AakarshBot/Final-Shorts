@@ -74,8 +74,8 @@ def test_headline_is_large_and_dynamic():
     assert renderer.HEADLINE_MAX_SIZE >= 250
     assert renderer.HEADLINE_MIN_SIZE >= 120
     assert renderer.HEADLINE_LINE_GAP > 0
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Anton-Regular.ttf"
-    assert font_path.name == "Anton-Regular.ttf"
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
+    assert font_path.name == "Oswald-Bold.ttf"
     assert font_path.exists()
     assert 1 <= len(renderer._fit_headline_font(renderer.HEADLINE_TEXT)[2]) <= renderer.HEADLINE_MAX_LINES
     assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size >= 150
@@ -671,7 +671,7 @@ def test_top5_editorial_uses_anton_and_the_lower_shorts_safe_zone():
         0,
     )
 
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Anton-Regular.ttf"
     assert font_path.exists()
     assert story["x"] == renderer.TOP5_EDITORIAL_MARGIN_X == 72
     assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == 860
@@ -717,6 +717,7 @@ def test_top5_editorial_body_uses_the_bottom_of_the_shorts_safe_zone():
     )
     body_start = layout["y"] + layout["headline_height"] + layout["body_gap"]
 
+    assert renderer.TOP5_EDITORIAL_SAFE_BOTTOM == 500
     assert body_start + body_height == renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 

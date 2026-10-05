@@ -275,15 +275,19 @@ Important:
 - Preserve the already-approved function contracts.
 
 ### Top-5 editorial card design — current Test redesign:
-- Top-5 is a static 9:16 editorial composition. The selected photograph remains full-bleed and the renderer does not add a white panel, lower-third, glass card, broad image wash, rounded card or template-style container.
-- The approved historical visual reference is Fade v2 from the earlier Top-5 card iterations: the readability treatment is generated from the actual headline/body letter mask, blurred with GaussianBlur(5), reduced to 60 alpha, and composited directly behind those letters. The photograph itself is not faded.
-- The historical reference uses bundled Oswald-Bold.ttf. The current Test experiment switches only the English Top-5 headline font to bundled Anton-Regular.ttf; placement and the rest of the visual treatment remain unchanged until the user reviews it.
-- English body copy uses a regular sans-serif at a deliberately readable 42px working size. It is not reduced into a tiny fallback size to force copy into a fixed card.
-- The headline remains the dominant element, left-aligned inside the established 860px lower safe column with a 72px left margin and at most two lines.
-- Ordinary story slides use the established lower anchor around Y=880; Slide 1 uses the opener anchor around Y=760. The complete headline + body block is bottom-anchored within the 90px bottom safe boundary, moving lower when there is available room so unnecessary space is not left beneath the body.
-- Body copy has no sentence cap, line cap or content-card height. It can use the available lower portion of the 1080 × 1920 frame and run toward the bottom safe boundary.
-- The composition is completely static. There is no headline-then-body motion, word animation, slide-in, bounce or platform-style interaction treatment.
-- Test preview is the acceptance point. This visual treatment is not approved for Live until the user reviews it in Test.
+- Top-5 is a static 9:16 editorial composition. The selected photograph remains full-bleed and the renderer does not add a white panel, lower-third, glass card, broad image wash, rounded card, strip or template-like container.
+- The headline font is now **locked to bundled Anton-Regular.ttf** for English Top-5 visuals. Anton is the only English display-font choice being tested from this point.
+- The headline is the dominant element: uppercase, heavy, condensed/display-style, left-aligned in the established 860px lower editorial column with a 72px left margin.
+- The body is subordinate supporting copy in the existing regular sans-serif treatment at a readable 42px working size.
+- The readability treatment is **Fade v2**: a mask is generated from the actual headline/body letters, blurred with GaussianBlur(5), reduced to 60 alpha and composited directly behind those letters. The photograph itself is not faded or washed.
+- The complete headline + body composition is laid out as one block. It remains in the lower editorial area and is positioned upward as needed so the complete text block stays clear of the Shorts UI.
+- The renderer reserves the **bottom 500px** of the 1080 × 1920 frame as a conservative YouTube Shorts UI exclusion zone. The main Top-5 headline/body block must end above y=1420.
+- The 500px boundary is a conservative working safe zone based on current observed Shorts UI layouts; YouTube does not publish one universal fixed organic pixel boundary, and the exact UI can vary by device/account/app version.
+- Body copy has no sentence cap, line cap or artificial card-height restriction. It uses the available lower safe area while remaining readable.
+- The composition is completely static. There is no headline-then-body motion, word animation, slide-in, bounce, blur-in animation or platform-style interaction treatment.
+- Preserve the existing manual image selection, crop/reposition, Test preview, logo and source-label handoffs. This typography work does not alter those flows.
+- The generic/non-Top-5 renderer path and the approved Cricket Visual Fetcher remain untouched.
+- Test preview remains the acceptance point. This treatment is not approved for Live until the user manually reviews it in Test.
 
 ### Top-5 standalone Visuals Test mode:
 - Test Stage 04 · Visuals is directly accessible even when the Top-5 Scriptwriter handoff does not exist.
@@ -312,7 +316,7 @@ Top-5 Upload:
 Top-5 status:
 - Test pipeline/framework: approved.
 - Standalone Top-5 Visuals renderer playground: implemented in Test; pending user visual approval.
-- Fade v2 + Oswald treatment: implemented in the shared renderer; pending user Test review.
+- Fade v2 + Anton treatment: implemented in the shared renderer; pending user Test review.
 - Live implementation: existing pipeline remains in production testing, but the current Oswald/Fade v2 redesign is not approved for Live until Test review succeeds.
 ### Production Line 03 — On This Day
 
@@ -334,7 +338,7 @@ Current audit state:
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
 - The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in the deliberate lower Shorts-safe zone.
-- Top-5 headlines use the historical Oswald Bold treatment; Top-5 body copy uses the regular sans-serif treatment used by the prior Fade v2 implementation.
+- Top-5 headlines use the locked Anton display treatment; Top-5 body copy uses the regular sans-serif treatment used by the Fade v2 implementation.
 - Top-5 readability uses Fade v2: a blurred mask generated directly from the actual letters with GaussianBlur(5) and 60 alpha, not a broad photo wash.
 - Body copy is not constrained by a sentence, line or card limit; it uses the lower portion of the frame and is bottom-anchored to the 90px safe boundary rather than being squeezed into a small card.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
