@@ -27,11 +27,12 @@ VISUAL_OPTIONS = (
 TOP5_VISUAL_OPTIONS = (
     "Option 1 · Automatic Scraper",
     "Option 2 · Manual Scraper",
-    "Option 3 · Real Image Search · WIP",
+    "Option 3 · Manual Fetcher",
     "Option 4 · AI Generation",
     "Option 5 · Stats Card",
     "Option 6 · Quote Card",
     "Option 7 · Subject Cutout",
+    "Option 8 · Body Card · WIP",
 )
 
 STAGES = [
@@ -5800,6 +5801,7 @@ elif st.session_state.app_mode == "test":
         elif line_name == "Top-5" and stage == "04 · Visuals":
             from renderer import build_top5_card_preview, build_quote_card_preview
             from visual_fetcher import crawl_visuals, manual_crawl_visuals
+            from visual_search import search_images
             from visual_generator import generate_images
 
             if "test_top5_visual_playground_headline" not in st.session_state:
@@ -5829,11 +5831,11 @@ elif st.session_state.app_mode == "test":
                 '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
                 '<div class="section-title">Standalone Visual QC</div>'
                 '<div class="canvas-copy">Test every Top-5 visual option independently. No Scriptwriter approval or earlier stage is required.</div></div>'
-                '<div class="section-count">7 visual options</div></div>',
+                '<div class="section-count">8 visual options</div></div>',
                 unsafe_allow_html=True,
             )
 
-            st.markdown('<div class="mini-label">7 VISUAL OPTIONS</div>', unsafe_allow_html=True)
+            st.markdown('<div class="mini-label">8 VISUAL OPTIONS</div>', unsafe_allow_html=True)
             visual_option = st.pills(
                 "Visual source",
                 TOP5_VISUAL_OPTIONS,
@@ -5916,8 +5918,28 @@ elif st.session_state.app_mode == "test":
                                 st.error(f"{type(exc).__name__}: {exc}")
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
-            elif visual_option == "Option 3 · Real Image Search · WIP":
-                st.info("Option 3 · Real Image Search is WIP in the Top-5 pipeline.")
+            elif visual_option == "Option 3 · Manual Fetcher":
+                query = st.text_input(
+                    "Manual image query",
+                    key="test_top5_visual_playground_query",
+                    placeholder="Virat Kohli batting India cricket",
+                )
+                if st.button("Fetch images", type="primary", width="stretch", key="test-top5-playground-manual-fetch"):
+                    query = query.strip()
+                    if not query:
+                        st.warning("Enter an image query first.")
+                    else:
+                        with st.spinner("Fetching manual image options…"):
+                            try:
+                                result = search_images(query)
+                                st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
+                                errors = result.get("errors") or {}
+                                if errors:
+                                    st.caption("Some configured image sources failed; successful results are still shown.")
+                            except Exception as exc:
+                                st.session_state.test_top5_visual_playground_results = []
+                                st.error(f"{type(exc).__name__}: {exc}")
+                assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
             elif visual_option == "Option 4 · AI Generation":
                 prompt = st.text_area(
@@ -5990,6 +6012,9 @@ elif st.session_state.app_mode == "test":
                         except (ValueError, OSError) as exc:
                             st.session_state.test_top5_visual_playground_render = None
                             st.error(str(exc))
+
+            elif visual_option == "Option 8 · Body Card · WIP":
+                st.info("Option 8 · Body Card is WIP. No Body Card renderer is active yet.")
 
             elif visual_option == "Option 7 · Subject Cutout":
                 st.caption("Runs BiRefNet locally on the current image and uses the detected subject to drive headline placement and controlled occlusion.")
@@ -6406,8 +6431,47 @@ elif st.session_state.app_mode == "test":
                                 st.caption(f'{len(result.get("assets") or [])} images returned by the Manual Scraper.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "manual")
 
-                    if visual_option == "Option 3 · Real Image Search · WIP":
-                        st.info("Option 3 · Real Image Search is WIP in the Top-5 pipeline.")
+                    if visual_option == "Option 3 · Manual Fetcher":
+                        st.caption("Manual image query → real-image provider results. This option only fetches the image pool.")
+                        query = st.text_input(
+                            "Manual image query",
+                            value=specific_prompt,
+                            key=f"test-top5-manual-fetch-query-{active_slide}",
+                        )
+                        if st.button(
+                            "Fetch images",
+                            type="primary",
+                            width="stretch",
+                            key=f"test-top5-manual-fetch-run-{active_slide}",
+                        ):
+                            query = query.strip()
+                            if not query:
+                                st.warning("Enter an image query first.")
+                            else:
+                                with st.spinner("Fetching manual image options…"):
+                                    try:
+                                        result = search_images(query)
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "source": "manual-fetch",
+                                            "query": query,
+                                            "assets": list(result.get("assets") or []),
+                                            "error": "",
+                                        }
+                                    except Exception as exc:
+                                        st.session_state.test_top5_visual_results[active_slide] = {
+                                            "source": "manual-fetch",
+                                            "query": query,
+                                            "assets": [],
+                                            "error": f"{type(exc).__name__}: {exc}",
+                                        }
+                                st.rerun()
+                        result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        if result.get("source") == "manual-fetch":
+                            if result.get("error"):
+                                st.error(result["error"])
+                            else:
+                                st.caption(f'{len(result.get("assets") or [])} images returned by the Manual Fetcher.')
+                                _top5_render_asset_pool(list(result.get("assets") or []), "manual-fetch")
 
                     if visual_option == "Option 4 · AI Generation":
                         st.caption("Same AI Generation used by Cricket: manual prompt across the configured AI image providers.")
@@ -6451,6 +6515,9 @@ elif st.session_state.app_mode == "test":
                             else:
                                 st.caption(f'{len(result.get("assets") or [])} AI images returned.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "ai")
+
+                    if visual_option == "Option 8 · Body Card · WIP":
+                        st.info("Option 8 · Body Card is WIP. No Body Card renderer is active yet.")
 
                     if visual_option == "Option 7 · Subject Cutout":
                         image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
