@@ -22,8 +22,8 @@ VISUAL_OPTIONS = (
     "Option 4 · AI Generation",
     "Option 5 · Stats Card",
     "Option 6 · Quote Card",
-    "Option 7 · Text Cutout",
 )
+CRICKET_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS + ("Option 7 · Text Cutout",)
 
 TOP5_VISUAL_OPTIONS = (
     "Option 1 · Automatic Scraper",
@@ -2391,13 +2391,20 @@ def _render_live_visuals(slide_count: int):
         st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
         return
 
+    visual_options = (
+        CRICKET_LIVE_VISUAL_OPTIONS
+        if st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
+        else VISUAL_OPTIONS
+    )
+    if st.session_state.get("live_visual_option") not in visual_options:
+        st.session_state.live_visual_option = visual_options[0]
     visual_option = st.pills(
         "Visual source",
-        VISUAL_OPTIONS,
-        default=st.session_state.get("live_visual_option", VISUAL_OPTIONS[0]),
+        visual_options,
+        default=st.session_state.live_visual_option,
         key="live_visual_option",
         label_visibility="collapsed",
-    ) or VISUAL_OPTIONS[0]
+    ) or visual_options[0]
 
     _render_visual_board(slide_count, live=True)
 
