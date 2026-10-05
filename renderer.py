@@ -353,9 +353,12 @@ def _top5_body_font(size: int, language: str = "english"):
                 continue
 
     if language == "english":
-        path = Path("C:/Windows/Fonts/arial.ttf")
-        if path.exists():
-            return ImageFont.truetype(str(path), size)
+        for path in (
+            Path("C:/Windows/Fonts/arial.ttf"),
+            Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
+        ):
+            if path.exists():
+                return ImageFont.truetype(str(path), size)
 
     return ImageFont.load_default()
 
@@ -420,9 +423,12 @@ def _top5_editorial_font(size: int, language: str):
                 continue
 
     if language == "english":
-        path = Path("C:/Windows/Fonts/arialbd.ttf")
-        if path.exists():
-            return ImageFont.truetype(str(path), size)
+        for path in (
+            Path("C:/Windows/Fonts/arialbd.ttf"),
+            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+        ):
+            if path.exists():
+                return ImageFont.truetype(str(path), size)
 
     return ImageFont.load_default()
 
