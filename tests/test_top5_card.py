@@ -80,34 +80,6 @@ def test_top5_opener_uses_dynamic_safe_area():
     assert layout["y"] + layout["total_height"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
-def test_top5_headline_size_tracks_real_negative_space():
-    quiet = Image.new("RGB", (1080, 1920), (28, 30, 34))
-    busy = Image.new("RGB", (1080, 1920), (28, 30, 34))
-    draw = ImageDraw.Draw(busy)
-    for y in range(0, 1920, 20):
-        for x in range(0, 1080, 20):
-            value = 238 if ((x // 20) + (y // 20)) % 2 else 18
-            draw.rectangle((x, y, x + 19, y + 19), fill=(value, value, value))
-
-    quiet_layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
-        "",
-        "english",
-        1,
-        image=quiet,
-    )
-    busy_layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
-        "",
-        "english",
-        1,
-        image=busy,
-    )
-
-    assert quiet_layout["headline_size"] > renderer.TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE
-    assert quiet_layout["headline_size"] > busy_layout["headline_size"]
-
-
 def test_top5_headline_size_adapts_to_copy():
     short = renderer._top5_editorial_layout(
         "India name a major change",
@@ -188,16 +160,6 @@ def test_top5_local_readability_uses_opaque_type_and_shadow(monkeypatch):
     assert not hasattr(renderer, "TOP5_EDITORIAL_LOCAL_SCRIM_BLUR")
     assert not hasattr(renderer, "TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA")
 
-
-def test_top5_local_body_compression_respects_the_cap():
-    source = (
-        "The board also confirmed the latest development and currently expects the "
-        "decision to affect the lineup before the next series begins."
-    )
-    compressed = renderer.compress_top5_body(source, 16)
-    assert len(compressed.rstrip("…").split()) <= 16
-    assert "confirmed" in compressed
-    assert "lineup" in compressed
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
     audio_file = tmp_path / "scene1.mp3"

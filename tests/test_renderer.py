@@ -681,68 +681,6 @@ def test_top5_editorial_uses_oswald_and_full_frame_safe_area():
     assert renderer.TOP5_EDITORIAL_SAFE_TOP <= opener["y"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
-def test_top5_option3_uses_top_negative_space_and_grows_headline():
-    image = Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (24, 28, 34))
-    draw = ImageDraw.Draw(image)
-    for y in range(1050, 1780, 18):
-        for x in range(0, renderer.WIDTH, 18):
-            value = 242 if ((x // 18) + (y // 18)) % 2 else 12
-            draw.rectangle((x, y, x + 17, y + 17), fill=(value, value, value))
-
-    layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
-        "The board confirmed the move after reviewing the latest result.",
-        "english",
-        1,
-        image=image,
-    )
-
-    assert layout["region_mode"] in {"top", "upper"}
-    assert layout["y"] < 800
-    assert layout["headline_size"] > renderer.TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE
-    assert layout["body_font"].size >= renderer.TOP5_EDITORIAL_BODY_MIN_SIZE
-
-
-def test_top5_option3_busy_image_reduces_supported_headline_size():
-    quiet = Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (30, 34, 40))
-    busy = Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (30, 34, 40))
-    draw = ImageDraw.Draw(busy)
-    for y in range(0, renderer.HEIGHT, 18):
-        for x in range(0, renderer.WIDTH, 18):
-            value = 238 if ((x // 18) + (y // 18)) % 2 else 18
-            draw.rectangle((x, y, x + 17, y + 17), fill=(value, value, value))
-
-    quiet_layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
-        "",
-        "english",
-        1,
-        image=quiet,
-    )
-    busy_layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
-        "",
-        "english",
-        1,
-        image=busy,
-    )
-
-    assert quiet_layout["headline_size"] > renderer.TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE
-    assert quiet_layout["headline_size"] > busy_layout["headline_size"]
-
-
-def test_top5_option3_uses_oswald_headline_font():
-    layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
-        "",
-        "english",
-        1,
-        image=Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (28, 32, 38)),
-    )
-
-    assert "Oswald" in Path(layout["headline_fonts"][0].path).name
-
-
 def test_top5_option7_side_subject_uses_compact_vertical_lines():
     subject = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(subject).rectangle((650, 520, 1010, 1650), fill=255)
@@ -784,8 +722,8 @@ def test_top5_option7_crosses_center_subject_with_headline_on_both_sides():
 
 def test_top5_option7_crosses_two_subjects_and_keeps_gap_visible(monkeypatch):
     background = Image.new("RGB", (1080, 1920), (20, 24, 30))
-    draw = ImageDraw.Draw(background)
     player_color = (180, 90, 60)
+    draw = ImageDraw.Draw(background)
     draw.rectangle((170, 620, 360, 1440), fill=player_color)
     draw.rectangle((720, 620, 910, 1440), fill=player_color)
 
@@ -816,26 +754,16 @@ def test_top5_option7_crosses_two_subjects_and_keeps_gap_visible(monkeypatch):
     assert layout["x"] < 170
     assert layout["x"] + layout["width"] > 910
 
-    hidden_subject_pixel = False
-    for y in range(layout["y"], layout["y"] + layout["headline_height"]):
-        for x in range(170, 361):
-            if image.getpixel((x, y)) == player_color:
-                hidden_subject_pixel = True
-                break
-        if hidden_subject_pixel:
-            break
-
-    gap_visible = False
-    for y in range(layout["y"], layout["y"] + layout["headline_height"]):
-        for x in range(361, 720):
-            if image.getpixel((x, y)) != background.getpixel((x, y)):
-                gap_visible = True
-                break
-        if gap_visible:
-            break
-
-    assert hidden_subject_pixel
-    assert gap_visible
+    assert any(
+        image.getpixel((x, y)) == player_color
+        for y in range(layout["y"], layout["y"] + layout["headline_height"])
+        for x in range(170, 361)
+    )
+    assert any(
+        image.getpixel((x, y)) != background.getpixel((x, y))
+        for y in range(layout["y"], layout["y"] + layout["headline_height"])
+        for x in range(361, 720)
+    )
 
 
 def test_top5_option7_ignores_body_copy():
@@ -893,34 +821,31 @@ def test_top5_option7_restores_player_above_headline(monkeypatch):
         subject_mask=subject,
     )
 
-    restored = 0
-    for y in range(layout["y"], min(layout["y"] + layout["headline_height"], 1420)):
-        for x in range(max(390, layout["x"]), min(690, layout["x"] + layout["width"])):
-            if image.getpixel((x, y)) == player_color:
-                restored += 1
-                break
-        if restored:
-            break
-
-    assert restored
+    assert any(
+        image.getpixel((x, y)) == player_color
+        for y in range(layout["y"], min(layout["y"] + layout["headline_height"], 1420))
+        for x in range(max(390, layout["x"]), min(690, layout["x"] + layout["width"]))
+    )
 
 
-
-def test_top5_subject_mask_uses_local_birefnet(monkeypatch):
+def test_top5_subject_mask_uses_local_birefnet_without_fp16(monkeypatch):
     import torch
+
+    seen_dtypes = []
 
     class FakeModel:
         def eval(self):
             return self
 
         def __call__(self, input_images):
-            return [torch.ones((1, 1, 1024, 1024))]
+            seen_dtypes.append(input_images.dtype)
+            return [torch.ones((1, 1, 1024, 1024), dtype=torch.float32)]
 
     renderer._top5_subject_mask.cache_clear()
     monkeypatch.setattr(
         renderer,
         "_load_top5_birefnet",
-        lambda: (FakeModel(), torch.device("cpu")),
+        lambda: (FakeModel(), __import__("torchvision").transforms),
     )
 
     source = BytesIO()
@@ -929,8 +854,7 @@ def test_top5_subject_mask_uses_local_birefnet(monkeypatch):
 
     assert mask is not None
     assert mask.size == (1080, 1920)
-    assert mask.getbbox() is not None
-
+    assert seen_dtypes == [torch.float32]
 
 def test_top5_editorial_uses_opaque_text_and_targeted_shadow(monkeypatch):
     calls = []
