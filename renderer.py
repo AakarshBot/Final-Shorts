@@ -846,6 +846,68 @@ def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
     )
 
 
+def build_quote_card_preview(
+    source_image: bytes | bytearray | Image.Image,
+    quote: str,
+    attribution: str,
+    source_label: str | None = None,
+) -> bytes:
+    """Render a static Quote Card using the direct editorial card renderer."""
+    frame = _draw_quote_card(
+        _top5_full_frame_image(source_image),
+        {
+            "quote": quote,
+            "attribution": attribution,
+        },
+    )
+    _paste_logo(frame)
+    _paste_top5_source(frame, source_label)
+    buffer = BytesIO()
+    frame.convert("RGB").save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
+def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
+    label = str(source_label or "Commons").strip() or "Commons"
+    draw = ImageDraw.Draw(base)
+    font = _font((), 20)
+    box = draw.textbbox((0, 0), label, font=font)
+    draw.text(
+        (
+            WIDTH - TOP5_EDITORIAL_MARGIN_X - (box[2] - box[0]),
+            HEIGHT - 48,
+        ),
+        label,
+        font=font,
+        fill=(86, 91, 100),
+    )
+
+
+def build_top5_card_preview(
+    source_image: bytes | bytearray | Image.Image,
+    headline: str,
+    body: str = "",
+    story_number: int = 0,
+    total_stories: int = 5,
+    source_label: str | None = None,
+) -> bytes:
+    """Render one static Top-5 slide with full-bleed photography and editorial typography."""
+    frame = _draw_top5_editorial_card(
+        source_image,
+        {
+            "headline": headline,
+            "body": body,
+            "story_number": story_number,
+            "total_stories": total_stories,
+        },
+    )
+    _paste_logo(frame)
+    _paste_top5_source(frame, source_label)
+    buffer = BytesIO()
+    frame.convert("RGB").save(buffer, format="PNG", optimize=True)
+    return buffer.getvalue()
+
+
 def _cue_at_time(subtitle_data: dict, t: float):
     for cue in subtitle_data.get("cues") or []:
         try:
