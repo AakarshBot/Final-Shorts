@@ -277,7 +277,7 @@ Important:
 ### Top-5 editorial card design — current Test redesign:
 - Top-5 is a static 9:16 editorial composition. The selected photograph remains full-bleed and the renderer does not add a white panel, lower-third, glass card, broad image wash, rounded card or template-style container.
 - The approved historical visual reference is Fade v2 from the earlier Top-5 card iterations: the readability treatment is generated from the actual headline/body letter mask, blurred with GaussianBlur(5), reduced to 60 alpha, and composited directly behind those letters. The photograph itself is not faded.
-- English Top-5 headlines use the bundled Oswald-Bold.ttf. This is the actual historical Fade v2 headline font and is not replaced by Montserrat.
+- The historical reference uses bundled Oswald-Bold.ttf. The current Test experiment switches only the English Top-5 headline font to bundled Anton-Regular.ttf; placement and the rest of the visual treatment remain unchanged until the user reviews it.
 - English body copy uses a regular sans-serif at a deliberately readable 42px working size. It is not reduced into a tiny fallback size to force copy into a fixed card.
 - The headline remains the dominant element, left-aligned inside the established 860px lower safe column with a 72px left margin and at most two lines.
 - Ordinary story slides use the established lower anchor around Y=880; Slide 1 uses the opener anchor around Y=760. The complete headline + body block is bottom-anchored within the 90px bottom safe boundary, moving lower when there is available room so unnecessary space is not left beneath the body.

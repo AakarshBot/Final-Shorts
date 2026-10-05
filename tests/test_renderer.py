@@ -74,8 +74,8 @@ def test_headline_is_large_and_dynamic():
     assert renderer.HEADLINE_MAX_SIZE >= 250
     assert renderer.HEADLINE_MIN_SIZE >= 120
     assert renderer.HEADLINE_LINE_GAP > 0
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
-    assert font_path.name == "Oswald-Bold.ttf"
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Anton-Regular.ttf"
+    assert font_path.name == "Anton-Regular.ttf"
     assert font_path.exists()
     assert 1 <= len(renderer._fit_headline_font(renderer.HEADLINE_TEXT)[2]) <= renderer.HEADLINE_MAX_LINES
     assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size >= 150
@@ -657,7 +657,7 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     assert seen == ["Quote Source"]
 
 
-def test_top5_editorial_uses_oswald_and_the_lower_shorts_safe_zone():
+def test_top5_editorial_uses_anton_and_the_lower_shorts_safe_zone():
     story = renderer._top5_editorial_layout(
         "Virat Kohli returns for another major cricket test",
         "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next match.",
@@ -677,7 +677,7 @@ def test_top5_editorial_uses_oswald_and_the_lower_shorts_safe_zone():
     assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == 860
     assert story["y"] >= renderer.TOP5_EDITORIAL_STORY_Y == 880
     assert opener["y"] >= renderer.TOP5_EDITORIAL_OPENER_Y == 760
-    assert story["headline_font"].getname()[0].lower().startswith("oswald")
+    assert story["headline_font"].getname()[0].lower().startswith("anton")
 
 
 def test_top5_editorial_body_uses_the_bottom_of_the_shorts_safe_zone():

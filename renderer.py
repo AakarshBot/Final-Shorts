@@ -395,7 +395,7 @@ def _top5_editorial_font(size: int, language: str):
             root / "NotoSansTelugu-Black.ttf",
         )
     else:
-        candidates = (root / "Oswald-Bold.ttf",)
+        candidates = (root / "Anton-Regular.ttf",)
 
     for path in candidates:
         if path.exists():
