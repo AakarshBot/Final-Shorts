@@ -171,16 +171,17 @@ The standard Cricket/Deep-Dive Visuals desk contains four retrieval options:
 3. Manual real-image search.
 4. Manual AI image generation.
 
-Top-5 has seven visual options in Test:
+Top-5 has eight visual options in Test:
 1. Automatic Scraper.
 2. Manual Scraper.
-3. Real Image Search — **WIP only in Top-5**.
+3. Manual Fetcher.
 4. AI Generation.
 5. Stats Card.
 6. Quote Card.
 7. Subject Cutout.
+8. Body Card — **WIP**.
 
-The established Cricket/Deep-Dive visual retrieval options remain unchanged. Top-5 Option 3 is deliberately removed from the Top-5 Test implementation and remains only as a dashboard WIP choice. It must not call the shared Cricket Real Image Search function.
+The established Cricket/Deep-Dive visual retrieval options remain unchanged. Top-5 Option 3 is the manual real-image fetcher: it accepts a manual query and returns the real-image provider pool only. It does not render a text card. Top-5 Option 8 is the future Body Card text-based visual and remains dashboard WIP with no active renderer.
 
 Top-5 Test Visuals remains independently runnable. The six-slide production Visual QC uses the approved Top-5 Scriptwriter handoff, while the standalone Test playground can exercise visual functions without upstream approvals.
 
@@ -223,7 +224,9 @@ Normal Top-5 cards:
 - Logo remains top-right; source label remains bottom-right.
 - English headlines use Oswald.
 
-Option 3 · Real Image Search is **WIP in Top-5** and has no active Top-5 renderer/retrieval path.
+Option 3 · Manual Fetcher is active in Top-5 Test. It performs manual-query real-image retrieval only and hands the returned image pool to the existing image-selection/crop flow.
+
+Option 8 · Body Card is **WIP**. It is reserved for the text-based Top-5 body visual and has no active renderer yet.
 
 Option 7 · Subject Cutout:
 - Runs local BiRefNet only when explicitly selected.
@@ -291,7 +294,9 @@ Important:
 
 ### Top-5 current implementation checkpoint
 
-- Top-5 Visuals Test remains independently runnable with exactly seven dashboard choices. Option 3 is visible only as **WIP**; it performs no Top-5 search or rendering.
+- Top-5 Visuals Test remains independently runnable with exactly eight dashboard choices.
+- Top-5 Option 3 is **Manual Fetcher**: manual query → real-image provider results → existing image pool. It does not render card typography.
+- Top-5 Option 8 is **Body Card · WIP** and performs no rendering.
 - Cricket's Option 3 / Real Image Search implementation is untouched and remains part of the approved Cricket visual pipeline.
 - Top-5 Option 7 has been rewritten from scratch to keep the implementation direct and small.
 - Option 7 uses the existing local `ZhengPeng7/BiRefNet` model through the already-installed PyTorch/torchvision/Transformers stack.
@@ -303,10 +308,11 @@ Important:
 - Side layouts use at most two words per line and are always positioned inside the safe frame.
 - Foreground restoration is done directly with the returned mask after text rendering. This is what creates the real text-behind-subject effect and preserves text through genuine gaps.
 - Subject Cutout does not render body copy and ignores upstream body data.
-- Option 3's previous adaptive quiet-region code is deleted. Top-5's dashboard explicitly marks Option 3 as WIP until that option is intentionally rebuilt later.
+- The previous Top-5 Option 3 adaptive quiet-region/text-card implementation is deleted. Option 3 is now only the manual image fetcher.
+- The future text-based body visual is reserved as Top-5 Option 8 · Body Card and remains WIP.
 - No wrappers, compatibility layers, new dependencies or duplicate Subject Cutout pipelines are part of this implementation.
 
-Status: **Top-5 Option 7 CPU rewrite in Test / WIP. Option 3 is WIP. Cricket pipeline is unchanged.**
+Status: **Top-5 Option 3 Manual Fetcher is active in Test. Option 7 Subject Cutout is active in Test/WIP. Option 8 Body Card is WIP. Cricket pipeline is unchanged.**
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -322,8 +328,9 @@ Status: **Planned / Test framework WIP.**
 The factory still follows one core implementation per production stage. Test and Live differ in orchestration, not in approved stage logic.
 
 For Top-5 during the current WIP period:
-- Test is the only place where Option 7 is being developed and evaluated.
-- Option 3 is explicitly a dashboard WIP choice and has no Top-5 implementation.
+- Test is the only place where Top-5 visual changes are being developed and evaluated.
+- Option 3 is active in Test as the manual image fetcher.
+- Option 8 is explicitly a dashboard WIP choice with no active renderer.
 - The shared Top-5 card renderer remains the component that will be promoted to Live after Test approval.
 - Cricket's existing visual retrieval/rendering paths are outside this rewrite and must not be changed.
 - Subject Cutout segmentation is never invoked by normal Top-5 rendering.
@@ -340,7 +347,7 @@ Cleanup rules:
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is WIP in Test; Option 3 is WIP and Option 7 is being rewritten/tested before any Live promotion**.
+- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is being tested, and Option 8 Body Card is WIP.**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
