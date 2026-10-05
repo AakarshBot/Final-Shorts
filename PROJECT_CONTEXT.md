@@ -297,24 +297,27 @@ Important:
 
 ### Top-5 current implementation checkpoint
 
-- Top-5 Visuals Test is independently runnable and exposes exactly seven visual options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
-- Every Top-5 image option uses the existing 9:16 Crop / Reposition component. The crop is applied before selection, preview, rendering and Subject Cutout analysis; the original pool asset remains unchanged.
-- Normal Top-5 cards remain static full-bleed editorial cards. They do not run subject detection and do not change because of Subject Cutout logic.
-- Normal-card headline sizing is image-aware and can grow materially beyond the 118px baseline when the actual image provides enough quiet negative space; size and position are solved together.
-- The approved editorial text treatment remains opaque Oswald-style type with the existing stronger shadow/outline treatment. No transparent text panel, universal gradient, decorative rail, border, dot or headline motion is used.
-- **Option 7 · Subject Cutout is the only Top-5 path that runs local BiRefNet subject extraction and subject-aware headline placement.**
-- In Option 7, the detected foreground subject drives the headline layout. A centered subject with usable space on both sides uses a **cross-subject** composition whenever a valid candidate exists. The headline can pass through the player and is rendered behind the recovered foreground subject.
-- Subject occlusion applies to the **headline only**. The body is still laid out and rendered normally below the headline with the normal body font and card treatment. The body is never restored above the subject by the occlusion pass.
-- Cross-subject text can intersect multiple players. Each detected foreground region is restored above the headline glyphs, while genuine gaps between players remain available for visible headline text.
-- Side subjects may use the strongest opposite-side vertical headline stack, with the same headline-only foreground restoration.
-- Upper/lower negative-space layouts remain valid when the subject geometry calls for them and no centered cross-subject composition is valid.
-- Subject-mask extraction uses adaptive threshold selection and rejects unusable near-empty or near-full-frame masks.
-- Option 7 no longer silently falls back to the ordinary bottom/negative-space editorial card when subject extraction or subject-aware layout fails. The Test UI surfaces the failure instead, so a failed Subject Cutout cannot masquerade as a successful normal render.
-- Regression coverage must verify both layout selection and actual pixels: the foreground subject replaces headline pixels where they intersect, while body rendering remains ordinary and multiple-player gaps retain visible headline pixels.
-- Test and Live consume the same renderer/asset contracts. Subject Cutout remains an explicit visual-option choice and is not automatically applied to normal Top-5 cards.
+- Top-5 Visuals Test remains independently runnable with exactly seven visual options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
+- The existing Crop / Reposition component remains the only crop path. Its cropped result is handed directly to the selected card renderer.
+- **Option 3 · Real Image Search is a fresh card implementation.** It is a static full-bleed 9:16 editorial card with no subject detection.
+- Option 3 scans the actual frame for quiet/negative regions instead of using the old fixed safe band or a generic composition score. Candidate regions cover the frame, including genuine top, upper, middle, lower and side spaces.
+- Option 3 first measures local visual busyness, converts that into an allowable headline-size ceiling, then chooses the **largest headline that physically fits** that region. Quiet space therefore directly permits materially larger type; busy imagery naturally restricts type size.
+- Option 3 uses **Oswald** for the headline. Headline line breaking is solved from the actual measured text widths rather than inherited fixed-size wrapping.
+- Option 3 body copy remains readable and visible beneath the headline when it fits. Body text uses the same editorial language as Option 7—opaque type, controlled outline and strong soft shadow/fade—while remaining sized for comfortable reading.
+- **Option 7 · Subject Cutout is a fresh card implementation and is headline-only.** The Test UI hides the body field and the renderer ignores any upstream body data for this option.
+- Option 7 runs the existing local **ZhengPeng7/BiRefNet** inference path only when Option 7 is selected. No new Python dependency or runtime layer is introduced. The current general BiRefNet model is retained rather than adding another segmentation model.
+- Option 7 identifies separate connected foreground components from the returned matte before deciding whether a composition is centered. The renderer no longer treats a multi-player image as one undifferentiated subject box for composition decisions.
+- For a centered subject or centered group of players with real space on both sides, Option 7 constructs a **cross-subject headline** that starts outside the leftmost subject, passes behind the foreground subject(s), and exits outside the rightmost subject.
+- The headline is rendered into a real pixel mask for composition analysis. Candidate positions are accepted only when the actual headline pixels are visible outside both sides and a controlled portion intersects the foreground matte.
+- With multiple players, the union of the real foreground components is used for occlusion. Headline pixels naturally remain visible through genuine gaps between players. The headline is never intentionally positioned so that it starts inside a gap.
+- For non-centered subjects, Option 7 uses the strongest actual negative space around the foreground. Side compositions are allowed to become tall editorial stacks with **one or two large words per line**, rather than being forced into the normal two-line headline limit.
+- Foreground restoration happens after text rendering, so the player visibly sits above the headline. The occlusion pass targets the headline pixels and their shadow/stroke only.
+- Option 7 never silently falls back to the normal Option 3 card. Extraction/layout failure is surfaced in Test.
+- The old Top-5 card architecture—fixed 620px headline-safe start, indirect size scoring, global subject bounding-box overlap scoring, repeated subject-layout helpers and silent normal-card fallback—is deleted.
+- Regression tests now target user-visible contracts: Option 3 must choose the largest fitting headline in genuinely quiet space and a smaller one on busy imagery; Option 7 must cross centered subjects, preserve multi-player gaps, restore foreground pixels over the headline and remain headline-only.
+- Test and Live continue to consume the same card renderer/asset contract. Option 7 remains an explicit visual-option choice and is never automatically applied to normal Top-5 cards.
 
-Status: **Top-5 typography, negative-space scaling and Option 7 subject-aware headline occlusion under active Test refinement; normal Top-5 rendering remains unchanged.**
-
+Status: **Option 3 and Option 7 card renderers have been rewritten from scratch on isolated branch rewrite-top5-option3-option7; validation is still required before any promotion to main.**
 ### Production Line 03 — On This Day
 
 Purpose:

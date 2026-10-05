@@ -151,21 +151,23 @@ def test_top5_body_preserves_all_copy_while_it_fits():
     assert renderer.TOP5_EDITORIAL_BODY_MIN_SIZE <= layout["body_font"].size <= renderer.TOP5_EDITORIAL_BODY_MAX_SIZE
 
 
-def test_top5_body_rejection_reports_a_strict_word_cap():
-    body = " ".join(["The board confirmed the latest development for the next series."] * 40)
+def test_top5_body_remains_readable():
+    body = (
+        "The board confirmed the latest development. "
+        "The decision changes the lineup for the next series."
+    )
 
-    with pytest.raises(ValueError) as error:
-        renderer._top5_editorial_layout(
-            "Selection change",
-            body,
-            "english",
-            1,
-        )
+    layout = renderer._top5_editorial_layout(
+        "Selection change",
+        body,
+        "english",
+        1,
+        image=Image.new("RGB", (1080, 1920), (30, 34, 40)),
+    )
 
-    assert "maximum" in str(error.value)
-    assert 0 < error.value.top5_max_words < len(body.split())
-
-
+    assert layout["body_lines"]
+    assert layout["body_font"] is not None
+    assert layout["body_size"] >= renderer.TOP5_EDITORIAL_BODY_MIN_SIZE
 def test_top5_local_readability_uses_opaque_type_and_shadow(monkeypatch):
     calls = []
     original = renderer.ImageFilter.GaussianBlur
