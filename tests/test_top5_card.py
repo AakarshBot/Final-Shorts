@@ -53,7 +53,7 @@ def test_top5_preview_does_not_add_a_readability_panel():
     assert image.getpixel((20, 1800)) == background
 
 
-def test_top5_layout_uses_the_proven_lower_editorial_anchor():
+def test_top5_layout_fills_to_the_lower_safe_boundary():
     layout = renderer._top5_editorial_layout(
         "India make a major selection change",
         "The board confirmed the move. The decision changes the lineup.",
@@ -62,10 +62,11 @@ def test_top5_layout_uses_the_proven_lower_editorial_anchor():
     )
 
     assert layout["x"] == renderer.TOP5_EDITORIAL_MARGIN_X
-    assert layout["y"] >= renderer.TOP5_EDITORIAL_STORY_Y
+    assert layout["y"] >= renderer.TOP5_EDITORIAL_SAFE_TOP
+    assert layout["y"] + layout["total_height"] == renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
-def test_top5_opener_uses_the_proven_editorial_anchor():
+def test_top5_opener_uses_the_same_dynamic_safe_boundary():
     layout = renderer._top5_editorial_layout(
         "Top 5 Cricket News Today",
         "",
@@ -73,12 +74,11 @@ def test_top5_opener_uses_the_proven_editorial_anchor():
         0,
     )
 
-    assert layout["y"] >= renderer.TOP5_EDITORIAL_OPENER_Y
+    assert layout["y"] >= renderer.TOP5_EDITORIAL_SAFE_TOP
+    assert layout["y"] + layout["total_height"] == renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
 def test_top5_headline_size_adapts_to_copy():
-    image = Image.new("RGB", (1080, 1920), (25, 30, 36))
-
     short = renderer._top5_editorial_layout(
         "India name a major change",
         "",
@@ -92,10 +92,9 @@ def test_top5_headline_size_adapts_to_copy():
         1,
     )
 
-    assert short["headline_font"].size >= long["headline_font"].size
-    assert len(long["headline_lines"]) <= 2
-    assert short["headline_lines"]
+    assert short["headline_fonts"][0].size >= long["headline_fonts"][0].size
     assert long["headline_lines"]
+    assert short["headline_lines"]
 
 
 def test_top5_body_preserves_all_copy_without_sentence_cap():
@@ -111,10 +110,14 @@ def test_top5_body_preserves_all_copy_without_sentence_cap():
         1,
     )
 
-    rendered_words = " ".join(layout["body_lines"])
+    rendered_words = " ".join(
+        word
+        for line in layout["body_lines"]
+        for word in line
+    )
     assert "Officials" in rendered_words
     assert "review." in rendered_words
-    assert layout["body_font"].size == renderer.TOP5_EDITORIAL_BODY_SIZE
+    assert renderer.TOP5_EDITORIAL_BODY_MIN_SIZE <= layout["body_font"].size <= renderer.TOP5_EDITORIAL_BODY_MAX_SIZE
 
 
 def test_top5_card_uses_a_subtle_letter_fade(monkeypatch):
