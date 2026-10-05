@@ -60,16 +60,16 @@ TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 76
 TOP5_EDITORIAL_HEADLINE_MAX_LINES = 2
 TOP5_EDITORIAL_HEADLINE_LINE_GAP = 8
 TOP5_EDITORIAL_BODY_MAX_SIZE = 50
-TOP5_EDITORIAL_BODY_MIN_SIZE = 36
-TOP5_EDITORIAL_BODY_LINE_GAP = 12
-TOP5_EDITORIAL_HEADLINE_BODY_GAP = 28
+TOP5_EDITORIAL_BODY_MIN_SIZE = 34
+TOP5_EDITORIAL_BODY_LINE_GAP = 10
+TOP5_EDITORIAL_HEADLINE_BODY_GAP = 24
 TOP5_EDITORIAL_STROKE_WIDTH = 2
 TOP5_EDITORIAL_SHADOW_BLUR = 7
-TOP5_EDITORIAL_SHADOW_ALPHA = 185
+TOP5_EDITORIAL_SHADOW_ALPHA = 210
 TOP5_EDITORIAL_SHADOW_OFFSET = (0, 5)
-TOP5_SUBJECT_HEADLINE_MAX_SIZE = 280
+TOP5_SUBJECT_HEADLINE_MAX_SIZE = 220
 TOP5_SUBJECT_HEADLINE_MIN_SIZE = 92
-TOP5_SUBJECT_MIN_SPACE = 70
+TOP5_SUBJECT_GAP = 24
 TOP5_SUBJECT_REMOVAL_MODEL = "ZhengPeng7/BiRefNet"
 
 
@@ -333,27 +333,18 @@ def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
 def _top5_body_font(size: int, language: str = "english"):
     root = Path(__file__).resolve().parent / "fonts"
     language = str(language or "english").casefold()
-    candidates = []
-    if language == "hindi":
-        candidates.extend([
-            root / "NotoSansDevanagariUI-Regular.ttf",
-            root / "NotoSansDevanagari-Regular.ttf",
-        ])
-    elif language == "telugu":
-        candidates.extend([
-            root / "NotoSansTelugu-Regular.ttf",
-        ])
-    else:
-        candidates.append(root / "Barlow-Regular.ttf")
-    candidates.extend([
+    path = {
+        "hindi": root / "NotoSansDevanagariUI-Regular.ttf",
+        "telugu": root / "NotoSansTelugu-Regular.ttf",
+    }.get(language, root / "Barlow-Regular.ttf")
+    for candidate in (
+        path,
         Path("C:/Windows/Fonts/arial.ttf"),
-        Path("C:/Windows/Fonts/segoeui.ttf"),
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
-    ])
-    for path in candidates:
-        if path.exists():
+    ):
+        if candidate.exists():
             try:
-                return ImageFont.truetype(str(path), size)
+                return ImageFont.truetype(str(candidate), size)
             except OSError:
                 continue
     return ImageFont.load_default()
@@ -370,68 +361,33 @@ def _top5_full_frame_image(value: bytes | bytearray | Image.Image) -> Image.Imag
             raise ValueError("A Top-5 visual could not be decoded.") from exc
     else:
         raise ValueError("A Top-5 visual is missing.")
-
     if image.size == (WIDTH, HEIGHT):
         return image
-
-    source_width, source_height = image.size
-    if source_height <= 0 or source_width <= 0:
-        raise ValueError("A Top-5 visual has invalid dimensions.")
-
-    source_ratio = source_width / source_height
-    target_ratio = WIDTH / HEIGHT
-    if abs(source_ratio - target_ratio) <= 0.01:
-        return image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
-
     return _fit_visual_to_frame(image)
 
 
-def _top5_editorial_measure(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    fonts: tuple[object, ...],
-) -> tuple[int, int]:
+def _top5_editorial_measure(draw: ImageDraw.ImageDraw, text: str, fonts: tuple[object, ...]) -> tuple[int, int]:
     runs = _headline_runs(text, fonts)
     if not runs:
         return 0, 0
-    widths = []
-    heights = []
-    for run, font in runs:
-        box = draw.textbbox(
-            (0, 0),
-            run,
-            font=font,
-            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-        )
-        widths.append(box[2] - box[0])
-        heights.append(box[3] - box[1])
-    return sum(widths), max(heights)
+    boxes = [
+        draw.textbbox((0, 0), run, font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
+        for run, font in runs
+    ]
+    return sum(box[2] - box[0] for box in boxes), max(box[3] - box[1] for box in boxes)
 
 
-def _top5_wrap_editorial_words(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    fonts: tuple[object, ...],
-    max_width: int,
-) -> list[list[str]]:
+def _top5_wrap_editorial_words(draw: ImageDraw.ImageDraw, text: str, fonts: tuple[object, ...], max_width: int) -> list[list[str]]:
     words = " ".join(str(text or "").split()).split()
-    if not words:
-        return []
     lines = []
     current = []
-    current_width = 0
     for word in words:
-        width, _ = _top5_editorial_measure(draw, word, fonts)
-        if width > max_width:
-            raise ValueError("Top-5 text contains a word that is too wide to fit.")
-        candidate = current_width + width + (10 if current else 0)
-        if current and candidate > max_width:
+        trial = " ".join(current + [word])
+        if current and _top5_editorial_measure(draw, trial, fonts)[0] > max_width:
             lines.append(current)
             current = [word]
-            current_width = width
         else:
             current.append(word)
-            current_width = candidate
     if current:
         lines.append(current)
     return lines
@@ -439,50 +395,41 @@ def _top5_wrap_editorial_words(
 
 @lru_cache(maxsize=256)
 def _top5_headline_font_stack(size: int, language: str) -> tuple[object, ...]:
-    language = str(language or "english").casefold()
     root = Path(__file__).resolve().parent / "fonts"
-    candidates = []
-    if language == "hindi":
-        candidates.extend([
+    language = str(language or "english").casefold()
+    paths = {
+        "hindi": (
             root / "NotoSansDevanagari-CondensedBlack.ttf",
             root / "NotoSansDevanagari-Black.ttf",
-        ])
-    elif language == "telugu":
-        candidates.extend([
+        ),
+        "telugu": (
             root / "NotoSansTelugu-CondensedBlack.ttf",
             root / "NotoSansTelugu-Black.ttf",
-        ])
-    else:
-        candidates.append(root / "Oswald-Bold.ttf")
-    candidates.extend([
-        root / "BarlowCondensed-Black.ttf",
-        Path("C:/Windows/Fonts/seguisym.ttf"),
-        Path("C:/Windows/Fonts/Nirmala.ttf"),
-        Path("C:/Windows/Fonts/NirmalaUI.ttf"),
-        Path("C:/Windows/Fonts/msyh.ttc"),
-        Path("C:/Windows/Fonts/msgothic.ttc"),
-        Path("C:/Windows/Fonts/malgun.ttf"),
-        Path("C:/Windows/Fonts/arialuni.ttf"),
-        Path("C:/Windows/Fonts/seguisb.ttf"),
-        Path("C:/Windows/Fonts/arial.ttf"),
-        Path("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf"),
-        Path("/usr/share/fonts/opentype/noto/NotoSans-Regular.ttf"),
-        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-    ])
+        ),
+    }.get(language, (root / "Oswald-Bold.ttf",))
     fonts = []
-    seen = set()
-    for path in candidates:
-        key = str(path).casefold()
-        if key in seen or not path.exists():
-            continue
-        seen.add(key)
-        try:
-            fonts.append(ImageFont.truetype(str(path), size))
-        except OSError:
-            continue
-    if not fonts:
-        fonts.append(ImageFont.load_default())
-    return tuple(fonts)
+    for path in paths:
+        if path.exists():
+            try:
+                fonts.append(ImageFont.truetype(str(path), size))
+            except OSError:
+                pass
+    return tuple(fonts) or (ImageFont.load_default(),)
+
+
+def _top5_two_line_headline(draw: ImageDraw.ImageDraw, words: list[str], fonts: tuple[object, ...]):
+    if len(words) < 2:
+        width, height = _top5_editorial_measure(draw, " ".join(words), fonts)
+        return [words], width, height
+    best = None
+    for split in range(1, len(words)):
+        first, second = words[:split], words[split:]
+        w1, h1 = _top5_editorial_measure(draw, " ".join(first), fonts)
+        w2, h2 = _top5_editorial_measure(draw, " ".join(second), fonts)
+        candidate = (abs(w1 - w2), [first, second], max(w1, w2), h1 + TOP5_EDITORIAL_HEADLINE_LINE_GAP + h2)
+        if best is None or candidate[0] < best[0]:
+            best = candidate
+    return best[1], best[2], best[3]
 
 
 def _top5_editorial_layout(
@@ -499,712 +446,141 @@ def _top5_editorial_layout(
     if not clean_headline:
         raise ValueError("Top-5 card requires a headline.")
 
-    frame = _top5_full_frame_image(image) if image is not None else Image.new(
-        "RGB",
-        (WIDTH, HEIGHT),
-        (24, 28, 34),
-    )
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-    safe_left = TOP5_EDITORIAL_MARGIN_X
-    safe_right = WIDTH - TOP5_EDITORIAL_MARGIN_X
-    safe_top = TOP5_EDITORIAL_SAFE_TOP
-    safe_bottom = TOP5_EDITORIAL_SAFE_BOTTOM
+    frame = _top5_full_frame_image(image) if image is not None else Image.new("RGB", (WIDTH, HEIGHT), (24, 28, 34))
+    draw = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    left = TOP5_EDITORIAL_MARGIN_X
+    right = WIDTH - TOP5_EDITORIAL_MARGIN_X
+    top = TOP5_EDITORIAL_SAFE_TOP
+    bottom = TOP5_EDITORIAL_SAFE_BOTTOM
+    safe_width = right - left
 
-    def headline_options(size, region_width):
-        fonts = _top5_headline_font_stack(size, language)
+    def horizontal(region, max_size, min_size):
+        rx1, ry1, rx2, ry2 = region
+        rw, rh = rx2 - rx1, ry2 - ry1
         words = clean_headline.split()
-        options = []
+        for size in range(max_size, min_size - 1, -4):
+            fonts = _top5_headline_font_stack(size, language)
+            width, height = _top5_editorial_measure(draw, clean_headline, fonts)
+            if width <= rw and height <= rh:
+                return rx1 + (rw - width) // 2, ry1 + (rh - height) // 2, width, height, fonts, [words], size
+            if max_headline_lines >= 2:
+                two = _top5_two_line_headline(draw, words, fonts)
+                if two[1] <= rw and two[2] <= rh:
+                    return rx1 + (rw - two[1]) // 2, ry1 + (rh - two[2]) // 2, two[1], two[2], fonts, two[0], size
+        return None
 
-        width, height = _top5_editorial_measure(
-            probe,
-            clean_headline,
-            fonts,
-        )
-        if width <= region_width:
-            options.append((
-                [words],
-                width,
-                height,
-            ))
-
-        if max_headline_lines >= 2 and len(words) > 2:
-            if max_headline_lines == 2:
-                for split in range(1, len(words)):
-                    first = words[:split]
-                    second = words[split:]
-                    width_1, height_1 = _top5_editorial_measure(
-                        probe,
-                        " ".join(first),
-                        fonts,
-                    )
-                    width_2, height_2 = _top5_editorial_measure(
-                        probe,
-                        " ".join(second),
-                        fonts,
-                    )
-                    width = max(width_1, width_2)
-                    height = (
-                        height_1
-                        + TOP5_EDITORIAL_HEADLINE_LINE_GAP
-                        + height_2
-                    )
-                    if width <= region_width:
-                        options.append((
-                            [first, second],
-                            width,
-                            height,
-                        ))
-            else:
-                lines = _top5_wrap_editorial_words(
-                    probe,
-                    clean_headline,
-                    fonts,
-                    region_width,
-                )
-                if lines and len(lines) <= max_headline_lines:
-                    width = max(
-                        _top5_editorial_measure(
-                            probe,
-                            " ".join(line),
-                            fonts,
-                        )[0]
-                        for line in lines
-                    )
-                    height = sum(
-                        _top5_editorial_measure(
-                            probe,
-                            " ".join(line),
-                            fonts,
-                        )[1]
-                        for line in lines
-                    ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(
-                        0,
-                        len(lines) - 1,
-                    )
-                    options.append((lines, width, height))
-
-        if len(options) > 1:
-            options.sort(
-                key=lambda item: (
-                    len(item[0]),
-                    -item[1],
-                )
-            )
-        return fonts, options
-    words = clean_headline.split()
-
-    if subject_mask is not None:
-        import numpy as np
-        from scipy import ndimage
-
-        mask = subject_mask.convert("L")
-        binary = mask.point(lambda value: 255 if value >= 96 else 0)
-        small = binary.resize((180, 320), Image.Resampling.BOX)
-        labeled, count = ndimage.label(np.asarray(small) >= 128)
-        objects = ndimage.find_objects(labeled)
-        components = []
-
-        for index, obj in enumerate(objects, 1):
-            if obj is None:
-                continue
-            ys, xs = obj
-            area = int((labeled[obj] == index).sum())
-            width = xs.stop - xs.start
-            height = ys.stop - ys.start
-            if area < 140 or width < 12 or height < 55:
-                continue
-            components.append({
-                "area": area,
-                "x1": int(xs.start * WIDTH / 180),
-                "y1": int(ys.start * HEIGHT / 320),
-                "x2": int(xs.stop * WIDTH / 180),
-                "y2": int(ys.stop * HEIGHT / 320),
-            })
-
-        if not components:
-            raise ValueError("Top-5 Subject Cutout returned no usable foreground subjects.")
-
-        components.sort(key=lambda item: item["area"], reverse=True)
-        components = components[:6]
-        outer_left = min(item["x1"] for item in components)
-        outer_right = max(item["x2"] for item in components)
-        outer_top = min(item["y1"] for item in components)
-        outer_bottom = max(item["y2"] for item in components)
-        center_x = (outer_left + outer_right) / 2.0
-        center_y = (outer_top + outer_bottom) / 2.0
-        left_space = outer_left - safe_left
-        right_space = safe_right - outer_right
-        top_space = outer_top - safe_top
-        bottom_space = safe_bottom - outer_bottom
-
-        crosses_center = any(
-            item["x1"] <= WIDTH * 0.50
-            and item["x2"] >= WIDTH * 0.50
-            for item in components
-        )
-        has_flanking_subjects = any(
-            left["x2"] <= WIDTH * 0.50
-            and right["x1"] >= WIDTH * 0.50
-            for index, left in enumerate(components)
-            for right in components[index + 1:]
-        )
-        centered = (
-            left_space >= TOP5_SUBJECT_MIN_SPACE
-            and right_space >= TOP5_SUBJECT_MIN_SPACE
-            and 0.30 <= center_x / WIDTH <= 0.70
-            and (crosses_center or has_flanking_subjects)
-        )
-
-
-
-        if centered:
-            analysis_mask = binary.resize((180, 320), Image.Resampling.BOX)
-            best = None
-            span_min = outer_right - outer_left + 48
-            span_max = safe_right - safe_left
-
-            for size in range(
-                TOP5_SUBJECT_HEADLINE_MAX_SIZE,
-                TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1,
-                -8,
-            ):
-                fonts, options = headline_options(size, span_max)
-                for lines, width, height in options:
-                    if width < span_min:
-                        continue
-
-                    min_x = max(
-                        safe_left,
-                        outer_right + 16 - width,
-                    )
-                    max_x = min(
-                        safe_right - width,
-                        outer_left - 16,
-                    )
-                    if min_x > max_x:
-                        continue
-
-                    x = int(round((min_x + max_x) / 2.0))
-                    for y in (
-                        int(round(center_y - height / 2.0)),
-                        int(round(center_y - height / 2.0 - 70)),
-                        int(round(center_y - height / 2.0 + 70)),
-                    ):
-                        if y < safe_top or y + height > safe_bottom:
-                            continue
-
-                        scale = 180 / WIDTH
-                        small_fonts = _top5_headline_font_stack(
-                            max(1, int(round(size * scale))),
-                            language,
-                        )
-                        text_small = Image.new("L", (180, 320), 0)
-                        small_draw = ImageDraw.Draw(text_small)
-                        cursor_y = int(round(y * 320 / HEIGHT))
-                        for line in lines:
-                            cursor_x = int(round(x * 180 / WIDTH))
-                            for run, small_font in _headline_runs(
-                                " ".join(line),
-                                small_fonts,
-                            ):
-                                box = small_draw.textbbox(
-                                    (0, 0),
-                                    run,
-                                    font=small_font,
-                                    stroke_width=max(
-                                        1,
-                                        int(
-                                            round(
-                                                TOP5_EDITORIAL_STROKE_WIDTH
-                                                * scale
-                                            )
-                                        ),
-                                    ),
-                                )
-                                small_draw.text(
-                                    (
-                                        cursor_x - box[0],
-                                        cursor_y - box[1],
-                                    ),
-                                    run,
-                                    font=small_font,
-                                    fill=255,
-                                    stroke_width=max(
-                                        1,
-                                        int(
-                                            round(
-                                                TOP5_EDITORIAL_STROKE_WIDTH
-                                                * scale
-                                            )
-                                        ),
-                                    ),
-                                    stroke_fill=255,
-                                )
-                                cursor_x += box[2] - box[0]
-                            cursor_y += int(
-                                round(
-                                    _top5_editorial_measure(
-                                        probe,
-                                        " ".join(line),
-                                        fonts,
-                                    )[1] * scale
-                                )
-                                + max(
-                                    1,
-                                    int(
-                                        round(
-                                            TOP5_EDITORIAL_HEADLINE_LINE_GAP
-                                            * scale
-                                        )
-                                    ),
-                                )
-                            )
-
-                        text_total = sum(text_small.getdata())
-                        intersection = ImageChops.multiply(
-                            text_small,
-                            analysis_mask,
-                        )
-                        hidden_total = sum(intersection.getdata())
-                        visible = ImageChops.subtract(
-                            text_small,
-                            analysis_mask,
-                        )
-                        left_end = max(
-                            1,
-                            min(180, int(outer_left * 180 / WIDTH)),
-                        )
-                        right_start = min(
-                            179,
-                            max(0, int(outer_right * 180 / WIDTH)),
-                        )
-                        left_visible = sum(
-                            visible.crop((0, 0, left_end, 320)).getdata()
-                        )
-                        right_visible = sum(
-                            visible.crop((right_start, 0, 180, 320)).getdata()
-                        )
-                        inner_box = (
-                            max(0, int(outer_left * 180 / WIDTH)),
-                            max(0, int(outer_top * 320 / HEIGHT)),
-                            min(180, int(outer_right * 180 / WIDTH)),
-                            min(320, int(outer_bottom * 320 / HEIGHT)),
-                        )
-                        gap_visible = sum(
-                            ImageChops.subtract(
-                                text_small.crop(inner_box),
-                                analysis_mask.crop(inner_box),
-                            ).getdata()
-                        )
-
-                        if not text_total:
-                            continue
-                        overlap = hidden_total / text_total
-                        left_ratio = left_visible / text_total
-                        right_ratio = right_visible / text_total
-                        gap_ratio = gap_visible / text_total
-
-                        if overlap < 0.08 or overlap > 0.62:
-                            continue
-                        if left_ratio < 0.03 or right_ratio < 0.03:
-                            continue
-
-                        candidate = {
-                            "score": (
-                                size * 12.0
-                                + min(1.0, left_ratio / 0.12) * 180.0
-                                + min(1.0, right_ratio / 0.12) * 180.0
-                                + min(1.0, gap_ratio / 0.04) * 70.0
-                                - abs(overlap - 0.28) * 180.0
-                                - abs(
-                                    y + height / 2.0 - center_y
-                                ) * 0.08
-                                - len(lines) * 18.0
-                            ),
-                            "composition_mode": "cross-subject",
-                            "x": x,
-                            "y": y,
-                            "width": width,
-                            "headline_fonts": fonts,
-                            "headline_lines": lines,
-                            "headline_height": height,
-                            "headline_size": size,
-                            "body_font": None,
-                            "body_lines": [],
-                            "body_height": 0,
-                            "body_size": None,
-                            "body_gap": 0,
-                            "total_height": height,
-                            "zone_bottom": safe_bottom,
-                            "subject_overlap": overlap,
-                            "subject_bbox": (
-                                outer_left,
-                                outer_top,
-                                outer_right,
-                                outer_bottom,
-                            ),
-                            "story_number": story_number,
-                        }
-                        if best is None or candidate["score"] > best["score"]:
-                            best = candidate
-
-                if best is not None and size <= best["headline_size"] - 16:
+    if subject_mask is None:
+        layout = horizontal((left, 520, right, bottom), TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE, TOP5_EDITORIAL_HEADLINE_MIN_SIZE)
+        if layout is None:
+            raise ValueError("Top-5 headline cannot fit the editorial card.")
+        x, y, width, height, fonts, lines, size = layout
+        body_font = None
+        body_lines = []
+        body_height = 0
+        if clean_body:
+            for body_size in range(TOP5_EDITORIAL_BODY_MAX_SIZE, TOP5_EDITORIAL_BODY_MIN_SIZE - 1, -2):
+                font = _top5_body_font(body_size, language)
+                lines_body = _top5_wrap_editorial_words(draw, clean_body, (font,), safe_width)
+                box = draw.textbbox((0, 0), "Ag", font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
+                line_height = box[3] - box[1]
+                height_body = line_height * len(lines_body) + TOP5_EDITORIAL_BODY_LINE_GAP * max(0, len(lines_body) - 1)
+                if y + height + TOP5_EDITORIAL_HEADLINE_BODY_GAP + height_body <= bottom:
+                    body_font, body_lines, body_height = font, lines_body, height_body
                     break
+        total_height = height + (TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height if body_lines else 0)
+        return {
+            "x": x, "y": max(top, min(bottom - total_height, y)), "width": width,
+            "headline_fonts": fonts, "headline_lines": lines, "headline_height": height,
+            "headline_size": size, "body_font": body_font, "body_lines": body_lines,
+            "body_height": body_height, "body_size": body_font.size if body_font else None,
+            "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
+            "total_height": total_height, "zone_bottom": bottom, "subject_overlap": 0.0,
+            "subject_bbox": None, "composition_mode": "editorial", "region_mode": "static",
+            "story_number": story_number,
+        }
 
-            if best is not None:
-                return best
+    mask = subject_mask.convert("L").point(lambda value: 255 if value >= 96 else 0)
+    bbox = mask.getbbox()
+    if bbox is None:
+        raise ValueError("Top-5 Subject Cutout returned no usable foreground subjects.")
 
-        regions = []
-        if top_space >= 260:
-            regions.append((
-                "top-negative-space",
-                (safe_left, safe_top, safe_right, outer_top - 30),
-            ))
-        if bottom_space >= 260:
-            regions.append((
-                "bottom-negative-space",
-                (safe_left, outer_bottom + 30, safe_right, safe_bottom),
-            ))
-        if center_x <= WIDTH * 0.48 and right_space >= 170:
-            regions.append((
-                "vertical-right",
-                (outer_right + 30, safe_top, safe_right, safe_bottom),
-            ))
-        if center_x >= WIDTH * 0.52 and left_space >= 170:
-            regions.append((
-                "vertical-left",
-                (safe_left, safe_top, outer_left - 30, safe_bottom),
-            ))
+    sx1, sy1, sx2, sy2 = bbox
+    left_space, right_space = sx1 - left, right - sx2
+    center = (sx1 + sx2) / 2 / WIDTH
 
-        best = None
-        for mode, region in regions:
-            rx1, ry1, rx2, ry2 = region
-            rw = rx2 - rx1
-            rh = ry2 - ry1
-            if rw < 220 or rh < 240:
+    if 0.30 <= center <= 0.70 and left_space >= 70 and right_space >= 70:
+        for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -6):
+            fonts = _top5_headline_font_stack(size, language)
+            width, height = _top5_editorial_measure(draw, clean_headline, fonts)
+            lines = [clean_headline.split()]
+            if width > safe_width:
+                lines, width, height = _top5_two_line_headline(draw, clean_headline.split(), fonts)
+            if width < (sx2 - sx1) + 32:
                 continue
+            min_x = max(left, sx2 + 18 - width)
+            max_x = min(sx1 - 18, right - width)
+            if min_x > max_x:
+                continue
+            x = int((min_x + max_x) / 2)
+            y = int(max(top, min(bottom - height, (sy1 + sy2 - height) / 2)))
+            overlap_w = max(0, min(x + width, sx2) - max(x, sx1))
+            overlap_h = max(0, min(y + height, sy2) - max(y, sy1))
+            return {
+                "x": x, "y": y, "width": width, "headline_fonts": fonts,
+                "headline_lines": lines, "headline_height": height, "headline_size": size,
+                "body_font": None, "body_lines": [], "body_height": 0, "body_size": None,
+                "body_gap": 0, "total_height": height, "zone_bottom": bottom,
+                "subject_overlap": (overlap_w * overlap_h) / max(1, width * height),
+                "subject_bbox": bbox, "composition_mode": "cross-subject", "region_mode": "center",
+                "story_number": story_number,
+            }
 
-            for size in range(
-                TOP5_SUBJECT_HEADLINE_MAX_SIZE,
-                TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1,
-                -8,
-            ):
-                fonts = _top5_headline_font_stack(size, language)
-                if mode.startswith("vertical"):
-                    lines = []
-                    current = []
-                    for word in words:
-                        trial = current + [word]
-                        trial_width = _top5_editorial_measure(
-                            probe,
-                            " ".join(trial),
-                            fonts,
-                        )[0]
-                        if current and (
-                            len(current) >= 2
-                            or trial_width > rw
-                        ):
-                            lines.append(current)
-                            current = [word]
-                        else:
-                            current = trial
-                    if current:
-                        lines.append(current)
-                    if not lines:
-                        continue
-                    widths = [
-                        _top5_editorial_measure(
-                            probe,
-                            " ".join(line),
-                            fonts,
-                        )[0]
-                        for line in lines
-                    ]
-                    heights = [
-                        _top5_editorial_measure(
-                            probe,
-                            " ".join(line),
-                            fonts,
-                        )[1]
-                        for line in lines
-                    ]
-                    width = max(widths)
-                    height = sum(heights) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(
-                        0,
-                        len(lines) - 1,
-                    )
-                    if height > rh:
-                        continue
-                else:
-                    _, options = headline_options(size, rw)
-                    if not options:
-                        continue
-                    lines, width, height = options[0]
-                    if height > rh:
-                        continue
+    words = clean_headline.split()
+    if center < 0.50:
+        region = (left, top, max(left + 1, sx1 - TOP5_SUBJECT_GAP), bottom)
+        mode = "vertical-left"
+    else:
+        region = (min(right - 1, sx2 + TOP5_SUBJECT_GAP), top, right, bottom)
+        mode = "vertical-right"
 
-                chosen = (lines, width, height)
-                if chosen is None:
-                    continue
-
-                lines, width, height = chosen
-                x = int(round(rx1 + (rw - width) / 2.0))
-                y = int(round(ry1 + (rh - height) / 2.0))
-                candidate = {
-                    "score": size * 10.0 + (width / rw) * 260.0,
-                    "composition_mode": mode,
-                    "x": x,
-                    "y": y,
-                    "width": width,
-                    "headline_fonts": fonts,
-                    "headline_lines": lines,
-                    "headline_height": height,
-                    "headline_size": size,
-                    "body_font": None,
-                    "body_lines": [],
-                    "body_height": 0,
-                    "body_size": None,
-                    "body_gap": 0,
-                    "total_height": height,
-                    "zone_bottom": safe_bottom,
-                    "subject_overlap": 0.0,
-                    "subject_bbox": (
-                        outer_left,
-                        outer_top,
-                        outer_right,
-                        outer_bottom,
-                    ),
+    if region[2] - region[0] >= 180:
+        lines = [words[index:index + 2] for index in range(0, len(words), 2)]
+        for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -6):
+            fonts = _top5_headline_font_stack(size, language)
+            widths = [_top5_editorial_measure(draw, " ".join(line), fonts)[0] for line in lines]
+            heights = [_top5_editorial_measure(draw, " ".join(line), fonts)[1] for line in lines]
+            width = max(widths)
+            height = sum(heights) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
+            if width <= region[2] - region[0] and height <= region[3] - region[1]:
+                return {
+                    "x": int(region[0] + (region[2] - region[0] - width) / 2),
+                    "y": int(region[1] + (region[3] - region[1] - height) / 2),
+                    "width": width, "headline_fonts": fonts, "headline_lines": lines,
+                    "headline_height": height, "headline_size": size, "body_font": None,
+                    "body_lines": [], "body_height": 0, "body_size": None, "body_gap": 0,
+                    "total_height": height, "zone_bottom": bottom, "subject_overlap": 0.0,
+                    "subject_bbox": bbox, "composition_mode": mode, "region_mode": mode,
                     "story_number": story_number,
                 }
-                if best is None or candidate["score"] > best["score"]:
-                    best = candidate
-                break
 
-        if best is None:
-            raise ValueError(
-                "Top-5 Subject Cutout could not build a subject-aware headline layout."
-            )
-        return best
+    if sy1 - top >= bottom - sy2:
+        region = (left, top, right, max(top + 1, sy1 - TOP5_SUBJECT_GAP))
+        mode = "top-negative-space"
+    else:
+        region = (left, min(bottom - 1, sy2 + TOP5_SUBJECT_GAP), right, bottom)
+        mode = "bottom-negative-space"
 
-    analysis = frame.convert("L").resize(
-        (90, 160),
-        Image.Resampling.BILINEAR,
-    )
-    edge_map = analysis.filter(ImageFilter.FIND_EDGES)
-    regions = [
-        ("top", (safe_left, 150, safe_right, 760)),
-        ("upper", (safe_left, 330, safe_right, 1030)),
-        ("middle", (safe_left, 620, safe_right, 1330)),
-        ("lower", (safe_left, 900, safe_right, 1610)),
-        ("bottom", (safe_left, 1120, safe_right, safe_bottom)),
-        ("top-left", (safe_left, 180, 620, 830)),
-        ("top-right", (460, 180, safe_right, 830)),
-        ("bottom-left", (safe_left, 1030, 620, safe_bottom)),
-        ("bottom-right", (460, 1030, safe_right, safe_bottom)),
-        ("center-left", (safe_left, 560, 720, 1420)),
-        ("center-right", (360, 560, safe_right, 1420)),
-    ]
-
-    candidates = []
-    for mode, region in regions:
-        rx1, ry1, rx2, ry2 = region
-        rw = rx2 - rx1
-        rh = ry2 - ry1
-        if rw < 300 or rh < 280:
-            continue
-
-        qbox = (
-            max(0, int(rx1 * 90 / WIDTH)),
-            max(0, int(ry1 * 160 / HEIGHT)),
-            min(90, int(rx2 * 90 / WIDTH)),
-            min(160, int(ry2 * 160 / HEIGHT)),
-        )
-        patch = edge_map.crop(qbox).resize((48, 48), Image.Resampling.BILINEAR)
-        values = list(patch.getdata())
-        if not values:
-            continue
-
-        mean = sum(values) / len(values)
-        variance = sum((value - mean) ** 2 for value in values) / len(values)
-        quiet = max(
-            0.0,
-            1.0
-            - min(1.0, mean / 52.0) * 0.76
-            - min(1.0, math.sqrt(variance) / 68.0) * 0.24,
-        )
-        allowed_max = int(
-            TOP5_EDITORIAL_HEADLINE_MIN_SIZE
-            + (
-                TOP5_EDITORIAL_HEADLINE_MAX_SIZE
-                - TOP5_EDITORIAL_HEADLINE_MIN_SIZE
-            ) * quiet
-        )
-
-        chosen = None
-        chosen_body = (None, [], 0)
-        for size in range(
-            min(TOP5_EDITORIAL_HEADLINE_MAX_SIZE, allowed_max),
-            TOP5_EDITORIAL_HEADLINE_MIN_SIZE - 1,
-            -4,
-        ):
-            fonts, options = headline_options(size, rw)
-            if not options:
-                continue
-
-            options.sort(
-                key=lambda item: (
-                    len(item[0]),
-                    -item[1],
-                )
-            )
-            lines, text_width, headline_height = options[0]
-            body_font = None
-            body_lines = []
-            body_height = 0
-
-            if clean_body:
-                for body_size in range(
-                    TOP5_EDITORIAL_BODY_MAX_SIZE,
-                    TOP5_EDITORIAL_BODY_MIN_SIZE - 1,
-                    -2,
-                ):
-                    font = _top5_body_font(body_size, language)
-                    lines_body = _top5_wrap_editorial_words(
-                        probe,
-                        clean_body,
-                        (font,),
-                        rw,
-                    )
-                    box = probe.textbbox(
-                        (0, 0),
-                        "Ag",
-                        font=font,
-                        stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-                    )
-                    line_height = box[3] - box[1]
-                    candidate_height = (
-                        line_height * len(lines_body)
-                        + TOP5_EDITORIAL_BODY_LINE_GAP
-                        * max(0, len(lines_body) - 1)
-                    )
-                    if (
-                        headline_height
-                        + TOP5_EDITORIAL_HEADLINE_BODY_GAP
-                        + candidate_height
-                        <= rh
-                    ):
-                        body_font = font
-                        body_lines = lines_body
-                        body_height = candidate_height
-                        break
-                if body_font is None:
-                    continue
-
-            total_height = headline_height + (
-                TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height
-                if body_lines
-                else 0
-            )
-            if total_height > rh:
-                continue
-
-            candidates.append({
-                "score": (fonts[0].size, quiet, text_width / rw),
-                "composition_mode": "negative-space",
-                "region_mode": mode,
-                "x": int(
-                    max(
-                        safe_left,
-                        min(
-                            safe_right - text_width,
-                            rx1 + (rw - text_width) / 2,
-                        ),
-                    )
-                ),
-                "y": int(
-                    max(
-                        safe_top,
-                        min(
-                            safe_bottom - total_height,
-                            ry1 + (rh - total_height) / 2,
-                        ),
-                    )
-                ),
-                "width": text_width,
-                "headline_fonts": fonts,
-                "headline_lines": lines,
-                "headline_height": headline_height,
-                "headline_size": fonts[0].size,
-                "body_font": body_font,
-                "body_lines": body_lines,
-                "body_height": body_height,
-                "body_size": body_font.size if body_font is not None else None,
-                "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
-                "total_height": total_height,
-                "zone_bottom": safe_bottom,
-                "subject_overlap": 0.0,
-                "story_number": story_number,
-                "quiet_score": quiet,
-            })
-
-    if not candidates:
-        raise ValueError(
-            "Top-5 headline cannot fit inside a readable negative-space region."
-        )
-
-    return max(
-        candidates,
-        key=lambda candidate: candidate["score"],
-    )
-
-
-def compress_top5_body(body: str, max_words: int) -> str:
-    words = " ".join(str(body or "").split()).split()
-    if max_words <= 0 or len(words) <= max_words:
-        return " ".join(words)
-
-    filler = {
-        "actually", "also", "currently", "just", "now", "really",
-        "still", "then", "very", "already", "simply",
+    layout = horizontal(region, TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE)
+    if layout is None:
+        raise ValueError("Top-5 Subject Cutout could not place the headline.")
+    x, y, width, height, fonts, lines, size = layout
+    return {
+        "x": x, "y": y, "width": width, "headline_fonts": fonts, "headline_lines": lines,
+        "headline_height": height, "headline_size": size, "body_font": None, "body_lines": [],
+        "body_height": 0, "body_size": None, "body_gap": 0, "total_height": height,
+        "zone_bottom": bottom, "subject_overlap": 0.0, "subject_bbox": bbox,
+        "composition_mode": mode, "region_mode": mode, "story_number": story_number,
     }
-    reduced = [
-        word for word in words
-        if word.casefold().strip(".,!?;:") not in filler
-    ]
-
-    if len(reduced) <= max_words:
-        return " ".join(reduced)
-
-    sentences = []
-    current = []
-    for word in reduced:
-        current.append(word)
-        if word.endswith((".", "!", "?")):
-            sentences.append(" ".join(current))
-            current = []
-    if current:
-        sentences.append(" ".join(current))
-
-    kept = []
-    count = 0
-    for sentence in sentences:
-        sentence_words = sentence.split()
-        if count + len(sentence_words) > max_words:
-            break
-        kept.extend(sentence_words)
-        count += len(sentence_words)
-
-    remaining = max_words - len(kept)
-    if remaining > 0 and len(kept) < len(reduced):
-        kept.extend(reduced[len(kept):len(kept) + remaining])
-
-    if not kept:
-        kept = reduced[:max_words]
-
-    result = " ".join(kept).strip()
-    if result and not result.endswith((".", "!", "?")):
-        result += "…"
-    return result
 
 
 @lru_cache(maxsize=1)
@@ -1212,22 +588,16 @@ def _load_top5_birefnet():
     try:
         import torch
         from transformers import AutoModelForImageSegmentation
+        from torchvision import transforms
     except ImportError as exc:
-        raise RuntimeError(
-            "Top-5 Subject Cutout needs torch and transformers. Run: "
-            "python -m pip install -r requirements.txt"
-        ) from exc
+        raise RuntimeError("Top-5 Subject Cutout needs the existing torch, torchvision and transformers packages.") from exc
 
     model = AutoModelForImageSegmentation.from_pretrained(
         TOP5_SUBJECT_REMOVAL_MODEL,
         trust_remote_code=True,
     )
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    model.to(device)
-    model.eval()
-    if device.type == "cuda":
-        model.half()
-    return model, device
+    model = model.to(torch.device("cpu")).float().eval()
+    return model, transforms
 
 
 @lru_cache(maxsize=64)
@@ -1236,62 +606,55 @@ def _top5_subject_mask(image_bytes: bytes) -> Image.Image | None:
         return None
     try:
         import torch
-        from torchvision import transforms
     except ImportError as exc:
-        raise RuntimeError(
-            "Top-5 Subject Cutout needs torch and torchvision. Run: "
-            "python -m pip install -r requirements.txt"
-        ) from exc
+        raise RuntimeError("Top-5 Subject Cutout needs torch.") from exc
 
     with Image.open(BytesIO(image_bytes)) as source:
         image = source.convert("RGB")
 
-    model, device = _load_top5_birefnet()
+    model, transforms = _load_top5_birefnet()
     transform = transforms.Compose([
         transforms.Resize((1024, 1024)),
         transforms.ToTensor(),
         transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
     ])
-    tensor = transform(image).unsqueeze(0).to(device)
-    if device.type == "cuda":
-        tensor = tensor.half()
+    tensor = transform(image).unsqueeze(0).to(dtype=torch.float32)
 
     with torch.inference_mode():
-        prediction = model(tensor)[-1].sigmoid().cpu()
+        prediction = model(tensor)
+        if isinstance(prediction, (tuple, list)):
+            prediction = prediction[-1]
+        prediction = prediction.sigmoid().squeeze().cpu()
 
-    mask = transforms.ToPILImage()(prediction[0].squeeze())
+    mask = transforms.ToPILImage()(prediction)
     mask = mask.resize(image.size, Image.Resampling.BILINEAR)
-    mask = mask.filter(ImageFilter.MedianFilter(3))
     if mask.getbbox() is None:
         return None
-    return mask
+    return mask.filter(ImageFilter.MedianFilter(3))
+
 
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     language = str(card.get("language") or "english")
     headline = " ".join(str(card.get("headline") or "").split())
     subject_cutout = bool(card.get("subject_cutout"))
     body = "" if subject_cutout else " ".join(str(card.get("body") or "").split())
-
     if not headline:
         raise ValueError("Top-5 card requires a headline.")
 
-    source_image = _top5_full_frame_image(base).convert("RGB")
+    source_image = _top5_full_frame_image(base)
     subject_mask = None
     if subject_cutout:
         source_bytes = BytesIO()
         source_image.save(source_bytes, format="PNG", optimize=False)
         subject_mask = _top5_subject_mask(source_bytes.getvalue())
         if subject_mask is None:
-            raise ValueError(
-                "Top-5 Subject Cutout could not produce a usable foreground mask."
-            )
+            raise ValueError("Top-5 Subject Cutout could not produce a usable foreground mask.")
 
     layout = _top5_editorial_layout(
         headline,
         body,
         language,
         int(card.get("story_number") or 0),
-        int(card.get("max_headline_lines") or TOP5_EDITORIAL_HEADLINE_MAX_LINES),
         image=source_image,
         subject_mask=subject_mask,
     )
@@ -1305,163 +668,52 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         line = " ".join(line_words)
         cursor_x = layout["x"]
         for run, font in _headline_runs(line, layout["headline_fonts"]):
-            box = draw.textbbox(
-                (0, 0),
-                run,
-                font=font,
-                stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-            )
-            commands.append(("headline", run, font, cursor_x, cursor_y))
+            box = draw.textbbox((0, 0), run, font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
+            commands.append((run, font, cursor_x, cursor_y))
             cursor_x += box[2] - box[0]
-        cursor_y += (
-            _top5_editorial_measure(
-                draw,
-                line,
-                layout["headline_fonts"],
-            )[1]
-            + TOP5_EDITORIAL_HEADLINE_LINE_GAP
-        )
+        cursor_y += _top5_editorial_measure(draw, line, layout["headline_fonts"])[1] + TOP5_EDITORIAL_HEADLINE_LINE_GAP
 
     if layout["body_lines"] and layout["body_font"] is not None:
-        cursor_y = (
-            layout["y"]
-            + layout["headline_height"]
-            + TOP5_EDITORIAL_HEADLINE_BODY_GAP
-        )
+        cursor_y = layout["y"] + layout["headline_height"] + TOP5_EDITORIAL_HEADLINE_BODY_GAP
         for line_words in layout["body_lines"]:
-            commands.append((
-                "body",
-                " ".join(line_words),
-                layout["body_font"],
-                layout["x"],
-                cursor_y,
-            ))
-            cursor_y += (
-                draw.textbbox(
-                    (0, 0),
-                    "Ag",
-                    font=layout["body_font"],
-                    stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-                )[3]
-                - draw.textbbox(
-                    (0, 0),
-                    "Ag",
-                    font=layout["body_font"],
-                    stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-                )[1]
-                + TOP5_EDITORIAL_BODY_LINE_GAP
-            )
+            commands.append((" ".join(line_words), layout["body_font"], layout["x"], cursor_y))
+            box = draw.textbbox((0, 0), "Ag", font=layout["body_font"], stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
+            cursor_y += box[3] - box[1] + TOP5_EDITORIAL_BODY_LINE_GAP
+
+    crop_box = (
+        max(0, layout["x"]),
+        max(0, layout["y"]),
+        min(WIDTH, layout["x"] + max(1, layout["width"])),
+        min(HEIGHT, layout["y"] + max(1, layout["total_height"])),
+    )
+    luma = source_image.convert("L").crop(crop_box).resize((1, 1)).getpixel((0, 0))
+    light_text = luma < 145
+    text_fill = (249, 250, 252, 255) if light_text else (5, 7, 10, 255)
+    shadow_rgb = (5, 7, 10) if light_text else (249, 250, 252)
+    stroke_fill = (5, 7, 10, 235) if light_text else (249, 250, 252, 235)
 
     text_mask = Image.new("L", canvas.size, 0)
     text_draw = ImageDraw.Draw(text_mask)
-    for kind, text, font, x_pos, y_pos in commands:
-        box = text_draw.textbbox(
-            (0, 0),
-            text,
-            font=font,
-            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-        )
-        text_draw.text(
-            (x_pos - box[0], y_pos - box[1]),
-            text,
-            font=font,
-            fill=255,
-            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-            stroke_fill=255,
-        )
+    for text, font, x, y in commands:
+        box = text_draw.textbbox((0, 0), text, font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
+        text_draw.text((x - box[0], y - box[1]), text, font=font, fill=255, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH, stroke_fill=255)
 
-    source_luma = source_image.convert("L")
-    text_values = []
-    for yy in range(0, HEIGHT, 6):
-        for xx in range(0, WIDTH, 6):
-            if text_mask.getpixel((xx, yy)) > 0:
-                text_values.append(source_luma.getpixel((xx, yy)))
-    mean_luma = (
-        sum(text_values) / len(text_values)
-        if text_values
-        else 127.5
-    )
-    text_fill = (
-        (249, 250, 252, 255)
-        if mean_luma < 137
-        else (5, 7, 10, 255)
-    )
-    stroke_fill = (
-        (5, 7, 10, 235)
-        if mean_luma < 137
-        else (249, 250, 252, 235)
-    )
-    shadow_rgb = (
-        (5, 7, 10)
-        if mean_luma < 137
-        else (249, 250, 252)
-    )
-
-    shadow_mask = text_mask.filter(
-        ImageFilter.GaussianBlur(TOP5_EDITORIAL_SHADOW_BLUR)
-    )
-    shadow_mask = shadow_mask.point(
-        lambda value: value * TOP5_EDITORIAL_SHADOW_ALPHA // 255
-    )
+    shadow = text_mask.filter(ImageFilter.GaussianBlur(TOP5_EDITORIAL_SHADOW_BLUR))
+    shadow = shadow.point(lambda value: value * TOP5_EDITORIAL_SHADOW_ALPHA // 255)
     shadow_layer = Image.new("RGBA", canvas.size, shadow_rgb + (0,))
-    shadow_layer.putalpha(shadow_mask)
-    shadow_offset = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
-    shadow_offset.alpha_composite(
-        shadow_layer,
-        dest=(TOP5_EDITORIAL_SHADOW_OFFSET[0], TOP5_EDITORIAL_SHADOW_OFFSET[1]),
-    )
-    canvas.alpha_composite(shadow_offset)
+    shadow_layer.putalpha(shadow)
+    canvas.alpha_composite(shadow_layer, dest=TOP5_EDITORIAL_SHADOW_OFFSET)
 
     draw = ImageDraw.Draw(canvas, "RGBA")
-    for kind, text, font, x_pos, y_pos in commands:
-        box = draw.textbbox(
-            (0, 0),
-            text,
-            font=font,
-            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-        )
-        draw.text(
-            (x_pos - box[0], y_pos - box[1]),
-            text,
-            font=font,
-            fill=text_fill,
-            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-            stroke_fill=stroke_fill,
-        )
+    for text, font, x, y in commands:
+        box = draw.textbbox((0, 0), text, font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
+        draw.text((x - box[0], y - box[1]), text, font=font, fill=text_fill, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH, stroke_fill=stroke_fill)
 
     if subject_mask is not None:
-        headline_mask = Image.new("L", canvas.size, 0)
-        headline_draw = ImageDraw.Draw(headline_mask)
-        for kind, text, font, x_pos, y_pos in commands:
-            if kind != "headline":
-                continue
-            box = headline_draw.textbbox(
-                (0, 0),
-                text,
-                font=font,
-                stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-            )
-            headline_draw.text(
-                (x_pos - box[0], y_pos - box[1]),
-                text,
-                font=font,
-                fill=255,
-                stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
-                stroke_fill=255,
-            )
+        canvas = Image.composite(source_image.convert("RGBA"), canvas, subject_mask)
 
-        occlusion_mask = ImageChops.multiply(
-            subject_mask.convert("L"),
-            ImageChops.lighter(headline_mask, shadow_mask),
-        )
-        if occlusion_mask.getbbox() is not None:
-            canvas = Image.composite(
-                source_image.convert("RGBA"),
-                canvas,
-                occlusion_mask,
-            )
+    return canvas
 
-    return canvas.convert("RGBA")
 
 def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
     quote = " ".join(str(card.get("quote") or "").split())
@@ -1470,7 +722,6 @@ def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
         raise ValueError("Quote Card requires quote text.")
     if not attribution:
         raise ValueError("Quote Card requires an attribution.")
-
     return _draw_top5_editorial_card(
         base,
         {
@@ -1488,14 +739,10 @@ def build_quote_card_preview(
     attribution: str,
     source_label: str | None = None,
 ) -> bytes:
-    """Render a static Quote Card using the direct editorial card renderer."""
-    frame = _draw_quote_card(
-        _top5_full_frame_image(source_image),
-        {
-            "quote": quote,
-            "attribution": attribution,
-        },
-    )
+    frame = _draw_quote_card(_top5_full_frame_image(source_image), {
+        "quote": quote,
+        "attribution": attribution,
+    })
     _paste_logo(frame)
     _paste_top5_source(frame, source_label)
     buffer = BytesIO()
@@ -1509,10 +756,7 @@ def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
     font = _font((), 20)
     box = draw.textbbox((0, 0), label, font=font)
     draw.text(
-        (
-            WIDTH - TOP5_EDITORIAL_MARGIN_X - (box[2] - box[0]),
-            HEIGHT - 48,
-        ),
+        (WIDTH - TOP5_EDITORIAL_MARGIN_X - (box[2] - box[0]), HEIGHT - 48),
         label,
         font=font,
         fill=(86, 91, 100),
@@ -1528,7 +772,6 @@ def build_top5_card_preview(
     source_label: str | None = None,
     subject_cutout: bool = False,
 ) -> bytes:
-    """Render one static Top-5 slide with adaptive editorial typography."""
     frame = _draw_top5_editorial_card(
         source_image,
         {
