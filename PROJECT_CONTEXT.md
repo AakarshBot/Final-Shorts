@@ -276,24 +276,26 @@ Important:
 
 ### Top-5 editorial card design — current Test redesign:
 - Top-5 uses a static 9:16 editorial composition. The selected photograph remains full-bleed.
-- English Top-5 headlines use the bundled Oswald-Bold.ttf display treatment.
-- Headline and body placement are dynamically fitted within the lower safe area while protecting the conservative bottom Shorts UI exclusion zone.
-- Current work is focused on **improving the text treatment on the visuals**. The exact final typography/readability treatment is **not yet approved**.
-- Do not treat the current text styling, shadow/fade strength, or other text-readability details as final.
-- No motion, word animation, fake UI, cards, broad image washes, or permanent gradients should be reintroduced while refining the text treatment.
-- Preserve the existing manual image selection, crop/reposition, Test preview, Render Now button, logo and source-label handoffs.
+- English Top-5 headlines use the bundled Oswald-Bold.ttf display treatment, rendered **ALL CAPS**.
+- The headline has a maximum of two lines and a readable minimum size; it is fitted only within the fixed Top-5 text zone rather than being allowed to drift around the image.
+- The Top-5 text zone is fixed at **x=64, y=900 through y=1480** on the 1080 × 1920 frame. The headline always starts at that fixed position, the body follows it, and the block does not move upward or downward based on copy length.
+- Top-5 body copy uses a clean regular sans-serif and will not shrink below the renderer's minimum readable size. Copy that cannot fit inside the fixed zone at that minimum is rejected instead of being made tiny.
+- Readability treatment is localized to the actual text area: a stronger soft dark scrim/halo is generated from the text mask, plus a distinct text shadow and dark outline. It is deliberately **not** a large panel, full-frame wash, permanent gradient, border, line, dot treatment or fake UI element.
+- When body copy is rejected, Renderer reports the strict maximum word count supported by the fixed zone. Visual QC automatically presents the **rejected body** in an editable field on the same slide.
+- Visual QC has a **Rewrite slide body (≤ N words)** action. This uses deterministic local compression only: no LLM/API call and no new dependency. The compressed result remains editable before the user renders it again.
+- Manual image selection, crop/reposition, Test preview, Render Now, logo and source-label handoffs remain unchanged.
 - The Test Render Now button uses the shared build_top5_card_preview() renderer directly.
 - The generic/non-Top-5 renderer path and the approved Cricket Visual Fetcher remain untouched.
-- Test preview remains the acceptance point. This text treatment is not approved for Live until the user manually reviews it in Test.
+- This typography/readability treatment is still **pending user Test approval** and must not be treated as Live-approved until the user accepts the visual result.
 
 ### Top-5 standalone Visuals Test mode:
 - Test Stage 04 · Visuals is directly accessible even when the Top-5 Scriptwriter handoff does not exist.
 - When no approved Top-5 script is present, the stage opens as a standalone renderer playground rather than blocking on Scriptwriter.
-- The standalone playground starts with a green 1080 × 1920 test canvas, an 9-word filler headline (TOP FIVE CRICKET STORIES YOU NEED TO KNOW TODAY) and approximately 70 words of filler body copy.
-- The filler headline/body are the defaults used by Render Now and remain editable.
+- The standalone playground starts with a green 1080 × 1920 test canvas, the existing filler headline and filler body, and exposes the current shared Top-5 renderer through Render Now.
+- The filler headline/body remain editable so typography, spacing, placement and localized readability treatment can be reviewed without waiting for a real script.
 - Standalone image retrieval exposes Real Image Search only. The user can search, select one real image, and press Render Now to see the exact shared Top-5 editorial treatment on that image.
 - Standalone rendering is preview-only. It does not create a Top-5 production handoff, bypass a production approval, or move the Test pipeline to a later stage.
-- Once an approved Scriptwriter handoff exists, the existing six-slide Top-5 Visual QC path remains unchanged, including its production image-selection and card-option behaviour.
+- Once an approved Scriptwriter handoff exists, the existing six-slide Top-5 Visual QC path remains available with its production image-selection and card-option behaviour, plus the body-rejection/edit/rewrite path described above.
 
 Top-5 Live orchestration:
 - The user manually chooses and orders the five stories.
@@ -313,8 +315,9 @@ Top-5 Upload:
 Top-5 status:
 - Test pipeline/framework: approved.
 - Standalone Top-5 Visuals renderer playground: implemented in Test; pending user visual approval.
-- Oswald + Fade v2 with dynamic lower-safe placement: implemented in the shared renderer; pending user Test review.
-- Live implementation: existing pipeline remains in production testing, but the current Oswald/Fade v2 redesign is not approved for Live until Test review succeeds.
+- Fixed-zone Oswald + localized scrim/shadow typography: implemented in the shared renderer and wired into Visual QC; pending user Test review.
+- Local body compression is implemented in the Visual QC path with no additional AI/API call or code dependency.
+- Live implementation: existing pipeline remains in production testing, but this typography/readability redesign is not approved for Live until Test review succeeds.
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -334,10 +337,10 @@ Current audit state:
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
-- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in one dynamically fitted lower-safe block that ends at y=1420.
-- Top-5 headlines use the Oswald display treatment; Top-5 body copy uses an adaptive regular sans-serif treatment.
-- Top-5 readability uses Fade v2: a blurred mask generated directly from the actual letters with GaussianBlur(5) and 60 alpha, not a broad photo wash.
-- Body copy is not constrained by an artificial card or fixed story anchor; the complete block is bottom-anchored to the y=1420 safe boundary and moves upward as the content gets taller.
+- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in one fixed text zone at x=64, y=900 through y=1480.
+- Top-5 headlines use Oswald-Bold in ALL CAPS with a two-line maximum and a readable minimum size; body copy uses a clean regular sans-serif with a readable minimum size.
+- Top-5 readability uses a localized dark scrim/halo derived from the actual text mask, plus a distinct text shadow and dark outline. It does not use a broad photo wash or full-frame panel.
+- Body copy is rejected when it cannot fit at the minimum readable size. Renderer exposes the strict maximum word count; Visual QC shows the rejected body as editable copy and offers deterministic local compression to that cap.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
 - Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.
@@ -360,7 +363,7 @@ Status: **Architecture cleanup in progress.**
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is approved; the current Oswald + Fade v2 dynamic lower-safe visual treatment remains in Test until the user approves it**.
+- **Top-5 production framework is approved; the current fixed-zone Oswald + localized scrim/shadow visual treatment remains in Test until the user approves it**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
