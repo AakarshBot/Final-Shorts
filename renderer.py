@@ -69,7 +69,6 @@ TOP5_EDITORIAL_SHADOW_ALPHA = 210
 TOP5_EDITORIAL_SHADOW_OFFSET = (0, 5)
 TOP5_SUBJECT_HEADLINE_MAX_SIZE = 220
 TOP5_SUBJECT_HEADLINE_MIN_SIZE = 92
-TOP5_SUBJECT_GAP = 24
 TOP5_SUBJECT_REMOVAL_MODEL = "ZhengPeng7/BiRefNet"
 
 
@@ -543,8 +542,7 @@ def _top5_editorial_layout(
             x = int(round(max(left, min(right - width, candidate_x))))
             y = int(round(max(top, min(bottom - height, candidate_y))))
             overlap = mask.crop((x, y, x + width, y + height))
-            overlap_pixels = sum(1 for value in overlap.getdata() if value)
-            overlap_ratio = overlap_pixels / max(1, width * height)
+            overlap_ratio = sum(overlap.histogram()[1:]) / max(1, width * height)
             distance = abs(overlap_ratio - 0.22)
             candidates.append((distance, -overlap_ratio if overlap_ratio <= 0.42 else overlap_ratio, x, y, overlap_ratio))
 
