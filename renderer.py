@@ -827,6 +827,25 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
 
     return canvas.convert("RGBA")
 
+def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
+    quote = " ".join(str(card.get("quote") or "").split())
+    attribution = " ".join(str(card.get("attribution") or "").split())
+    if not quote:
+        raise ValueError("Quote Card requires quote text.")
+    if not attribution:
+        raise ValueError("Quote Card requires an attribution.")
+
+    return _draw_top5_editorial_card(
+        base,
+        {
+            "headline": quote,
+            "body": f"— {attribution}",
+            "language": str(card.get("language") or "english"),
+            "max_headline_lines": 4,
+        },
+    )
+
+
 def _cue_at_time(subtitle_data: dict, t: float):
     for cue in subtitle_data.get("cues") or []:
         try:
