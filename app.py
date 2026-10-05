@@ -24,6 +24,8 @@ VISUAL_OPTIONS = (
     "Option 6 · Quote Card",
 )
 
+TOP5_VISUAL_OPTIONS = VISUAL_OPTIONS + ("Option 7 · Subject Cutout",)
+
 STAGES = [
     {"key": "01 · Topic Fetcher", "number": "01", "label": "Topics", "desc": "Find the story"},
     {"key": "02 · Scriptwriter", "number": "02", "label": "Script", "desc": "Write the Short"},
@@ -6074,11 +6076,11 @@ elif st.session_state.app_mode == "test":
 
                     visual_option = st.pills(
                         "Visual source",
-                        VISUAL_OPTIONS,
-                        default=st.session_state.get("test_top5_visual_option", VISUAL_OPTIONS[0]),
+                        TOP5_VISUAL_OPTIONS,
+                        default=st.session_state.get("test_top5_visual_option", TOP5_VISUAL_OPTIONS[0]),
                         key="test_top5_visual_option",
                         label_visibility="collapsed",
-                    ) or VISUAL_OPTIONS[0]
+                    ) or TOP5_VISUAL_OPTIONS[0]
 
                     def _top5_asset_source(asset):
                         return str(
@@ -6108,6 +6110,7 @@ elif st.session_state.app_mode == "test":
                         preview_bytes=None,
                         headline_text=None,
                         body_text=None,
+                        subject_cutout=False,
                     ):
                         image = _asset_to_image(source_bytes)
                         if image is None:
@@ -6163,7 +6166,7 @@ elif st.session_state.app_mode == "test":
                                         str(card_data.get("attribution") or ""),
                                         source_label=source,
                                     )
-                            except (ValueError, OSError) as exc:
+                            except (ValueError, OSError, RuntimeError, ImportError) as exc:
                                 if card_type == "editorial":
                                     max_words = int(getattr(exc, "top5_max_words", 0) or 0)
                                     st.session_state.test_top5_visual_rejections[active_slide] = {
@@ -6194,7 +6197,7 @@ elif st.session_state.app_mode == "test":
                         st.session_state.test_top5_visual_card_results.pop(active_slide, None)
                         return True
 
-                    def _top5_render_asset_pool(assets, result_key):
+                    def _top5_render_asset_pool(assets, result_key, subject_cutout=False):
                         if not assets:
                             st.info("No images are currently available from this option.")
                             return
@@ -6433,6 +6436,23 @@ elif st.session_state.app_mode == "test":
                             else:
                                 st.caption(f'{len(result.get("assets") or [])} AI images returned.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "ai")
+
+                    if visual_option == "Option 7 · Subject Cutout":
+                        image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        image_assets = list(image_result.get("assets") or [])
+                        if not image_assets:
+                            st.info(
+                                "Run one of Options 1–4 for this slide first. Subject Cutout reuses the existing image pool and adds the foreground subject layer locally."
+                            )
+                        else:
+                            st.caption(
+                                "BiRefNet runs locally. The first use downloads the model once; later uses stay local and free."
+                            )
+                            _top5_render_asset_pool(
+                                image_assets,
+                                "subject-cutout",
+                                subject_cutout=True,
+                            )
 
                     if visual_option in {"Option 5 · Stats Card", "Option 6 · Quote Card"}:
                         image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
