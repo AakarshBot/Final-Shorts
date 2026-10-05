@@ -5,11 +5,12 @@ from __future__ import annotations
 from io import BytesIO
 from pathlib import Path
 import math
+import os
 import shutil
 import subprocess
 from functools import lru_cache
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 
 WIDTH = 1080
@@ -70,6 +71,10 @@ TOP5_EDITORIAL_TEXT_SHADOW_BLUR = 6
 TOP5_EDITORIAL_TEXT_SHADOW_ALPHA = 205
 TOP5_EDITORIAL_BODY_SHADOW_BLUR = 3
 TOP5_EDITORIAL_BODY_SHADOW_ALPHA = 105
+TOP5_SUBJECT_SEGMENTATION_MODEL = os.getenv(
+    "TOP5_SUBJECT_SEGMENTATION_MODEL",
+    "facebook/detr-resnet-50-panoptic",
+)
 
 
 @lru_cache(maxsize=256)
@@ -493,6 +498,7 @@ def _top5_headline_layout(
     headline: str,
     language: str,
     probe: ImageDraw.ImageDraw,
+    max_lines: int = TOP5_EDITORIAL_HEADLINE_MAX_LINES,
 ) -> dict:
     clean_headline = " ".join(str(headline or "").split())
     if not clean_headline:
@@ -514,7 +520,7 @@ def _top5_headline_layout(
         except ValueError:
             continue
 
-        if not headline_lines or len(headline_lines) > TOP5_EDITORIAL_HEADLINE_MAX_LINES:
+        if not headline_lines or len(headline_lines) > max_lines:
             continue
 
         headline_height = sum(
@@ -620,6 +626,7 @@ def _top5_editorial_layout(
     body: str,
     language: str,
     story_number: int,
+    max_headline_lines: int = TOP5_EDITORIAL_HEADLINE_MAX_LINES,
 ) -> dict:
     clean_headline = " ".join(str(headline or "").split())
     clean_body = " ".join(str(body or "").split())
@@ -631,6 +638,7 @@ def _top5_editorial_layout(
         clean_headline,
         language,
         probe,
+        max_headline_lines,
     )
 
     body_font = None
