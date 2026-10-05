@@ -55,7 +55,8 @@ TOP5_EDITORIAL_MARGIN_X = 64
 TOP5_EDITORIAL_MAX_WIDTH = WIDTH - (TOP5_EDITORIAL_MARGIN_X * 2)
 TOP5_EDITORIAL_SAFE_TOP = 620
 TOP5_EDITORIAL_SAFE_BOTTOM = 1650
-TOP5_EDITORIAL_HEADLINE_MAX_SIZE = 118
+TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE = 118
+TOP5_EDITORIAL_HEADLINE_MAX_SIZE = 160
 TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 72
 TOP5_EDITORIAL_HEADLINE_MAX_LINES = 2
 TOP5_EDITORIAL_HEADLINE_LINE_GAP = 6
@@ -489,36 +490,38 @@ def _top5_headline_layout(
     language: str,
     probe: ImageDraw.ImageDraw,
     max_width: int,
+    headline_size: int,
     max_lines: int = TOP5_EDITORIAL_HEADLINE_MAX_LINES,
 ) -> dict:
     clean_headline = " ".join(str(headline or "").split())
     if not clean_headline:
         raise ValueError("Top-5 card requires a headline.")
-    headline_min_size = TOP5_EDITORIAL_HEADLINE_MIN_SIZE if max_lines <= 2 else 40
-    for headline_size in range(TOP5_EDITORIAL_HEADLINE_MAX_SIZE, headline_min_size - 1, -1):
-        headline_fonts = _top5_headline_font_stack(headline_size, language)
-        try:
-            headline_lines = _top5_wrap_editorial_words(
-                probe,
-                clean_headline.upper(),
-                headline_fonts,
-                max_width,
-            )
-        except ValueError:
-            continue
-        if not headline_lines or len(headline_lines) > max_lines:
-            continue
-        headline_height = sum(
-            _top5_editorial_measure(probe, " ".join(line), headline_fonts)[1]
-            for line in headline_lines
-        ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(headline_lines) - 1)
-        return {
-            "headline_fonts": headline_fonts,
-            "headline_lines": headline_lines,
-            "headline_height": headline_height,
-            "headline_size": headline_size,
-        }
-    raise ValueError("Top-5 headline cannot fit inside the editorial text area.")
+    if headline_size < TOP5_EDITORIAL_HEADLINE_MIN_SIZE:
+        raise ValueError("Top-5 headline is below the readable size floor.")
+
+    headline_fonts = _top5_headline_font_stack(headline_size, language)
+    try:
+        headline_lines = _top5_wrap_editorial_words(
+            probe,
+            clean_headline.upper(),
+            headline_fonts,
+            max_width,
+        )
+    except ValueError:
+        raise
+    if not headline_lines or len(headline_lines) > max_lines:
+        raise ValueError("Top-5 headline cannot fit inside the editorial text area.")
+
+    headline_height = sum(
+        _top5_editorial_measure(probe, " ".join(line), headline_fonts)[1]
+        for line in headline_lines
+    ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(headline_lines) - 1)
+    return {
+        "headline_fonts": headline_fonts,
+        "headline_lines": headline_lines,
+        "headline_height": headline_height,
+        "headline_size": headline_size,
+    }
 
 
 def _top5_body_fits(
@@ -942,7 +945,10 @@ def _top5_subject_layout(
             item["score"]
             + item.get("mode_bonus", 0.0)
             + min(item["region_area"] / 12000.0, 90.0)
-            + max(0.0, item["headline_size"] - TOP5_EDITORIAL_HEADLINE_MAX_SIZE) * 2.5
+            + max(
+                0.0,
+                item["headline_size"] - TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE,
+            ) * 2.5
         )
 
     best = max(candidates, key=candidate_score)
@@ -1077,88 +1083,115 @@ def _top5_editorial_layout(
     source_image = _top5_full_frame_image(image) if image is not None else None
     candidates = []
     max_word_cap = 0
+    headline_sizes = (
+        range(
+            TOP5_EDITORIAL_HEADLINE_MAX_SIZE,
+            TOP5_EDITORIAL_HEADLINE_MIN_SIZE - 1,
+            -4,
+        )
+        if source_image is not None
+        else (TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE,)
+    )
 
     for width in (TOP5_EDITORIAL_MAX_WIDTH, 896, 824):
-        try:
-            headline_layout = _top5_headline_layout(
-                clean_headline,
-                language,
-                probe,
-                width,
-                max_headline_lines,
-            )
-        except ValueError:
-            continue
-
-        body_font = None
-        body_lines = []
-        body_height = 0
-        if clean_body:
-            for body_size in range(
-                TOP5_EDITORIAL_BODY_MAX_SIZE,
-                TOP5_EDITORIAL_BODY_MIN_SIZE - 1,
-                -1,
-            ):
-                try:
-                    candidate_lines, candidate_height = _top5_body_fits(
-                        clean_body,
-                        headline_layout["headline_height"],
-                        body_size,
-                        language,
-                        probe,
-                        width,
-                    )
-                except ValueError:
-                    continue
-                available_height = (
-                    TOP5_EDITORIAL_SAFE_BOTTOM
-                    - TOP5_EDITORIAL_SAFE_TOP
-                    - headline_layout["headline_height"]
-                    - TOP5_EDITORIAL_HEADLINE_BODY_GAP
+        for headline_size in headline_sizes:
+            try:
+                headline_layout = _top5_headline_layout(
+                    clean_headline,
+                    language,
+                    probe,
+                    width,
+                    headline_size,
+                    max_headline_lines,
                 )
-                if candidate_height <= available_height:
-                    body_font = _top5_body_font(body_size, language)
-                    body_lines = candidate_lines
-                    body_height = candidate_height
-                    break
-            if body_font is None:
-                max_word_cap = max(
-                    max_word_cap,
-                    _top5_body_word_cap(
-                        clean_body,
-                        headline_layout["headline_height"],
-                        language,
-                        probe,
-                        width,
-                    ),
-                )
+            except ValueError:
                 continue
 
-        total_height = headline_layout["headline_height"] + (
-            TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height if body_lines else 0
-        )
-        for score, x, y, candidate_width in _top5_layout_candidates(
-            total_height,
-            width,
-            source_image,
-        ):
-            candidates.append({
-                "score": score,
-                "x": x,
-                "y": y,
-                "width": candidate_width,
-                "headline_fonts": headline_layout["headline_fonts"],
-                "headline_lines": headline_layout["headline_lines"],
-                "headline_height": headline_layout["headline_height"],
-                "headline_size": headline_layout["headline_size"],
-                "body_font": body_font,
-                "body_lines": body_lines,
-                "body_height": body_height,
-                "body_size": getattr(body_font, "size", None),
-                "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
-                "total_height": total_height,
-                "zone_bottom": TOP5_EDITORIAL_SAFE_BOTTOM,
-            })
+            body_font = None
+            body_lines = []
+            body_height = 0
+            if clean_body:
+                for body_size in range(
+                    TOP5_EDITORIAL_BODY_MAX_SIZE,
+                    TOP5_EDITORIAL_BODY_MIN_SIZE - 1,
+                    -1,
+                ):
+                    try:
+                        candidate_lines, candidate_height = _top5_body_fits(
+                            clean_body,
+                            headline_layout["headline_height"],
+                            body_size,
+                            language,
+                            probe,
+                            width,
+                        )
+                    except ValueError:
+                        continue
+                    available_height = (
+                        TOP5_EDITORIAL_SAFE_BOTTOM
+                        - TOP5_EDITORIAL_SAFE_TOP
+                        - headline_layout["headline_height"]
+                        - TOP5_EDITORIAL_HEADLINE_BODY_GAP
+                    )
+                    if candidate_height <= available_height:
+                        body_font = _top5_body_font(body_size, language)
+                        body_lines = candidate_lines
+                        body_height = candidate_height
+                        break
+                if body_font is None:
+                    max_word_cap = max(
+                        max_word_cap,
+                        _top5_body_word_cap(
+                            clean_body,
+                            headline_layout["headline_height"],
+                            language,
+                            probe,
+                            width,
+                        ),
+                    )
+                    continue
+
+            total_height = headline_layout["headline_height"] + (
+                TOP5_EDITORIAL_HEADLINE_BODY_GAP + body_height if body_lines else 0
+            )
+            for score, x, y, candidate_width in _top5_layout_candidates(
+                total_height,
+                width,
+                source_image,
+            ):
+                supported_size = TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE
+                if source_image is not None:
+                    supported_size += (
+                        TOP5_EDITORIAL_HEADLINE_MAX_SIZE
+                        - TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE
+                    ) * max(
+                        0.0,
+                        min(
+                            1.0,
+                            (score - TOP5_EDITORIAL_MIN_COMPOSITION_SCORE)
+                            / (100.0 - TOP5_EDITORIAL_MIN_COMPOSITION_SCORE),
+                        ),
+                    )
+                size_penalty = abs(
+                    headline_layout["headline_size"] - supported_size
+                ) * 0.9
+                candidates.append({
+                    "score": score - size_penalty,
+                    "x": x,
+                    "y": y,
+                    "width": candidate_width,
+                    "headline_fonts": headline_layout["headline_fonts"],
+                    "headline_lines": headline_layout["headline_lines"],
+                    "headline_height": headline_layout["headline_height"],
+                    "headline_size": headline_layout["headline_size"],
+                    "body_font": body_font,
+                    "body_lines": body_lines,
+                    "body_height": body_height,
+                    "body_size": getattr(body_font, "size", None),
+                    "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
+                    "total_height": total_height,
+                    "zone_bottom": TOP5_EDITORIAL_SAFE_BOTTOM,
+                })
 
     if not candidates:
         if clean_body and max_word_cap:
