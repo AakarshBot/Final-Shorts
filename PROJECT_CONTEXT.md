@@ -53,7 +53,7 @@ Production lines:
 1. **Top 5 cricket stories of the day** — **Test-only / WIP**
 2. **On This Day** — **Test-first / WIP**
 
-Top-5 is currently Test-only / WIP. Nothing from the current Option 7 rewrite is promoted to Live. Live production logic is not part of this experiment.
+Top-5 is currently Test-only / WIP. Its Option 9 Manual Subject Cutout remains a Top-5-only experiment. Live Cricket now includes the approved visual option `Option 7 · Text Cutout`, using the proven manual subject cutout rendering path without changing Top-5 Option 7 or Option 9.
 
 ## Factory order
 
@@ -197,7 +197,7 @@ Subject Cutout receives the selected/cropped image, builds one foreground mask, 
 
 The original image is composited back through the foreground mask after the headline is drawn, so the detected foreground remains visibly above the text while real gaps in the mask keep the headline visible.
 
-Option 7 has no body copy. It uses the approved headline only. Normal Top-5 cards never run subject segmentation.
+Top-5 Option 7 has no body copy. It uses the approved headline only. Normal Top-5 cards never run subject segmentation.
 
 ## Subtitles — Function 05
 
@@ -312,7 +312,7 @@ Important:
 - The future text-based body visual is reserved as Top-5 Option 8 · Body Card and remains WIP.
 - No wrappers, compatibility layers, new dependencies or duplicate Subject Cutout pipelines are part of this implementation.
 
-Status: **Top-5 Option 3 Manual Fetcher is active in Test. Option 7 Subject Cutout is active in Test/WIP. Option 8 Body Card is WIP. Cricket pipeline is unchanged.**
+Status: **Top-5 Option 3 Manual Fetcher is active in Test. Option 7 Subject Cutout is active in Test/WIP. Option 8 Body Card is WIP. Live Cricket Option 7 · Text Cutout is active in Live.**
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -323,6 +323,12 @@ Purpose:
 
 Status: **Planned / Test framework WIP.**
 
+### Live Cricket Option 7 · Text Cutout
+
+Live Cricket's Text Cutout is the visual counterpart of the proven Top-5 manual subject cutout composition, while remaining a separate Live option. It is English-only, has no subtitles, and its own editable headline defaults to the approved Cricket Script headline only as filler. It supports Negative Space and Behind Subject composition, the same font/style choices, and a free-size text rectangle drawn directly on the 1080 × 1920 frame. The rectangle is the sole position/area control; there are no X/Y sliders. Text auto-fits inside the selected rectangle. Behind Subject restores the detected foreground subjects above the complete text/effects stack, including multiple people and real gaps between them.
+
+The rendered Text Cutout frame is preserved exactly for production handoff: no logo, no source label and no other overlays. A Text Cutout slide also has no subtitles. The headline, text size, font, style, mode and rectangle only become the production configuration when the user presses **Render Now**. Changing the rectangle or controls must not regenerate the rendered preview automatically. The Text Cutout UI is isolated from the full dashboard so moving the rectangle does not refresh the rest of the Live dashboard; **Render Now** is the explicit preview-generation action. The final rendered frame can be attached to any Cricket slide.
+
 ### Test / Live architecture audit
 
 The factory still follows one core implementation per production stage. Test and Live differ in orchestration, not in approved stage logic.
@@ -331,8 +337,8 @@ For Top-5 during the current WIP period:
 - Test is the only place where Top-5 visual changes are being developed and evaluated.
 - Option 3 is active in Test as the manual image fetcher.
 - Option 8 is explicitly a dashboard WIP choice with no active renderer.
-- The shared Top-5 card renderer remains the component that will be promoted to Live after Test approval.
-- Cricket's existing visual retrieval/rendering paths are outside this rewrite and must not be changed.
+- Top-5's shared card renderer remains the component that will be promoted to Live after its Test approval.
+- Existing Cricket visual retrieval/rendering paths remain unchanged. Live Cricket Option 7 · Text Cutout is a separate visual choice alongside the existing scraper/search/card options.
 - Subject Cutout segmentation is never invoked by normal Top-5 rendering.
 - No duplicate Live-only Subject Cutout implementation is permitted.
 
@@ -347,7 +353,7 @@ Cleanup rules:
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is being tested, and Option 8 Body Card is WIP.**.
+- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is being tested, and Option 8 Body Card is WIP. Live Cricket Option 7 · Text Cutout is active in the Cricket Visuals desk.**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
@@ -525,7 +531,7 @@ Status: **Approved / cleaned.**
 - Python compile check passed.
 - The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
 - Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
-- Top-5 Option 7 must not be treated as approved or Live-ready until this rewrite passes the full suite and is manually verified in Test.
+- Top-5 Option 7 must not be treated as approved or Live-ready until its own Test work passes the full suite and is manually verified in Test. This does not apply to Live Cricket Option 7 · Text Cutout, which is a separate Live visual choice.
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
 
