@@ -33,6 +33,7 @@ TOP5_VISUAL_OPTIONS = (
     "Option 6 · Quote Card",
     "Option 7 · Subject Cutout",
     "Option 8 · Body Card · WIP",
+    "Option 9 · Manual Subject Cutout",
 )
 
 STAGES = [
@@ -5799,7 +5800,11 @@ elif st.session_state.app_mode == "test":
                 if st.session_state.get("test_top5_audio_handoff"):
                     st.success("Top-5 Audio approved. All six spoken lines are ready for the next stage.")
         elif line_name == "Top-5" and stage == "04 · Visuals":
-            from renderer import build_top5_card_preview, build_quote_card_preview
+            from renderer import (
+                build_top5_card_preview,
+                build_quote_card_preview,
+                build_top5_manual_subject_cutout_preview,
+            )
             from visual_fetcher import crawl_visuals, manual_crawl_visuals
             from visual_search import search_images
             from visual_generator import generate_images
@@ -5835,7 +5840,7 @@ elif st.session_state.app_mode == "test":
                 unsafe_allow_html=True,
             )
 
-            st.markdown('<div class="mini-label">8 VISUAL OPTIONS</div>', unsafe_allow_html=True)
+            st.markdown('<div class="mini-label">9 VISUAL OPTIONS</div>', unsafe_allow_html=True)
             visual_option = st.pills(
                 "Visual source",
                 TOP5_VISUAL_OPTIONS,
@@ -5862,7 +5867,7 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_headline",
                     height=82,
                 )
-                if visual_option != "Option 7 · Subject Cutout":
+                if visual_option not in {"Option 7 · Subject Cutout", "Option 9 · Manual Subject Cutout"}:
                     st.text_area(
                         "Body",
                         key="test_top5_visual_playground_body",
@@ -6012,6 +6017,103 @@ elif st.session_state.app_mode == "test":
                         except (ValueError, OSError) as exc:
                             st.session_state.test_top5_visual_playground_render = None
                             st.error(str(exc))
+
+            elif visual_option == "Option 9 · Manual Subject Cutout":
+                assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
+                st.caption(
+                    "English only. Draw a free-size text box over the current image. "
+                    "Negative Space keeps the text in that box; Behind Subject puts the text under the detected foreground subjects."
+                )
+                mode = st.pills(
+                    "Composition",
+                    ["Negative Space", "Behind Subject"],
+                    key="test-top5-manual-subject-playground-mode",
+                ) or "Negative Space"
+
+                from streamlit_cropper import st_cropper
+                saved_box = st.session_state.get("test-top5-manual-subject-playground-box")
+                default_coords = None
+                if isinstance(saved_box, (list, tuple)) and len(saved_box) == 4:
+                    bx, by, bw, bh = [int(value) for value in saved_box]
+                    default_coords = (bx, bx + bw, by, by + bh)
+
+                marker = st_cropper(
+                    current_image,
+                    realtime_update=True,
+                    default_coords=default_coords,
+                    aspect_ratio=None,
+                    return_type="box",
+                    box_color="#2f6255",
+                    stroke_width=2,
+                    key="test-top5-manual-subject-playground-marker",
+                )
+                box = (
+                    int(marker["left"]),
+                    int(marker["top"]),
+                    int(marker["width"]),
+                    int(marker["height"]),
+                )
+                st.session_state["test-top5-manual-subject-playground-box"] = box
+
+                font_size = st.slider(
+                    "Font size",
+                    min_value=72,
+                    max_value=260,
+                    value=int(st.session_state.get("test-top5-manual-subject-playground-font-size", 150)),
+                    step=2,
+                    key="test-top5-manual-subject-playground-font-size",
+                )
+
+                x = box[0]
+                y = box[1]
+                if mode == "Behind Subject":
+                    x_key = "test-top5-manual-subject-playground-x"
+                    y_key = "test-top5-manual-subject-playground-y"
+                    st.session_state[x_key] = min(
+                        int(st.session_state.get(x_key, box[0])),
+                        max(0, 1080 - box[2]),
+                    )
+                    st.session_state[y_key] = min(
+                        int(st.session_state.get(y_key, box[1])),
+                        max(0, 1920 - box[3]),
+                    )
+                    x = st.slider(
+                        "Text horizontal position",
+                        0,
+                        max(0, 1080 - box[2]),
+                        key=x_key,
+                    )
+                    y = st.slider(
+                        "Text vertical position",
+                        0,
+                        max(0, 1920 - box[3]),
+                        key=y_key,
+                    )
+
+                try:
+                    from renderer import build_top5_manual_subject_cutout_preview
+                    st.session_state.test_top5_visual_playground_render = build_top5_manual_subject_cutout_preview(
+                        current_image,
+                        st.session_state.test_top5_visual_playground_headline,
+                        mode="behind-subject" if mode == "Behind Subject" else "negative-space",
+                        text_box=box,
+                        font_size=font_size,
+                        x=x,
+                        y=y,
+                        source_label=current_source,
+                    )
+                    rendered_config = {
+                        "headline": st.session_state.test_top5_visual_playground_headline,
+                        "mode": "behind-subject" if mode == "Behind Subject" else "negative-space",
+                        "text_box": box,
+                        "font_size": font_size,
+                        "x": x,
+                        "y": y,
+                    }
+                    st.session_state["test-top5-manual-subject-playground-config"] = rendered_config
+                except (ValueError, OSError, RuntimeError, ImportError) as exc:
+                    st.session_state.test_top5_visual_playground_render = None
+                    st.error(str(exc))
 
             elif visual_option == "Option 8 · Body Card · WIP":
                 st.info("Option 8 · Body Card is WIP. No Body Card renderer is active yet.")
@@ -6205,6 +6307,7 @@ elif st.session_state.app_mode == "test":
                         headline_text=None,
                         body_text=None,
                         subject_cutout=False,
+                        manual_subject_cutout=None,
                     ):
                         image = _asset_to_image(source_bytes)
                         if image is None:
@@ -6233,6 +6336,8 @@ elif st.session_state.app_mode == "test":
                             assignment["quote_card"] = dict(card_data)
                         elif card_type == "stats" and isinstance(card_data, dict):
                             assignment["card_layout"] = dict(card_data.get("layout") or {})
+                        elif card_type == "manual-subject" and isinstance(card_data, dict):
+                            assignment["manual_subject_cutout"] = dict(card_data)
                         else:
                             assignment["top5_card"] = {
                                 "headline": selected_headline,
@@ -6260,6 +6365,17 @@ elif st.session_state.app_mode == "test":
                                         selected_bytes,
                                         str(card_data.get("quote") or ""),
                                         str(card_data.get("attribution") or ""),
+                                        source_label=source,
+                                    )
+                                elif card_type == "manual-subject" and isinstance(card_data, dict):
+                                    preview_bytes = build_top5_manual_subject_cutout_preview(
+                                        selected_bytes,
+                                        str(card_data.get("headline") or selected_headline),
+                                        mode=str(card_data.get("mode") or "negative-space"),
+                                        text_box=tuple(card_data.get("text_box") or (0, 0, 1, 1)),
+                                        font_size=int(card_data.get("font_size") or 150),
+                                        x=card_data.get("x"),
+                                        y=card_data.get("y"),
                                         source_label=source,
                                     )
                             except (ValueError, OSError, RuntimeError, ImportError) as exc:
@@ -6535,6 +6651,190 @@ elif st.session_state.app_mode == "test":
                                 "subject-cutout",
                                 subject_cutout=True,
                             )
+
+                    if visual_option == "Option 9 · Manual Subject Cutout":
+                        image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        image_assets = list(image_result.get("assets") or [])
+                        if not image_assets:
+                            st.info(
+                                "Run one of Options 1–4 for this slide first. Manual Subject Cutout reuses the existing image pool and does not run another image search."
+                            )
+                        else:
+                            choices = []
+                            for index, asset in enumerate(image_assets):
+                                asset_key = _visual_asset_key(f"manual-subject-{active_slide}", index, asset)
+                                choices.append((
+                                    index,
+                                    asset,
+                                    asset_key,
+                                    _top5_asset_source(asset),
+                                    _top5_asset_label(asset),
+                                ))
+
+                            state = st.session_state.test_top5_manual_subject_cutouts.setdefault(active_slide, {})
+                            selected_index = int(state.get("image_index", 0))
+                            selected_index = min(max(0, selected_index), len(choices) - 1)
+                            selected_image = choices[selected_index]
+
+                            selected_label = selected_image[4]
+                            st.markdown(
+                                '<div class="section-head"><div><div class="eyebrow">MANUAL SUBJECT CUTOUT</div>'
+                                '<div class="section-title">Choose the composition</div></div>'
+                                '<div class="section-count">English only</div></div>',
+                                unsafe_allow_html=True,
+                            )
+                            card_image = selected_image[1].get("bytes")
+                            if not isinstance(card_image, (bytes, bytearray)):
+                                st.error("This image is not available.")
+                            else:
+                                selected_crop = st.session_state.test_top5_visual_crops.get(selected_image[2])
+                                working_bytes = bytes(selected_crop) if selected_crop else bytes(card_image)
+                                working_image = _asset_to_image(working_bytes)
+                                if working_image is None:
+                                    st.error("This image could not be decoded.")
+                                else:
+                                    selected_index = st.selectbox(
+                                        "Source image",
+                                        list(range(len(choices))),
+                                        index=selected_index,
+                                        key=f"test-top5-manual-subject-image-{active_slide}",
+                                        format_func=lambda i: choices[i][4][:90],
+                                    )
+                                    if int(selected_index) != int(state.get("image_index", 0)):
+                                        state.clear()
+                                        state["image_index"] = int(selected_index)
+                                        st.rerun()
+                                    selected_image = choices[int(selected_index)]
+                                    selected_label = selected_image[4]
+                                    card_image = selected_image[1].get("bytes")
+                                    selected_crop = st.session_state.test_top5_visual_crops.get(selected_image[2])
+                                    working_bytes = bytes(selected_crop) if selected_crop else bytes(card_image or b"")
+                                    working_image = _asset_to_image(working_bytes)
+                                    if working_image is not None:
+                                        crop_col, source_col = st.columns([1, .28], gap="medium")
+                                        with crop_col:
+                                            if st.button(
+                                                "Crop / reposition source image",
+                                                width="stretch",
+                                                key=f"test-top5-manual-subject-source-crop-{active_slide}",
+                                            ):
+                                                _crop_visual_dialog(
+                                                    selected_image[2],
+                                                    bytes(card_image or b""),
+                                                    selected_label,
+                                                    crop_store="test_top5_visual_crops",
+                                                )
+                                            st.image(_top5_fit_preview(working_bytes), width=330)
+                                        with source_col:
+                                            st.caption(f"{_top5_asset_source(selected_image[1])} · {selected_label}")
+
+                                        mode = st.pills(
+                                            "Composition mode",
+                                            ["Negative Space", "Behind Subject"],
+                                            default="Negative Space",
+                                            key=f"test-top5-manual-subject-mode-{active_slide}",
+                                        ) or "Negative Space"
+
+                                        saved_box = state.get("text_box")
+                                        default_coords = None
+                                        if isinstance(saved_box, (list, tuple)) and len(saved_box) == 4:
+                                            bx, by, bw, bh = [int(value) for value in saved_box]
+                                            default_coords = (bx, bx + bw, by, by + bh)
+
+                                        from streamlit_cropper import st_cropper
+                                        marker = st_cropper(
+                                            working_image,
+                                            realtime_update=True,
+                                            default_coords=default_coords,
+                                            aspect_ratio=None,
+                                            return_type="box",
+                                            box_color="#2f6255",
+                                            stroke_width=2,
+                                            key=f"test-top5-manual-subject-marker-{active_slide}",
+                                        )
+                                        box = (
+                                            int(marker["left"]),
+                                            int(marker["top"]),
+                                            int(marker["width"]),
+                                            int(marker["height"]),
+                                        )
+                                        state["image_index"] = int(selected_index)
+                                        state["text_box"] = box
+
+                                        font_size = st.slider(
+                                            "Font size",
+                                            min_value=72,
+                                            max_value=260,
+                                            value=int(state.get("font_size", 150)),
+                                            step=2,
+                                            key=f"test-top5-manual-subject-size-{active_slide}",
+                                        )
+                                        x = box[0]
+                                        y = box[1]
+                                        if mode == "Behind Subject":
+                                            x_key = f"test-top5-manual-subject-x-{active_slide}"
+                                            y_key = f"test-top5-manual-subject-y-{active_slide}"
+                                            st.session_state[x_key] = min(
+                                                int(st.session_state.get(x_key, box[0])),
+                                                max(0, 1080 - box[2]),
+                                            )
+                                            st.session_state[y_key] = min(
+                                                int(st.session_state.get(y_key, box[1])),
+                                                max(0, 1920 - box[3]),
+                                            )
+                                            x = st.slider(
+                                                "Text horizontal position",
+                                                0,
+                                                max(0, 1080 - box[2]),
+                                                key=x_key,
+                                            )
+                                            y = st.slider(
+                                                "Text vertical position",
+                                                0,
+                                                max(0, 1920 - box[3]),
+                                                key=y_key,
+                                            )
+                                        config = {
+                                            "headline": headline,
+                                            "mode": "behind-subject" if mode == "Behind Subject" else "negative-space",
+                                            "text_box": box,
+                                            "font_size": font_size,
+                                            "x": x,
+                                            "y": y,
+                                        }
+                                        state.update(config)
+                                        try:
+                                            preview = build_top5_manual_subject_cutout_preview(
+                                                working_image,
+                                                headline,
+                                                mode=config["mode"],
+                                                text_box=box,
+                                                font_size=font_size,
+                                                x=x,
+                                                y=y,
+                                                source_label=_top5_asset_source(selected_image[1]),
+                                            )
+                                            st.markdown('<div class="mini-label">RENDERED MANUAL CUTOUT</div>', unsafe_allow_html=True)
+                                            st.image(preview, width=420)
+                                            if st.button(
+                                                f"Use Manual Subject Cutout for slide {active_slide}",
+                                                type="primary",
+                                                width="stretch",
+                                                key=f"test-top5-manual-subject-use-{active_slide}",
+                                            ):
+                                                _top5_store_assignment(
+                                                    selected_image[1],
+                                                    working_bytes,
+                                                    "manual-subject",
+                                                    _top5_asset_source(selected_image[1]),
+                                                    selected_label,
+                                                    card_type="manual-subject",
+                                                    card_data=config,
+                                                    preview_bytes=preview,
+                                                )
+                                                st.rerun()
+                                        except (ValueError, OSError, RuntimeError, ImportError) as exc:
+                                            st.error(str(exc))
 
                     if visual_option in {"Option 5 · Stats Card", "Option 6 · Quote Card"}:
                         image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
