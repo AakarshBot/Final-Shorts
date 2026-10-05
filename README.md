@@ -81,3 +81,5 @@ Use this JSON contract internally. SRT/VTT/ASS can be derived later only when an
 Function 07 uses a local `token.json` for YouTube OAuth. The QC desk shows the rendered video plus the three Scriptwriter title candidates, editable description, hashtags and comment. One QC approval unlocks the Public and Private upload buttons. A Public upload automatically posts the approved comment; a Private upload does not.
 
 Place your authorized `token.json` beside `app.py`. The token must include YouTube upload permission and YouTube comment permission (or the full YouTube scope). The token file is ignored by Git.
+
+<!-- temporary CI verification -->
