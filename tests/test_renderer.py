@@ -316,6 +316,75 @@ def test_invalid_subtitle_handoff_is_rejected():
 
 
 
+def test_production_renderer_preserves_manual_subject_cutout(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+
+    visual = Image.new("RGB", (1080, 1920), (20, 24, 30))
+    player_color = (180, 90, 60)
+    ImageDraw.Draw(visual).rectangle((390, 620, 690, 1420), fill=player_color)
+    visual_buffer = BytesIO()
+    visual.save(visual_buffer, format="PNG")
+
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((390, 620, 690, 1420), fill=255)
+    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
+
+    script = {
+        "schema": "final-shorts.top5-script.v1",
+        "approved_for_audio": True,
+        "slides": [{
+            "slide_number": 1,
+            "headline": "India dominate the latest result",
+            "body": "",
+        }],
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
+    }
+    manual = {
+        "headline": "India dominate the latest result",
+        "mode": "behind-subject",
+        "text_box": (120, 680, 840, 500),
+        "font_size": 140,
+        "x": 120,
+        "y": 760,
+    }
+    visuals = [{
+        "bytes": visual_buffer.getvalue(),
+        "source": "Test Source",
+        "manual_subject_cutout": manual,
+    }]
+    seen = []
+
+    def fake_preview(frames, path):
+        seen.append(next(iter(frames)))
+        path.write_bytes(b"silent")
+        return path
+
+    def fake_mux(silent_video, audio_scenes, output):
+        output.write_bytes(b"final")
+        return output
+
+    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
+    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
+
+    output = tmp_path / "manual-subject.mp4"
+    renderer.render_production_video(
+        script,
+        audio,
+        None,
+        visuals,
+        output,
+        headline_enabled=False,
+    )
+
+    assert output.read_bytes() == b"final"
+    assert seen
+    assert seen[0].getpixel((500, 900)) == player_color
+
+
 def test_production_renderer_uses_approved_handoffs(monkeypatch, tmp_path):
     from io import BytesIO
 
@@ -759,7 +828,7 @@ def test_top5_option7_ignores_body_copy():
         subject_mask=subject,
     )
 
-    assert layout["composition_mode"] == "cross-subject"
+    assert layout["composition_mode"] == "subject-cutout"
     assert layout["body_lines"] == []
     assert layout["body_font"] is None
 
@@ -808,6 +877,87 @@ def test_top5_option7_restores_player_above_headline(monkeypatch):
         for x in range(max(390, layout["x"]), min(690, layout["x"] + layout["width"]))
     )
     assert image.getpixel((40, 40)) == (16, 19, 24)
+
+
+def test_top5_manual_subject_cutout_uses_barlow_condensed():
+    preview = renderer.build_top5_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India dominate the latest result",
+        mode="negative-space",
+        text_box=(80, 650, 920, 500),
+        font_size=150,
+    )
+    image = Image.open(BytesIO(preview))
+    assert image.size == (renderer.WIDTH, renderer.HEIGHT)
+
+
+def test_top5_manual_subject_cutout_negative_space_does_not_use_subject_mask(monkeypatch):
+    called = []
+
+    def fail(*_args):
+        called.append(True)
+        raise AssertionError("Negative Space must not run subject detection.")
+
+    monkeypatch.setattr(renderer, "_top5_subject_mask", fail)
+    preview = renderer.build_top5_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (240, 240, 240)),
+        "India dominate the latest result",
+        mode="negative-space",
+        text_box=(60, 700, 960, 500),
+        font_size=130,
+    )
+
+    assert preview
+    assert not called
+
+
+def test_top5_manual_subject_cutout_wraps_headline_inside_box():
+    preview = renderer.build_top5_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India dominate the latest cricket result today",
+        mode="negative-space",
+        text_box=(120, 700, 840, 560),
+        font_size=110,
+    )
+
+    assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
+
+    with pytest.raises(ValueError, match="does not fit"):
+        renderer.build_top5_manual_subject_cutout_preview(
+            Image.new("RGB", (1080, 1920), (40, 40, 40)),
+            "India dominate the latest cricket result today",
+            mode="negative-space",
+            text_box=(120, 700, 840, 180),
+            font_size=180,
+        )
+
+
+def test_top5_manual_subject_cutout_keeps_two_subjects_above_text(monkeypatch):
+    background = Image.new("RGB", (1080, 1920), (20, 24, 30))
+    player_color = (180, 90, 60)
+    draw = ImageDraw.Draw(background)
+    draw.rectangle((160, 620, 360, 1440), fill=player_color)
+    draw.rectangle((720, 620, 920, 1440), fill=player_color)
+
+    subject = Image.new("L", (1080, 1920), 0)
+    subject_draw = ImageDraw.Draw(subject)
+    subject_draw.rectangle((160, 620, 360, 1440), fill=255)
+    subject_draw.rectangle((720, 620, 920, 1440), fill=255)
+    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
+
+    preview = renderer.build_top5_manual_subject_cutout_preview(
+        background,
+        "India dominate the latest result",
+        mode="behind-subject",
+        text_box=(120, 680, 840, 500),
+        font_size=140,
+        x=120,
+        y=760,
+    )
+    image = Image.open(BytesIO(preview)).convert("RGB")
+
+    assert image.getpixel((200, 900)) == player_color
+    assert image.getpixel((800, 900)) == player_color
 
 
 def test_top5_subject_mask_uses_local_birefnet_without_fp16(monkeypatch):
