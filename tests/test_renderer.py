@@ -743,6 +743,25 @@ def test_top5_option3_uses_oswald_headline_font():
     assert "Oswald" in Path(layout["headline_fonts"][0].path).name
 
 
+def test_top5_option7_side_subject_uses_compact_vertical_lines():
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((650, 520, 1010, 1650), fill=255)
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest cricket result",
+        "",
+        "english",
+        1,
+        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        subject_mask=subject,
+    )
+
+    assert layout["composition_mode"] == "vertical-left"
+    assert layout["x"] >= renderer.TOP5_EDITORIAL_MARGIN_X
+    assert all(1 <= len(line) <= 2 for line in layout["headline_lines"])
+    assert layout["headline_size"] >= renderer.TOP5_SUBJECT_HEADLINE_MIN_SIZE
+
+
 def test_top5_option7_crosses_center_subject_with_headline_on_both_sides():
     subject = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(subject).rectangle((390, 570, 690, 1490), fill=255)
