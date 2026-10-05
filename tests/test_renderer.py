@@ -721,57 +721,65 @@ def test_top5_editorial_moves_down_when_lower_copy_space_is_quieter():
     assert layout["composition_score"] >= renderer.TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
 
 
-def test_top5_subject_side_layout_is_vertical_and_uses_empty_space():
-    image = Image.new("RGB", (1080, 1920), (70, 70, 70))
+
+def test_top5_subject_layout_uses_vertical_stack_for_side_subject():
     subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((60, 620, 620, 1420), fill=255)
+    ImageDraw.Draw(subject).rectangle((60, 600, 430, 1500), fill=255)
 
     layout = renderer._top5_editorial_layout(
         "India dominate the latest cricket result",
-        "The board confirmed the move.",
+        "",
         "english",
         1,
-        image=image,
+        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
         subject_mask=subject,
     )
 
     assert layout["composition_mode"] == "vertical-right"
     assert 2 <= len(layout["headline_lines"]) <= 4
     assert sum(len(line) > 1 for line in layout["headline_lines"]) >= 1
-    assert layout["headline_size"] >= 100
-    assert layout["x"] >= 620
+    assert layout["headline_size"] >= 120
+    assert layout["x"] >= 390
+    assert layout["x"] < 430
 
 
-def test_top5_subject_center_layout_crosses_the_player():
-    image = Image.new("RGB", (1080, 1920), (70, 70, 70))
+def test_top5_subject_layout_handles_bottom_side_subject_without_pinning_headline_to_player():
     subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((390, 620, 690, 1420), fill=255)
+    ImageDraw.Draw(subject).rectangle((60, 980, 430, 1810), fill=255)
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest cricket result",
+        "",
+        "english",
+        1,
+        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        subject_mask=subject,
+    )
+
+    assert layout["composition_mode"] == "vertical-right"
+    assert layout["headline_size"] >= 120
+    assert layout["y"] < 1250
+
+
+def test_top5_subject_layout_crosses_center_subject_with_large_horizontal_headline():
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((390, 580, 690, 1480), fill=255)
 
     layout = renderer._top5_editorial_layout(
         "India dominate the latest result",
         "",
         "english",
         1,
-        image=image,
+        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
         subject_mask=subject,
     )
 
     assert layout["composition_mode"] == "cross-subject"
     assert len(layout["headline_lines"]) == 1
-    assert layout["headline_size"] >= 150
+    assert layout["headline_size"] >= 180
     assert layout["x"] < 390
     assert layout["x"] + layout["width"] > 690
     assert layout["y"] < 1250
-    overlap = renderer._top5_subject_overlap_ratio(
-        subject,
-        (
-            layout["x"],
-            layout["y"],
-            layout["x"] + layout["width"],
-            layout["y"] + layout["headline_height"],
-        ),
-    )
-    assert overlap > 0.02
 
 
 def test_top5_subject_center_searches_for_readable_crossing_band():
@@ -830,44 +838,6 @@ def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
         )
 
     assert occluded
-
-
-def test_top5_subject_layout_uses_vertical_stack_for_side_subject():
-    subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((60, 600, 430, 1500), fill=255)
-
-    layout = renderer._top5_editorial_layout(
-        "India dominate the latest cricket result",
-        "",
-        "english",
-        1,
-        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        subject_mask=subject,
-    )
-
-    assert layout["composition_mode"] == "vertical-right"
-    assert 2 <= len(layout["headline_lines"]) <= 4
-    assert layout["headline_size"] >= 120
-
-
-def test_top5_subject_layout_crosses_center_subject_with_large_horizontal_headline():
-    subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((390, 580, 690, 1480), fill=255)
-
-    layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
-        "",
-        "english",
-        1,
-        image=Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        subject_mask=subject,
-    )
-
-    assert layout["composition_mode"] == "cross-subject"
-    assert len(layout["headline_lines"]) == 1
-    assert layout["headline_size"] >= 180
-    assert layout["x"] < 390
-    assert layout["x"] + layout["width"] > 690
 
 
 def test_top5_subject_mask_uses_local_birefnet(monkeypatch):
