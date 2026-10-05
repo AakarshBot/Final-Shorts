@@ -890,6 +890,20 @@ def test_top5_manual_subject_cutout_uses_barlow_condensed():
     assert image.size == (renderer.WIDTH, renderer.HEIGHT)
 
 
+def test_top5_manual_subject_cutout_accepts_both_modes():
+    for mode in ("negative-space", "behind-subject"):
+        preview = renderer.build_top5_manual_subject_cutout_preview(
+            Image.new("RGB", (1080, 1920), (40, 40, 40)),
+            "India dominate the latest result",
+            mode=mode,
+            text_box=(60, 700, 960, 500),
+            font_size=140,
+            x=60,
+            y=700,
+        )
+        assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
+
+
 def test_top5_manual_subject_cutout_uses_position_in_both_modes(monkeypatch):
     background = Image.new("RGB", (1080, 1920), (240, 240, 240))
     subject = Image.new("L", (1080, 1920), 0)
