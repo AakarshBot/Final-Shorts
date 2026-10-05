@@ -304,7 +304,7 @@ Important:
 - Option 3 headline uses **Oswald** and can grow materially beyond the 118px baseline when the real image supports it. The headline remains a large editorial element, with the body fitted beneath it.
 - Option 3 body copy is always preserved when it fits at the readable floor. It uses the same visual language as Option 7, but remains smaller and clearer for reading: opaque type, controlled stroke, and strong soft shadow/fade treatment. No opaque/transparent text panel is introduced.
 - Option 3 does not run subject segmentation and does not use the Subject Cutout model. Its placement comes from image negative-space analysis only.
-- **Option 7 · Subject Cutout card is a complete rewrite.** It is headline-only; body copy is not part of this card.
+- **Option 7 · Subject Cutout card is a complete rewrite.** It is headline-only; the Test UI hides the body field and the renderer ignores any upstream body data so Option 7 can never render body copy.
 - Option 7 runs the existing local **ZhengPeng7/BiRefNet** inference path only when Subject Cutout is selected. No new Python package or separate runtime is introduced.
 - Option 7 keeps the original foreground image as the restoration layer and places the headline between background and foreground, following the proven text-behind-subject compositing pattern.
 - Option 7 uses the actual foreground matte, not a subject bounding box, to determine the visual result. The headline itself is rendered into a pixel mask and the foreground matte is composited above those headline pixels.
