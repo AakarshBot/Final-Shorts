@@ -453,7 +453,23 @@ def _top5_headline_font_stack(size: int, language: str) -> tuple[object, ...]:
         ])
     else:
         candidates.append(root / "BarlowCondensed-Black.ttf")
-    candidates.extend(_headline_font_stack(size, language))
+
+    candidates.extend([
+        root / "Oswald-Bold.ttf",
+        Path("C:/Windows/Fonts/seguisym.ttf"),
+        Path("C:/Windows/Fonts/Nirmala.ttf"),
+        Path("C:/Windows/Fonts/NirmalaUI.ttf"),
+        Path("C:/Windows/Fonts/msyh.ttc"),
+        Path("C:/Windows/Fonts/msgothic.ttc"),
+        Path("C:/Windows/Fonts/malgun.ttf"),
+        Path("C:/Windows/Fonts/arialuni.ttf"),
+        Path("C:/Windows/Fonts/seguisb.ttf"),
+        Path("C:/Windows/Fonts/arial.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf"),
+        Path("/usr/share/fonts/opentype/noto/NotoSansSymbols2-Regular.ttf"),
+        Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
+        Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
+    ])
 
     fonts = []
     seen = set()
