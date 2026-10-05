@@ -1,6 +1,6 @@
 from io import BytesIO
 
-from PIL import Image, ImageDraw
+from PIL import Image
 
 import renderer
 
@@ -53,57 +53,43 @@ def test_top5_preview_does_not_add_a_readability_panel():
     assert image.getpixel((20, 1800)) == background
 
 
-def test_top5_layout_chooses_quiet_side_of_the_photo():
-    image = Image.new("RGB", (1080, 1920), (28, 35, 45))
-    draw = ImageDraw.Draw(image)
-    for x in range(850, 1080, 8):
-        for y in range(0, 1920, 8):
-            if (x + y) // 8 % 2:
-                draw.rectangle((x, y, x + 7, y + 7), fill=(230, 230, 230))
-
+def test_top5_layout_uses_the_proven_lower_editorial_anchor():
     layout = renderer._top5_editorial_layout(
-        image,
         "India make a major selection change",
         "The board confirmed the move. The decision changes the lineup.",
         "english",
+        1,
     )
 
-    assert layout["align"] == "left"
     assert layout["x"] == renderer.TOP5_EDITORIAL_MARGIN_X
+    assert layout["y"] == renderer.TOP5_EDITORIAL_STORY_Y
 
 
-def test_top5_layout_is_not_locked_to_a_bottom_anchor():
-    image = Image.new("RGB", (1080, 1920), (36, 44, 54))
-    draw = ImageDraw.Draw(image)
-    for x in range(0, 1080, 10):
-        for y in range(980, 1920, 10):
-            if (x + y) // 10 % 2:
-                draw.rectangle((x, y, x + 9, y + 9), fill=(235, 235, 235))
-
+def test_top5_opener_uses_the_proven_editorial_anchor():
     layout = renderer._top5_editorial_layout(
-        image,
         "Top 5 Cricket News Today",
         "",
         "english",
+        0,
     )
 
-    assert layout["y"] < 700
+    assert layout["y"] == renderer.TOP5_EDITORIAL_OPENER_Y
 
 
 def test_top5_headline_size_adapts_to_copy():
     image = Image.new("RGB", (1080, 1920), (25, 30, 36))
 
     short = renderer._top5_editorial_layout(
-        image,
         "India name a major change",
         "",
         "english",
+        1,
     )
     long = renderer._top5_editorial_layout(
-        image,
         "India reshuffles the squad after a late selection change before the next international series",
         "",
         "english",
+        1,
     )
 
     assert short["headline_fonts"][0].size >= long["headline_fonts"][0].size
@@ -118,16 +104,35 @@ def test_top5_body_preserves_all_copy_without_sentence_cap():
         "Officials also confirmed the timing of the next review."
     )
     layout = renderer._top5_editorial_layout(
-        Image.new("RGB", (1080, 1920), (20, 24, 30)),
         "Selection change",
         body,
         "english",
+        1,
     )
 
     rendered_words = " ".join(" ".join(line) for line in layout["body_lines"])
     assert "Officials" in rendered_words
     assert "review." in rendered_words
-    assert layout["body_font"].size >= renderer.TOP5_EDITORIAL_BODY_MIN_SIZE
+    assert layout["body_font"].size >= 34
+
+
+def test_top5_card_uses_a_subtle_letter_fade(monkeypatch):
+    calls = []
+    original = renderer.ImageFilter.GaussianBlur
+
+    def gaussian_blur(radius):
+        calls.append(radius)
+        return original(radius)
+
+    monkeypatch.setattr(renderer.ImageFilter, "GaussianBlur", gaussian_blur)
+    renderer.build_top5_card_preview(
+        _solid_png((1080, 1920), (30, 30, 30)),
+        "India confirm the latest squad change",
+        "The board confirmed the move.",
+        story_number=1,
+    )
+
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR in calls
 
 
 def test_top5_production_visual_uses_card_payload(monkeypatch, tmp_path):
