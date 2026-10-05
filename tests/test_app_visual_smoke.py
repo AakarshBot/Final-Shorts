@@ -52,3 +52,26 @@ def test_card_visual_options_load():
     for option in VISUAL_OPTIONS[3:]:
         at = _run_visual_option(option)
         assert not at.exception, at.exception
+
+
+def test_top5_standalone_visual_qc_exposes_all_seven_options():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "top5"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.run()
+
+    assert not at.exception, at.exception
+    labels = []
+    for pills in at.pills:
+        labels.extend(str(option) for option in pills.options)
+
+    assert labels == [
+        "Option 1 · Automatic Scraper",
+        "Option 2 · Manual Scraper",
+        "Option 3 · Real Image Search",
+        "Option 4 · AI Generation",
+        "Option 5 · Stats Card",
+        "Option 6 · Quote Card",
+        "Option 7 · Subject Cutout",
+    ]
