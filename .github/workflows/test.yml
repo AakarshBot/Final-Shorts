@@ -15,4 +15,4 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -r requirements.txt
       - run: python -m py_compile app.py topic_fetcher.py script_writer.py audio.py visual_fetcher.py visual_search.py visual_generator.py stats_card.py renderer.py subtitles.py uploader.py
-      - run: python -m pytest -q tests/test_renderer.py -x
+      - run: python -m pytest -q
