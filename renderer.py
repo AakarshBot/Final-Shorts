@@ -69,7 +69,7 @@ TOP5_EDITORIAL_SHADOW_ALPHA = 185
 TOP5_EDITORIAL_SHADOW_OFFSET = (0, 5)
 TOP5_SUBJECT_HEADLINE_MAX_SIZE = 280
 TOP5_SUBJECT_HEADLINE_MIN_SIZE = 92
-TOP5_SUBJECT_MIN_SPACE = 110
+TOP5_SUBJECT_MIN_SPACE = 70
 TOP5_SUBJECT_REMOVAL_MODEL = "ZhengPeng7/BiRefNet"
 
 
@@ -510,6 +510,89 @@ def _top5_editorial_layout(
     safe_top = TOP5_EDITORIAL_SAFE_TOP
     safe_bottom = TOP5_EDITORIAL_SAFE_BOTTOM
 
+    def headline_options(size, region_width):
+        fonts = _top5_headline_font_stack(size, language)
+        words = clean_headline.split()
+        options = []
+
+        width, height = _top5_editorial_measure(
+            probe,
+            clean_headline,
+            fonts,
+        )
+        if width <= region_width:
+            options.append((
+                [words],
+                width,
+                height,
+            ))
+
+        if max_headline_lines >= 2 and len(words) > 2:
+            if max_headline_lines == 2:
+                for split in range(1, len(words)):
+                    first = words[:split]
+                    second = words[split:]
+                    width_1, height_1 = _top5_editorial_measure(
+                        probe,
+                        " ".join(first),
+                        fonts,
+                    )
+                    width_2, height_2 = _top5_editorial_measure(
+                        probe,
+                        " ".join(second),
+                        fonts,
+                    )
+                    width = max(width_1, width_2)
+                    height = (
+                        height_1
+                        + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+                        + height_2
+                    )
+                    if width <= region_width:
+                        options.append((
+                            [first, second],
+                            width,
+                            height,
+                        ))
+            else:
+                lines = _top5_wrap_editorial_words(
+                    probe,
+                    clean_headline,
+                    fonts,
+                    region_width,
+                )
+                if lines and len(lines) <= max_headline_lines:
+                    width = max(
+                        _top5_editorial_measure(
+                            probe,
+                            " ".join(line),
+                            fonts,
+                        )[0]
+                        for line in lines
+                    )
+                    height = sum(
+                        _top5_editorial_measure(
+                            probe,
+                            " ".join(line),
+                            fonts,
+                        )[1]
+                        for line in lines
+                    ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(
+                        0,
+                        len(lines) - 1,
+                    )
+                    options.append((lines, width, height))
+
+        if len(options) > 1:
+            options.sort(
+                key=lambda item: (
+                    len(item[0]),
+                    -item[1],
+                )
+            )
+        return fonts, options
+    words = clean_headline.split()
+
     if subject_mask is not None:
         import numpy as np
         from scipy import ndimage
@@ -572,87 +655,7 @@ def _top5_editorial_layout(
             and (crosses_center or has_flanking_subjects)
         )
 
-        def headline_options(size, region_width):
-            fonts = _top5_headline_font_stack(size, language)
-            words = clean_headline.split()
-            options = []
 
-            width, height = _top5_editorial_measure(
-                probe,
-                clean_headline,
-                fonts,
-            )
-            if width <= region_width:
-                options.append((
-                    [words],
-                    width,
-                    height,
-                ))
-
-            if max_headline_lines >= 2 and len(words) > 2:
-                if max_headline_lines == 2:
-                    for split in range(1, len(words)):
-                        first = words[:split]
-                        second = words[split:]
-                        width_1, height_1 = _top5_editorial_measure(
-                            probe,
-                            " ".join(first),
-                            fonts,
-                        )
-                        width_2, height_2 = _top5_editorial_measure(
-                            probe,
-                            " ".join(second),
-                            fonts,
-                        )
-                        width = max(width_1, width_2)
-                        height = (
-                            height_1
-                            + TOP5_EDITORIAL_HEADLINE_LINE_GAP
-                            + height_2
-                        )
-                        if width <= region_width:
-                            options.append((
-                                [first, second],
-                                width,
-                                height,
-                            ))
-                else:
-                    lines = _top5_wrap_editorial_words(
-                        probe,
-                        clean_headline,
-                        fonts,
-                        region_width,
-                    )
-                    if lines and len(lines) <= max_headline_lines:
-                        width = max(
-                            _top5_editorial_measure(
-                                probe,
-                                " ".join(line),
-                                fonts,
-                            )[0]
-                            for line in lines
-                        )
-                        height = sum(
-                            _top5_editorial_measure(
-                                probe,
-                                " ".join(line),
-                                fonts,
-                            )[1]
-                            for line in lines
-                        ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(
-                            0,
-                            len(lines) - 1,
-                        )
-                        options.append((lines, width, height))
-
-            if len(options) > 1:
-                options.sort(
-                    key=lambda item: (
-                        len(item[0]),
-                        -item[1],
-                    )
-                )
-            return fonts, options
 
         if centered:
             analysis_mask = binary.resize((180, 320), Image.Resampling.BOX)
