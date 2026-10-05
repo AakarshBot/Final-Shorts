@@ -2755,7 +2755,6 @@ def _render_live_visuals(slide_count: int):
                             )
                             st.session_state.live_text_cutout_config = rendered_config
                             st.session_state.live_text_cutout_render = preview_bytes
-                            st.session_state.live_text_cutout_font_size = int(font_size)
                         except (ValueError, OSError, RuntimeError, ImportError) as exc:
                             st.session_state.live_text_cutout_render = None
                             st.error(str(exc))
