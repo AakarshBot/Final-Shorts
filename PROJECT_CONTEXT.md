@@ -310,7 +310,7 @@ Important:
 - For a centered subject or centered group of players with real space on both sides, Option 7 constructs a **cross-subject headline** that starts outside the leftmost subject, passes behind the foreground subject(s), and exits outside the rightmost subject.
 - The headline is rendered into a real pixel mask for composition analysis. Candidate positions are accepted only when the actual headline pixels are visible outside both sides and a controlled portion intersects the foreground matte.
 - With multiple players, the union of the real foreground components is used for occlusion. Headline pixels naturally remain visible through genuine gaps between players. The headline is never intentionally positioned so that it starts inside a gap.
-- For non-centered subjects, Option 7 uses the strongest actual negative space around the foreground. Side compositions can become tall editorial stacks with one or two large words per line.
+- For non-centered subjects, Option 7 uses the strongest actual negative space around the foreground. Side compositions are allowed to become tall editorial stacks with **one or two large words per line**, rather than being forced into the normal two-line headline limit.
 - Foreground restoration happens after text rendering, so the player visibly sits above the headline. The occlusion pass targets the headline pixels and their shadow/stroke only.
 - Option 7 never silently falls back to the normal Option 3 card. Extraction/layout failure is surfaced in Test.
 - The old Top-5 card architecture—fixed 620px headline-safe start, indirect size scoring, global subject bounding-box overlap scoring, repeated subject-layout helpers and silent normal-card fallback—is deleted.
