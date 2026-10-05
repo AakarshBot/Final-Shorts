@@ -444,6 +444,7 @@ def _top5_editorial_layout(
     body: str,
     language: str,
     story_number: int,
+    max_headline_lines: int = 2,
 ) -> dict:
     clean_headline = " ".join(str(headline or "").split())
     clean_body = " ".join(str(body or "").split())
@@ -466,7 +467,7 @@ def _top5_editorial_layout(
             candidate,
             TOP5_EDITORIAL_MAX_WIDTH,
         )
-        if len(lines) <= 2:
+        if len(lines) <= max_headline_lines:
             headline_font = candidate
             headline_lines = lines
             break
@@ -525,10 +526,7 @@ def _top5_editorial_layout(
 
     return {
         "x": TOP5_EDITORIAL_MARGIN_X,
-        "y": max(
-            preferred_top,
-            HEIGHT - TOP5_EDITORIAL_SAFE_BOTTOM - total_height,
-        ),
+        "y": HEIGHT - TOP5_EDITORIAL_SAFE_BOTTOM - total_height,
         "width": TOP5_EDITORIAL_MAX_WIDTH,
         "headline_font": headline_font,
         "headline_lines": headline_lines,
@@ -546,6 +544,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         card.get("body"),
         language,
         int(card.get("story_number") or 0),
+        int(card.get("max_headline_lines") or 2),
     )
 
     canvas = source.convert("RGBA")
@@ -654,6 +653,7 @@ def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
             "headline": quote,
             "body": f"— {attribution}",
             "language": str(card.get("language") or "english"),
+            "max_headline_lines": 4,
         },
     )
 
