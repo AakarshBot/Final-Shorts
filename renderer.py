@@ -763,11 +763,8 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
     if mode not in {"negative-space", "behind-subject"}:
         raise ValueError("Manual Subject Cutout has an invalid composition mode.")
 
-    x = box_left
-    y = box_top
-    if mode == "behind-subject":
-        x = int(config.get("x") if config.get("x") is not None else box_left)
-        y = int(config.get("y") if config.get("y") is not None else box_top)
+    x = int(config.get("x") if config.get("x") is not None else box_left)
+    y = int(config.get("y") if config.get("y") is not None else box_top)
     x = max(0, min(WIDTH - box_width, x))
     y = max(0, min(HEIGHT - box_height, y))
 
