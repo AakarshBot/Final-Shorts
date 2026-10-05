@@ -748,6 +748,7 @@ def test_top5_subject_aware_layout_targets_controlled_headline_overlap(monkeypat
 
 def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
     background = Image.new("RGB", (1080, 1920), (20, 24, 30))
+    ImageDraw.Draw(background).rectangle((60, 620, 600, 960), fill=(180, 90, 60))
     subject = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(subject).rectangle((60, 620, 600, 960), fill=255)
 
