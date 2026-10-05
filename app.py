@@ -666,6 +666,7 @@ if "test_top5_visual_previews" not in st.session_state:
     st.session_state.test_top5_visual_previews = {}
 if "test_top5_visual_assignments" not in st.session_state:
     st.session_state.test_top5_visual_assignments = {}
+                st.session_state.test_top5_visual_rejections = {}
 if "test_top5_visual_handoff" not in st.session_state:
     st.session_state.test_top5_visual_handoff = None
 if "test_top5_visual_card_results" not in st.session_state:
@@ -5302,6 +5303,7 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_visual_selected = {}
                 st.session_state.test_top5_visual_previews = {}
                 st.session_state.test_top5_visual_assignments = {}
+                st.session_state.test_top5_visual_rejections = {}
                 st.session_state.test_top5_visual_card_results = {}
                 st.session_state.test_top5_visual_handoff = None
                 st.session_state.test_top5_rendered_video_path = None
@@ -5382,6 +5384,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
+                st.session_state.test_top5_visual_rejections = {}
                                 st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -5405,6 +5408,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
+                st.session_state.test_top5_visual_rejections = {}
                                 st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -5428,6 +5432,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
+                st.session_state.test_top5_visual_rejections = {}
                                 st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -5735,6 +5740,7 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_top5_visual_selected = {}
                             st.session_state.test_top5_visual_previews = {}
                             st.session_state.test_top5_visual_assignments = {}
+                st.session_state.test_top5_visual_rejections = {}
                             st.session_state.test_top5_visual_card_results = {}
                             st.session_state.test_top5_visual_handoff = None
                             st.session_state.test_top5_rendered_video_path = None
@@ -5845,7 +5851,7 @@ elif st.session_state.app_mode == "test":
                 if st.session_state.get("test_top5_audio_handoff"):
                     st.success("Top-5 Audio approved. All six spoken lines are ready for the next stage.")
         elif line_name == "Top-5" and stage == "04 · Visuals":
-            from renderer import build_top5_card_preview, build_quote_card_preview
+            from renderer import build_top5_card_preview, build_quote_card_preview, compress_top5_body
 
             script = st.session_state.get("test_top5_script_handoff")
             if not isinstance(script, dict) or script.get("schema") != "final-shorts.top5-script.v1":
@@ -6025,6 +6031,7 @@ elif st.session_state.app_mode == "test":
                         unsafe_allow_html=True,
                     )
 
+                    st.session_state.setdefault("test_top5_visual_rejections", {})
                     assignments = st.session_state.test_top5_visual_assignments
                     st.caption(
                         f"{len(assignments)}/6 slides attached. The preview shown for each attached slide is the actual static 1080 × 1920 frame handed to Renderer."
@@ -6102,7 +6109,7 @@ elif st.session_state.app_mode == "test":
                         image = _asset_to_image(source_bytes)
                         if image is None:
                             st.warning("This visual could not be decoded as an image.")
-                            return
+                            return False
 
                         buffer = BytesIO()
                         image.save(buffer, format="JPEG", quality=94, optimize=True)
@@ -6130,34 +6137,57 @@ elif st.session_state.app_mode == "test":
                                 "body": body,
                                 "story_number": story_number,
                                 "total_stories": 5,
+                                "language": str(script.get("language_used") or "english").casefold(),
                             }
 
                         if preview_bytes is None:
-                            if card_type == "editorial":
-                                preview_bytes = build_top5_card_preview(
-                                    selected_bytes,
-                                    headline,
-                                    body,
-                                    story_number=story_number,
-                                    total_stories=5,
-                                    source_label=source,
-                                )
-                            elif card_type == "quote" and isinstance(card_data, dict):
-                                preview_bytes = build_quote_card_preview(
-                                    selected_bytes,
-                                    str(card_data.get("quote") or ""),
-                                    str(card_data.get("attribution") or ""),
-                                    source_label=source,
-                                )
+                            try:
+                                if card_type == "editorial":
+                                    preview_bytes = build_top5_card_preview(
+                                        selected_bytes,
+                                        headline,
+                                        body,
+                                        story_number=story_number,
+                                        total_stories=5,
+                                        source_label=source,
+                                    )
+                                elif card_type == "quote" and isinstance(card_data, dict):
+                                    preview_bytes = build_quote_card_preview(
+                                        selected_bytes,
+                                        str(card_data.get("quote") or ""),
+                                        str(card_data.get("attribution") or ""),
+                                        source_label=source,
+                                    )
+                            except (ValueError, OSError) as exc:
+                                if card_type == "editorial":
+                                    max_words = int(getattr(exc, "top5_max_words", 0) or 0)
+                                    st.session_state.test_top5_visual_rejections[active_slide] = {
+                                        "headline": headline,
+                                        "body": body,
+                                        "max_words": max_words,
+                                        "reason": str(exc),
+                                        "source_bytes": selected_bytes,
+                                        "result_key": result_key,
+                                        "source": source,
+                                        "label": label,
+                                    }
+                                    st.session_state.test_top5_visual_assignments.pop(active_slide, None)
+                                    st.session_state.test_top5_visual_previews.pop(active_slide, None)
+                                    st.session_state.test_top5_visual_handoff = None
+                                    st.session_state.test_top5_rendered_video_path = None
+                                    return False
+                                raise
 
                         if preview_bytes:
                             assignment["preview_bytes"] = bytes(preview_bytes)
 
                         st.session_state.test_top5_visual_assignments[active_slide] = assignment
                         st.session_state.test_top5_visual_previews[active_slide] = bytes(preview_bytes or selected_bytes)
+                        st.session_state.test_top5_visual_rejections.pop(active_slide, None)
                         st.session_state.test_top5_visual_handoff = None
                         st.session_state.test_top5_rendered_video_path = None
                         st.session_state.test_top5_visual_card_results.pop(active_slide, None)
+                        return True
 
                     def _top5_render_asset_pool(assets, result_key):
                         if not assets:
@@ -6569,6 +6599,66 @@ elif st.session_state.app_mode == "test":
                                             preview_bytes=card_result["preview"],
                                         )
                                         st.rerun()
+
+                    rejection = st.session_state.test_top5_visual_rejections.get(active_slide)
+                    if rejection:
+                        st.divider()
+                        st.markdown(
+                            '<div class="mini-label">BODY NEEDS EDIT</div>',
+                            unsafe_allow_html=True,
+                        )
+                        max_words = int(rejection.get("max_words") or 0)
+                        if max_words > 0:
+                            st.warning(
+                                f'{rejection.get("reason") or "The body does not fit the fixed text zone."} '
+                                f'Edit it below or use the local rewrite to reduce it to {max_words} words or fewer.'
+                            )
+                        else:
+                            st.warning(
+                                rejection.get("reason")
+                                or "The body does not fit the fixed text zone."
+                            )
+
+                        rejected_body_key = f"test-top5-rejected-body-{active_slide}"
+                        rewritten_body = str(rejection.get("body") or "")
+                        st.session_state.setdefault(rejected_body_key, rewritten_body)
+
+                        if max_words > 0 and st.button(
+                            f"Rewrite slide body (≤ {max_words} words)",
+                            width="stretch",
+                            key=f"test-top5-rewrite-body-{active_slide}",
+                        ):
+                            st.session_state[rejected_body_key] = compress_top5_body(
+                                st.session_state.get(rejected_body_key, rewritten_body),
+                                max_words,
+                            )
+                            rejection["body"] = st.session_state[rejected_body_key]
+
+                        edited_body = st.text_area(
+                            "Rejected visual body",
+                            key=rejected_body_key,
+                            height=150,
+                            max_chars=600,
+                            label_visibility="collapsed",
+                        )
+                        rejection["body"] = edited_body.strip()
+
+                        if st.button(
+                            f"Render edited body on slide {active_slide}",
+                            type="primary",
+                            width="stretch",
+                            key=f"test-top5-render-rejected-body-{active_slide}",
+                        ):
+                            success = _top5_store_assignment(
+                                {
+                                    "asset_key": rejection.get("asset_key"),
+                                },
+                                rejection.get("source_bytes") or b"",
+                                rejection.get("result_key") or "visual",
+                                rejection.get("source") or "Visual",
+                                rejection.get("label") or "Selected visual",
+                            )
+                            st.rerun()
 
                     current_assignment = assignments.get(active_slide)
                     if current_assignment:
