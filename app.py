@@ -5870,8 +5870,10 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_visual_playground_source = "Test green canvas"
             if "test_top5_visual_playground_render" not in st.session_state:
                 st.session_state.test_top5_visual_playground_render = None
-            if "test_top5_visual_playground_option" not in st.session_state:
-                st.session_state.test_top5_visual_playground_option = TOP5_VISUAL_OPTIONS[2]
+            st.session_state.setdefault(
+                "test_top5_visual_playground_option",
+                TOP5_VISUAL_OPTIONS[2],
+            )
             for key, default in (
                 ("test_top5_visual_playground_url", ""),
                 ("test_top5_visual_playground_query", ""),
@@ -5917,7 +5919,6 @@ elif st.session_state.app_mode == "test":
             visual_option = st.pills(
                 "Visual source",
                 TOP5_VISUAL_OPTIONS,
-                default=st.session_state.test_top5_visual_playground_option,
                 key="test_top5_visual_playground_option",
                 label_visibility="collapsed",
             ) or TOP5_VISUAL_OPTIONS[2]
@@ -6147,10 +6148,11 @@ elif st.session_state.app_mode == "test":
                 st.image(rendered, width=420)
 
             else:
+                script = st.session_state.get("test_top5_script_handoff") or {}
                 slides = list(script.get("slides") or [])
                 stories = list(script.get("stories") or [])
                 if len(slides) != 6:
-                    st.error("Top-5 Visuals requires exactly six approved script slides.")
+                    st.info("Standalone Visual QC is active above. The six-slide production QC appears after the Top-5 Scriptwriter handoff is approved.")
                 else:
                     st.markdown(
                         '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
