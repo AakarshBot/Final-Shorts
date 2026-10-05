@@ -876,6 +876,38 @@ def test_top5_option7_restores_player_above_headline(monkeypatch):
     )
 
 
+def test_top5_manual_subject_cutout_supports_four_fonts_and_four_styles():
+    previews = []
+    for font in renderer.TOP5_MANUAL_SUBJECT_FONT_OPTIONS:
+        preview = renderer.build_top5_manual_subject_cutout_preview(
+            Image.new("RGB", (1080, 1920), (40, 40, 40)),
+            "India dominate the latest result",
+            mode="negative-space",
+            text_box=(60, 700, 960, 500),
+            font_size=140,
+            font=font,
+            style="Crisp Outline",
+        )
+        previews.append(preview)
+        assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
+    assert len(set(previews)) == 4
+
+    previews = []
+    for style in renderer.TOP5_MANUAL_SUBJECT_STYLE_OPTIONS:
+        preview = renderer.build_top5_manual_subject_cutout_preview(
+            Image.new("RGB", (1080, 1920), (40, 40, 40)),
+            "India dominate the latest result",
+            mode="negative-space",
+            text_box=(60, 700, 960, 500),
+            font_size=140,
+            font="Barlow Condensed",
+            style=style,
+        )
+        previews.append(preview)
+        assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
+    assert len(set(previews)) == 4
+
+
 def test_top5_manual_subject_cutout_uses_barlow_condensed():
     preview = renderer.build_top5_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
