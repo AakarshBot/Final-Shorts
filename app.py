@@ -1638,71 +1638,6 @@ def _top5_fit_preview(value, width=300, height=533):
         image = image.crop((0, top, image.width, top + crop_height))
     return image.resize((width, height), Image.Resampling.LANCZOS)
 
-@st.dialog("Crop visual", width="large")
-def _top5_crop_visual_dialog(asset_key: str, image_bytes: bytes, label: str):
-    from PIL import Image, ImageFilter, ImageOps
-    image = _asset_to_image(image_bytes)
-    if image is None:
-        st.error("This visual could not be opened for cropping.")
-        return
-
-    st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
-    st.caption(
-        "9:16 frame · drag the frame to reposition it, or drag a corner outward to zoom out and reveal more of the original. "
-        "Any exposed area uses a blurred extension of the same image."
-    )
-
-    from streamlit_cropper import st_cropper
-
-    canvas_width = max(image.width, int(round(image.height * 9 / 16)))
-    canvas_height = int(round(canvas_width * 16 / 9))
-    background = ImageOps.fit(
-        image.convert("RGB"),
-        (canvas_width, canvas_height),
-        method=Image.Resampling.LANCZOS,
-    ).filter(ImageFilter.GaussianBlur(radius=max(18, canvas_width // 55)))
-    canvas = background.copy()
-    offset_x = (canvas_width - image.width) // 2
-    offset_y = (canvas_height - image.height) // 2
-    canvas.paste(image.convert("RGB"), (offset_x, offset_y))
-
-    default = _largest_9x16_crop_coords(image)
-    default_coords = (
-        offset_x + default[0],
-        offset_x + default[1],
-        offset_y + default[2],
-        offset_y + default[3],
-    )
-
-    cropped = st_cropper(
-        canvas,
-        realtime_update=True,
-        default_coords=default_coords,
-        box_color="#4F46E5",
-        aspect_ratio=(9, 16),
-        return_type="image",
-        key=f"top5-cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
-        stroke_width=2,
-    )
-
-    left, right = st.columns([1.2, .8], gap="large")
-    with left:
-        st.markdown('<div class="crop-dialog-kicker">PREVIEW</div>', unsafe_allow_html=True)
-        st.image(cropped, width="stretch")
-    with right:
-        st.markdown('<div class="crop-dialog-kicker">ORIGINAL SIZE</div>', unsafe_allow_html=True)
-        st.caption(f"{image.width} × {image.height}px")
-        st.markdown('<div class="crop-dialog-kicker" style="margin-top:1rem;">OUTPUT</div>', unsafe_allow_html=True)
-        st.caption("Applying the crop changes the selected slide framing only; the original visual stays untouched.")
-        if st.button("Apply crop", type="primary", width="stretch", key=f"top5-apply-crop-{asset_key}"):
-            buffer = BytesIO()
-            cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
-            crop_bytes = buffer.getvalue()
-            st.session_state.test_top5_visual_crops[asset_key] = crop_bytes
-            st.rerun()
-
-
 def _render_home():
     st.markdown(
         '<div class="home-hero">'
@@ -6151,7 +6086,7 @@ elif st.session_state.app_mode == "test":
                                     key=f"test-top5-playground-crop-{visual_option}-{index}",
                                 ):
                                     if isinstance(raw, (bytes, bytearray)):
-                                        _top5_crop_visual_dialog(asset_key, bytes(raw), label)
+                                        _crop_visual_dialog(asset_key, bytes(raw), label, crop_store="test_top5_visual_crops")
                                     else:
                                         st.warning("This image is not crop-ready.")
 
@@ -6675,7 +6610,7 @@ elif st.session_state.app_mode == "test":
                                 width="stretch",
                                 key=f"test-top5-card-crop-{active_slide}",
                             ):
-                                _top5_crop_visual_dialog(card_asset_key, bytes(card_asset.get("bytes") or b""), card_label)
+                                _crop_visual_dialog(card_asset_key, bytes(card_asset.get("bytes") or b""), card_label, crop_store="test_top5_visual_crops")
 
                             if visual_option == "Option 5 · Stats Card":
                                 from stats_card import StatsCardError, build_stats_card
