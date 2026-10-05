@@ -954,7 +954,8 @@ def _top5_subject_mask(image_bytes: bytes) -> Image.Image | None:
     )
     if mask.getbbox() is None:
         return None
-    return mask.filter(ImageFilter.GaussianBlur(0.7))
+    mask = mask.point(lambda value: 255 if value >= 90 else 0)
+    return mask.filter(ImageFilter.MaxFilter(17))
 
 
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
