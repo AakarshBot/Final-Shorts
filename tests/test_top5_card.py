@@ -165,7 +165,7 @@ def test_top5_local_body_compression_respects_the_cap():
         "decision to affect the lineup before the next series begins."
     )
     compressed = renderer.compress_top5_body(source, 16)
-    assert len(compressed.rstrip("…").split()) <= 12
+    assert len(compressed.rstrip("…").split()) <= 16
     assert "confirmed" in compressed
     assert "lineup" in compressed
 
