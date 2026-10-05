@@ -316,7 +316,7 @@ Top-5 status:
 - Test pipeline/framework: approved.
 - Standalone Top-5 Visuals renderer playground: implemented in Test; pending user visual approval.
 - Fixed-zone Barlow Condensed + localized contrast-aware shadow typography: implemented in the shared renderer and wired into Visual QC; body shadow reduced; pending user Test review.
-- Headline subject-occlusion typography: implemented in the shared Top-5 renderer using the existing Hugging Face dependency path; the segmentation model is provider-backed through the Hugging Face Inference API; pending user Test review.
+- Headline subject-occlusion typography: implemented in the shared Top-5 renderer using the existing Hugging Face dependency path with `briaai/RMBG-2.0` through routed `fal-ai` image segmentation; pending user Test review and separate production-license suitability review.
 - Local body compression is implemented in the Visual QC path with no additional AI/API call or code dependency.
 - Live implementation: existing pipeline remains in production testing, but this typography/readability redesign is not approved for Live until Test review succeeds.
 ### Production Line 03 — On This Day
@@ -341,8 +341,9 @@ Current audit state:
 - The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in one fixed text zone at x=64, y=900 through y=1480.
 - Top-5 headlines use Barlow Condensed Black in ALL CAPS with a two-line maximum and a readable minimum size; body copy uses Barlow Regular with a readable minimum size.
 - Top-5 readability uses a localized dark scrim/halo derived from the actual text mask, plus separate contrast-aware headline/body shadows and a dark outline. The body shadow is intentionally lighter than the headline shadow. It does not use a broad photo wash or full-frame panel.
-- The Top-5 headline now supports **player/subject occlusion typography**: a person segmentation mask is generated through the existing Hugging Face integration using the **facebook/mask2former-swin-large-coco-panoptic** model through Hugging Face Inference API, and only the portion of the isolated person overlapping the headline is composited back over the type. This keeps the body copy unobstructed and creates the sports-poster depth effect.
-- Subject segmentation is cached per image/model and fails closed to the existing flat editorial composition when no Hugging Face token is configured or segmentation fails. No new Python dependency is introduced.
+- The Top-5 headline now supports **player/subject occlusion typography**: the selected photograph is sent through the existing Hugging Face integration using **briaai/RMBG-2.0** via the routed **fal-ai** image-segmentation provider, producing a foreground matte. Only the foreground pixels that overlap the headline are composited back above the type; the body copy remains unobstructed.
+- Foreground extraction is cached per source image. It uses the existing **HF_TOKEN** and the existing `huggingface_hub` dependency; no new Python dependency or paid background-removal service is introduced. Hugging Face currently provides monthly free Inference Provider credits to Free users, with additional usage requiring purchased credits.
+- **Production-license note:** BRIA publishes RMBG-2.0 for non-commercial use. This exact model is therefore a Test-stage implementation and must not be promoted into monetized Live production without replacing it with a commercially permitted foreground-removal model.
 - Body copy is rejected when it cannot fit at the minimum readable size. Renderer exposes the strict maximum word count; Visual QC shows the rejected body as editable copy and offers deterministic local compression to that cap.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
