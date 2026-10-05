@@ -91,6 +91,7 @@ def test_top5_standalone_visual_qc_exposes_all_seven_options():
         "Option 6 · Quote Card",
         "Option 7 · Subject Cutout",
         "Option 8 · Body Card · WIP",
+        "Option 9 · Manual Subject Cutout",
     ]
 
 
