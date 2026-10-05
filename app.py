@@ -6358,7 +6358,7 @@ elif st.session_state.app_mode == "test":
                                             key=f"test-top5-crop-{active_slide}-{result_key}-{index}",
                                         ):
                                             if isinstance(raw, (bytes, bytearray)):
-                                                _top5_crop_visual_dialog(asset_key, bytes(raw), label)
+                                                _crop_visual_dialog(asset_key, bytes(raw), label, crop_store="test_top5_visual_crops")
                                             else:
                                                 st.warning("This image is not crop-ready.")
 
