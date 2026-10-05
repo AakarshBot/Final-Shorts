@@ -675,11 +675,9 @@ def _top5_editorial_layout(
     subject_mask: Image.Image | None = None,
 ) -> dict:
     clean_headline = " ".join(str(headline or "").split()).upper()
-    clean_body = " ".join(str(body or "").split())
+    clean_body = "" if subject_mask is not None else " ".join(str(body or "").split())
     if not clean_headline:
         raise ValueError("Top-5 card requires a headline.")
-    if subject_mask is not None and clean_body:
-        raise ValueError("Top-5 Subject Cutout accepts a headline only.")
 
     frame = _top5_full_frame_image(image) if image is not None else Image.new(
         "RGB",
@@ -1293,13 +1291,11 @@ def _top5_subject_mask(image_bytes: bytes) -> Image.Image | None:
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     language = str(card.get("language") or "english")
     headline = " ".join(str(card.get("headline") or "").split())
-    body = " ".join(str(card.get("body") or "").split())
     subject_cutout = bool(card.get("subject_cutout"))
+    body = "" if subject_cutout else " ".join(str(card.get("body") or "").split())
 
     if not headline:
         raise ValueError("Top-5 card requires a headline.")
-    if subject_cutout and body:
-        raise ValueError("Top-5 Subject Cutout accepts a headline only.")
 
     source_image = _top5_full_frame_image(base).convert("RGB")
     subject_mask = None
