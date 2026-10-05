@@ -738,7 +738,8 @@ def _top5_editorial_layout(
                                         " ".join(line),
                                         fonts,
                                     )[1] * scale
-                                ) + max(
+                                )
+                                + max(
                                     1,
                                     int(
                                         round(
@@ -747,6 +748,7 @@ def _top5_editorial_layout(
                                         )
                                     ),
                                 )
+                            )
 
                         text_total = sum(text_small.getdata())
                         intersection = ImageChops.multiply(
