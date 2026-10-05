@@ -68,6 +68,8 @@ TOP5_EDITORIAL_LOCAL_SCRIM_BLUR = 22
 TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA = 150
 TOP5_EDITORIAL_TEXT_SHADOW_BLUR = 6
 TOP5_EDITORIAL_TEXT_SHADOW_ALPHA = 205
+TOP5_EDITORIAL_BODY_SHADOW_BLUR = 3
+TOP5_EDITORIAL_BODY_SHADOW_ALPHA = 105
 
 
 @lru_cache(maxsize=256)
@@ -795,7 +797,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
                 font=font,
                 stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
             )
-            commands.append((run, font, cursor_x, cursor_y))
+            commands.append(("headline", run, font, cursor_x, cursor_y))
             cursor_x += box[2] - box[0]
         cursor_y += line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
 
@@ -815,6 +817,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         for line_words in layout["body_lines"]:
             commands.append(
                 (
+                    "body",
                     " ".join(line_words),
                     layout["body_font"],
                     TOP5_EDITORIAL_MARGIN_X,
@@ -824,8 +827,12 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             cursor_y += line_height + TOP5_EDITORIAL_BODY_LINE_GAP
 
     text_mask = Image.new("L", canvas.size, 0)
+    headline_mask = Image.new("L", canvas.size, 0)
+    body_mask = Image.new("L", canvas.size, 0)
     mask_draw = ImageDraw.Draw(text_mask)
-    for text, font, x_pos, y_pos in commands:
+    headline_mask_draw = ImageDraw.Draw(headline_mask)
+    body_mask_draw = ImageDraw.Draw(body_mask)
+    for kind, text, font, x_pos, y_pos in commands:
         box = mask_draw.textbbox(
             (0, 0),
             text,
@@ -833,6 +840,15 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
         )
         mask_draw.text(
+            (x_pos - box[0], y_pos - box[1]),
+            text,
+            font=font,
+            fill=255,
+            stroke_width=TOP5_EDITORIAL_STROKE_WIDTH,
+            stroke_fill=255,
+        )
+        target_draw = body_mask_draw if kind == "body" else headline_mask_draw
+        target_draw.text(
             (x_pos - box[0], y_pos - box[1]),
             text,
             font=font,
@@ -852,10 +868,15 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     local_scrim.putalpha(localized_mask)
     canvas.alpha_composite(local_scrim)
 
-    shadow_alpha = text_mask.filter(
+    headline_shadow_alpha = headline_mask.filter(
         ImageFilter.GaussianBlur(TOP5_EDITORIAL_TEXT_SHADOW_BLUR)
     ).point(
         lambda value: value * TOP5_EDITORIAL_TEXT_SHADOW_ALPHA // 255
+    )
+    body_shadow_alpha = body_mask.filter(
+        ImageFilter.GaussianBlur(TOP5_EDITORIAL_BODY_SHADOW_BLUR)
+    ).point(
+        lambda value: value * TOP5_EDITORIAL_BODY_SHADOW_ALPHA // 255
     )
 
     original_background = _top5_full_frame_image(base).convert("RGB")
@@ -874,11 +895,14 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     shadow_rgb = (0, 0, 0) if average_luminance >= 145 else (255, 255, 255)
 
     shadow_layer = Image.new("RGBA", canvas.size, shadow_rgb + (0,))
-    shadow_layer.putalpha(shadow_alpha)
+    shadow_layer.putalpha(headline_shadow_alpha)
     canvas.alpha_composite(shadow_layer)
+    body_shadow_layer = Image.new("RGBA", canvas.size, shadow_rgb + (0,))
+    body_shadow_layer.putalpha(body_shadow_alpha)
+    canvas.alpha_composite(body_shadow_layer)
 
     draw = ImageDraw.Draw(canvas, "RGBA")
-    for text, font, x_pos, y_pos in commands:
+    for _, text, font, x_pos, y_pos in commands:
         box = draw.textbbox(
             (0, 0),
             text,
