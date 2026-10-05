@@ -1028,6 +1028,14 @@ def _crop_visual_dialog(
             cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
             crop_bytes = buffer.getvalue()
             store[asset_key] = crop_bytes
+            if (
+                crop_store == "live_visual_crops"
+                and isinstance(st.session_state.get("live_text_cutout_image_selection"), dict)
+                and st.session_state.live_text_cutout_image_selection.get("asset_key") == asset_key
+            ):
+                st.session_state.live_text_cutout_config = None
+                st.session_state.live_text_cutout_render = None
+                st.session_state.live_text_cutout_font_size = 150
             assignments = st.session_state.get("live_visual_assignments") or {}
             for assignment in assignments.values():
                 if assignment.get("asset_key") == asset_key:
@@ -2662,6 +2670,7 @@ def _render_live_visuals(slide_count: int):
                                         }
                                         st.session_state.live_text_cutout_config = None
                                         st.session_state.live_text_cutout_render = None
+                                        st.session_state.live_text_cutout_font_size = 150
     
                 selected = st.session_state.live_text_cutout_image_selection
                 if isinstance(selected, dict):
