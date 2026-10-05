@@ -736,8 +736,8 @@ def test_top5_subject_side_layout_is_vertical_and_uses_empty_space():
     )
 
     assert layout["composition_mode"] == "vertical-right"
-    assert 2 <= len(layout["headline_lines"]) <= 5
-    assert sum(len(line) == 1 for line in layout["headline_lines"]) <= 1
+    assert 2 <= len(layout["headline_lines"]) <= 4
+    assert sum(len(line) > 1 for line in layout["headline_lines"]) >= 1
     assert layout["headline_size"] >= 100
     assert layout["x"] >= 620
 
@@ -761,6 +761,16 @@ def test_top5_subject_center_layout_crosses_the_player():
     assert layout["headline_size"] >= 150
     assert layout["x"] < 390
     assert layout["x"] + layout["width"] > 690
+    overlap = renderer._top5_subject_overlap_ratio(
+        subject,
+        (
+            layout["x"],
+            layout["y"],
+            layout["x"] + layout["width"],
+            layout["y"] + layout["headline_height"],
+        ),
+    )
+    assert 0.02 < overlap < 0.30
 
 
 def test_top5_subject_center_searches_for_readable_crossing_band():
