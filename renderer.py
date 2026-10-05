@@ -868,7 +868,6 @@ def compress_top5_body(body: str, max_words: int) -> str:
     return result
 
 
-@lru_cache(maxsize=32)
 @lru_cache(maxsize=1)
 def _load_top5_birefnet():
     try:
