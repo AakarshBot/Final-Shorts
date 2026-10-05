@@ -721,6 +721,31 @@ def test_top5_editorial_moves_down_when_lower_copy_space_is_quieter():
     assert layout["composition_score"] >= renderer.TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
 
 
+def test_top5_subject_aware_layout_targets_controlled_headline_overlap(monkeypatch):
+    image = Image.new("RGB", (1080, 1920), (70, 70, 70))
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((60, 620, 620, 980), fill=255)
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "The board confirmed the move.",
+        "english",
+        1,
+        image=image,
+        subject_mask=subject,
+    )
+
+    overlap = renderer._top5_subject_overlap_score(
+        subject,
+        layout["x"],
+        layout["y"],
+        layout["width"],
+        layout["headline_height"],
+    )
+    assert overlap > 0
+    assert layout["composition_score"] >= renderer.TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
+
+
 def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
     background = Image.new("RGB", (1080, 1920), (20, 24, 30))
     subject = Image.new("L", (1080, 1920), 0)
