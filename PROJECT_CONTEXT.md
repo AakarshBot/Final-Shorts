@@ -275,15 +275,16 @@ Important:
 - Preserve the already-approved function contracts.
 
 ### Top-5 editorial card design — current Test redesign:
-- Top-5 is a static 9:16 editorial composition. The selected photograph remains full-bleed and the renderer does not add a white panel, lower-third, glass card, broad image wash, rounded card, strip or template-like container.
-- The headline font is now **locked to bundled Anton-Regular.ttf** for English Top-5 visuals. Anton is the only English display-font choice being tested from this point.
-- The headline is the dominant element: uppercase, heavy, condensed/display-style, left-aligned in the established 860px lower editorial column with a 72px left margin.
-- The body is subordinate supporting copy in the existing regular sans-serif treatment at a readable 42px working size.
-- The readability treatment is **Fade v2**: a mask is generated from the actual headline/body letters, blurred with GaussianBlur(5), reduced to 60 alpha and composited directly behind those letters. The photograph itself is not faded or washed.
-- The complete headline + body composition is laid out as one block. It remains in the lower editorial area and is positioned upward as needed so the complete text block stays clear of the Shorts UI.
-- The renderer reserves the **bottom 500px** of the 1080 × 1920 frame as a conservative YouTube Shorts UI exclusion zone. The main Top-5 headline/body block must end above y=1420.
-- The 500px boundary is a conservative working safe zone based on current observed Shorts UI layouts; YouTube does not publish one universal fixed organic pixel boundary, and the exact UI can vary by device/account/app version.
-- Body copy has no sentence cap, line cap or artificial card-height restriction. It uses the available lower safe area while remaining readable.
+- Top-5 is a static 9:16 editorial composition. The selected photograph remains full-bleed and the renderer adds no white panel, lower-third, card, strip, broad image wash, rounded container, fake UI or permanent gradient.
+- The English Top-5 headline uses the bundled **Oswald-Bold.ttf** treatment that was established in the approved editorial reference. Oswald is the current display-font baseline for this Test candidate.
+- The headline is the dominant element: uppercase, heavy and condensed, left-aligned in the established 860px editorial column with a 72px left margin.
+- Headline fitting remains dynamic and supports a maximum of two lines without changing the established typography hierarchy.
+- Supporting body copy uses the regular sans-serif treatment at an adaptive readable size between 24px and 36px, so longer factual copy can fit without creating a template-like card.
+- The readability treatment is **Fade v2** from the approved reference implementation: a mask is generated directly from the actual headline/body glyphs, blurred with GaussianBlur(5), reduced to 60 alpha and composited immediately behind those letters. The photograph itself is not faded or washed.
+- Text colour remains adaptive to the local rendered text block so the editorial typography stays legible on both light and dark photographs.
+- The complete headline + body composition is laid out as one block. Normal story slides start at the established lower editorial anchor of y=880; Slide 1 opener starts at y=760. The block moves upward only when the available safe area requires it.
+- The renderer reserves the **bottom 500px** of the 1080 × 1920 frame as the working Shorts UI exclusion zone. Important Top-5 headline/body text must end at or above y=1420.
+- The background photograph is still allowed to occupy the full 1080 × 1920 frame, including UI-danger regions; only the important text is protected.
 - The composition is completely static. There is no headline-then-body motion, word animation, slide-in, bounce, blur-in animation or platform-style interaction treatment.
 - Preserve the existing manual image selection, crop/reposition, Test preview, logo and source-label handoffs. This typography work does not alter those flows.
 - The generic/non-Top-5 renderer path and the approved Cricket Visual Fetcher remain untouched.
@@ -316,7 +317,7 @@ Top-5 Upload:
 Top-5 status:
 - Test pipeline/framework: approved.
 - Standalone Top-5 Visuals renderer playground: implemented in Test; pending user visual approval.
-- Fade v2 + Anton treatment: implemented in the shared renderer; pending user Test review.
+- Fade v2 + Oswald treatment: implemented in the shared renderer; pending user Test review.
 - Live implementation: existing pipeline remains in production testing, but the current Oswald/Fade v2 redesign is not approved for Live until Test review succeeds.
 ### Production Line 03 — On This Day
 
@@ -337,10 +338,10 @@ Current audit state:
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card and Quote Card.
-- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in the deliberate lower Shorts-safe zone.
-- Top-5 headlines use the locked Anton display treatment; Top-5 body copy uses the regular sans-serif treatment used by the Fade v2 implementation.
+- The Top-5 renderer uses the full-bleed photograph as the primary visual field and composes typography in the established lower editorial anchor.
+- Top-5 headlines use the Oswald display treatment; Top-5 body copy uses an adaptive regular sans-serif treatment.
 - Top-5 readability uses Fade v2: a blurred mask generated directly from the actual letters with GaussianBlur(5) and 60 alpha, not a broad photo wash.
-- Body copy is not constrained by a sentence, line or card limit; it uses the lower portion of the frame and is bottom-anchored to the 90px safe boundary rather than being squeezed into a small card.
+- Body copy is not constrained by an artificial card and stays within the working bottom 500px Shorts UI exclusion zone; longer compositions move upward rather than being bottom-pinned.
 - Test and Live continue to consume the same shared Top-5 renderer implementation.
 - No wrapper, compatibility layer or new dependency was introduced for the Top-5 typography rewrite.
 - Existing Deep-Dive/Cricket/Niche Sports behavior is not changed by the Top-5 typography work.

@@ -657,7 +657,7 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     assert seen == ["Quote Source"]
 
 
-def test_top5_editorial_uses_anton_and_the_lower_shorts_safe_zone():
+def test_top5_editorial_uses_oswald_and_the_lower_shorts_safe_zone():
     story = renderer._top5_editorial_layout(
         "Virat Kohli returns for another major cricket test",
         "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next match.",
@@ -671,13 +671,75 @@ def test_top5_editorial_uses_anton_and_the_lower_shorts_safe_zone():
         0,
     )
 
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Anton-Regular.ttf"
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
     assert font_path.exists()
     assert story["x"] == renderer.TOP5_EDITORIAL_MARGIN_X == 72
     assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == 860
-    assert story["y"] >= renderer.TOP5_EDITORIAL_STORY_Y == 880
-    assert opener["y"] >= renderer.TOP5_EDITORIAL_OPENER_Y == 760
-    assert story["headline_font"].getname()[0].lower().startswith("anton")
+    assert story["y"] == renderer.TOP5_EDITORIAL_STORY_Y == 880
+    assert opener["y"] == renderer.TOP5_EDITORIAL_OPENER_Y == 760
+    assert story["headline_fonts"][0].getname()[0].lower().startswith("oswald")
+
+
+def test_top5_editorial_body_stays_clear_of_the_shorts_ui():
+    body = " ".join(
+        [
+            "The board confirmed the move after reviewing the latest result and selection options.",
+            "The decision changes the lineup ahead of the next match and follows the latest update from officials.",
+        ]
+        * 3
+    )
+    layout = renderer._top5_editorial_layout(
+        "Selection picture changes after the latest result",
+        body,
+        "english",
+        1,
+    )
+
+    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
+    font = layout["body_font"]
+    assert font is not None
+    assert renderer.TOP5_EDITORIAL_BODY_MIN_SIZE <= font.size <= renderer.TOP5_EDITORIAL_BODY_MAX_SIZE
+    body_height = (
+        (probe.textbbox(
+            (0, 0),
+            "Ag",
+            font=font,
+            stroke_width=renderer.TOP5_EDITORIAL_STROKE_WIDTH,
+        )[3] - probe.textbbox(
+            (0, 0),
+            "Ag",
+            font=font,
+            stroke_width=renderer.TOP5_EDITORIAL_STROKE_WIDTH,
+        )[1])
+        * len(layout["body_lines"])
+        + renderer.TOP5_EDITORIAL_BODY_LINE_GAP
+        * max(0, len(layout["body_lines"]) - 1)
+    )
+    body_start = layout["y"] + layout["headline_height"] + layout["body_gap"]
+
+    assert body_start + body_height <= renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
+
+
+def test_top5_editorial_uses_fade_v2_letter_mask(monkeypatch):
+    calls = []
+    original_blur = renderer.ImageFilter.GaussianBlur
+
+    def spy_blur(radius):
+        calls.append(radius)
+        return original_blur(radius)
+
+    monkeypatch.setattr(renderer.ImageFilter, "GaussianBlur", spy_blur)
+    preview = renderer.build_top5_card_preview(
+        Image.new("RGB", (1080, 1920), (28, 42, 64)),
+        "Big cricket result changes the selection picture",
+        "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next match.",
+        story_number=1,
+    )
+
+    assert preview
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR == 5
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR in calls
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 60
 
 
 def test_top5_editorial_body_uses_the_bottom_of_the_shorts_safe_zone():
