@@ -54,7 +54,7 @@ def test_top5_preview_does_not_add_a_readability_panel():
     assert image.getpixel((20, 1800)) == background
 
 
-def test_top5_layout_uses_one_fixed_text_zone():
+def test_top5_layout_uses_dynamic_safe_area():
     layout = renderer._top5_editorial_layout(
         "India make a major selection change",
         "The board confirmed the move. The decision changes the lineup.",
@@ -62,13 +62,13 @@ def test_top5_layout_uses_one_fixed_text_zone():
         1,
     )
 
-    assert layout["x"] == renderer.TOP5_EDITORIAL_MARGIN_X
-    assert layout["y"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_TOP
-    assert layout["zone_bottom"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
-    assert layout["y"] + layout["total_height"] <= renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
+    assert layout["x"] >= renderer.TOP5_EDITORIAL_MARGIN_X
+    assert renderer.TOP5_EDITORIAL_SAFE_TOP <= layout["y"]
+    assert layout["y"] + layout["total_height"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
+    assert layout["zone_bottom"] == renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
-def test_top5_opener_uses_the_same_fixed_text_zone():
+def test_top5_opener_uses_dynamic_safe_area():
     layout = renderer._top5_editorial_layout(
         "Top 5 Cricket News Today",
         "",
@@ -76,8 +76,8 @@ def test_top5_opener_uses_the_same_fixed_text_zone():
         0,
     )
 
-    assert layout["y"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_TOP
-    assert layout["y"] + layout["total_height"] <= renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM
+    assert renderer.TOP5_EDITORIAL_SAFE_TOP <= layout["y"]
+    assert layout["y"] + layout["total_height"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
 def test_top5_headline_size_adapts_to_copy():
@@ -138,7 +138,7 @@ def test_top5_body_rejection_reports_a_strict_word_cap():
     assert 0 < error.value.top5_max_words < len(body.split())
 
 
-def test_top5_local_readability_uses_visible_local_treatments(monkeypatch):
+def test_top5_local_readability_uses_opaque_type_and_shadow(monkeypatch):
     calls = []
     original = renderer.ImageFilter.GaussianBlur
 
@@ -154,9 +154,9 @@ def test_top5_local_readability_uses_visible_local_treatments(monkeypatch):
         story_number=1,
     )
 
-    assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA > renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA - 100
+    assert renderer.TOP5_EDITORIAL_SHADOW_BLUR in calls
+    assert not hasattr(renderer, "TOP5_EDITORIAL_LOCAL_SCRIM_BLUR")
+    assert not hasattr(renderer, "TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA")
 
 
 def test_top5_local_body_compression_respects_the_cap():
