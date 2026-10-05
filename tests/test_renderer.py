@@ -1,3 +1,4 @@
+import pytest
 from io import BytesIO
 from pathlib import Path
 
@@ -657,7 +658,7 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     assert seen == ["Quote Source"]
 
 
-def test_top5_editorial_uses_oswald_in_the_fixed_text_zone():
+def test_top5_editorial_uses_barlow_in_the_fixed_text_zone():
     story = renderer._top5_editorial_layout(
         "Virat Kohli returns for another cricket test",
         "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next match.",
@@ -671,7 +672,7 @@ def test_top5_editorial_uses_oswald_in_the_fixed_text_zone():
         0,
     )
 
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     assert font_path.exists()
     assert story["x"] == renderer.TOP5_EDITORIAL_MARGIN_X == 64
     assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == renderer.WIDTH - 128
@@ -681,6 +682,33 @@ def test_top5_editorial_uses_oswald_in_the_fixed_text_zone():
     assert story["y"] + story["total_height"] <= story["zone_bottom"]
     assert opener["y"] == story["y"]
 
+
+
+def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
+    background = Image.new("RGB", (1080, 1920), (20, 24, 30))
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((60, 900, 600, 1120), fill=255)
+
+    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
+    occluded = renderer.build_top5_card_preview(
+        background,
+        "India dominate the latest cricket result",
+        "The board confirmed the move after the latest result.",
+        story_number=1,
+    )
+
+    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: None)
+    normal = renderer.build_top5_card_preview(
+        background,
+        "India dominate the latest cricket result",
+        "The board confirmed the move after the latest result.",
+        story_number=1,
+    )
+
+    assert ImageChops.difference(
+        Image.open(BytesIO(occluded)).convert("RGB"),
+        Image.open(BytesIO(normal)).convert("RGB"),
+    ).getbbox() is not None
 
 def test_top5_editorial_body_rejects_copy_below_readable_floor():
     body = " ".join(
@@ -723,6 +751,7 @@ def test_top5_editorial_uses_local_text_treatments(monkeypatch):
     assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_BLUR in calls
     assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA > 100
     assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA > 150
+    assert renderer.TOP5_EDITORIAL_BODY_SHADOW_ALPHA < renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA
 
 
 def test_top5_card_preview_renders_the_shared_editorial_treatment():
