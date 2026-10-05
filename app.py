@@ -5180,7 +5180,10 @@ elif st.session_state.app_mode == "test":
             "deep_dive": "Deep-Dive",
             "top_5": "Top-5",
             "otd": "OTD",
-        }[st.session_state.test_production_line]
+        }.get(
+            st.session_state.test_production_line,
+            str(st.session_state.test_production_line).replace("_", " ").title(),
+        )
         stage = st.session_state.test_stage
 
         test_stage_labels = [item["label"] for item in STAGES]
