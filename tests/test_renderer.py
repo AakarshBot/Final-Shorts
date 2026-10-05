@@ -721,13 +721,13 @@ def test_top5_editorial_moves_down_when_lower_copy_space_is_quieter():
     assert layout["composition_score"] >= renderer.TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
 
 
-def test_top5_subject_aware_layout_targets_controlled_headline_overlap(monkeypatch):
+def test_top5_subject_side_layout_is_vertical_and_uses_empty_space():
     image = Image.new("RGB", (1080, 1920), (70, 70, 70))
     subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((60, 620, 620, 980), fill=255)
+    ImageDraw.Draw(subject).rectangle((60, 620, 620, 1420), fill=255)
 
     layout = renderer._top5_editorial_layout(
-        "India dominate the latest result",
+        "India dominate the latest cricket result",
         "The board confirmed the move.",
         "english",
         1,
@@ -735,22 +735,46 @@ def test_top5_subject_aware_layout_targets_controlled_headline_overlap(monkeypat
         subject_mask=subject,
     )
 
-    overlap = renderer._top5_subject_overlap_score(
-        subject,
-        layout["x"],
-        layout["y"],
-        layout["width"],
-        layout["headline_height"],
+    assert layout["composition_mode"] == "vertical-right"
+    assert len(layout["headline_lines"]) >= 3
+    assert layout["headline_size"] >= 140
+    assert layout["x"] >= 650
+
+
+def test_top5_subject_center_layout_crosses_the_player():
+    image = Image.new("RGB", (1080, 1920), (70, 70, 70))
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((390, 620, 690, 1420), fill=255)
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "",
+        "english",
+        1,
+        image=image,
+        subject_mask=subject,
     )
-    assert overlap >= 120
-    assert layout["composition_score"] >= renderer.TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
+
+    assert layout["composition_mode"] == "cross-subject"
+    assert len(layout["headline_lines"]) == 1
+    assert layout["headline_size"] > renderer.TOP5_EDITORIAL_HEADLINE_MAX_SIZE
+    overlap = renderer._top5_subject_overlap_ratio(
+        subject,
+        (
+            layout["x"],
+            layout["y"],
+            layout["x"] + layout["width"],
+            layout["y"] + layout["headline_height"],
+        ),
+    )
+    assert 0.04 <= overlap <= 0.34
 
 
 def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
     background = Image.new("RGB", (1080, 1920), (20, 24, 30))
-    ImageDraw.Draw(background).rectangle((60, 620, 600, 960), fill=(180, 90, 60))
+    ImageDraw.Draw(background).rectangle((390, 620, 690, 1420), fill=(180, 90, 60))
     subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((60, 620, 600, 960), fill=255)
+    ImageDraw.Draw(subject).rectangle((390, 620, 690, 1420), fill=255)
 
     monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
     occluded = renderer.build_top5_card_preview(
