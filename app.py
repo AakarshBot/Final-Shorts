@@ -6025,10 +6025,11 @@ elif st.session_state.app_mode == "test":
                             st.error(str(exc))
 
             elif visual_option == "Option 9 · Manual Subject Cutout":
-                assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
+                from streamlit_cropper import st_cropper
+
                 st.caption(
-                    "English only. Draw a free-size text box over the current image. "
-                    "Negative Space keeps the text in that box; Behind Subject puts the text under the detected foreground subjects."
+                    "English only. First select the text area with a free-size rectangle. "
+                    "Render it, then adjust the text position and size and press Render Now again."
                 )
                 mode = st.pills(
                     "Composition",
@@ -6036,91 +6037,111 @@ elif st.session_state.app_mode == "test":
                     key="test-top5-manual-subject-playground-mode",
                 ) or "Negative Space"
 
-                from streamlit_cropper import st_cropper
-                saved_box = st.session_state.get("test-top5-manual-subject-playground-box")
-                default_coords = None
-                if isinstance(saved_box, (list, tuple)) and len(saved_box) == 4:
-                    bx, by, bw, bh = [int(value) for value in saved_box]
-                    default_coords = (bx, bx + bw, by, by + bh)
-
-                marker_image = _top5_fit_preview(current_image, 1080, 1920)
-                marker = st_cropper(
-                    marker_image or current_image,
-                    realtime_update=True,
-                    default_coords=default_coords,
-                    aspect_ratio=None,
-                    return_type="box",
-                    box_color="#2f6255",
-                    stroke_width=2,
-                    key="test-top5-manual-subject-playground-marker",
-                )
-                box = (
-                    int(marker["left"]),
-                    int(marker["top"]),
-                    int(marker["width"]),
-                    int(marker["height"]),
-                )
-                st.session_state["test-top5-manual-subject-playground-box"] = box
-
-                font_size = st.slider(
-                    "Font size",
-                    min_value=72,
-                    max_value=260,
-                    value=int(st.session_state.get("test-top5-manual-subject-playground-font-size", 150)),
-                    step=2,
-                    key="test-top5-manual-subject-playground-font-size",
-                )
-
-                x = box[0]
-                y = box[1]
-                if mode == "Behind Subject":
-                    x_key = "test-top5-manual-subject-playground-x"
-                    y_key = "test-top5-manual-subject-playground-y"
-                    st.session_state[x_key] = min(
-                        int(st.session_state.get(x_key, box[0])),
-                        max(0, 1080 - box[2]),
+                rendered_config = st.session_state.get("test-top5-manual-subject-playground-config")
+                if not rendered_config:
+                    marker_image = _top5_fit_preview(current_image, 1080, 1920)
+                    marker = st_cropper(
+                        marker_image,
+                        realtime_update=True,
+                        aspect_ratio=None,
+                        return_type="box",
+                        box_color="#2f6255",
+                        stroke_width=2,
+                        key="test-top5-manual-subject-playground-marker",
                     )
-                    st.session_state[y_key] = min(
-                        int(st.session_state.get(y_key, box[1])),
-                        max(0, 1920 - box[3]),
+                    box = (
+                        int(marker["left"]),
+                        int(marker["top"]),
+                        int(marker["width"]),
+                        int(marker["height"]),
                     )
+                    st.session_state["test-top5-manual-subject-playground-box"] = box
+                    font_size = 150
+                    x = box[0]
+                    y = box[1]
+                else:
+                    box = tuple(int(value) for value in rendered_config["text_box"])
+                    st.caption(
+                        f"Selected area locked at {box[2]} × {box[3]}. "
+                        "Use the controls below to reposition and resize the text."
+                    )
+                    max_x = max(0, 1080 - box[2])
+                    max_y = max(0, 1920 - box[3])
+                    current_x = min(
+                        max_x,
+                        max(0, int(st.session_state.get(
+                            "test-top5-manual-subject-playground-x",
+                            rendered_config.get("x", box[0]),
+                        ))),
+                    )
+                    current_y = min(
+                        max_y,
+                        max(0, int(st.session_state.get(
+                            "test-top5-manual-subject-playground-y",
+                            rendered_config.get("y", box[1]),
+                        ))),
+                    )
+                    current_font_size = int(st.session_state.get(
+                        "test-top5-manual-subject-playground-font-size",
+                        rendered_config.get("font_size", 150),
+                    ))
+                    st.session_state["test-top5-manual-subject-playground-x"] = current_x
+                    st.session_state["test-top5-manual-subject-playground-y"] = current_y
+                    st.session_state["test-top5-manual-subject-playground-font-size"] = current_font_size
+
                     x = st.slider(
-                        "Text horizontal position",
+                        "Horizontal position",
                         0,
-                        max(0, 1080 - box[2]),
-                        key=x_key,
+                        max_x,
+                        key="test-top5-manual-subject-playground-x",
                     )
                     y = st.slider(
-                        "Text vertical position",
+                        "Vertical position",
                         0,
-                        max(0, 1920 - box[3]),
-                        key=y_key,
+                        max_y,
+                        key="test-top5-manual-subject-playground-y",
+                    )
+                    font_size = st.slider(
+                        "Text size",
+                        min_value=72,
+                        max_value=260,
+                        step=2,
+                        key="test-top5-manual-subject-playground-font-size",
                     )
 
-                try:
-                    from renderer import build_top5_manual_subject_cutout_preview
-                    st.session_state.test_top5_visual_playground_render = build_top5_manual_subject_cutout_preview(
-                        current_image,
-                        st.session_state.test_top5_visual_playground_headline,
-                        mode="behind-subject" if mode == "Behind Subject" else "negative-space",
-                        text_box=box,
-                        font_size=font_size,
-                        x=x,
-                        y=y,
-                        source_label=current_source,
-                    )
-                    rendered_config = {
-                        "headline": st.session_state.test_top5_visual_playground_headline,
-                        "mode": "behind-subject" if mode == "Behind Subject" else "negative-space",
-                        "text_box": box,
-                        "font_size": font_size,
-                        "x": x,
-                        "y": y,
-                    }
-                    st.session_state["test-top5-manual-subject-playground-config"] = rendered_config
-                except (ValueError, OSError, RuntimeError, ImportError) as exc:
-                    st.session_state.test_top5_visual_playground_render = None
-                    st.error(str(exc))
+                if st.button(
+                    "Render Now",
+                    type="primary",
+                    width="stretch",
+                    key="test-top5-manual-subject-playground-render",
+                ):
+                    try:
+                        from renderer import build_top5_manual_subject_cutout_preview
+                        rendered_config = {
+                            "headline": st.session_state.test_top5_visual_playground_headline,
+                            "mode": "behind-subject" if mode == "Behind Subject" else "negative-space",
+                            "text_box": box,
+                            "font_size": int(font_size),
+                            "x": int(x),
+                            "y": int(y),
+                        }
+                        st.session_state["test-top5-manual-subject-playground-config"] = rendered_config
+                        st.session_state["test-top5-manual-subject-playground-x"] = int(x)
+                        st.session_state["test-top5-manual-subject-playground-y"] = int(y)
+                        st.session_state["test-top5-manual-subject-playground-font-size"] = int(font_size)
+                        st.session_state.test_top5_visual_playground_render = build_top5_manual_subject_cutout_preview(
+                            current_image,
+                            rendered_config["headline"],
+                            mode=rendered_config["mode"],
+                            text_box=rendered_config["text_box"],
+                            font_size=rendered_config["font_size"],
+                            x=rendered_config["x"],
+                            y=rendered_config["y"],
+                            source_label=current_source,
+                        )
+                    except (ValueError, OSError, RuntimeError, ImportError) as exc:
+                        st.session_state.test_top5_visual_playground_render = None
+                        st.error(str(exc))
 
             elif visual_option == "Option 8 · Body Card · WIP":
                 st.info("Option 8 · Body Card is WIP. No Body Card renderer is active yet.")
