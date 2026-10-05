@@ -837,6 +837,38 @@ def test_top5_subject_cutout_does_not_silently_fall_back_when_mask_is_unusable(m
         )
 
 
+def test_top5_subject_cutout_with_body_occludes_headline_only(monkeypatch):
+    background = Image.new("RGB", (1080, 1920), (20, 24, 30))
+    ImageDraw.Draw(background).rectangle((390, 620, 690, 1420), fill=(180, 90, 60))
+    subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(subject).rectangle((390, 620, 690, 1420), fill=255)
+
+    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "The latest result reshapes the cricket race.",
+        "english",
+        1,
+        image=background,
+        subject_mask=subject,
+    )
+
+    assert layout["composition_mode"] == "cross-subject"
+    assert layout["body_lines"]
+    assert layout["body_font"] is not None
+    assert layout["total_height"] > layout["headline_height"]
+
+    preview = renderer.build_top5_card_preview(
+        background,
+        "India dominate the latest result",
+        "The latest result reshapes the cricket race.",
+        story_number=1,
+        subject_cutout=True,
+    )
+    assert preview
+
+
 def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
     background = Image.new("RGB", (1080, 1920), (20, 24, 30))
     ImageDraw.Draw(background).rectangle((390, 620, 690, 1420), fill=(180, 90, 60))
