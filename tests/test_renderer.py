@@ -921,6 +921,75 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
     )
 
 
+def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+    visual = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
+
+    calls = []
+    monkeypatch.setattr(
+        renderer,
+        "_draw_top5_manual_subject_cutout",
+        lambda base, config: (calls.append(("draw", config)) or base),
+    )
+    monkeypatch.setattr(
+        renderer,
+        "_paste_logo",
+        lambda *args: calls.append(("logo",)),
+    )
+    monkeypatch.setattr(
+        renderer,
+        "_paste_source",
+        lambda *args: calls.append(("source",)),
+    )
+    monkeypatch.setattr(
+        renderer,
+        "write_preview_video",
+        lambda frames, path: (next(iter(frames)), path.write_bytes(b"silent"), path)[-1],
+    )
+    monkeypatch.setattr(
+        renderer,
+        "_mux_audio",
+        lambda silent, scenes, output: (output.write_bytes(b"final") or output),
+    )
+
+    config = {
+        "headline": "Text Cutout Headline",
+        "mode": "negative-space",
+        "text_box": (80, 700, 920, 420),
+        "font_size": 140,
+        "font": "Barlow Condensed",
+        "style": "Heavy Drop",
+        "include_overlays": False,
+    }
+    script = {
+        "approved_for_audio": True,
+        "script": [{"voiceover": "A spoken line."}],
+        "headline": "Opening Headline",
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
+    }
+
+    output = tmp_path / "text-cutout.mp4"
+    renderer.render_production_video(
+        script,
+        audio,
+        TEST_SUBTITLE_DATA,
+        [{
+            "bytes": visual.getvalue(),
+            "source": "Sports Desk",
+            "manual_subject_cutout": config,
+        }],
+        output,
+    )
+
+    assert calls == [("draw", config)]
+
+
+
 def test_top5_manual_subject_cutout_uses_barlow_condensed():
     preview = renderer.build_top5_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
