@@ -23,3 +23,5 @@ scikit-image>=0.24,<1
 kornia>=0.7,<1
 einops>=0.8,<1
 accelerate>=1,<2
+tqdm>=4,<5
+prettytable>=3,<4
