@@ -281,7 +281,7 @@ Important:
 - The headline is the dominant element: uppercase, heavy and condensed, left-aligned in a wide 968px editorial column with a 56px left margin.
 - Headline size, wrapping and the complete headline + body block are fitted dynamically against the available vertical space.
 - Supporting body copy uses the regular sans-serif treatment at an adaptive readable size between 18px and 36px. There is no artificial card height or fixed story-slide y-position.
-- The readability treatment is Fade v2: a mask is generated directly from the rendered headline/body glyphs, blurred with GaussianBlur(5), reduced to 60 alpha and composited immediately behind those letters. The photograph itself is not faded or washed.
+- The readability treatment is Fade v2: a mask is generated directly from the rendered headline/body glyphs, blurred with GaussianBlur(5), reduced to 120 alpha and composited immediately behind those letters. This is the same glyph-derived treatment as the historical reference, with stronger visibility so the soft shadow/fade is clearly perceptible. The photograph itself is not faded or washed.
 - Text colour remains adaptive to the rendered text region so the typography stays legible on both light and dark photographs.
 - The important text block occupies the lower safe area dynamically. The bottom of the completed headline + body block is anchored to y=1420, while the block moves upward as needed when the content becomes taller. The working safe area begins at y=230.
 - The renderer therefore uses the lower half of the Shorts frame without placing important headline/body copy inside the conservative bottom 500px YouTube Shorts UI exclusion zone.
