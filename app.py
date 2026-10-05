@@ -6028,8 +6028,8 @@ elif st.session_state.app_mode == "test":
                 from streamlit_cropper import st_cropper
 
                 st.caption(
-                    "English only. First select the text area with a free-size rectangle. "
-                    "Render it, then adjust the text position and size and press Render Now again."
+                    "English only. Draw a free-size rectangle over the image to show exactly where the headline should sit. "
+                    "The rectangle becomes the text area after the first render."
                 )
                 mode = st.pills(
                     "Composition",
@@ -6055,58 +6055,37 @@ elif st.session_state.app_mode == "test":
                         int(marker["width"]),
                         int(marker["height"]),
                     )
-                    st.session_state["test-top5-manual-subject-playground-box"] = box
-                    font_size = 150
+                    st.caption(f"Selected text area: {box[2]} × {box[3]}")
                     x = box[0]
                     y = box[1]
+                    font_size = 150
                 else:
                     box = tuple(int(value) for value in rendered_config["text_box"])
-                    st.caption(
-                        f"Selected area locked at {box[2]} × {box[3]}. "
-                        "Use the controls below to reposition and resize the text."
-                    )
                     max_x = max(0, 1080 - box[2])
                     max_y = max(0, 1920 - box[3])
-                    current_x = min(
-                        max_x,
-                        max(0, int(st.session_state.get(
-                            "test-top5-manual-subject-playground-x",
-                            rendered_config.get("x", box[0]),
-                        ))),
+                    st.caption(
+                        f"Selected text area locked at {box[2]} × {box[3]}. "
+                        "Adjust the headline and its position or size, then press Render Now."
                     )
-                    current_y = min(
-                        max_y,
-                        max(0, int(st.session_state.get(
-                            "test-top5-manual-subject-playground-y",
-                            rendered_config.get("y", box[1]),
-                        ))),
-                    )
-                    current_font_size = int(st.session_state.get(
-                        "test-top5-manual-subject-playground-font-size",
-                        rendered_config.get("font_size", 150),
-                    ))
-                    st.session_state["test-top5-manual-subject-playground-x"] = current_x
-                    st.session_state["test-top5-manual-subject-playground-y"] = current_y
-                    st.session_state["test-top5-manual-subject-playground-font-size"] = current_font_size
 
-                    x = st.slider(
-                        "Horizontal position",
-                        0,
-                        max_x,
-                        key="test-top5-manual-subject-playground-x",
-                    )
-                    y = st.slider(
-                        "Vertical position",
-                        0,
-                        max_y,
-                        key="test-top5-manual-subject-playground-y",
-                    )
+                    x_key = "test-top5-manual-subject-playground-x"
+                    y_key = "test-top5-manual-subject-playground-y"
+                    size_key = "test-top5-manual-subject-playground-font-size"
+                    if x_key not in st.session_state:
+                        st.session_state[x_key] = min(max_x, max(0, int(rendered_config.get("x", box[0]))))
+                    if y_key not in st.session_state:
+                        st.session_state[y_key] = min(max_y, max(0, int(rendered_config.get("y", box[1]))))
+                    if size_key not in st.session_state:
+                        st.session_state[size_key] = int(rendered_config.get("font_size", 150))
+
+                    x = st.slider("Horizontal position", 0, max_x, key=x_key)
+                    y = st.slider("Vertical position", 0, max_y, key=y_key)
                     font_size = st.slider(
                         "Text size",
                         min_value=72,
                         max_value=260,
                         step=2,
-                        key="test-top5-manual-subject-playground-font-size",
+                        key=size_key,
                     )
 
                 if st.button(
@@ -6120,15 +6099,12 @@ elif st.session_state.app_mode == "test":
                         rendered_config = {
                             "headline": st.session_state.test_top5_visual_playground_headline,
                             "mode": "behind-subject" if mode == "Behind Subject" else "negative-space",
-                            "text_box": box,
+                            "text_box": tuple(box),
                             "font_size": int(font_size),
                             "x": int(x),
                             "y": int(y),
                         }
                         st.session_state["test-top5-manual-subject-playground-config"] = rendered_config
-                        st.session_state["test-top5-manual-subject-playground-x"] = int(x)
-                        st.session_state["test-top5-manual-subject-playground-y"] = int(y)
-                        st.session_state["test-top5-manual-subject-playground-font-size"] = int(font_size)
                         st.session_state.test_top5_visual_playground_render = build_top5_manual_subject_cutout_preview(
                             current_image,
                             rendered_config["headline"],
@@ -6700,9 +6676,10 @@ elif st.session_state.app_mode == "test":
                                 ))
 
                             state = st.session_state.test_top5_manual_subject_cutouts.setdefault(active_slide, {})
-                            selected_index = int(state.get("image_index", 0))
-                            selected_index = min(max(0, selected_index), len(choices) - 1)
-
+                            selected_index = min(
+                                max(0, int(state.get("image_index", 0))),
+                                len(choices) - 1,
+                            )
                             selected_index = st.selectbox(
                                 "Source image",
                                 list(range(len(choices))),
@@ -6722,7 +6699,7 @@ elif st.session_state.app_mode == "test":
                             working_bytes = bytes(selected_crop) if selected_crop else bytes(card_image or b"")
                             working_image = _asset_to_image(working_bytes)
 
-                            if not working_image:
+                            if working_image is None:
                                 st.error("This image could not be decoded.")
                             else:
                                 crop_col, source_col = st.columns([1, .28], gap="medium")
@@ -6750,11 +6727,10 @@ elif st.session_state.app_mode == "test":
                                 ) or "Negative Space"
 
                                 from streamlit_cropper import st_cropper
-                                box = state.get("text_box")
-                                if not state.get("rendered_config"):
+                                rendered_config = state.get("rendered_config")
+                                if not rendered_config:
                                     st.caption(
-                                        "First select a free-size text rectangle. "
-                                        "Its width and height will lock after the first render."
+                                        "Draw a free-size rectangle over the image to show exactly where the headline should sit."
                                     )
                                     marker_image = _top5_fit_preview(working_bytes, 1080, 1920)
                                     marker = st_cropper(
@@ -6772,46 +6748,36 @@ elif st.session_state.app_mode == "test":
                                         int(marker["width"]),
                                         int(marker["height"]),
                                     )
-                                    state["image_index"] = int(selected_index)
-                                    state["text_box"] = box
-                                    font_size = 150
                                     x = box[0]
                                     y = box[1]
+                                    font_size = 150
                                 else:
-                                    rendered_config = dict(state["rendered_config"])
                                     box = tuple(int(value) for value in rendered_config["text_box"])
+                                    max_x = max(0, 1080 - box[2])
+                                    max_y = max(0, 1920 - box[3])
                                     st.caption(
-                                        f"Selected area locked at {box[2]} × {box[3]}. "
-                                        "Adjust position and text size below, then press Render Now."
+                                        f"Selected text area locked at {box[2]} × {box[3]}. "
+                                        "Adjust the headline and its position or size, then press Render Now."
                                     )
+
                                     x_key = f"test-top5-manual-subject-x-{active_slide}"
                                     y_key = f"test-top5-manual-subject-y-{active_slide}"
                                     size_key = f"test-top5-manual-subject-size-{active_slide}"
-                                    max_x = max(0, 1080 - box[2])
-                                    max_y = max(0, 1920 - box[3])
-                                    st.session_state[x_key] = min(
-                                        max_x,
-                                        max(0, int(st.session_state.get(x_key, rendered_config.get("x", box[0])))),
-                                    )
-                                    st.session_state[y_key] = min(
-                                        max_y,
-                                        max(0, int(st.session_state.get(y_key, rendered_config.get("y", box[1])))),
-                                    )
-                                    st.session_state[size_key] = int(
-                                        st.session_state.get(size_key, rendered_config.get("font_size", 150))
-                                    )
-                                    x = st.slider(
-                                        "Horizontal position",
-                                        0,
-                                        max_x,
-                                        key=x_key,
-                                    )
-                                    y = st.slider(
-                                        "Vertical position",
-                                        0,
-                                        max_y,
-                                        key=y_key,
-                                    )
+                                    if x_key not in st.session_state:
+                                        st.session_state[x_key] = min(
+                                            max_x,
+                                            max(0, int(rendered_config.get("x", box[0]))),
+                                        )
+                                    if y_key not in st.session_state:
+                                        st.session_state[y_key] = min(
+                                            max_y,
+                                            max(0, int(rendered_config.get("y", box[1]))),
+                                        )
+                                    if size_key not in st.session_state:
+                                        st.session_state[size_key] = int(rendered_config.get("font_size", 150))
+
+                                    x = st.slider("Horizontal position", 0, max_x, key=x_key)
+                                    y = st.slider("Vertical position", 0, max_y, key=y_key)
                                     font_size = st.slider(
                                         "Text size",
                                         min_value=72,
@@ -6830,7 +6796,7 @@ elif st.session_state.app_mode == "test":
                                         rendered_config = {
                                             "headline": headline,
                                             "mode": "behind-subject" if mode == "Behind Subject" else "negative-space",
-                                            "text_box": box,
+                                            "text_box": tuple(box),
                                             "font_size": int(font_size),
                                             "x": int(x),
                                             "y": int(y),
@@ -6846,12 +6812,8 @@ elif st.session_state.app_mode == "test":
                                             source_label=_top5_asset_source(selected_image[1]),
                                         )
                                         state["image_index"] = int(selected_index)
-                                        state["text_box"] = tuple(rendered_config["text_box"])
                                         state["rendered_config"] = rendered_config
                                         state["rendered_preview"] = preview
-                                        st.session_state[f"test-top5-manual-subject-x-{active_slide}"] = int(x)
-                                        st.session_state[f"test-top5-manual-subject-y-{active_slide}"] = int(y)
-                                        st.session_state[f"test-top5-manual-subject-size-{active_slide}"] = int(font_size)
                                     except (ValueError, OSError, RuntimeError, ImportError) as exc:
                                         st.error(str(exc))
 
