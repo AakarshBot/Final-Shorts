@@ -658,24 +658,23 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     assert seen == ["Quote Source"]
 
 
-def test_top5_editorial_uses_barlow_and_dynamic_safe_area():
+def test_top5_editorial_uses_oswald_and_full_frame_safe_area():
     story = renderer._top5_editorial_layout(
         "Virat Kohli returns for another cricket test",
         "The board confirmed the move after reviewing the latest result.",
         "english",
         1,
+        image=Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (28, 32, 38)),
     )
     opener = renderer._top5_editorial_layout(
         "Today's top five cricket stories",
         "",
         "english",
         0,
+        image=Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (28, 32, 38)),
     )
 
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
-    assert font_path.exists()
-    assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == renderer.WIDTH - 128
-    assert story["headline_fonts"][0].getname()[0].lower().startswith("barlow")
+    assert story["headline_fonts"][0].getname()[0].lower() == "oswald"
     assert renderer.TOP5_EDITORIAL_SAFE_TOP <= story["y"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
     assert story["y"] + story["total_height"] <= story["zone_bottom"]
     assert renderer.TOP5_EDITORIAL_SAFE_TOP <= opener["y"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
