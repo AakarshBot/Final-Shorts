@@ -845,10 +845,97 @@ def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
         story_number=1,
     )
 
-    assert ImageChops.difference(
-        Image.open(BytesIO(occluded)).convert("RGB"),
-        Image.open(BytesIO(normal)).convert("RGB"),
-    ).getbbox() is not None
+    occluded_image = Image.open(BytesIO(occluded)).convert("RGB")
+    normal_image = Image.open(BytesIO(normal)).convert("RGB")
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "",
+        "english",
+        1,
+        image=background,
+        subject_mask=subject,
+    )
+
+    hidden_pixels = 0
+    subject_color = (180, 90, 60)
+    for y in range(
+        layout["y"],
+        min(layout["y"] + layout["headline_height"], 1420),
+    ):
+        for x in range(
+            max(390, layout["x"]),
+            min(690, layout["x"] + layout["width"]),
+        ):
+            if (
+                normal_image.getpixel((x, y)) != subject_color
+                and occluded_image.getpixel((x, y)) == subject_color
+            ):
+                hidden_pixels += 1
+                break
+        if hidden_pixels:
+            break
+
+    assert hidden_pixels > 0
+
+
+def test_top5_subject_occlusion_preserves_two_player_gap(monkeypatch):
+    background = Image.new("RGB", (1080, 1920), (20, 24, 30))
+    draw = ImageDraw.Draw(background)
+    player_color = (180, 90, 60)
+    draw.rectangle((170, 620, 360, 1440), fill=player_color)
+    draw.rectangle((720, 620, 910, 1440), fill=player_color)
+
+    subject = Image.new("L", (1080, 1920), 0)
+    subject_draw = ImageDraw.Draw(subject)
+    subject_draw.rectangle((170, 620, 360, 1440), fill=255)
+    subject_draw.rectangle((720, 620, 910, 1440), fill=255)
+
+    monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
+    preview = renderer.build_top5_card_preview(
+        background,
+        "India dominate the latest result",
+        "",
+        story_number=1,
+        subject_cutout=True,
+    )
+    image = Image.open(BytesIO(preview)).convert("RGB")
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "",
+        "english",
+        1,
+        image=background,
+        subject_mask=subject,
+    )
+
+    assert layout["composition_mode"] == "cross-subject"
+    assert layout["x"] < 170
+    assert layout["x"] + layout["width"] > 910
+
+    hidden = False
+    for y in range(layout["y"], layout["y"] + layout["headline_height"]):
+        for x in range(layout["x"], layout["x"] + layout["width"]):
+            if (
+                170 <= x <= 910
+                and not 360 < x < 720
+                and image.getpixel((x, y)) == player_color
+            ):
+                hidden = True
+                break
+        if hidden:
+            break
+
+    gap_has_type = False
+    for y in range(layout["y"], layout["y"] + layout["headline_height"]):
+        for x in range(361, 720):
+            if image.getpixel((x, y)) != (20, 24, 30):
+                gap_has_type = True
+                break
+        if gap_has_type:
+            break
+
+    assert hidden
+    assert gap_has_type
 
 
 def test_top5_subject_mask_uses_local_birefnet(monkeypatch):
