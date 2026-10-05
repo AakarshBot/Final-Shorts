@@ -886,17 +886,61 @@ def _top5_editorial_layout(
                 TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1,
                 -8,
             ):
-                fonts, options = headline_options(size, rw)
-                chosen = None
-                for lines, width, height in options:
-                    if mode.startswith("vertical") and any(
-                        len(line) > 2 for line in lines
-                    ):
+                fonts = _top5_headline_font_stack(size, language)
+                if mode.startswith("vertical"):
+                    lines = []
+                    current = []
+                    for word in words:
+                        trial = current + [word]
+                        trial_width = _top5_editorial_measure(
+                            probe,
+                            " ".join(trial),
+                            fonts,
+                        )[0]
+                        if current and (
+                            len(current) >= 2
+                            or trial_width > rw
+                        ):
+                            lines.append(current)
+                            current = [word]
+                        else:
+                            current = trial
+                    if current:
+                        lines.append(current)
+                    if not lines:
                         continue
+                    widths = [
+                        _top5_editorial_measure(
+                            probe,
+                            " ".join(line),
+                            fonts,
+                        )[0]
+                        for line in lines
+                    ]
+                    heights = [
+                        _top5_editorial_measure(
+                            probe,
+                            " ".join(line),
+                            fonts,
+                        )[1]
+                        for line in lines
+                    ]
+                    width = max(widths)
+                    height = sum(heights) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(
+                        0,
+                        len(lines) - 1,
+                    )
                     if height > rh:
                         continue
-                    chosen = (lines, width, height)
-                    break
+                else:
+                    _, options = headline_options(size, rw)
+                    if not options:
+                        continue
+                    lines, width, height = options[0]
+                    if height > rh:
+                        continue
+
+                chosen = (lines, width, height)
                 if chosen is None:
                     continue
 
