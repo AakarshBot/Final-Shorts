@@ -666,7 +666,7 @@ if "test_top5_visual_previews" not in st.session_state:
     st.session_state.test_top5_visual_previews = {}
 if "test_top5_visual_assignments" not in st.session_state:
     st.session_state.test_top5_visual_assignments = {}
-                st.session_state.test_top5_visual_rejections = {}
+    st.session_state.test_top5_visual_rejections = {}
 if "test_top5_visual_handoff" not in st.session_state:
     st.session_state.test_top5_visual_handoff = None
 if "test_top5_visual_card_results" not in st.session_state:
@@ -5384,7 +5384,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                st.session_state.test_top5_visual_rejections = {}
+                                st.session_state.test_top5_visual_rejections = {}
                                 st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -5408,7 +5408,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                st.session_state.test_top5_visual_rejections = {}
+                                st.session_state.test_top5_visual_rejections = {}
                                 st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -5432,7 +5432,7 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                st.session_state.test_top5_visual_rejections = {}
+                                st.session_state.test_top5_visual_rejections = {}
                                 st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -5740,7 +5740,7 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_top5_visual_selected = {}
                             st.session_state.test_top5_visual_previews = {}
                             st.session_state.test_top5_visual_assignments = {}
-                st.session_state.test_top5_visual_rejections = {}
+                            st.session_state.test_top5_visual_rejections = {}
                             st.session_state.test_top5_visual_card_results = {}
                             st.session_state.test_top5_visual_handoff = None
                             st.session_state.test_top5_rendered_video_path = None
