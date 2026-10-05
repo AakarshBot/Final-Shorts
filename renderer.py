@@ -804,7 +804,23 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     ).point(
         lambda value: value * TOP5_EDITORIAL_TEXT_SHADOW_ALPHA // 255
     )
-    shadow_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+
+    original_background = _top5_full_frame_image(base).convert("RGB")
+    shadow_sample = original_background.crop(
+        (
+            TOP5_EDITORIAL_MARGIN_X,
+            max(0, TOP5_EDITORIAL_TEXT_ZONE_TOP - 30),
+            TOP5_EDITORIAL_MARGIN_X + TOP5_EDITORIAL_MAX_WIDTH,
+            min(HEIGHT, TOP5_EDITORIAL_TEXT_ZONE_BOTTOM + 30),
+        )
+    ).convert("L")
+    average_luminance = shadow_sample.resize(
+        (1, 1),
+        Image.Resampling.BOX,
+    ).getpixel((0, 0))
+    shadow_rgb = (0, 0, 0) if average_luminance >= 145 else (255, 255, 255)
+
+    shadow_layer = Image.new("RGBA", canvas.size, shadow_rgb + (0,))
     shadow_layer.putalpha(shadow_alpha)
     canvas.alpha_composite(shadow_layer)
 
