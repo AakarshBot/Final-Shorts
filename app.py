@@ -2466,7 +2466,8 @@ def _render_live_visuals(slide_count: int):
             else:
                 with st.spinner("Searching real-image sources…"):
                     try:
-                                    st.session_state.live_real_image_result = search_images(query)
+                        from visual_search import search_images
+                        st.session_state.live_real_image_result = search_images(query)
                     except Exception as exc:
                         st.session_state.live_real_image_result = {
                             "error": f"{type(exc).__name__}: {exc}"
