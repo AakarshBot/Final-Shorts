@@ -767,7 +767,7 @@ def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
             "headline": quote,
             "body": f"— {attribution}",
             "language": str(card.get("language") or "english"),
-            "max_headline_lines": 6,
+            "max_headline_lines": 10,
         },
     )
 
