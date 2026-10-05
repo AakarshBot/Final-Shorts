@@ -274,54 +274,55 @@ Important:
 - Do not add new factory logic while doing dashboard UI work unless required to support an existing completed handoff.
 - Preserve the already-approved function contracts.
 
-### Top-5 editorial card design — current Test redesign:
+### Top-5 editorial card design — current Test state:
 - Top-5 uses a static 9:16 editorial composition. The selected photograph remains full-bleed.
-- English Top-5 headlines use the bundled **BarlowCondensed-Black.ttf** display treatment, rendered **ALL CAPS**. Barlow Condensed was selected over Oswald after reviewing current short-form/video typography guidance and sports/editorial type use: it is condensed enough for long headlines while retaining a broad, modern grotesk character. citeturn730203search0turn587275search4
-- The headline has a maximum of two lines and a readable minimum size; it is fitted only within the fixed Top-5 text zone rather than being allowed to drift around the image.
-- The Top-5 text zone is fixed at **x=64, y=900 through y=1480** on the 1080 × 1920 frame. The headline always starts at that fixed position, the body follows it, and the block does not move upward or downward based on copy length.
-- Top-5 body copy uses a clean regular sans-serif and will not shrink below the renderer's minimum readable size. Copy that cannot fit inside the fixed zone at that minimum is rejected instead of being made tiny.
-- Readability treatment is localized to the actual text area: a stronger soft dark scrim/halo is generated from the text mask, plus a distinct contrast-aware shadow whose color switches between **black on locally bright photography and white on locally dark photography**. Headline shadow remains stronger; body shadow is deliberately lighter/subtler. A dark text outline remains. It is deliberately **not** a large panel, full-frame wash, permanent gradient, border, line, dot treatment or fake UI element.
-- When body copy is rejected, Renderer reports the strict maximum word count supported by the fixed zone. Visual QC automatically presents the **rejected body** in an editable field on the same slide.
-- Visual QC has a **Rewrite slide body (≤ N words)** action. This uses deterministic local compression only: no LLM/API call and no new dependency. The compressed result remains editable before the user renders it again.
-- Manual image selection, crop/reposition, Test preview, Render Now, logo and source-label handoffs remain unchanged.
-- The Test Render Now button uses the shared build_top5_card_preview() renderer directly.
-- The generic/non-Top-5 renderer path and the approved Cricket Visual Fetcher remain untouched.
-- This typography/readability treatment is still **pending user Test approval** and must not be treated as Live-approved until the user accepts the visual result.
+- English Top-5 headlines use bundled **Barlow Condensed Black**, rendered **ALL CAPS**, with a maximum of two lines. Body copy uses **Barlow Regular**.
+- The renderer dynamically evaluates multiple text widths and left/center/right placements plus multiple vertical positions inside the editorial safe area **y=620–1650**. It scores the actual image for calm copy space, local contrast and composition instead of using one fixed text position.
+- The text treatment is opaque editorial type. It uses a restrained directional shadow and a thin contrast-aware outline; there is no transparent/faded text, broad scrim, full-frame wash, permanent panel, border, line or decorative UI treatment.
+- Body copy can vary in length, but it must fit the readable card area. Renderer rejects copy that cannot fit at the readable floor rather than shrinking it into illegibility.
+- The approved Test visual handoff keeps the existing image selection, crop/reposition, rendered-preview and source-label behaviour.
 
 ### Top-5 standalone Visuals Test mode:
-- Test Stage 04 · Visuals is directly accessible even when the Top-5 Scriptwriter handoff does not exist.
-- When no approved Top-5 script is present, Stage 04 opens as the standalone Top-5 Visual QC and remains independent of prior approvals.
-- Standalone Visual QC exposes the full seven-option visual selector: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card, and Subject Cutout.
-- Standalone testing keeps the headline/body editable and allows each visual option to be exercised directly against the current image without waiting for Scriptwriter.
-- Options 1–4 build an image pool that can be used as the current slide image. Options 5–6 build their respective card previews from the current image. Option 7 runs the local BiRefNet subject-aware composition on the current image.
-- The standalone page shows the exact rendered Top-5 card preview for the currently tested treatment. It does not create a production handoff, bypass a production approval, or move Test to a later stage.
-- Once an approved Scriptwriter handoff exists, the existing six-slide Top-5 Visual QC path remains available with its production image-selection, card-option, crop/reposition and approval behaviour.
+- **Stage 04 · Visuals can be opened directly without any Scriptwriter or Audio approval.**
+- The standalone page is a visual laboratory, not a production bypass.
+- It exposes exactly **seven visual options** immediately under the Visuals header:
+  1. Automatic Scraper
+  2. Manual Scraper
+  3. Real Image Search
+  4. AI Generation
+  5. Stats Card
+  6. Quote Card
+  7. Subject Cutout
+- Options 1–4 retrieve an image pool and let the user choose the current source image. Options 5–6 build the corresponding card treatment from that image. Option 7 runs local subject extraction and renders the Top-5 editorial composition with the detected foreground subject in front of the headline.
+- The standalone selector and controls must remain usable even when no approved Top-5 script exists. It must never fall through into six-slide production QC code or require an upstream handoff.
+- The current headline and body remain editable in standalone mode so typography and visual treatments can be tested independently.
+- When a full Top-5 Scriptwriter handoff exists, the six-slide production Visual QC remains available and uses the same shared renderer/visual assignment contracts.
 
-Top-5 Live orchestration:
+### Top-5 Subject Cutout — current Test experiment:
+- Subject Cutout is **Option 7**, not the default treatment. Normal Top-5 slides do not invoke BiRefNet.
+- It uses **ZhengPeng7/BiRefNet_lite** locally through PyTorch/Transformers, with the foreground mask cached per source image.
+- The renderer uses the detected subject spatially: when Option 7 is selected, candidate headline placements are explicitly generated around the detected subject bounding box and strongly scored for meaningful subject/headline overlap.
+- The overlap target is deliberately stronger than ordinary copy-space scoring so the composition visibly produces **text behind the player/subject** rather than merely placing the headline somewhere on the same photograph.
+- The subject mask is thresholded and slightly expanded before compositing so the foreground subject cleanly occludes the headline. Only the intersection of the subject mask and headline mask is composited above the type; body copy remains unobstructed.
+- The intended visual result is an editorial sports-desk composition where the headline can pass behind a player/subject when the photograph supports it. It is not forced onto every image.
+- This is still a **Test-only** visual experiment pending the user's approval. Do not promote it to Live until the user explicitly approves the rendered result.
+
+### Top-5 Live orchestration:
 - The user manually chooses and orders the five stories.
 - Approving Stage 1 creates the canonical five-story handoff and immediately starts five automatic Visual Fetcher jobs, one per selected story URL.
 - Slide 1 and Slide 2 use the first selected story's automatic image pool; Slides 3–6 use stories 2–5.
 - Scriptwriter starts automatically after Stage 1 approval and waits for manual Script QC approval.
 - Audio starts automatically after Script QC approval and waits for manual Audio approval.
-- Visual QC waits for the approved Script and Audio handoffs, while automatic retrieval may already be running.
-- Renderer builds the finished six-slide video after Visual approval; the user explicitly approves the rendered result before Upload QC.
+- Visual QC waits for approved Script and Audio handoffs while automatic retrieval may already be running.
+- Renderer builds the finished six-slide video after Visual approval.
 
-Top-5 Upload:
-- Upload QC uses Slide 1's approved spoken headline as the YouTube title.
-- Description, hashtags and public comment remain editable.
-- One Upload QC approval unlocks Upload Public and Upload Private.
-- Public upload attempts to add the approved public comment; comment failure is reported without adding another approval gate.
-
-Top-5 status:
+### Top-5 status:
 - Test pipeline/framework: approved.
-- Standalone Top-5 Visuals renderer playground: implemented in Test; pending user visual approval.
-- Dynamic editorial typography: implemented in the shared renderer and wired into the Top-5 Test Visual QC. The renderer evaluates multiple left/center/right and vertical placements against the actual image, prefers quiet copy space, keeps text inside the 620–1650 safe area, and adapts width to preserve readable type.
-- Top-5 English headlines use Barlow Condensed Black in ALL CAPS with a two-line maximum; body copy uses Barlow Regular with a readable minimum size.
-- Text treatment is opaque editorial type with a restrained directional shadow and contrast-aware black/white text. The previous transparent/scrim treatment has been removed.
-- Optional Subject Cutout is available as Top-5 Test Visual QC Option 7. It reuses an existing image pool and runs ZhengPeng7/BiRefNet_lite locally through PyTorch/Transformers only when selected. The model is MIT-licensed and approximately 178 MB.
-- BiRefNet foreground pixels are composited above the headline only, allowing deliberate player/subject occlusion while leaving body copy unobstructed.
-- Local body compression is implemented in the Visual QC path with no additional AI/API call.
-- Live implementation: this typography/Subject Cutout redesign remains Test-only until the user approves the Test result.
+- Standalone seven-option Top-5 Visual QC: implemented; currently being visually refined.
+- Dynamic editorial typography: implemented in the shared renderer.
+- Optional Subject Cutout: implemented in Test with local BiRefNet, with aggressive subject-aware headline placement and foreground occlusion.
+- Live promotion: blocked until the current Test visual result is explicitly approved.
+
 ### Production Line 03 — On This Day
 
 Purpose:
