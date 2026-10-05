@@ -53,7 +53,7 @@ Production lines:
 1. **Top 5 cricket stories of the day** — **Test-only / WIP**
 2. **On This Day** — **Test-first / WIP**
 
-Top-5 Live uses the approved Top-5 writer, audio, visual treatments, renderer and uploader contracts. Live-specific code is limited to production orchestration: approval-triggered stage progression and concurrent automatic visual retrieval.
+Top-5 is currently Test-only / WIP. Nothing from the current Option 7 rewrite is promoted to Live. Live production logic is not part of this experiment.
 
 ## Factory order
 
