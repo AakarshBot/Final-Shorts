@@ -3465,6 +3465,7 @@ def render_live_top5():
                                         story_number=story_number,
                                         total_stories=5,
                                         source_label=source,
+                                        subject_cutout=subject_cutout,
                                     ),
                                     "top5_card": {
                                         "headline": headline,
@@ -6146,6 +6147,7 @@ elif st.session_state.app_mode == "test":
                                 "story_number": story_number,
                                 "total_stories": 5,
                                 "language": str(script.get("language_used") or "english").casefold(),
+                                "subject_cutout": bool(subject_cutout),
                             }
 
                         if preview_bytes is None:
@@ -6167,6 +6169,9 @@ elif st.session_state.app_mode == "test":
                                         source_label=source,
                                     )
                             except (ValueError, OSError, RuntimeError, ImportError) as exc:
+                                if subject_cutout:
+                                    st.error(str(exc))
+                                    return False
                                 if card_type == "editorial":
                                     max_words = int(getattr(exc, "top5_max_words", 0) or 0)
                                     st.session_state.test_top5_visual_rejections[active_slide] = {
