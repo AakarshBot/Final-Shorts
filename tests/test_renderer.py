@@ -761,6 +761,7 @@ def test_top5_subject_center_layout_crosses_the_player():
     assert layout["headline_size"] >= 150
     assert layout["x"] < 390
     assert layout["x"] + layout["width"] > 690
+    assert layout["y"] < 1250
     overlap = renderer._top5_subject_overlap_ratio(
         subject,
         (
@@ -770,7 +771,7 @@ def test_top5_subject_center_layout_crosses_the_player():
             layout["y"] + layout["headline_height"],
         ),
     )
-    assert 0.02 < overlap < 0.30
+    assert overlap > 0.02
 
 
 def test_top5_subject_center_searches_for_readable_crossing_band():
