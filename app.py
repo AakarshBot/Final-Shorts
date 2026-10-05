@@ -3319,8 +3319,16 @@ def render_live_top5():
                 result_key = "auto"
             elif option == "Option 2 · Manual Scraper":
                 with st.form(f"live-top5-manual-{active_slide}"):
-                    query = st.text_input("Manual query", value=specific_prompt, key=f"live-top5-manual-query-{active_slide}")
-                    run = st.form_submit_button("Run manual scrape", type="primary", width="stretch")
+                    query = st.text_input(
+                        "Manual query",
+                        value=specific_prompt,
+                        key=f"live-top5-manual-query-{active_slide}",
+                    )
+                    run = st.form_submit_button(
+                        "Run manual scrape",
+                        type="primary",
+                        width="stretch",
+                    )
                 if run:
                     query = query.strip()
                     if query:
@@ -3328,7 +3336,9 @@ def render_live_top5():
                             from visual_fetcher import manual_crawl_visuals
                             st.session_state.live_top5_manual_visual_results[active_slide] = manual_crawl_visuals(query)
                         except Exception as exc:
-                            st.session_state.live_top5_manual_visual_results[active_slide] = {"error": f"{type(exc).__name__}: {exc}"}
+                            st.session_state.live_top5_manual_visual_results[active_slide] = {
+                                "error": f"{type(exc).__name__}: {exc}"
+                            }
                         st.rerun()
                     else:
                         st.warning("Enter a query first.")
@@ -3338,16 +3348,17 @@ def render_live_top5():
                 assets = list(result.get("assets") or [])
                 result_key = "manual"
             else:
-                        st.warning("Enter a query first.")
-                result = st.session_state.live_top5_real_image_results.get(active_slide) or {}
-                if result.get("error"):
-                    st.error(result["error"])
-                assets = list(result.get("assets") or [])
-                result_key = "real"
-            else:
                 with st.form(f"live-top5-ai-{active_slide}"):
-                    query = st.text_input("AI prompt", value=specific_prompt, key=f"live-top5-ai-query-{active_slide}")
-                    run = st.form_submit_button("Generate images", type="primary", width="stretch")
+                    query = st.text_input(
+                        "AI prompt",
+                        value=specific_prompt,
+                        key=f"live-top5-ai-query-{active_slide}",
+                    )
+                    run = st.form_submit_button(
+                        "Generate images",
+                        type="primary",
+                        width="stretch",
+                    )
                 if run:
                     query = query.strip()
                     if query:
@@ -3355,7 +3366,9 @@ def render_live_top5():
                             from visual_generator import generate_images
                             st.session_state.live_top5_ai_image_results[active_slide] = generate_images(query)
                         except Exception as exc:
-                            st.session_state.live_top5_ai_image_results[active_slide] = {"error": f"{type(exc).__name__}: {exc}"}
+                            st.session_state.live_top5_ai_image_results[active_slide] = {
+                                "error": f"{type(exc).__name__}: {exc}"
+                            }
                         st.rerun()
                     else:
                         st.warning("Enter a prompt first.")
@@ -3364,7 +3377,6 @@ def render_live_top5():
                     st.error(result["error"])
                 assets = list(result.get("assets") or [])
                 result_key = "ai"
-
 
             for start in range(0, len(assets), 3):
                 cols = st.columns(3, gap="medium")
