@@ -6166,8 +6166,8 @@ elif st.session_state.app_mode == "test":
                                 if card_type == "editorial":
                                     max_words = int(getattr(exc, "top5_max_words", 0) or 0)
                                     st.session_state.test_top5_visual_rejections[active_slide] = {
-                                        "headline": headline,
-                                        "body": body,
+                                        "headline": selected_headline,
+                                        "body": selected_body,
                                         "max_words": max_words,
                                         "reason": str(exc),
                                         "source_bytes": selected_bytes,
