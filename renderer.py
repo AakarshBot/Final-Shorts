@@ -592,27 +592,28 @@ def _top5_body_word_cap(
 
 
 def _top5_subject_geometry(subject_mask: Image.Image) -> dict | None:
-    bbox = subject_mask.getbbox()
+    binary = subject_mask.convert("L").point(lambda value: 255 if value >= 128 else 0)
+    bbox = binary.getbbox()
     if not bbox:
         return None
 
-    sample = subject_mask.convert("L").resize((72, 128), Image.Resampling.BOX)
+    sample = binary.resize((90, 160), Image.Resampling.BOX)
     pixels = list(sample.getdata())
-    total = sum(pixels)
-    if total <= 0:
+    coverage = sum(value > 128 for value in pixels) / len(pixels)
+    if coverage < 0.006 or coverage > 0.72:
         return None
 
+    total = sum(pixels)
     x_weight = 0
     y_weight = 0
     for index, value in enumerate(pixels):
-        row, column = divmod(index, 72)
+        row, column = divmod(index, 90)
         x_weight += column * value
         y_weight += row * value
 
-    center_x = (x_weight / total) / 72 * WIDTH
-    center_y = (y_weight / total) / 128 * HEIGHT
+    center_x = (x_weight / max(1, total)) / 90 * WIDTH
+    center_y = (y_weight / max(1, total)) / 160 * HEIGHT
     x1, y1, x2, y2 = bbox
-
     return {
         "bbox": bbox,
         "center_x": center_x,
@@ -621,6 +622,7 @@ def _top5_subject_geometry(subject_mask: Image.Image) -> dict | None:
         "right_space": WIDTH - x2,
         "width": x2 - x1,
         "height": y2 - y1,
+        "coverage": coverage,
     }
 
 
@@ -632,17 +634,27 @@ def _top5_subject_mode(subject_mask: Image.Image) -> str | None:
     center_x = geometry["center_x"]
     left_space = geometry["left_space"]
     right_space = geometry["right_space"]
+    subject_width = geometry["width"]
 
-    if center_x <= WIDTH * 0.44 and right_space >= 300:
-        return "vertical-right"
-    if center_x >= WIDTH * 0.56 and left_space >= 300:
-        return "vertical-left"
     if (
         WIDTH * 0.40 <= center_x <= WIDTH * 0.60
-        and left_space >= 150
-        and right_space >= 150
+        and left_space >= 140
+        and right_space >= 140
+        and subject_width <= 720
     ):
         return "cross-subject"
+    if (
+        center_x < WIDTH * 0.46
+        and right_space >= 320
+        and subject_width <= 720
+    ):
+        return "vertical-right"
+    if (
+        center_x > WIDTH * 0.54
+        and left_space >= 320
+        and subject_width <= 720
+    ):
+        return "vertical-left"
     return None
 
 
@@ -653,11 +665,11 @@ def _top5_subject_overlap_ratio(
     x1, y1, x2, y2 = box
     if x2 <= x1 or y2 <= y1:
         return 0.0
-    region = subject_mask.crop((x1, y1, x2, y2)).resize(
+    region = subject_mask.convert("L").crop((x1, y1, x2, y2)).resize(
         (72, 24),
         Image.Resampling.BOX,
     )
-    return sum(value > 90 for value in region.getdata()) / (72 * 24)
+    return sum(value > 128 for value in region.getdata()) / (72 * 24)
 
 
 def _top5_subject_layout(
@@ -677,28 +689,24 @@ def _top5_subject_layout(
     clean_body = " ".join(str(body or "").split())
     safe_top = TOP5_EDITORIAL_SAFE_TOP
     safe_bottom = TOP5_EDITORIAL_SAFE_BOTTOM
+    headline_candidates = []
 
     if mode.startswith("vertical"):
-        if mode == "vertical-right":
-            available_width = geometry["right_space"] - 36
-            column_x = geometry["bbox"][2] + 36
-        else:
-            available_width = geometry["left_space"] - 36
-            column_x = TOP5_EDITORIAL_MARGIN_X
-
+        available_width = (
+            geometry["right_space"] - 44
+            if mode == "vertical-right"
+            else geometry["left_space"] - 44
+        )
         if available_width < 300:
             return None
 
-        max_width = min(470, int(available_width))
-        target_lines = min(
-            5,
-            max(2, math.ceil(len(clean_headline.split()) / 2)),
-        )
-        headline_candidates = []
+        width_floor = max(300, min(420, available_width))
+        width_ceiling = min(500, available_width)
+        target_lines = min(4, max(2, math.ceil(len(clean_headline.split()) / 2)))
 
-        for width in range(max_width, 299, -20):
-            for size in range(168, 95, -2):
-                fonts = _top5_headline_font_stack(size, language)
+        for size in range(176, 98, -2):
+            fonts = _top5_headline_font_stack(size, language)
+            for width in range(int(width_ceiling), int(width_floor) - 1, -20):
                 try:
                     lines = _top5_wrap_editorial_words(
                         probe,
@@ -711,7 +719,10 @@ def _top5_subject_layout(
                 if not 2 <= len(lines) <= 5:
                     continue
 
-                multi_word_lines = sum(len(line) > 1 for line in lines)
+                singleton_lines = sum(1 for line in lines if len(line) == 1)
+                if singleton_lines > 1:
+                    continue
+
                 headline_height = (
                     sum(
                         _top5_editorial_measure(
@@ -721,154 +732,160 @@ def _top5_subject_layout(
                         )[1]
                         for line in lines
                     )
-                    + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
-                )
-                score = (
-                    size * 2.0
-                    + multi_word_lines * 28.0
-                    - abs(len(lines) - target_lines) * 46.0
-                    - abs(width - max_width) * 0.12
+                    + TOP5_EDITORIAL_HEADLINE_LINE_GAP * (len(lines) - 1)
                 )
                 headline_candidates.append({
-                    "score": score,
+                    "score": (
+                        size * 3.0
+                        + sum(len(line) > 1 for line in lines) * 52.0
+                        - singleton_lines * 170.0
+                        - abs(len(lines) - target_lines) * 36.0
+                        - abs(width - width_ceiling) * 0.04
+                    ),
                     "headline_fonts": fonts,
                     "headline_lines": lines,
                     "headline_height": headline_height,
                     "headline_size": size,
                     "width": width,
-                    "x": column_x,
                 })
 
         if not headline_candidates:
             return None
 
-        headline_layout = max(headline_candidates, key=lambda item: item["score"])
-        chosen_x = int(headline_layout["x"])
-        composition_score = headline_layout["score"]
-        target_y_factor = 0.46
+        headline_layout = max(
+            headline_candidates,
+            key=lambda item: (item["score"], item["headline_size"]),
+        )
+        if mode == "vertical-right":
+            chosen_x = geometry["bbox"][2] + 44
+        else:
+            chosen_x = geometry["bbox"][0] - 44 - headline_layout["width"]
+        chosen_x = max(
+            TOP5_EDITORIAL_MARGIN_X,
+            min(
+                WIDTH - TOP5_EDITORIAL_MARGIN_X - headline_layout["width"],
+                chosen_x,
+            ),
+        )
 
     else:
-        max_width = WIDTH - TOP5_EDITORIAL_MARGIN_X * 2
-        headline_candidates = []
+        sample_mask = subject_mask.convert("L").resize(
+            (90, 160),
+            Image.Resampling.BOX,
+        ).point(lambda value: 255 if value >= 128 else 0)
+        target_center_y = HEIGHT * 0.52
 
-        for size in range(204, 108, -2):
+        for size in range(224, 120, -2):
             fonts = _top5_headline_font_stack(size, language)
+            line_sets = []
+
             width, height = _top5_editorial_measure(
                 probe,
                 clean_headline.upper(),
                 fonts,
             )
-            if width > max_width:
-                continue
+            if 640 <= width <= 1000:
+                line_sets.append((
+                    [clean_headline.upper().split()],
+                    width,
+                    height,
+                    1,
+                ))
 
-            base_x = int(round(geometry["center_x"] - width / 2))
-            for shift in (-140, -100, -60, -20, 20, 60, 100, 140):
-                x = max(
-                    TOP5_EDITORIAL_MARGIN_X,
-                    min(
-                        WIDTH - TOP5_EDITORIAL_MARGIN_X - width,
-                        base_x + shift,
-                    ),
-                )
-                y = max(
-                    safe_top,
-                    min(
-                        safe_bottom - height,
-                        int(round(geometry["center_y"] - height / 2)),
-                    ),
-                )
-                overlap = _top5_subject_overlap_ratio(
-                    subject_mask,
-                    (x, y, x + width, y + height),
-                )
-                if not 0.04 <= overlap <= 0.30:
-                    continue
-                score = (
-                    size * 2.4
-                    + 190.0
-                    - abs(overlap - 0.13) * 900.0
-                    - abs(shift) * 0.03
-                )
-                headline_candidates.append({
-                    "score": score,
-                    "headline_fonts": fonts,
-                    "headline_lines": [[word for word in clean_headline.upper().split()]],
-                    "headline_height": height,
-                    "headline_size": size,
-                    "width": width,
-                    "x": x,
-                    "y": y,
-                })
-
-            if headline_candidates:
-                best_size = max(item["headline_size"] for item in headline_candidates)
-                if best_size == size:
-                    break
-
-        if not headline_candidates:
-            for size in range(186, 106, -2):
-                fonts = _top5_headline_font_stack(size, language)
+            if not line_sets and size <= 184:
                 try:
                     lines = _top5_wrap_editorial_words(
                         probe,
                         clean_headline.upper(),
                         fonts,
-                        940,
+                        960,
                     )
                 except ValueError:
-                    continue
-                if len(lines) != 2:
-                    continue
-                width = max(
-                    _top5_editorial_measure(
-                        probe,
-                        " ".join(line),
-                        fonts,
-                    )[0]
-                    for line in lines
-                )
-                headline_height = (
-                    sum(
+                    lines = []
+                if len(lines) == 2:
+                    height = sum(
                         _top5_editorial_measure(
                             probe,
                             " ".join(line),
                             fonts,
                         )[1]
                         for line in lines
+                    ) + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+                    width = max(
+                        _top5_editorial_measure(
+                            probe,
+                            " ".join(line),
+                            fonts,
+                        )[0]
+                        for line in lines
                     )
-                    + TOP5_EDITORIAL_HEADLINE_LINE_GAP
-                )
+                    line_sets.append((lines, width, height, 2))
+
+            for lines, width, height, line_count in line_sets:
                 x = (WIDTH - width) // 2
-                y = max(
+                for y in range(
                     safe_top,
-                    min(
-                        safe_bottom - headline_height,
-                        int(round(geometry["center_y"] - headline_height / 2)),
-                    ),
-                )
-                overlap = _top5_subject_overlap_ratio(
-                    subject_mask,
-                    (x, y, x + width, y + headline_height),
-                )
-                headline_candidates.append({
-                    "score": size * 2.2 + 160.0 - abs(overlap - 0.13) * 700.0,
-                    "headline_fonts": fonts,
-                    "headline_lines": lines,
-                    "headline_height": headline_height,
-                    "headline_size": size,
-                    "width": width,
-                    "x": x,
-                    "y": y,
-                })
-                break
+                    max(safe_top, safe_bottom - height) + 1,
+                    20,
+                ):
+                    sample_y1 = max(0, int(round(y / HEIGHT * 160)))
+                    sample_y2 = min(
+                        160,
+                        max(
+                            sample_y1 + 1,
+                            int(round((y + height) / HEIGHT * 160)),
+                        ),
+                    )
+                    subject_box = sample_mask.crop(
+                        (0, sample_y1, 90, sample_y2)
+                    ).getbbox()
+                    if not subject_box:
+                        continue
+
+                    subject_x1 = int(round(subject_box[0] / 90 * WIDTH))
+                    subject_x2 = int(round(subject_box[2] / 90 * WIDTH))
+                    subject_center = (subject_x1 + subject_x2) / 2
+                    if not WIDTH * 0.40 <= subject_center <= WIDTH * 0.60:
+                        continue
+                    if x >= subject_x1 - 28 or x + width <= subject_x2 + 28:
+                        continue
+
+                    overlap_width = min(x + width, subject_x2) - max(x, subject_x1)
+                    if overlap_width <= 0:
+                        continue
+
+                    target_overlap = min(150, max(80, round(width * 0.10)))
+                    side_clearance = min(
+                        subject_x1 - x,
+                        x + width - subject_x2,
+                    )
+                    vertical_center = y + height / 2
+                    score = (
+                        size * 3.8
+                        + (260.0 if line_count == 1 else 80.0)
+                        - abs(overlap_width - target_overlap) * 1.55
+                        + min(220.0, side_clearance) * 0.18
+                        - abs(vertical_center - target_center_y) * 0.04
+                    )
+                    headline_candidates.append({
+                        "score": score,
+                        "headline_fonts": fonts,
+                        "headline_lines": lines,
+                        "headline_height": height,
+                        "headline_size": size,
+                        "width": width,
+                        "x": x,
+                        "y": y,
+                    })
 
         if not headline_candidates:
             return None
 
-        headline_layout = max(headline_candidates, key=lambda item: item["score"])
-        chosen_x = int(headline_layout["x"])
-        composition_score = headline_layout["score"]
-        target_y_factor = 0.50
+        headline_layout = max(
+            headline_candidates,
+            key=lambda item: (item["score"], item["headline_size"]),
+        )
+        chosen_x = headline_layout["x"]
 
     body_font = None
     body_lines = []
@@ -909,41 +926,19 @@ def _top5_subject_layout(
     )
 
     if mode.startswith("vertical"):
-        target_y = int(round(
-            geometry["center_y"] - total_height * target_y_factor
-        ))
-        chosen_x = int(headline_layout["x"])
+        target_y = int(round(geometry["center_y"] - total_height / 2))
+        chosen_y = max(
+            safe_top,
+            min(safe_bottom - total_height, target_y),
+        )
     else:
-        target_y = int(headline_layout.get("y", round(
-            geometry["center_y"] - total_height * target_y_factor
-        )))
-
-    chosen_y = max(
-        safe_top,
-        min(safe_bottom - total_height, target_y),
-    )
-
-    if mode == "cross-subject":
-        overlap = _top5_subject_overlap_ratio(
-            subject_mask,
-            (
-                chosen_x,
-                chosen_y,
-                chosen_x + headline_layout["width"],
-                chosen_y + headline_layout["headline_height"],
-            ),
-        )
-        if not 0.04 <= overlap <= 0.34:
-            return None
-        composition_score = (
-            headline_layout["score"]
-            + 80.0
-            - abs(overlap - 0.13) * 700.0
-        )
+        chosen_y = int(headline_layout["y"])
+        if chosen_y + total_height > safe_bottom:
+            chosen_y = safe_bottom - total_height
 
     return {
-        "score": composition_score,
-        "composition_score": composition_score,
+        "score": headline_layout["score"],
+        "composition_score": headline_layout["score"],
         "composition_mode": mode,
         "x": chosen_x,
         "y": chosen_y,
@@ -971,7 +966,11 @@ def _top5_composition_score(
         24,
         min(
             72,
-            round((box[3] - box[1]) * sample_width / max(1, box[2] - box[0])),
+            round(
+                (box[3] - box[1])
+                * sample_width
+                / max(1, box[2] - box[0]),
+            ),
         ),
     )
     sample = image.crop(box).resize(
@@ -999,7 +998,10 @@ def _top5_composition_score(
     center_y = ((box[1] + box[3]) / 2) / HEIGHT
     thirds_distance = min(abs(center_y - 1 / 3), abs(center_y - 2 / 3))
     thirds_bonus = max(0.0, 1.0 - thirds_distance * 5.0)
-    width_bonus = min(1.0, max(0.0, (box[2] - box[0] - 760) / 200))
+    width_bonus = min(
+        1.0,
+        max(0.0, (box[2] - box[0] - 760) / 200),
+    )
     return calmness * 68.0 + contrast * 22.0 + thirds_bonus * 7.0 + width_bonus * 3.0
 
 
@@ -1066,6 +1068,9 @@ def _top5_editorial_layout(
         )
         if subject_layout is not None:
             return subject_layout
+        raise ValueError(
+            "Subject Cutout could not find a readable subject-aware composition for this image."
+        )
 
     source_image = _top5_full_frame_image(image) if image is not None else None
     candidates = []
@@ -1274,9 +1279,12 @@ def _top5_subject_mask(image_bytes: bytes) -> Image.Image | None:
     )
     if mask.getbbox() is None:
         return None
-    mask = mask.point(lambda value: 255 if value >= 90 else 0)
-    return mask.filter(ImageFilter.MaxFilter(17))
 
+    mask = mask.point(lambda value: 255 if value >= 128 else 0)
+    mask = mask.filter(ImageFilter.MedianFilter(5))
+    if mask.getbbox() is None:
+        return None
+    return mask
 
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     language = str(card.get("language") or "english")
@@ -1291,6 +1299,10 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         source_bytes = BytesIO()
         canvas.convert("RGB").save(source_bytes, format="PNG", optimize=False)
         subject_mask = _top5_subject_mask(source_bytes.getvalue())
+        if subject_mask is None:
+            raise ValueError(
+                "Subject Cutout could not isolate a usable foreground subject from this image."
+            )
 
     layout = _top5_editorial_layout(
         headline,
