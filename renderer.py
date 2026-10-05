@@ -908,6 +908,102 @@ def build_top5_card_preview(
     return buffer.getvalue()
 
 
+def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
+    primary_font, clean, lines = _fit_headline_font(text, language)
+    fonts = _headline_font_stack(primary_font.size, language)
+    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(layer)
+
+    line_boxes = [
+        (
+            0,
+            0,
+            *_measure_headline_text(
+                draw,
+                " ".join(line),
+                fonts,
+            ),
+        )
+        for line in lines
+    ]
+    line_widths = [box[2] for box in line_boxes]
+    line_heights = [box[3] for box in line_boxes]
+
+    text_block_width = max(line_widths)
+    text_block_height = (
+        sum(line_heights) + HEADLINE_LINE_GAP * max(0, len(lines) - 1)
+    )
+    group_width = HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP + text_block_width
+
+    progress = min(1.0, max(0.0, t / 0.45))
+    eased = 1 - (1 - progress) ** 3
+    start_group_x = -group_width - 80
+    final_group_x = (WIDTH - group_width) // 2
+    group_x = int(
+        start_group_x + (final_group_x - start_group_x) * eased
+    )
+
+    marker_x = group_x
+    text_x = group_x + HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP
+    y = 560
+
+    first_height = line_heights[0]
+    line_y = y + max(8, (first_height - HEADLINE_MARKER_HEIGHT) // 2)
+    split = int(HEADLINE_MARKER_WIDTH * 0.58)
+    draw.rectangle(
+        (
+            marker_x,
+            line_y,
+            marker_x + split,
+            line_y + HEADLINE_MARKER_HEIGHT,
+        ),
+        fill=BRAND_BLUE,
+    )
+    draw.rectangle(
+        (
+            marker_x + split,
+            line_y,
+            marker_x + HEADLINE_MARKER_WIDTH,
+            line_y + HEADLINE_MARKER_HEIGHT,
+        ),
+        fill=ACCENT,
+    )
+
+    cursor_y = y
+    for row, line in enumerate(lines):
+        line_text = " ".join(line)
+        line_width = line_widths[row]
+        line_x = text_x + (text_block_width - line_width) // 2
+        runs = _headline_runs(line_text, fonts)
+        cursor_x = line_x
+        for run, font in runs:
+            box = draw.textbbox(
+                (0, 0),
+                run,
+                font=font,
+                stroke_width=HEADLINE_STROKE_WIDTH,
+            )
+            run_height = box[3] - box[1]
+            run_y = cursor_y + (line_heights[row] - run_height) // 2
+            draw.text(
+                (cursor_x - box[0], run_y - box[1]),
+                run,
+                font=font,
+                fill=WHITE,
+                stroke_width=HEADLINE_STROKE_WIDTH,
+                stroke_fill=DARK,
+            )
+            cursor_x += box[2] - box[0]
+        cursor_y += line_heights[row] + HEADLINE_LINE_GAP
+
+    if t < 0.68 and progress < 1.0:
+        layer = layer.filter(
+            ImageFilter.GaussianBlur(radius=max(0.0, 2.5 * (1 - progress)))
+        )
+
+    base.paste(layer, (0, 0), layer)
+
+
 def _cue_at_time(subtitle_data: dict, t: float):
     for cue in subtitle_data.get("cues") or []:
         try:
