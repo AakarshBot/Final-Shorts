@@ -661,6 +661,8 @@ def _top5_headline_fit(
             continue
         if not lines or len(lines) > max_lines:
             continue
+        if orientation == "vertical" and len(lines) < 2:
+            continue
 
         widths = [
             _top5_editorial_measure(probe, " ".join(line), fonts)[0]
