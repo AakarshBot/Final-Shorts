@@ -599,18 +599,19 @@ def _top5_subject_overlap_score(
     headline_height: int,
 ) -> float:
     region = subject_mask.crop((x, y, x + width, y + headline_height)).resize(
-        (48, 24),
+        (64, 32),
         Image.Resampling.BILINEAR,
     )
-    coverage = sum(value > 80 for value in region.getdata()) / (48 * 24)
-    if coverage <= 0.02:
-        return -55.0
-    if coverage <= 0.18:
-        return coverage * 380.0
-    if coverage <= 0.36:
-        return 68.0 - abs(coverage - 0.26) * 120.0
-    return 24.0 - (coverage - 0.36) * 180.0
-
+    coverage = sum(value > 90 for value in region.getdata()) / (64 * 32)
+    if coverage < 0.05:
+        return -180.0
+    if coverage < 0.14:
+        return -180.0 + (coverage - 0.05) * 1600.0
+    if coverage <= 0.32:
+        return 120.0 + (coverage - 0.14) * 500.0
+    if coverage <= 0.48:
+        return 210.0 - (coverage - 0.32) * 360.0
+    return 152.0 - (coverage - 0.48) * 700.0
 
 def _top5_composition_score(
     image: Image.Image,
@@ -689,10 +690,38 @@ def _top5_layout_candidates(
         max(TOP5_EDITORIAL_MARGIN_X, WIDTH - TOP5_EDITORIAL_MARGIN_X - width),
     })
 
+    if subject_mask is not None and headline_height:
+        subject_box = subject_mask.getbbox()
+        if subject_box:
+            sx1, sy1, sx2, sy2 = subject_box
+            subject_center_x = (sx1 + sx2) // 2
+            x_values.extend([
+                subject_center_x - width // 2,
+                sx1 - width // 2,
+                sx2 - width // 2,
+            ])
+            subject_height = max(1, sy2 - sy1)
+            for subject_position in (0.40, 0.56, 0.68):
+                y_values.append(
+                    int(
+                        sy1
+                        + subject_height * subject_position
+                        - headline_height / 2
+                    )
+                )
+
+    x_values = sorted({
+        max(0, min(WIDTH - width, int(x)))
+        for x in x_values
+    })
+    y_values = sorted({
+        max(TOP5_EDITORIAL_SAFE_TOP, min(max_y, int(y)))
+        for y in y_values
+    })
+
     candidates = []
     for y in y_values:
         for x in x_values:
-            x = max(0, min(WIDTH - width, x))
             box = (x, y, x + width, y + total_height)
             score = _top5_composition_score(
                 image,
