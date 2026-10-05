@@ -722,6 +722,21 @@ def test_top5_editorial_moves_down_when_lower_copy_space_is_quieter():
 
 
 
+def test_top5_subject_geometry_accepts_soft_foreground_masks():
+    mask = Image.new("L", (1080, 1920), 0)
+    draw = ImageDraw.Draw(mask)
+    draw.rectangle((350, 520, 730, 1510), fill=215)
+    draw.rectangle((80, 80, 1000, 1840), outline=70, width=20)
+
+    geometry = renderer._top5_subject_geometry(mask)
+
+    assert geometry is not None
+    assert geometry["bbox"][0] > 100
+    assert geometry["bbox"][2] < 980
+    assert geometry["bbox"][1] > 300
+    assert geometry["bbox"][3] < 1700
+
+
 def test_top5_subject_layout_uses_vertical_stack_for_side_subject():
     subject = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(subject).rectangle((40, 560, 390, 1510), fill=255)
@@ -810,16 +825,16 @@ def test_top5_subject_layout_crosses_two_subjects_and_preserves_gap():
     assert overlap_left > 0.02
 
 
-def test_top5_subject_cutout_falls_back_to_negative_space_when_mask_is_unusable(monkeypatch):
+def test_top5_subject_cutout_does_not_silently_fall_back_when_mask_is_unusable(monkeypatch):
     monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: None)
-    preview = renderer.build_top5_card_preview(
-        Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        "India dominate the latest cricket result",
-        "",
-        story_number=1,
-        subject_cutout=True,
-    )
-    assert preview
+    with pytest.raises(ValueError, match="usable foreground mask"):
+        renderer.build_top5_card_preview(
+            Image.new("RGB", (1080, 1920), (40, 40, 40)),
+            "India dominate the latest cricket result",
+            "",
+            story_number=1,
+            subject_cutout=True,
+        )
 
 
 def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
