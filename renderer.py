@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from io import BytesIO
 from pathlib import Path
 import math
@@ -71,10 +72,7 @@ TOP5_EDITORIAL_TEXT_SHADOW_BLUR = 6
 TOP5_EDITORIAL_TEXT_SHADOW_ALPHA = 205
 TOP5_EDITORIAL_BODY_SHADOW_BLUR = 3
 TOP5_EDITORIAL_BODY_SHADOW_ALPHA = 105
-TOP5_SUBJECT_SEGMENTATION_MODEL = os.getenv(
-    "TOP5_SUBJECT_SEGMENTATION_MODEL",
-    "facebook/mask2former-swin-large-coco-panoptic",
-)
+TOP5_SUBJECT_REMOVAL_MODEL = "briaai/RMBG-2.0"
 
 
 @lru_cache(maxsize=256)
@@ -773,52 +771,58 @@ def compress_top5_body(body: str, max_words: int) -> str:
 
 
 @lru_cache(maxsize=32)
-def _top5_subject_mask(image_bytes: bytes, model_name: str) -> Image.Image | None:
+def _top5_subject_mask(image_bytes: bytes) -> Image.Image | None:
     token = str(os.getenv("HF_TOKEN") or "").strip()
     if not token or not image_bytes:
         return None
 
-    try:
-        from huggingface_hub import InferenceClient
+    from huggingface_hub import InferenceClient
 
-        with Image.open(BytesIO(image_bytes)) as source:
-            image = source.convert("RGB")
+    with Image.open(BytesIO(image_bytes)) as source:
+        image = source.convert("RGB")
 
-        client = InferenceClient(
-            provider="hf-inference",
-            api_key=token,
-        )
-        segments = client.image_segmentation(
-            image,
-            model=model_name,
-            subtask="panoptic",
-            threshold=0.55,
-            mask_threshold=0.50,
-        )
-        combined = Image.new("L", image.size, 0)
-
+    client = InferenceClient(
+        provider="fal-ai",
+        api_key=token,
+    )
+    segments = client.image_segmentation(
+        image,
+        model=TOP5_SUBJECT_REMOVAL_MODEL,
+    )
+    if isinstance(segments, Image.Image):
+        mask = segments.convert("L")
+    else:
+        mask = None
         for segment in segments or []:
-            if isinstance(segment, dict):
-                label = str(segment.get("label") or "")
-                mask = segment.get("mask")
-                score = float(segment.get("score") or 0.0)
-            else:
-                label = str(getattr(segment, "label", "") or "")
-                mask = getattr(segment, "mask", None)
-                score = float(getattr(segment, "score", 0.0) or 0.0)
+            candidate = (
+                segment.get("mask")
+                if isinstance(segment, dict)
+                else getattr(segment, "mask", None)
+            )
+            if isinstance(candidate, Image.Image):
+                mask = candidate.convert("L")
+                break
+            if isinstance(candidate, (bytes, bytearray)):
+                with Image.open(BytesIO(bytes(candidate))) as source:
+                    mask = source.convert("L")
+                break
+            if isinstance(candidate, str):
+                encoded = candidate.split(",", 1)[-1]
+                try:
+                    decoded = base64.b64decode(encoded)
+                    with Image.open(BytesIO(decoded)) as source:
+                        mask = source.convert("L")
+                except (ValueError, OSError):
+                    continue
+                break
 
-            if label.casefold() != "person" or score < 0.55 or not isinstance(mask, Image.Image):
-                continue
-
-            mask = mask.convert("L").resize(image.size, Image.Resampling.LANCZOS)
-            combined = ImageChops.lighter(combined, mask)
-
-        if combined.getbbox() is None:
-            return None
-
-        return combined.filter(ImageFilter.GaussianBlur(0.7))
-    except Exception:
+    if mask is None or mask.getbbox() is None:
         return None
+
+    if mask.size != image.size:
+        mask = mask.resize(image.size, Image.Resampling.LANCZOS)
+
+    return mask.filter(ImageFilter.GaussianBlur(0.7))
 
 
 def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
@@ -982,10 +986,7 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         format="PNG",
         optimize=False,
     )
-    subject_mask = _top5_subject_mask(
-        subject_bytes.getvalue(),
-        TOP5_SUBJECT_SEGMENTATION_MODEL,
-    )
+    subject_mask = _top5_subject_mask(subject_bytes.getvalue())
     if subject_mask is not None:
         occlusion_mask = ImageChops.multiply(
             subject_mask,
