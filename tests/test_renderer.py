@@ -657,7 +657,7 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     assert seen == ["Quote Source"]
 
 
-def test_top5_editorial_uses_the_deliberate_lower_shorts_safe_anchors():
+def test_top5_editorial_uses_oswald_and_the_lower_shorts_safe_zone():
     story = renderer._top5_editorial_layout(
         "Virat Kohli returns for another major cricket test",
         "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next match.",
@@ -671,13 +671,16 @@ def test_top5_editorial_uses_the_deliberate_lower_shorts_safe_anchors():
         0,
     )
 
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
+    assert font_path.exists()
     assert story["x"] == renderer.TOP5_EDITORIAL_MARGIN_X == 72
     assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == 860
-    assert story["y"] == renderer.TOP5_EDITORIAL_STORY_Y == 880
-    assert opener["y"] == renderer.TOP5_EDITORIAL_OPENER_Y == 760
+    assert story["y"] >= renderer.TOP5_EDITORIAL_STORY_Y == 880
+    assert opener["y"] >= renderer.TOP5_EDITORIAL_OPENER_Y == 760
+    assert story["headline_font"].getname()[0].lower().startswith("oswald")
 
 
-def test_top5_editorial_body_uses_the_lower_half_to_the_bottom_boundary():
+def test_top5_editorial_body_uses_the_bottom_of_the_shorts_safe_zone():
     body = " ".join(
         [
             "The board confirmed the move after reviewing the latest result and selection options.",
@@ -695,6 +698,7 @@ def test_top5_editorial_body_uses_the_lower_half_to_the_bottom_boundary():
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     font = layout["body_font"]
     assert font is not None
+    assert font.size == renderer.TOP5_EDITORIAL_BODY_SIZE
     body_height = (
         (probe.textbbox(
             (0, 0),
@@ -711,17 +715,12 @@ def test_top5_editorial_body_uses_the_lower_half_to_the_bottom_boundary():
         + renderer.TOP5_EDITORIAL_BODY_LINE_GAP
         * max(0, len(layout["body_lines"]) - 1)
     )
-    body_start = (
-        layout["y"]
-        + layout["headline_height"]
-        + layout["body_gap"]
-    )
+    body_start = layout["y"] + layout["headline_height"] + layout["body_gap"]
 
-    assert body_start + body_height <= renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
-    assert font.size >= renderer.TOP5_EDITORIAL_BODY_MIN_SIZE
+    assert body_start + body_height == renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
 
-def test_top5_editorial_uses_the_second_letter_level_fade(monkeypatch):
+def test_top5_editorial_uses_fade_v2_letter_mask(monkeypatch):
     calls = []
     original_blur = renderer.ImageFilter.GaussianBlur
 
@@ -738,5 +737,6 @@ def test_top5_editorial_uses_the_second_letter_level_fade(monkeypatch):
     )
 
     assert preview
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR == 5
     assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 165
+    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 60
