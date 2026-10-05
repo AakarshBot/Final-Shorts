@@ -92,7 +92,7 @@ def test_top5_headline_size_adapts_to_copy():
         1,
     )
 
-    assert short["headline_fonts"][0].size >= long["headline_fonts"][0].size
+    assert short["headline_font"].size >= long["headline_font"].size
     assert short["headline_lines"]
     assert long["headline_lines"]
 
@@ -110,7 +110,7 @@ def test_top5_body_preserves_all_copy_without_sentence_cap():
         1,
     )
 
-    rendered_words = " ".join(" ".join(line) for line in layout["body_lines"])
+    rendered_words = " ".join(layout["body_lines"])
     assert "Officials" in rendered_words
     assert "review." in rendered_words
     assert layout["body_font"].size >= 34
