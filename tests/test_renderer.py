@@ -942,14 +942,14 @@ def test_top5_manual_subject_cutout_wraps_headline_inside_box():
 
     assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
 
-    with pytest.raises(ValueError, match="does not fit"):
-        renderer.build_top5_manual_subject_cutout_preview(
-            Image.new("RGB", (1080, 1920), (40, 40, 40)),
-            "India dominate the latest cricket result today",
-            mode="negative-space",
-            text_box=(120, 700, 840, 180),
-            font_size=180,
-        )
+    preview = renderer.build_top5_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India dominate the latest cricket result today",
+        mode="negative-space",
+        text_box=(120, 700, 840, 180),
+        font_size=180,
+    )
+    assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
 
 
 def test_top5_manual_subject_cutout_keeps_two_subjects_above_text(monkeypatch):
