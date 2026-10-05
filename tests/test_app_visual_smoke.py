@@ -16,8 +16,8 @@ VISUAL_OPTIONS = (
 )
 
 
-def _image_bytes() -> bytes:
-    image = Image.new("RGB", (600, 900), (40, 50, 60))
+def _image_bytes(color=(40, 50, 60), size=(600, 900)) -> bytes:
+    image = Image.new("RGB", size, color)
     buffer = BytesIO()
     image.save(buffer, format="PNG")
     return buffer.getvalue()
@@ -108,3 +108,115 @@ def test_top5_manual_fetcher_and_body_card_wip_load():
         at.run()
 
         assert not at.exception, at.exception
+
+
+def test_live_cricket_text_cutout_loads_and_switches_images():
+    assets = [
+        {
+            "bytes": _image_bytes((40, 50, 60)),
+            "source": "source-a",
+            "article_title": "Image A",
+        },
+        {
+            "bytes": _image_bytes((80, 90, 100)),
+            "source": "source-b",
+            "article_title": "Image B",
+        },
+    ]
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "deep_dive"
+    at.session_state["live_desk"] = "cricket"
+    at.session_state["live_cricket_profile"] = "cricket_india_asia"
+    at.session_state["live_topics_profile"] = "cricket_india_asia"
+    at.session_state["live_topics"] = [{"title": "Test story"}]
+    at.session_state["live_stage"] = "04 · Visuals + Render"
+    at.session_state["live_approved_script"] = {
+        "headline": "Test headline",
+        "script": [
+            {"voiceover": "One."},
+            {"voiceover": "Two."},
+            {"voiceover": "Three."},
+            {"voiceover": "Four."},
+        ],
+    }
+    at.session_state["live_approved_audio"] = {}
+    at.session_state["live_subtitle_data"] = {}
+    at.session_state["live_visual_option"] = "Option 7 · Text Cutout"
+    at.session_state["live_visual_result"] = {"assets": assets}
+    at.run()
+
+    assert not at.exception, at.exception
+    option_sets = [
+        [str(option) for option in pills.options]
+        for pills in at.pills
+        if pills.options
+    ]
+    assert [
+        "Option 1 · Automatic Scraper",
+        "Option 2 · Manual Scraper",
+        "Option 3 · Real Image Search",
+        "Option 4 · AI Generation",
+        "Option 5 · Stats Card",
+        "Option 6 · Quote Card",
+        "Option 7 · Text Cutout",
+    ] in option_sets
+    assert len([button for button in at.button if button.label == "Crop / reposition"]) == 2
+    assert len([button for button in at.button if button.label == "Select image"]) == 2
+
+    select_buttons = [button for button in at.button if button.label == "Select image"]
+    select_buttons[0].click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["live_text_cutout_image_selection"]["bytes"] == assets[0]["bytes"]
+
+    select_buttons = [button for button in at.button if button.label == "Select image"]
+    select_buttons[0].click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["live_text_cutout_image_selection"]["bytes"] == assets[1]["bytes"]
+
+
+def test_live_text_cutout_prefers_the_existing_9x16_crop():
+    asset = {
+        "bytes": _image_bytes((40, 50, 60)),
+        "source": "source-a",
+        "article_title": "Image A",
+    }
+    cropped = _image_bytes((200, 210, 220), size=(1080, 1920))
+    identity = "|".join([
+        "live-auto",
+        str(asset.get("source_page_url") or asset.get("url") or ""),
+        str(asset.get("article_title") or asset.get("model") or ""),
+        "0",
+    ])
+    import hashlib
+
+    asset_key = f"live-auto-{hashlib.sha1(identity.encode('utf-8')).hexdigest()[:12]}"
+
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "deep_dive"
+    at.session_state["live_desk"] = "cricket"
+    at.session_state["live_cricket_profile"] = "cricket_india_asia"
+    at.session_state["live_topics_profile"] = "cricket_india_asia"
+    at.session_state["live_topics"] = [{"title": "Test story"}]
+    at.session_state["live_stage"] = "04 · Visuals + Render"
+    at.session_state["live_approved_script"] = {
+        "headline": "Test headline",
+        "script": [
+            {"voiceover": "One."},
+            {"voiceover": "Two."},
+            {"voiceover": "Three."},
+            {"voiceover": "Four."},
+        ],
+    }
+    at.session_state["live_approved_audio"] = {}
+    at.session_state["live_subtitle_data"] = {}
+    at.session_state["live_visual_option"] = "Option 7 · Text Cutout"
+    at.session_state["live_visual_result"] = {"assets": [asset]}
+    at.session_state["live_visual_crops"] = {asset_key: cropped}
+    at.run()
+
+    select = next(button for button in at.button if button.label == "Select image")
+    select.click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["live_text_cutout_image_selection"]["bytes"] == cropped
