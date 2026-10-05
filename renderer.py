@@ -1167,17 +1167,23 @@ def _top5_editorial_layout(
 
     if subject_mask is not None:
         subject_geometry = _top5_subject_geometry(subject_mask)
-        if subject_geometry is not None:
-            subject_layout = _top5_subject_layout(
-                clean_headline,
-                "",
-                language,
-                story_number,
-                subject_geometry,
-                probe,
+        if subject_geometry is None:
+            raise ValueError(
+                "Top-5 Subject Cutout could not isolate a usable foreground subject."
             )
-            if subject_layout is not None:
-                return subject_layout
+        subject_layout = _top5_subject_layout(
+            clean_headline,
+            "",
+            language,
+            story_number,
+            subject_geometry,
+            probe,
+        )
+        if subject_layout is None:
+            raise ValueError(
+                "Top-5 Subject Cutout could not build a subject-aware headline layout."
+            )
+        return subject_layout
 
     source_image = _top5_full_frame_image(image) if image is not None else None
     candidates = []
@@ -1433,6 +1439,10 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
         source_bytes = BytesIO()
         canvas.convert("RGB").save(source_bytes, format="PNG", optimize=False)
         subject_mask = _top5_subject_mask(source_bytes.getvalue())
+        if subject_mask is None:
+            raise ValueError(
+                "Top-5 Subject Cutout could not produce a usable foreground mask."
+            )
 
     layout = _top5_editorial_layout(
         headline,
