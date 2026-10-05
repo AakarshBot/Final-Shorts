@@ -1830,7 +1830,7 @@ def _render_app_sidebar():
         if st.session_state.app_mode == "test" and st.session_state.test_production_line:
             line_name = {
                 "deep_dive": "Deep-Dive",
-                "top5": "Top-5",
+                "top_5": "Top-5",
                 "otd": "OTD",
             }[st.session_state.test_production_line]
             st.markdown(
