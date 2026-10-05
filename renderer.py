@@ -568,17 +568,31 @@ def _top5_editorial_layout(
         mode = "vertical-right"
 
     if region[2] - region[0] >= 180:
-        lines = [words[index:index + 2] for index in range(0, len(words), 2)]
-        for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -6):
+        region_width = region[2] - region[0]
+        region_height = region[3] - region[1]
+        for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -4):
             fonts = _top5_headline_font_stack(size, language)
+            lines = []
+            current = []
+            for word in words:
+                trial = " ".join(current + [word])
+                if current and _top5_editorial_measure(draw, trial, fonts)[0] > region_width:
+                    lines.append(current)
+                    current = [word]
+                else:
+                    current.append(word)
+            if current:
+                lines.append(current)
+            if not lines or any(_top5_editorial_measure(draw, " ".join(line), fonts)[0] > region_width for line in lines):
+                continue
             widths = [_top5_editorial_measure(draw, " ".join(line), fonts)[0] for line in lines]
             heights = [_top5_editorial_measure(draw, " ".join(line), fonts)[1] for line in lines]
             width = max(widths)
             height = sum(heights) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
-            if width <= region[2] - region[0] and height <= region[3] - region[1]:
+            if height <= region_height:
                 return {
-                    "x": int(region[0] + (region[2] - region[0] - width) / 2),
-                    "y": int(region[1] + (region[3] - region[1] - height) / 2),
+                    "x": int(region[0] + (region_width - width) / 2),
+                    "y": int(region[1] + (region_height - height) / 2),
                     "width": width, "headline_fonts": fonts, "headline_lines": lines,
                     "headline_height": height, "headline_size": size, "body_font": None,
                     "body_lines": [], "body_height": 0, "body_size": None, "body_gap": 0,
@@ -753,7 +767,7 @@ def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
             "headline": quote,
             "body": f"— {attribution}",
             "language": str(card.get("language") or "english"),
-            "max_headline_lines": 4,
+            "max_headline_lines": 6,
         },
     )
 
