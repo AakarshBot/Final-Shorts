@@ -88,7 +88,7 @@ def _top5_headline_font_stack(size: int, language: str) -> tuple[object, ...]:
             root / "NotoSansTelugu-Black.ttf",
         ])
     else:
-        candidates.append(root / "fonts" / "BarlowCondensed-Black.ttf")
+        candidates.append(root / "BarlowCondensed-Black.ttf")
 
     candidates.extend([
         root / "BarlowCondensed-Black.ttf",
@@ -563,7 +563,6 @@ def compress_top5_body(body: str, max_words: int) -> str:
     return result
 
 
-@lru_cache(maxsize=32)
 @lru_cache(maxsize=1)
 def _load_top5_birefnet():
     try:
