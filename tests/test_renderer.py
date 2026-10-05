@@ -658,10 +658,10 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     assert seen == ["Quote Source"]
 
 
-def test_top5_editorial_uses_barlow_in_the_fixed_text_zone():
+def test_top5_editorial_uses_barlow_and_dynamic_safe_area():
     story = renderer._top5_editorial_layout(
         "Virat Kohli returns for another cricket test",
-        "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next match.",
+        "The board confirmed the move after reviewing the latest result.",
         "english",
         1,
     )
@@ -674,20 +674,57 @@ def test_top5_editorial_uses_barlow_in_the_fixed_text_zone():
 
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     assert font_path.exists()
-    assert story["x"] == renderer.TOP5_EDITORIAL_MARGIN_X == 64
     assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == renderer.WIDTH - 128
     assert story["headline_fonts"][0].getname()[0].lower().startswith("barlow")
-    assert story["y"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_TOP == 900
-    assert story["zone_bottom"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM == 1480
+    assert renderer.TOP5_EDITORIAL_SAFE_TOP <= story["y"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
     assert story["y"] + story["total_height"] <= story["zone_bottom"]
-    assert opener["y"] == story["y"]
+    assert renderer.TOP5_EDITORIAL_SAFE_TOP <= opener["y"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
 
+
+def test_top5_editorial_moves_into_quiet_vertical_copy_space():
+    image = Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (24, 28, 34))
+    draw = ImageDraw.Draw(image)
+    for y in range(1160, 1650, 20):
+        for x in range(0, renderer.WIDTH, 20):
+            value = 255 if ((x // 20) + (y // 20)) % 2 else 0
+            draw.rectangle((x, y, x + 19, y + 19), fill=(value, value, value))
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "The board confirmed the move today.",
+        "english",
+        1,
+        image=image,
+    )
+
+    assert layout["y"] < 1000
+    assert layout["composition_score"] >= renderer.TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
+
+
+def test_top5_editorial_moves_down_when_lower_copy_space_is_quieter():
+    image = Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), (20, 22, 26))
+    draw = ImageDraw.Draw(image)
+    for y in range(620, 1050, 20):
+        for x in range(0, renderer.WIDTH, 20):
+            value = 255 if ((x // 20) + (y // 20)) % 2 else 0
+            draw.rectangle((x, y, x + 19, y + 19), fill=(value, value, value))
+
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "The board confirmed the move today.",
+        "english",
+        1,
+        image=image,
+    )
+
+    assert layout["y"] > 1000
+    assert layout["composition_score"] >= renderer.TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
 
 
 def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
     background = Image.new("RGB", (1080, 1920), (20, 24, 30))
     subject = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(subject).rectangle((60, 900, 600, 1120), fill=255)
+    ImageDraw.Draw(subject).rectangle((60, 620, 600, 960), fill=255)
 
     monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
     occluded = renderer.build_top5_card_preview(
@@ -695,6 +732,7 @@ def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
         "India dominate the latest cricket result",
         "The board confirmed the move after the latest result.",
         story_number=1,
+        subject_cutout=True,
     )
 
     monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: None)
@@ -711,24 +749,22 @@ def test_top5_headline_subject_occlusion_sits_above_type(monkeypatch):
     ).getbbox() is not None
 
 
-def test_top5_subject_mask_uses_rmbg_via_hugging_face(monkeypatch):
-    import huggingface_hub
+def test_top5_subject_mask_uses_local_birefnet(monkeypatch):
+    import torch
 
-    calls = []
+    class FakeModel:
+        def eval(self):
+            return self
 
-    class FakeClient:
-        def __init__(self, provider, api_key):
-            calls.append(("client", provider, api_key))
+        def __call__(self, input_images):
+            return [torch.ones((1, 1, 1024, 1024))]
 
-        def image_segmentation(self, image, model):
-            calls.append(("segmentation", image.size, model))
-            mask = Image.new("L", image.size, 0)
-            ImageDraw.Draw(mask).rectangle((100, 900, 600, 1160), fill=255)
-            return [{"mask": mask}]
-
-    monkeypatch.setattr(huggingface_hub, "InferenceClient", FakeClient)
-    monkeypatch.setenv("HF_TOKEN", "test-token")
     renderer._top5_subject_mask.cache_clear()
+    monkeypatch.setattr(
+        renderer,
+        "_load_top5_birefnet",
+        lambda: (FakeModel(), torch.device("cpu")),
+    )
 
     source = BytesIO()
     Image.new("RGB", (1080, 1920), (20, 24, 30)).save(source, format="PNG")
@@ -736,8 +772,29 @@ def test_top5_subject_mask_uses_rmbg_via_hugging_face(monkeypatch):
 
     assert mask is not None
     assert mask.size == (1080, 1920)
-    assert ("client", "fal-ai", "test-token") in calls
-    assert ("segmentation", (1080, 1920), "briaai/RMBG-2.0") in calls
+    assert mask.getbbox() is not None
+
+
+def test_top5_editorial_uses_opaque_text_and_targeted_shadow(monkeypatch):
+    calls = []
+    original_blur = renderer.ImageFilter.GaussianBlur
+
+    def spy_blur(radius):
+        calls.append(radius)
+        return original_blur(radius)
+
+    monkeypatch.setattr(renderer.ImageFilter, "GaussianBlur", spy_blur)
+    preview = renderer.build_top5_card_preview(
+        Image.new("RGB", (1080, 1920), (28, 42, 64)),
+        "Big cricket result changes",
+        "The board confirmed the move after reviewing the latest result.",
+        story_number=1,
+    )
+
+    assert preview
+    assert renderer.TOP5_EDITORIAL_SHADOW_BLUR in calls
+    assert not hasattr(renderer, "TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA")
+    assert not hasattr(renderer, "TOP5_EDITORIAL_LOCAL_SCRIM_BLUR")
 
 
 def test_top5_editorial_body_rejects_copy_below_readable_floor():
@@ -759,30 +816,6 @@ def test_top5_editorial_body_rejects_copy_below_readable_floor():
     assert error.value.top5_max_words > 0
     assert error.value.top5_max_words < len(body.split())
 
-
-def test_top5_editorial_uses_local_text_treatments(monkeypatch):
-    calls = []
-    original_blur = renderer.ImageFilter.GaussianBlur
-
-    def spy_blur(radius):
-        calls.append(radius)
-        return original_blur(radius)
-
-    monkeypatch.setattr(renderer.ImageFilter, "GaussianBlur", spy_blur)
-    preview = renderer.build_top5_card_preview(
-        Image.new("RGB", (1080, 1920), (28, 42, 64)),
-        "Big cricket result changes",
-        "The board confirmed the move after reviewing the latest result.",
-        story_number=1,
-    )
-
-    assert preview
-    assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA > 100
-    assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA > 150
-    assert renderer.TOP5_EDITORIAL_BODY_SHADOW_ALPHA < renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA
-    assert renderer.TOP5_EDITORIAL_BODY_SHADOW_ALPHA < renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA
 
 
 def test_top5_card_preview_renders_the_shared_editorial_treatment():
