@@ -297,18 +297,22 @@ Important:
 
 ### Top-5 current implementation checkpoint
 
-- Top-5 Visuals Test is independently runnable and exposes exactly seven options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
-- Top-5 image pools retain the factory's existing 9:16 Crop / Reposition interaction. Cropped framing is used consistently for selection, preview, rendering and Subject Cutout analysis.
-- Normal Top-5 cards remain static full-bleed editorial cards with adaptive opaque Oswald typography.
-- Subject Cutout is an optional Test-only treatment using local ZhengPeng7/BiRefNet_lite through the existing PyTorch/Transformers dependencies.
-- Subject Cutout is explicitly image-driven:
-  - Bottom subject + substantial top negative space → large horizontal headline filling roughly 80% of the top copy space.
-  - Left/right subject + meaningful opposite-side space → large normally oriented vertical headline stack filling roughly 80% of that side space, with intelligent multi-word grouping rather than one-word lines.
-  - Central subject → large horizontal headline crossing the foreground subject, preferably one line, with the headline disappearing behind the subject and remaining visible in any gap between multiple subjects.
-  - Weak segmentation → ordinary negative-space typography instead of an error.
-- Headline size, line grouping and position change with the actual image; the renderer must never reuse one fixed size/position simply because the Subject Cutout option was selected.
-- Foreground pixels are composited above intersecting headline glyphs only. This is the actual depth effect; transparency, broad panels, universal gradients, decorative borders and headline motion are not used.
-- Subject Cutout remains blocked from Live until the Test treatment is explicitly approved.
+- Top-5 Visuals Test is independently runnable and exposes exactly seven visual options: Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and Subject Cutout.
+- Every Top-5 image option uses the factory's existing 9:16 Crop / Reposition component. The crop is applied before selection, preview, rendering and Subject Cutout analysis; the original pool asset remains unchanged.
+- Normal Top-5 cards remain static full-bleed editorial cards. Subject Cutout is an optional image-driven treatment used only when selected.
+- Subject Cutout uses the local ZhengPeng7/BiRefNet_lite model through the existing PyTorch/Transformers dependency set. It is not a hosted inference service and it is not invoked for normal Top-5 cards.
+- Subject Cutout composition is determined from the actual foreground mask, not from a fixed text position:
+  - Large subject in the lower part of the frame with meaningful space above → the headline is placed in that upper negative space and sized to use roughly 80% of its usable area.
+  - Subject clearly on the left or right with usable opposite-side space → the headline switches to a normally oriented vertical editorial stack, grouping words intelligently instead of putting one word on every line; it fills roughly 80% of that side's usable area.
+  - Subject centered with readable space on both sides → the headline becomes a large horizontal cross-subject composition. The text is rendered first, then the detected foreground is restored over every intersecting letter, so the headline disappears behind every detected person and reappears through genuine gaps between multiple people.
+  - Upper subject with meaningful space below is treated symmetrically using the lower negative space.
+  - Mixed geometry is resolved from the actual available space; no single fixed size or fixed vertical position is reused across images.
+- Negative space is a first-class layout region. The renderer searches headline sizes and line groupings against the real region and prefers the largest readable treatment that lands near the requested ~80% spatial fill. A larger negative-space treatment can therefore beat the normal default headline size.
+- Subject overlap is also optimized rather than added for decoration: the cross-subject composition only wins when the headline intersects the detected foreground by a controlled amount and remains readable. Multiple foreground people share the same mask, so text can remain visible in gaps between them.
+- Headline text remains opaque editorial type with the existing image-dependent contrast, restrained shadow and thin outline. No transparency-as-style, broad scrims, universal gradients, decorative rails, borders, dots or motion are used.
+- Body copy is normally omitted for Subject Cutout compositions. Standard Top-5 cards continue to support body copy and reject it only when it cannot fit at the minimum readable size.
+- Subject Cutout must degrade gracefully: unusable/weak segmentation falls back to the normal Top-5 editorial treatment instead of presenting a false "subject-aware" composition.
+- Test and Live continue to consume the same Top-5 renderer/asset contracts. Subject Cutout remains a Test-only treatment until explicitly approved.
 
 Status: **Top-5 Subject Cutout under active Test visual refinement.**
 
