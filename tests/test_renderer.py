@@ -742,7 +742,7 @@ def test_top5_subject_aware_layout_targets_controlled_headline_overlap(monkeypat
         layout["width"],
         layout["headline_height"],
     )
-    assert overlap > 0
+    assert overlap >= 120
     assert layout["composition_score"] >= renderer.TOP5_EDITORIAL_MIN_COMPOSITION_SCORE
 
 
