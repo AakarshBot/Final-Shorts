@@ -6246,7 +6246,7 @@ elif st.session_state.app_mode == "test":
 
                         st.session_state.test_top5_visual_assignments[active_slide] = assignment
                         st.session_state.test_top5_visual_previews[active_slide] = bytes(preview_bytes or selected_bytes)
-                            st.session_state.test_top5_visual_handoff = None
+                        st.session_state.test_top5_visual_handoff = None
                         st.session_state.test_top5_rendered_video_path = None
                         st.session_state.test_top5_visual_card_results.pop(active_slide, None)
                         return True
