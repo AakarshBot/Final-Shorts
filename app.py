@@ -6045,8 +6045,9 @@ elif st.session_state.app_mode == "test":
                     bx, by, bw, bh = [int(value) for value in saved_box]
                     default_coords = (bx, bx + bw, by, by + bh)
 
+                marker_image = _top5_fit_preview(current_image, 1080, 1920)
                 marker = st_cropper(
-                    current_image,
+                    marker_image or current_image,
                     realtime_update=True,
                     default_coords=default_coords,
                     aspect_ratio=None,
@@ -6750,8 +6751,9 @@ elif st.session_state.app_mode == "test":
                                             default_coords = (bx, bx + bw, by, by + bh)
 
                                         from streamlit_cropper import st_cropper
+                                        marker_image = _top5_fit_preview(working_bytes, 1080, 1920)
                                         marker = st_cropper(
-                                            working_image,
+                                            marker_image or working_image,
                                             realtime_update=True,
                                             default_coords=default_coords,
                                             aspect_ratio=None,
