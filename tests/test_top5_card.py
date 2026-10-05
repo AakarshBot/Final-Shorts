@@ -86,13 +86,14 @@ def test_top5_headline_size_adapts_to_copy():
         1,
     )
     long = renderer._top5_editorial_layout(
-        "India reshuffles the squad after a late selection change before the next international series",
+        "India reshuffles the squad after a late selection change before the series",
         "",
         "english",
         1,
     )
 
     assert short["headline_font"].size >= long["headline_font"].size
+    assert len(long["headline_lines"]) <= 2
     assert short["headline_lines"]
     assert long["headline_lines"]
 
