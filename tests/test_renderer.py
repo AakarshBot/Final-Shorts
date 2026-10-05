@@ -657,14 +657,14 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     assert seen == ["Quote Source"]
 
 
-def test_top5_editorial_uses_oswald_and_dynamically_fills_the_lower_safe_area():
+def test_top5_editorial_uses_oswald_in_the_fixed_text_zone():
     story = renderer._top5_editorial_layout(
-        "Virat Kohli returns for another major cricket test",
+        "Virat Kohli returns for another cricket test",
         "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next match.",
         "english",
         1,
     )
-    short = renderer._top5_editorial_layout(
+    opener = renderer._top5_editorial_layout(
         "Today's top five cricket stories",
         "",
         "english",
@@ -673,38 +673,36 @@ def test_top5_editorial_uses_oswald_and_dynamically_fills_the_lower_safe_area():
 
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
     assert font_path.exists()
-    assert story["x"] == renderer.TOP5_EDITORIAL_MARGIN_X == 56
-    assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == renderer.WIDTH - 112
+    assert story["x"] == renderer.TOP5_EDITORIAL_MARGIN_X == 64
+    assert story["width"] == renderer.TOP5_EDITORIAL_MAX_WIDTH == renderer.WIDTH - 128
     assert story["headline_fonts"][0].getname()[0].lower().startswith("oswald")
-    assert renderer.TOP5_EDITORIAL_SAFE_BOTTOM == 500
-    assert story["y"] >= renderer.TOP5_EDITORIAL_SAFE_TOP == 230
-    assert story["y"] + story["total_height"] == renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
-    assert short["y"] > story["y"]
-    assert short["y"] + short["total_height"] == renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
+    assert story["y"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_TOP == 900
+    assert story["zone_bottom"] == renderer.TOP5_EDITORIAL_TEXT_ZONE_BOTTOM == 1480
+    assert story["y"] + story["total_height"] <= story["zone_bottom"]
+    assert opener["y"] == story["y"]
 
 
-def test_top5_editorial_body_stays_inside_the_shorts_ui_exclusion_zone():
+def test_top5_editorial_body_rejects_copy_below_readable_floor():
     body = " ".join(
         [
             "The board confirmed the move after reviewing the latest result and selection options.",
             "The decision changes the lineup ahead of the next match and follows the latest update from officials.",
         ] * 3
     )
-    layout = renderer._top5_editorial_layout(
-        "Selection picture changes after the latest result",
-        body,
-        "english",
-        1,
-    )
 
-    font = layout["body_font"]
-    assert font is not None
-    assert renderer.TOP5_EDITORIAL_BODY_MIN_SIZE <= font.size <= renderer.TOP5_EDITORIAL_BODY_MAX_SIZE
-    assert layout["y"] >= renderer.TOP5_EDITORIAL_SAFE_TOP
-    assert layout["y"] + layout["total_height"] <= renderer.HEIGHT - renderer.TOP5_EDITORIAL_SAFE_BOTTOM
+    with pytest.raises(ValueError) as error:
+        renderer._top5_editorial_layout(
+            "Selection picture changes after the latest result",
+            body,
+            "english",
+            1,
+        )
+
+    assert error.value.top5_max_words > 0
+    assert error.value.top5_max_words < len(body.split())
 
 
-def test_top5_editorial_uses_fade_v2_letter_mask(monkeypatch):
+def test_top5_editorial_uses_local_text_treatments(monkeypatch):
     calls = []
     original_blur = renderer.ImageFilter.GaussianBlur
 
@@ -715,15 +713,16 @@ def test_top5_editorial_uses_fade_v2_letter_mask(monkeypatch):
     monkeypatch.setattr(renderer.ImageFilter, "GaussianBlur", spy_blur)
     preview = renderer.build_top5_card_preview(
         Image.new("RGB", (1080, 1920), (28, 42, 64)),
-        "Big cricket result changes the selection picture",
-        "The board confirmed the move after reviewing the latest result. The decision changes the lineup for the next match.",
+        "Big cricket result changes",
+        "The board confirmed the move after reviewing the latest result.",
         story_number=1,
     )
 
     assert preview
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR == 5
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_BLUR in calls
-    assert renderer.TOP5_EDITORIAL_TEXT_FADE_ALPHA == 120
+    assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_BLUR in calls
+    assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_BLUR in calls
+    assert renderer.TOP5_EDITORIAL_LOCAL_SCRIM_ALPHA > 100
+    assert renderer.TOP5_EDITORIAL_TEXT_SHADOW_ALPHA > 150
 
 
 def test_top5_card_preview_renders_the_shared_editorial_treatment():
