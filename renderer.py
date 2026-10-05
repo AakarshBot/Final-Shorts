@@ -73,7 +73,7 @@ TOP5_EDITORIAL_BODY_SHADOW_BLUR = 3
 TOP5_EDITORIAL_BODY_SHADOW_ALPHA = 105
 TOP5_SUBJECT_SEGMENTATION_MODEL = os.getenv(
     "TOP5_SUBJECT_SEGMENTATION_MODEL",
-    "facebook/detr-resnet-50-panoptic",
+    "facebook/mask2former-swin-large-coco-panoptic",
 )
 
 
@@ -785,7 +785,7 @@ def _top5_subject_mask(image_bytes: bytes, model_name: str) -> Image.Image | Non
             image = source.convert("RGB")
 
         client = InferenceClient(
-            provider="auto",
+            provider="hf-inference",
             api_key=token,
         )
         segments = client.image_segmentation(
