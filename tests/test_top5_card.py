@@ -1,7 +1,7 @@
 from io import BytesIO
 
 import pytest
-from PIL import Image
+from PIL import Image, ImageDraw
 
 import renderer
 
@@ -78,6 +78,34 @@ def test_top5_opener_uses_dynamic_safe_area():
 
     assert renderer.TOP5_EDITORIAL_SAFE_TOP <= layout["y"]
     assert layout["y"] + layout["total_height"] <= renderer.TOP5_EDITORIAL_SAFE_BOTTOM
+
+
+def test_top5_headline_size_tracks_real_negative_space():
+    quiet = Image.new("RGB", (1080, 1920), (28, 30, 34))
+    busy = Image.new("RGB", (1080, 1920), (28, 30, 34))
+    draw = ImageDraw.Draw(busy)
+    for y in range(0, 1920, 20):
+        for x in range(0, 1080, 20):
+            value = 238 if ((x // 20) + (y // 20)) % 2 else 18
+            draw.rectangle((x, y, x + 19, y + 19), fill=(value, value, value))
+
+    quiet_layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "",
+        "english",
+        1,
+        image=quiet,
+    )
+    busy_layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "",
+        "english",
+        1,
+        image=busy,
+    )
+
+    assert quiet_layout["headline_size"] > renderer.TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE
+    assert quiet_layout["headline_size"] > busy_layout["headline_size"]
 
 
 def test_top5_headline_size_adapts_to_copy():
