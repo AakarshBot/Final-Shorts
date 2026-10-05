@@ -819,18 +819,21 @@ def test_top5_option7_crosses_two_subjects_and_keeps_gap_visible(monkeypatch):
     assert gap_visible
 
 
-def test_top5_option7_rejects_body_copy():
+def test_top5_option7_ignores_body_copy():
     subject = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(subject).rectangle((390, 570, 690, 1490), fill=255)
 
-    with pytest.raises(ValueError, match="headline only"):
-        renderer._top5_editorial_layout(
-            "India dominate the latest result",
-            "Body should not be part of Subject Cutout.",
-            "english",
-            1,
-            subject_mask=subject,
-        )
+    layout = renderer._top5_editorial_layout(
+        "India dominate the latest result",
+        "Body should not be rendered by Subject Cutout.",
+        "english",
+        1,
+        subject_mask=subject,
+    )
+
+    assert layout["composition_mode"] == "cross-subject"
+    assert layout["body_lines"] == []
+    assert layout["body_font"] is None
 
 
 def test_top5_option7_surfaces_mask_failure(monkeypatch):
