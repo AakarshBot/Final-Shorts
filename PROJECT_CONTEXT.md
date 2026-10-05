@@ -180,20 +180,23 @@ Top-5 extends the visual desk to seven options:
 6. Quote Card.
 7. Subject Cutout.
 
-Top-5 Visual QC is independently testable in Test without requiring Scriptwriter or Audio approval. The standalone Top-5 Visuals screen always exposes all seven options and must not fall through into the six-slide production QC when no Scriptwriter handoff exists.
+Top-5 Visual QC is independently testable in Test without requiring Scriptwriter or Audio approval. The standalone Top-5 Visuals screen always exposes all seven options and does not enter six-slide production QC until a real Top-5 Scriptwriter handoff exists.
 
-The image-selection workflow uses the factory's existing image-pool interaction. Every Top-5 source-image pool supports Crop / Reposition through the shared factory crop dialog and stores the resulting 9:16 framing per asset. The same cropped bytes are used for selection, preview and Subject Cutout analysis.
+Every Top-5 image pool uses the factory's existing Crop / Reposition interaction. The crop is stored per asset, visibly marked as applied, becomes the selected 9:16 framing and is the exact framing passed to Subject Cutout analysis.
 
-Option 7 · Subject Cutout is an optional treatment, not a default applied to every image. It runs local ZhengPeng7/BiRefNet_lite subject segmentation. No hosted inference service is used for this treatment.
+Option 7 · Subject Cutout is optional and user-selected. It uses local ZhengPeng7/BiRefNet_lite through the already-approved PyTorch/Transformers dependency stack. It is not used by ordinary Top-5 cards.
 
-Subject Cutout composition is spatially driven:
-- A subject predominantly on the left or right creates a vertical headline stack in the available opposite-side copy space. The stack remains normally oriented/readable, but dynamically wraps into balanced 2–4 horizontal lines rather than forcing one word per line.
-- A subject occupying the middle creates a large horizontal cross-subject headline. The headline is centered and positioned through the detected subject band so the type visibly passes behind the foreground subject and reappears on the other side where the image supports it.
-- Subject position, available copy space, headline length, font size, vertical position and readable subject overlap are evaluated together. The system is not allowed to use one fixed position or one fixed font size for every photograph.
-- The foreground subject is composited back over the headline only where the segmentation mask and headline intersect. This creates the genuine text-behind-subject depth effect rather than a simulated shadow or transparent-text treatment.
-- When a photograph does not benefit from the effect, Subject Cutout remains optional; normal Top-5 editorial cards continue to use ordinary adaptive copy-space placement.
+Subject Cutout is an image-composition system, not a fixed headline style:
+- First identify usable subject geometry from the foreground mask.
+- When a subject is predominantly at the bottom and there is substantial space above it, the headline stays horizontal and dynamically grows/shrinks to use roughly 80% of that top negative space.
+- When a subject is predominantly on the left or right, the headline uses the opposite negative-space region as a large, normally oriented vertical stack. The words are intelligently grouped across multiple lines; it is never forced into one-word-per-line stacking.
+- When the subject is central, the headline becomes a large horizontal headline crossing the subject. It starts in the left copy space, passes behind the foreground subject and reappears in the right copy space. One line is preferred; a second line is used only when a single line would become too small or unreadable.
+- When two or more subjects are present, the same cross-subject headline passes behind every detected foreground subject. Any readable gap between subjects naturally reveals the type.
+- Headline scale is chosen from the actual usable space and headline length. The renderer deliberately targets roughly 80% space usage rather than reusing the same font size or position across photographs.
+- The foreground image is composited back above the actual headline glyphs only at their intersection with the foreground mask. The depth effect therefore comes from real subject occlusion, not transparency, a fake shadow or a panel.
+- If segmentation is weak or inconclusive, the renderer does not reject the image. It falls back to an ordinary negative-space composition rather than showing a Subject Cutout error.
 
-No extra visual panels, rails, universal gradients, transparent/faded type, headline animation or decorative UI treatments are part of the Subject Cutout design.
+No broad visual panels, rails, universal gradients, transparent/faded type, headline animation or decorative UI treatment is part of this design.
 
 Status: Test implementation / visual refinement in progress.
 
@@ -212,35 +215,33 @@ Status: **Approved.**
 
 ## Renderer — Function 06
 
-Top-5 uses a separate static editorial-card treatment inside the shared renderer.
+Top-5 uses a static 9:16 full-bleed editorial-card treatment inside the shared renderer.
 
 Typography:
-- English headlines use Barlow Condensed Black, ALL CAPS.
-- Normal Top-5 cards dynamically fit a 1–2 line headline inside readable image copy space.
-- Top-5 Subject Cutout overrides the normal 1–2 line layout when the photograph supports a stronger spatial composition:
-  - side subjects use a balanced 2–4 line vertical stack in the opposite copy space;
-  - center subjects use a large horizontal headline that crosses the foreground subject.
-- Font size is chosen from the actual image geometry and headline fit, not kept constant across images.
-- Body text uses Barlow Regular and remains variable-length while fitting the readable visual area.
+- English headlines use bundled Oswald, ALL CAPS.
+- Normal Top-5 cards use adaptive horizontal editorial placement.
+- Subject Cutout dynamically changes headline direction, size, grouping and position from the photograph rather than applying one fixed template.
+- Body text remains variable-length and is used when the selected card treatment needs it; Subject Cutout headline-led compositions normally use no body.
+- Text remains opaque. Readability uses a restrained directional shadow and thin contrast-aware outline.
 
 Subject Cutout:
-- Subject segmentation is local using ZhengPeng7/BiRefNet_lite.
-- The subject mask determines foreground geometry, side-space availability, and the preferred composition mode.
-- Cross-subject layouts seek a meaningful readable crossing through the subject rather than placing the headline in an unrelated empty zone.
-- Side-subject layouts use the available opposite side as intentional copy space, while allowing a small controlled intrusion into the foreground.
-- The foreground subject is drawn over intersecting headline pixels only, preserving ordinary opaque type everywhere else.
-- Subject Cutout is an optional per-slide visual treatment chosen during Visual QC.
+- Local foreground segmentation uses ZhengPeng7/BiRefNet_lite and the existing PyTorch/Transformers dependencies.
+- Subject geometry is evaluated from multiple foreground thresholds so usable players/subjects are not discarded because one threshold is imperfect.
+- Bottom subjects prioritize the top negative-space region and fill roughly 80% of that available copy space with a horizontal headline.
+- Side subjects prioritize the opposite-side negative-space region and use a large balanced vertical headline stack, with smart multi-word grouping rather than one-word lines.
+- Center subjects use a large horizontal headline that intentionally crosses the foreground subject. The complete headline remains readable through the visible type on either side of the subject.
+- Multiple subjects are treated as one foreground field for the crossing headline, allowing the text to disappear behind each subject and remain visible through genuine gaps between them.
+- The foreground mask is composited only where it overlaps headline glyphs, leaving the rest of the opaque headline untouched.
+- Weak segmentation falls back to negative-space typography instead of failing the Visuals stage.
 
-Readability and styling:
-- Type remains opaque.
-- Readability uses a restrained directional shadow and thin contrast-aware outline.
-- There is no transparent/faded text, broad scrim, universal panel, permanent border, decorative dots/lines or headline motion.
+Standard treatment:
+- No transparent/faded type, broad scrim, universal panel, permanent border, decorative dots/lines or headline motion.
 - Logo is the real local logo.png, top-right.
 - Source label is plain text, bottom-right.
 
 Crop:
-- Top-5 image pools use the same Crop / Reposition control as the rest of the factory.
-- The user's chosen crop becomes the selected slide framing and is the framing analyzed by Subject Cutout.
+- Top-5 uses the same factory 9:16 Crop / Reposition component as the other image pools.
+- The chosen crop is the actual image used for preview, selection, rendering and Subject Cutout analysis.
 
 Status: Top-5 Subject Cutout test implementation / visual refinement in progress.
 
@@ -356,8 +357,8 @@ Current audit state:
 - Test and Live still have distinct orchestration because Test is the proving ground and Live is the automated production lane.
 - Test and Live Top-5 visuals consume the same approved image and assignment contracts.
 - Top-5 visual attachments use one direct assignment path for Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card, Quote Card and the Test-only Subject Cutout treatment.
-- The Top-5 renderer uses the full-bleed photograph as the primary visual field. Normal cards use dynamic copy-space scoring; Subject Cutout uses the local foreground mask to reason about subject position before choosing the headline composition.
-- Subject Cutout uses two image-driven compositions: a large vertical headline stack in the strongest opposite-side copy space for side-positioned subjects, or a large horizontal headline crossing a centered subject with controlled overlap.
+- The Top-5 renderer uses the full-bleed photograph as the primary visual field. Normal cards use adaptive copy-space placement; Subject Cutout uses the local foreground mask to choose a bottom/top, side/vertical, center/cross-subject or negative-space fallback composition.
+- Subject Cutout targets roughly 80% use of the available negative space and dynamically changes headline size and line grouping from the actual photograph.
 - Text treatment remains opaque editorial type chosen from the image luminance, with a restrained directional shadow and thin contrasting outline. There is no broad photo wash, full-frame panel or transparent text.
 - Optional Subject Cutout uses ZhengPeng7/BiRefNet_lite locally through the existing PyTorch/Transformers dependencies. The model runs only when the user selects Option 7; normal Top-5 rendering does not invoke it. Foreground extraction is cached per source image, and the normal factory crop is applied before analysis.
 - Body copy is rejected when it cannot fit at the minimum readable size. Renderer exposes the strict maximum word count; Visual QC shows the rejected body as editable copy and offers deterministic local compression to that cap.
@@ -383,7 +384,7 @@ Status: **Architecture cleanup in progress.**
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is approved; the dynamic Barlow editorial typography and optional local Subject Cutout remain in Test until the user approves them**.
+- **Top-5 production framework is approved; the dynamic Oswald editorial typography and optional local Subject Cutout remain in Test until the user approves them**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
