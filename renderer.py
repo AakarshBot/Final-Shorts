@@ -502,9 +502,15 @@ def _top5_headline_layout(
     if not clean_headline:
         raise ValueError("Top-5 card requires a headline.")
 
+    headline_min_size = (
+        TOP5_EDITORIAL_HEADLINE_MIN_SIZE
+        if max_lines <= TOP5_EDITORIAL_HEADLINE_MAX_LINES
+        else 40
+    )
+
     for headline_size in range(
         TOP5_EDITORIAL_HEADLINE_MAX_SIZE,
-        TOP5_EDITORIAL_HEADLINE_MIN_SIZE - 1,
+        headline_min_size - 1,
         -1,
     ):
         headline_fonts = _top5_headline_font_stack(headline_size, language)
