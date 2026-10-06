@@ -190,17 +190,16 @@ def test_live_cricket_text_cutout_loads_and_switches_images():
     ] in option_sets
     assert len([button for button in at.button if button.label == "Crop / reposition"]) == 2
     assert len([button for button in at.button if button.label == "Select image"]) == 2
+    select_buttons = [button for button in at.button if button.label == "Select image"]
+    select_buttons[0].click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["live_text_cutout_image_selection"]["bytes"] == assets[0]["bytes"]
     assert at.session_state["live_text_cutout_polygon_points"] == [
         (120, 700),
         (960, 700),
         (960, 1200),
         (120, 1200),
     ]
-
-    select_buttons = [button for button in at.button if button.label == "Select image"]
-    select_buttons[0].click().run()
-    assert not at.exception, at.exception
-    assert at.session_state["live_text_cutout_image_selection"]["bytes"] == assets[0]["bytes"]
 
     select_buttons = [button for button in at.button if button.label == "Select image"]
     select_buttons[0].click().run()
