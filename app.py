@@ -1228,7 +1228,12 @@ def _render_manual_subject_cutout(
     state_id: str,
     default_headline: str,
 ):
-    from renderer import MANUAL_SUBJECT_FONT_OPTIONS, MANUAL_SUBJECT_STYLE_OPTIONS, build_manual_subject_cutout_preview
+    from renderer import (
+        MANUAL_SUBJECT_FONT_OPTIONS,
+        MANUAL_SUBJECT_STYLE_OPTIONS,
+        build_manual_subject_cutout_layout_previews,
+        build_manual_subject_cutout_preview,
+    )
 
     if not assets:
         st.info("No existing images are available for Manual Subject Cutout.")
@@ -1242,6 +1247,9 @@ def _render_manual_subject_cutout(
         "headline_source": "",
         "polygon_points": None,
         "font_size": 150,
+        "line_breaks": None,
+        "layout_options": None,
+        "layout_signature": None,
         "rendered_config": None,
         "rendered_preview": None,
         "source_key": None,
@@ -1256,10 +1264,15 @@ def _render_manual_subject_cutout(
     size_key = f"{state_id}-font-size"
 
     if state["headline_source"] != default_headline:
-        state["headline_source"] = default_headline
-        state["rendered_config"] = None
-        state["rendered_preview"] = None
-        state["font_size"] = 150
+        state.update(
+            headline_source=default_headline,
+            rendered_config=None,
+            rendered_preview=None,
+            font_size=150,
+            line_breaks=None,
+            layout_options=None,
+            layout_signature=None,
+        )
         st.session_state.pop(headline_key, None)
         st.session_state.pop(size_key, None)
 
@@ -1314,6 +1327,9 @@ def _render_manual_subject_cutout(
                             rendered_config=None,
                             rendered_preview=None,
                             font_size=150,
+                            line_breaks=None,
+                            layout_options=None,
+                            layout_signature=None,
                             source_key=None,
                             source_digest=None,
                             editor_image_digest=None,
@@ -1340,6 +1356,9 @@ def _render_manual_subject_cutout(
             rendered_config=None,
             rendered_preview=None,
             font_size=150,
+            line_breaks=None,
+            layout_options=None,
+            layout_signature=None,
             editor_image_digest=None,
             editor_image_data=None,
         )
@@ -1471,10 +1490,108 @@ def _render_manual_subject_cutout(
     ))
     state["font_size"] = font_size
 
+    layout_signature = hashlib.sha1(
+        repr(
+            (
+                headline,
+                selected_mode,
+                state["font"],
+                state["style"],
+                font_size,
+                tuple(polygon_points),
+                source_digest,
+            )
+        ).encode("utf-8")
+    ).hexdigest()
+
+    current_layouts = (
+        state.get("layout_options")
+        if state.get("layout_signature") == layout_signature
+        else None
+    )
+    selected_line_breaks = (
+        tuple(state.get("line_breaks") or ())
+        if current_layouts
+        else None
+    )
+
+    if st.button(
+        "Preview all valid line-break options",
+        width="stretch",
+        key=f"{state_id}-preview-line-breaks",
+    ):
+        try:
+            with st.spinner("Rendering every valid line-break layout…"):
+                current_layouts = build_manual_subject_cutout_layout_previews(
+                    working_bytes,
+                    headline,
+                    mode=selected_mode,
+                    font_size=font_size,
+                    font=state["font"],
+                    style=state["style"],
+                    text_polygon=tuple(polygon_points),
+                )
+            state["layout_options"] = current_layouts
+            state["layout_signature"] = layout_signature
+            state["line_breaks"] = tuple(current_layouts[0]["line_breaks"]) if current_layouts else None
+            selected_line_breaks = tuple(state["line_breaks"] or ())
+        except (ValueError, OSError, RuntimeError, ImportError) as exc:
+            state["layout_options"] = None
+            state["layout_signature"] = None
+            state["line_breaks"] = None
+            current_layouts = None
+            st.error(str(exc))
+
+    if current_layouts:
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">LINE-BREAK OPTIONS</div>'
+            '<div class="section-title">Choose the exact text layout</div></div>'
+            f'<div class="section-count">{len(current_layouts)} valid combinations</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "Every option keeps the requested font size and uses the polygon as the actual text field. "
+            "More lines are created as needed instead of shrinking the text."
+        )
+        for start in range(0, len(current_layouts), 3):
+            cols = st.columns(min(3, len(current_layouts) - start), gap="medium")
+            for col, option in zip(cols, current_layouts[start:start + 3]):
+                with col:
+                    st.image(option["preview"], width="stretch")
+                    st.markdown(
+                        '<div class="visual-detail">'
+                        + " / ".join(option["lines"])
+                        + "</div>",
+                        unsafe_allow_html=True,
+                    )
+                    selected = tuple(option["line_breaks"]) == tuple(state.get("line_breaks") or ())
+                    if st.button(
+                        "Selected" if selected else "Use this layout",
+                        type="primary" if selected else "secondary",
+                        width="stretch",
+                        key=f"{state_id}-line-break-{option['index']}",
+                    ):
+                        state["line_breaks"] = tuple(option["line_breaks"])
+                        selected_line_breaks = tuple(option["line_breaks"])
+        state["layout_signature"] = layout_signature
+
     st.caption(
         "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
-        "Drag points or the whole polygon; Render Now replaces the rendered frame."
+        "Polygon is the full text field; larger text uses line breaks to fill it, while smaller text may sit centered. "
+        "Render Now replaces the rendered frame."
     )
+
+    if selected_line_breaks:
+        selected_lines = next(
+            (
+                option["lines"]
+                for option in (current_layouts or [])
+                if tuple(option["line_breaks"]) == selected_line_breaks
+            ),
+            (),
+        )
+        if selected_lines:
+            st.caption("Selected layout: " + " / ".join(selected_lines))
 
     if st.button("Render Now", type="primary", width="stretch", key=f"{state_id}-render"):
         try:
@@ -1485,6 +1602,7 @@ def _render_manual_subject_cutout(
                 "font_size": font_size,
                 "font": state["font"],
                 "style": state["style"],
+                "line_breaks": selected_line_breaks or None,
                 "source_key": selected["asset_key"],
                 "source_digest": source_digest,
             }
@@ -1496,6 +1614,7 @@ def _render_manual_subject_cutout(
                 font=state["font"],
                 style=state["style"],
                 text_polygon=config["text_polygon"],
+                line_breaks=config["line_breaks"],
             )
             state["font_size"] = font_size
             state["rendered_config"] = config
@@ -1511,6 +1630,8 @@ def _render_manual_subject_cutout(
             unsafe_allow_html=True,
         )
         st.image(state["rendered_preview"], width=360)
+
+
 def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
     if live:
         specs = [
