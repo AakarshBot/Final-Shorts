@@ -433,7 +433,10 @@ def _profile_relevant(title: str, description: str, profile: str | None) -> bool
             "tennis", "badminton", "squash", "athletics", "swimming", "cycling",
             "golf", "boxing", "wrestling", "hockey", "kabaddi", "volleyball",
             "basketball", "chess", "motorsport", "motogp", "formula 1",
-        )) and not any(\n            re.search(rf"\\b{re.escape(term)}\\b", text)\n            for term in CRICKET_TERMS\n        )
+        )) and not any(
+            re.search(r"(?<!\\w)" + re.escape(term) + r"(?!\\w)", text)
+            for term in CRICKET_TERMS
+        )
     if profile not in {"cricket_india_asia", "cricket_global"}:
         return False
     text = f"{title} {description}".casefold()
