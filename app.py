@@ -1390,7 +1390,8 @@ def _render_manual_subject_cutout(
     except (TypeError, ValueError, IndexError):
         polygon_points = list(default_polygon)
 
-    if len(polygon_points) == 4:
+    migrated_from_four_points = len(polygon_points) == 4
+    if migrated_from_four_points:
         polygon_points = [
             polygon_points[0],
             ((polygon_points[0][0] + polygon_points[1][0]) // 2, (polygon_points[0][1] + polygon_points[1][1]) // 2),
@@ -1448,10 +1449,12 @@ def _render_manual_subject_cutout(
         current_points = getattr(editor, "points", None)
     if current_points:
         try:
-            polygon_points = [
+            normalized_points = [
                 (max(0, min(1080, int(point[0]))), max(0, min(1920, int(point[1]))))
                 for point in current_points
             ]
+            if not (migrated_from_four_points and len(normalized_points) == 4):
+                polygon_points = normalized_points
         except (TypeError, ValueError, IndexError):
             pass
 
@@ -1499,6 +1502,7 @@ def _render_manual_subject_cutout(
             )
             state["font_size"] = font_size
             state["rendered_config"] = config
+            st.rerun(scope="fragment")
         except (ValueError, OSError, RuntimeError, ImportError) as exc:
             state["rendered_preview"] = None
             st.error(str(exc))
