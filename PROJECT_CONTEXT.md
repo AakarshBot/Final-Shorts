@@ -44,7 +44,7 @@ The factory's seven functional stages are **Approved** for the established Deep-
 03. Audio — **Approved**
 04. Visuals — **Approved**
 05. Subtitles — **Approved**
-06. Renderer — **Approved**
+06. Renderer — **Under active v2 rewrite/test**
 07. YouTube Upload — **Approved**
 
 The Dashboard UI/UX remains **WIP**.
@@ -214,33 +214,18 @@ Contract:
 Status: **Approved.**
 
 ## Renderer — Function 06
+Renderer v2 is the current active implementation on branch `renderer-v2`, pending Test approval before promotion to `main`.
 
-Top-5 uses a static 9:16 full-bleed editorial-card treatment in the shared renderer.
-
-Normal Top-5 cards:
-- Use the direct static editorial typography path.
-- No subject detection.
-- No image-busyness/negative-space search.
-- No broad scrim, transparent/faded type, universal gradient, permanent border, decorative dots/lines or headline motion.
-- Logo remains top-right; source label remains bottom-right.
-- English headlines use Oswald.
-
-Option 3 · Manual Fetcher is active in Top-5 Test. It performs manual-query real-image retrieval only and hands the returned image pool to the existing image-selection/crop flow.
-
-Option 8 · Body Card is **WIP**. It is reserved for the text-based Top-5 body visual and has no active renderer yet.
-
-Option 7 · Subject Cutout:
-- Runs local BiRefNet only when explicitly selected.
-- Uses CPU float32 inference with the existing dependency stack.
-- Suppresses all body copy.
-- Uses the actual foreground mask to keep players/subjects above headline pixels.
-- Centered compositions cross the foreground field; side compositions use the opposite-side negative space with two-word-per-line stacks; remaining compositions use the larger top/bottom negative space.
-- Multiple subjects are treated as one foreground field for the crossing headline, while genuine gaps in the mask remain visible.
-- The renderer never silently turns Subject Cutout into Option 3.
-- The same `build_top5_card_preview` / `_draw_top5_editorial_card` contract is used by Test and the eventual Live promotion.
-
-The obsolete Top-5 image-busyness search, multi-stage subject scoring, SciPy connected-component path, body word-cap/rejection helper and FP16 CUDA inference path have been deleted.
-
+- One shared renderer is used by Test and Live; there is no separate Test/Live encoder implementation.
+- Rendering is direct Python/Pillow frame composition into FFmpeg. MoviePy is not used.
+- Final output is 1080 × 1920 progressive H.264 High Profile, 4:2:0, two B-frames, closed GOP, GOP of half the frame rate, constant frame rate, BT.709, Fast Start and quality-controlled CRF 18 encoding, aligned with YouTube's current published upload guidance.
+- Final audio is AAC-LC, stereo, 48 kHz at 192 kbps with final loudness normalization targeting approximately -14 LUFS / -1.5 dBTP.
+- The renderer contains no detector-evasion, metadata-fingerprinting, pixel-perturbation, or other mechanism intended to bypass YouTube systems.
+- Ordinary photographic scenes use deterministic, subtle asset/story-derived push and pan motion instead of one fixed factory animation sequence.
+- Stats Cards, Quote Cards, Top-5 editorial cards and Manual Subject Cutout remain static/composition-led where motion would reduce readability.
+- Channel logo is optional and disabled by default. Source credit remains independently available.
+- Existing headline, subtitle, Top-5, Quote Card, Stats Card and Manual Subject Cutout contracts remain direct renderer features with no wrapper layer.
+- Renderer v2 must be validated in Test before promotion to Live.
 ## YouTube Upload — Function 07
 
 Authentication:
