@@ -72,7 +72,7 @@ def test_top5_standalone_visual_qc_exposes_all_nine_options():
         for pills in at.pills
         if pills.options
     ]
-    eight = next(
+    options = next(
         options
         for options in option_sets
         if options[:8] == [
@@ -87,7 +87,7 @@ def test_top5_standalone_visual_qc_exposes_all_nine_options():
         ]
     )
 
-    assert eight == [
+    assert options == [
         "Option 1 · Automatic Scraper",
         "Option 2 · Manual Scraper",
         "Option 3 · Manual Fetcher",
