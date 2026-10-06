@@ -1377,6 +1377,38 @@ def test_top5_card_preview_renders_the_shared_editorial_treatment():
     assert image.size == (renderer.WIDTH, renderer.HEIGHT)
 
 
+
+def test_mux_audio_loudnorm_is_inside_complex_filtergraph(monkeypatch, tmp_path):
+    silent_video = tmp_path / "silent.mp4"
+    silent_video.write_bytes(b"video")
+    audio = tmp_path / "scene.mp3"
+    audio.write_bytes(b"audio")
+    output = tmp_path / "output.mp4"
+    seen = {}
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        return Result()
+
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+
+    result = renderer._mux_audio(
+        silent_video,
+        [{"scene": 1, "path": str(audio)}],
+        output,
+    )
+
+    assert result == output
+    command = seen["command"]
+    filter_index = command.index("-filter_complex")
+    filter_value = command[filter_index + 1]
+    assert "concat=n=1:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]" in filter_value
+    assert "-af" not in command
+
 def test_final_renderer_quality_contract():
     import inspect
     import renderer
