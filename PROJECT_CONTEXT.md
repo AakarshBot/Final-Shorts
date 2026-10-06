@@ -360,7 +360,7 @@ Image flow:
 State/render behavior:
 - Polygon, headline, font, style and Text Size edits do not regenerate the rendered frame.
 - The editor is one Streamlit fragment. Its widgets and the polygon component rerun only the cutout editor; they must not refresh the full dashboard.
-- Text Size remains feature state separate from the Streamlit widget key. The first render starts at 150px. After the first render, the slider uses 80–260px in 10px increments and the selected value must change the actual rendered text size on the next explicit Render Now.
+- Text Size remains feature state separate from the Streamlit widget key. The first render starts at 150px. After the first render, the slider uses 80–260px in 10px increments and the selected value is the requested rendered font size on the next explicit Render Now. The renderer must never silently shrink the requested size; when the polygon cannot fit that size, it reports that the polygon must be enlarged or the size reduced.
 - Render Now is the explicit generation action. It stores the current headline, mode, polygon, font, style, text size and rendered frame. It must not call a full-app rerun; the fragment interaction itself updates the editor.
 - After Render Now, the same polygon and controls remain available for another edit-and-render pass.
 - The production handoff consumes the rendered frame together with its cutout configuration.
