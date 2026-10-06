@@ -632,7 +632,7 @@ RULES
 - Each angle must be directly supported by the research packet.
 - The angles must be materially different, not three phrasings of the same summary.
 - Prefer angles that create a useful editorial choice: event/result, statement/reaction, consequence/significance, performance/process, controversy, background or another evidence-backed lens.
-- When the research contains a meaningful post-match, post-event or public statement, consider a statement/reaction angle.
+- When the research contains a meaningful post-match, post-event or public statement, one of the three angles must be a statement/reaction angle centered on that evidence.
 - Never invent a quote, motive, consequence, or interpretation that the research does not support.
 - Each title must be concise, about 2–5 words, and immediately communicate the lens.
 - Each description must be one short sentence explaining what the Short would focus on.
