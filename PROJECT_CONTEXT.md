@@ -326,40 +326,53 @@ Status: **Planned / Test framework WIP.**
 
 ### Shared Manual Subject Cutout · Top-5 Option 9 + Cricket Option 7
 
-Top-5 Option 9 · Manual Subject Cutout and Cricket Option 7 · Text Cutout are the same approved visual feature and use one implementation. Top-5 Option 7 · Subject Cutout is experimental and remains completely separate. Top-5 Live remains WIP and does not consume this feature yet.
+Top-5 **Option 9 · Manual Subject Cutout** is the canonical version of the manual subject-cutout experiment. Cricket **Option 7 · Text Cutout** is the same feature. Top-5 **Option 7 · Subject Cutout** is a separate experimental feature and must not be modified as part of this work. Top-5 Live remains WIP and does not consume this feature.
 
-The shared feature is English-only, subtitle-free and headline-driven. It has one editable headline field, defaulted from the approved/script headline only as filler. It supports Negative Space and Behind Subject, the approved Manual Subject Cutout font/style set, and an editable polygon text region on a 1080 × 1920 frame.
+There is exactly one manual subject-cutout implementation:
+- One shared editor in app.py.
+- One shared renderer in renderer.py.
+- Top-5 Test Option 9, Cricket Test Option 7 and Cricket Live Option 7 all call the same implementation.
+- Top-5 Live support is deferred.
 
-The polygon starts as a four-point rectangle. Individual vertices can be dragged, the entire polygon can be dragged rigidly within the frame, and clicking an edge inserts a new point. The polygon is the only text-position/area control; there are no X/Y sliders. Rendering calculates usable text space line by line from the polygon, including sloped/irregular regions, and auto-fits the requested text size without cutoff.
+Feature contract:
+- English-only.
+- No subtitles.
+- One editable headline, defaulted from the approved/script headline only as filler.
+- Two modes: Negative Space and Behind Subject.
+- Same approved Manual Subject Cutout fonts and styles everywhere.
+- 1080 × 1920 output.
+- Editable polygon text area starting as a four-point rectangle.
+- Individual vertices can be dragged.
+- The whole polygon can be dragged rigidly inside the frame.
+- Clicking an edge adds a point.
+- No X/Y position sliders.
+- Text auto-fits the polygon line by line, including irregular/sloped regions, with no cutoff.
+- Negative Space never runs BiRefNet.
+- Behind Subject uses the existing BiRefNet model and restores detected foreground subjects, including multiple subjects and genuine gaps.
 
-Negative Space never runs BiRefNet. Behind Subject runs the existing BiRefNet subject detector and restores the complete foreground mask above the text/effects, including multiple subjects and genuine gaps.
+Image flow:
+- Uses the existing Automatic Scraper, Manual Scraper, Real Image Search and AI Generation image pools.
+- Does not shrink those pools or add a new search path.
+- Uses the existing locked 9:16 Crop / reposition function.
+- An applied crop is reused by the cutout editor and renderer.
+- The interactive editor preview is 360 × 640, so the complete 9:16 frame remains a manageable medium size.
 
-Both Test and Live use the existing visual pools and the existing locked 9:16 Crop / reposition function. A selected crop is reused; the image pool is unchanged and no new search path is introduced.
+State/render behavior:
+- Polygon, headline, font, style and Text Size edits do not regenerate the rendered frame.
+- The editor runs inside a Streamlit fragment, so normal editing interactions do not refresh the full dashboard.
+- Text Size is feature state separate from the Streamlit widget key. The first render starts at 150px. The slider appears after the first render and can be changed on every later render without rewriting its own widget state.
+- Render Now is the explicit generation action. It stores the current headline, mode, polygon, font, style, text size and exact rendered frame, then triggers the full dashboard rerun.
+- After Render Now, the same polygon and controls remain available for another edit-and-render pass.
+- The production handoff consumes the exact rendered frame and its cutout configuration.
+- The cutout frame itself has no logo, source label, permanent headline overlay, subtitles or other overlays.
 
-The editor preview is a medium 360 × 640 interactive component. Polygon, headline, font/style and text-size edits do not regenerate the rendered frame. The editor runs inside a Streamlit fragment, so those interactions update only the feature UI rather than refreshing the full dashboard. Render Now is the only action that replaces the rendered preview and is allowed to trigger the full dashboard rerun. After rendering, the same polygon and controls remain available for another edit-and-render pass.
+Cleanup rule:
+- Keep this feature direct and compact.
+- Delete obsolete rectangle-only/manual-subject duplicate code rather than layering compatibility wrappers.
+- Do not modify Top-5 Option 7 · Subject Cutout.
+- Do not add Top-5 Live support yet.
 
-Text size is stored as feature state separately from the Streamlit widget key. The first render starts at 150px; the Text Size control appears after a render and remains editable on every subsequent render without rewriting the widget's own session-state key.
-
-The rendered Manual Subject Cutout frame is intrinsically overlay-free: no logo, source label, permanent headline overlay, subtitles or other dashboard overlays are added. The exact rendered frame plus its headline, mode, polygon, font and style are what the production handoff consumes.
-
-### Test / Live architecture audit
-
-There is one Manual Subject Cutout UI implementation in app.py and one renderer implementation in renderer.py.
-
-Consumers:
-- Top-5 Test → Option 9 · Manual Subject Cutout uses the shared editor in both standalone playground testing and per-slide visual testing.
-- Cricket Test → Option 7 · Text Cutout uses the same shared editor and renderer.
-- Cricket Live → Option 7 · Text Cutout uses the same shared editor and renderer.
-- Top-5 Live does not expose this feature yet; that handoff remains deferred.
-
-The surrounding orchestration uses separate session-state namespaces and menu labels where required, but there is no duplicate polygon editor, text-fitting engine, font/style implementation or renderer for Test versus Live.
-
-Cleanup rules:
-- Keep the approved feature direct and compact.
-- Delete obsolete duplicate implementations rather than layering wrappers or compatibility pipelines around them.
-- Do not modify Top-5 Option 7 · Subject Cutout as part of this feature.
-- Do not add Top-5 Live support until Top-5 Live is ready.
-
+Status: **Canonical shared implementation in Test for Top-5 Option 9 and Cricket Option 7, and in Live for Cricket Option 7.**
 
 ### Production-line development rule
 
