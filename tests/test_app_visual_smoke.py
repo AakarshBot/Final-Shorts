@@ -188,7 +188,7 @@ def test_cricket_test_exposes_shared_text_cutout():
     }
     at.run()
 
-    assert not at.exception, at.exception
+    assert at.exception is None, at.exception
     assert any(
         [str(option) for option in pills.options]
         == [
