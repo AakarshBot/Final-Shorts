@@ -924,12 +924,6 @@ if "youtube_trend_keyword" not in st.session_state:
     st.session_state.youtube_trend_keyword = ""
 if "youtube_trend_error" not in st.session_state:
     st.session_state.youtube_trend_error = ""
-if "youtube_trend_lane" not in st.session_state:
-    st.session_state.youtube_trend_lane = "Cricket India / Asia"
-if "youtube_trend_geo" not in st.session_state:
-    st.session_state.youtube_trend_geo = "IN"
-if "youtube_trend_profile" not in st.session_state:
-    st.session_state.youtube_trend_profile = "cricket_india_asia"
 if "selected_topic" not in st.session_state:
     st.session_state.selected_topic = None
 if "topic_open_tile" not in st.session_state:
