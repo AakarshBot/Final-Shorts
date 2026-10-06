@@ -52,6 +52,7 @@ The Dashboard UI/UX remains **WIP**.
 Production lines:
 1. **Top 5 cricket stories of the day** — **Test-only / WIP**
 2. **On This Day** — **Test-first / WIP**
+3. **YouTube Search Trends** — **Test-only / Approved; Live promotion deferred**
 
 Top-5 is currently Test-only / WIP. **Option 7 · Subject Cutout is experimental and must remain untouched. Option 9 · Manual Subject Cutout is the canonical manual subject cutout feature in Top-5 Test.** Cricket has the same canonical feature as **Option 7 · Text Cutout** in both Test and Live. Top-5 Live remains WIP and is not being added yet.
 
@@ -365,9 +366,10 @@ Status: **Implementation complete in the shared Test/Live paths. Not yet user-ap
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The next implementation step after this completed cutout work is the main Factory Renderer change.**.
+- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The renderer v2 change is now merged into main.**.
 - **OTD** is **WIP**.
-- All three production lines use the same seven-stage factory framework.
+- **YouTube Search Trends** is **Test-only / Approved; Live promotion deferred**. It is a sports-focused Topic Fetcher source. Selecting **YT Trends** immediately fetches one mixed pool of the top 20 current YouTube search-trend signals; the UI does not segregate the trends by sport, country or market. Selecting one trend then searches the existing news source for articles published on the current calendar day in Asia/Kolkata, and the resulting headline is handed to the existing downstream Scriptwriter path. Any downstream Cricket/Niche classification is internal to the selected trend and is not a dashboard choice.
+- All four production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
 - Build new production lines in **Test** first; Top-5 remains in Test/WIP until its current visual work is accepted. OTD remains Test-first.
 - Do not create a separate stage pipeline, parallel model, duplicate metadata system or duplicate runtime architecture for a new line.
@@ -471,6 +473,23 @@ Cleanup baseline:
 
 Status: **Approved / cleaned / entity tiles implemented / keyword tile implemented.**
 
+
+
+### Function 01B — YouTube Search Trends
+
+Status: **Test implementation approved / merged to main. Live remains untouched.**
+
+- This is a Test-only Topic Fetcher source; it does not create a separate downstream pipeline.
+- Selecting the **YT Trends** dashboard option immediately fetches one unsegregated pool of the top 20 current YouTube search-trend signals.
+- The trend collector uses Google Trends with the YouTube property (gprop=youtube) for top/rising related queries around a small hidden sports-seed set and checks YouTube autocomplete for query wording.
+- The UI does not show Cricket/Niche/India/Global trend categories.
+- The trend board uses normalized evidence ranking rather than claiming exact public YouTube search-volume counts.
+- The user chooses one trend keyword.
+- The selected keyword is searched through the existing Google News path with an explicit current-day date filter and a final publication-date check in Asia/Kolkata. Only articles published today are handed forward.
+- The resulting Topic keeps the normal title, description, source, published_at and real news URL fields.
+- The selected trend carries its downstream Cricket/Niche profile internally so the existing Scriptwriter, Audio, Visuals, Subtitles, Renderer and Upload stages continue through their existing contracts without a second pipeline.
+- No Live UI, Live state or Live topic-fetch path is added.
+- No new Python dependency is introduced.
 
 ### Cricket Pipeline Checkpoint — 6/10
 
