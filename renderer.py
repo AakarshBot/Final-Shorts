@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import hashlib
 from pathlib import Path
 import math
 import shutil
@@ -14,7 +15,7 @@ from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont
 
 WIDTH = 1080
 HEIGHT = 1920
-FPS = 24
+FPS = 30
 
 HEADLINE_SECONDS = 1.35
 HEADLINE_TEXT = "THE GAME JUST CHANGED"
@@ -1277,12 +1278,15 @@ def build_quote_card_preview(
     quote: str,
     attribution: str,
     source_label: str | None = None,
+    logo_enabled: bool = False,
 ) -> bytes:
     frame = _draw_quote_card(_top5_full_frame_image(source_image), {
         "quote": quote,
         "attribution": attribution,
     })
-    _paste_logo(frame)
+    if logo_enabled:
+        if logo_enabled:
+        _paste_logo(frame)
     _paste_top5_source(frame, source_label)
     buffer = BytesIO()
     frame.convert("RGB").save(buffer, format="PNG", optimize=True)
@@ -1310,6 +1314,7 @@ def build_top5_card_preview(
     total_stories: int = 5,
     source_label: str | None = None,
     subject_cutout: bool = False,
+    logo_enabled: bool = False,
 ) -> bytes:
     frame = _draw_top5_editorial_card(
         source_image,
@@ -1422,6 +1427,61 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
         )
 
     base.paste(layer, (0, 0), layer)
+
+
+
+def _motion_profile(seed: str) -> tuple[int, float, float, int, int]:
+    digest = hashlib.sha1(str(seed or "visual").encode("utf-8")).digest()
+    return (
+        digest[0] % 5,
+        1.04 + (digest[1] % 5) * 0.006,
+        1.085 + (digest[2] % 5) * 0.006,
+        -1 if digest[3] & 1 else 1,
+        -1 if digest[4] & 1 else 1,
+    )
+
+
+def _animate_visual(
+    image: Image.Image,
+    t: float,
+    duration: float,
+    seed: str,
+) -> Image.Image:
+    if duration <= 0.0:
+        return image.copy()
+
+    mode, start_scale, end_scale, x_direction, y_direction = _motion_profile(seed)
+    progress = min(1.0, max(0.0, float(t) / duration))
+    eased = 0.5 - 0.5 * math.cos(math.pi * progress)
+
+    if mode == 1:
+        scale = end_scale - (end_scale - start_scale) * eased
+    elif mode == 4:
+        scale = start_scale + (end_scale - start_scale) * eased * 0.65
+    else:
+        scale = start_scale + (end_scale - start_scale) * eased
+
+    if mode == 0:
+        x_progress, y_progress = eased * x_direction, 0.0
+    elif mode == 1:
+        x_progress, y_progress = 0.0, eased * y_direction
+    elif mode == 2:
+        x_progress, y_progress = eased * x_direction, eased * y_direction
+    elif mode == 3:
+        x_progress, y_progress = (eased - 0.5) * 2.0 * x_direction, 0.0
+    else:
+        x_progress, y_progress = eased * 0.5 * x_direction, (eased - 0.5) * y_direction
+
+    scaled_width = max(WIDTH, int(round(WIDTH * scale)))
+    scaled_height = max(HEIGHT, int(round(HEIGHT * scale)))
+    scaled = image.resize((scaled_width, scaled_height), Image.Resampling.BICUBIC)
+    max_x, max_y = scaled_width - WIDTH, scaled_height - HEIGHT
+    x = int(round(max_x / 2.0 + max_x / 2.0 * x_progress))
+    y = int(round(max_y / 2.0 + max_y / 2.0 * y_progress))
+    x = max(0, min(max_x, x))
+    y = max(0, min(max_y, y))
+    return scaled.crop((x, y, x + WIDTH, y + HEIGHT))
+
 
 
 def _cue_at_time(subtitle_data: dict, t: float):
@@ -1645,6 +1705,8 @@ def render_frame(
     top5_card: dict | None = None,
     validate_handoff: bool = True,
     quote_card: dict | None = None,
+    logo_enabled: bool = False,
+    source_enabled: bool = True,
 ) -> Image.Image:
     if subtitle_data is None:
         subtitle_data = {"language": "english", "cues": []}
@@ -1678,11 +1740,13 @@ def render_frame(
         else:
             _draw_subtitles(frame, subtitle_data, t, subtitle_y)
 
-    _paste_logo(frame)
-    if source_label is None:
-        _paste_source(frame)
-    else:
-        _paste_source(frame, source_label)
+    if logo_enabled:
+        _paste_logo(frame)
+    if source_enabled:
+        if source_label is None:
+            _paste_source(frame)
+        else:
+            _paste_source(frame, source_label)
     return frame.convert("RGB")
 
 
@@ -1690,57 +1754,35 @@ def _ffmpeg_available() -> bool:
     return shutil.which("ffmpeg") is not None
 
 
+
 def write_preview_video(frames, path: Path) -> Path:
     if not _ffmpeg_available():
-        raise RuntimeError("ffmpeg is required to create renderer previews.")
+        raise RuntimeError("ffmpeg is required to create renderer videos.")
 
     path.parent.mkdir(parents=True, exist_ok=True)
     process = subprocess.Popen(
         [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
-            "-f",
-            "rawvideo",
-            "-pix_fmt",
-            "rgb24",
-            "-s",
-            f"{WIDTH}x{HEIGHT}",
-            "-r",
-            str(FPS),
-            "-i",
-            "-",
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
+            "-f", "rawvideo", "-pix_fmt", "rgb24",
+            "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS), "-i", "-",
             "-an",
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-crf",
-            "20",
-            "-profile:v",
-            "high",
-            "-level:v",
-            "4.2",
-            "-bf",
-            "2",
-            "-g",
-            str(FPS * 2),
-            "-pix_fmt",
-            "yuv420p",
-            "-color_primaries",
-            "bt709",
-            "-color_trc",
-            "bt709",
-            "-colorspace",
-            "bt709",
-            "-movflags",
-            "+faststart",
+            "-c:v", "libx264",
+            "-preset", "fast",
+            "-crf", "18",
+            "-profile:v", "high",
+            "-bf", "2",
+            "-g", str(max(1, FPS // 2)),
+            "-keyint_min", str(max(1, FPS // 2)),
+            "-flags", "+cgop",
+            "-pix_fmt", "yuv420p",
+            "-color_primaries", "bt709",
+            "-color_trc", "bt709",
+            "-colorspace", "bt709",
+            "-movflags", "+faststart",
+            "-fps_mode", "cfr",
             str(path),
         ],
-        stdin=subprocess.PIPE,
-        stderr=subprocess.PIPE,
+        stdin=subprocess.PIPE, stderr=subprocess.PIPE,
     )
     assert process.stdin is not None
 
@@ -1748,22 +1790,23 @@ def write_preview_video(frames, path: Path) -> Path:
         wrote_frame = False
         for frame in frames:
             wrote_frame = True
-            process.stdin.write(frame.tobytes())
+            if frame.size != (WIDTH, HEIGHT):
+                frame = frame.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
+            process.stdin.write(frame.convert("RGB").tobytes())
         if not wrote_frame:
             process.stdin.close()
             process.kill()
-            raise ValueError("No preview frames were provided.")
+            raise ValueError("No frames were provided.")
         process.stdin.close()
     except BrokenPipeError as exc:
         process.kill()
-        raise RuntimeError("ffmpeg stopped while creating the preview.") from exc
+        raise RuntimeError("ffmpeg stopped while creating the video.") from exc
 
     stderr = process.stderr.read().decode("utf-8", "replace") if process.stderr else ""
     code = process.wait()
     if code != 0:
-        raise RuntimeError(stderr.strip() or "ffmpeg failed to create the preview.")
+        raise RuntimeError(stderr.strip() or "ffmpeg failed to create the video.")
     return path
-
 
 def _fit_visual_to_frame(value: bytes | bytearray | Image.Image) -> Image.Image:
     if isinstance(value, Image.Image):
@@ -1791,6 +1834,7 @@ def _fit_visual_to_frame(value: bytes | bytearray | Image.Image) -> Image.Image:
     return image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
 
 
+
 def _mux_audio(
     silent_video: Path,
     audio_scenes: list[dict],
@@ -1802,53 +1846,28 @@ def _mux_audio(
     for index, scene in enumerate(audio_scenes, 1):
         audio_path = Path(str(scene.get("path") or ""))
         if not audio_path.is_file() or audio_path.stat().st_size <= 0:
-            raise ValueError(
-                f"Audio file for scene {scene.get('scene') or index} is missing."
-            )
+            raise ValueError(f"Audio file for scene {scene.get('scene') or index} is missing.")
         inputs.extend(["-i", str(audio_path)])
         filter_inputs.append(f"[{index}:a]")
 
-    filter_complex = (
-        "".join(filter_inputs)
-        + f"concat=n={len(audio_scenes)}:v=0:a=1[a]"
-    )
+    filter_complex = "".join(filter_inputs) + f"concat=n={len(audio_scenes)}:v=0:a=1[a]"
 
     process = subprocess.run(
         [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-y",
+            "ffmpeg", "-hide_banner", "-loglevel", "error", "-y",
             *inputs,
-            "-filter_complex",
-            filter_complex,
-            "-map",
-            "0:v:0",
-            "-map",
-            "[a]",
-            "-c:v",
-            "copy",
-            "-c:a",
-            "aac",
-            "-b:a",
-            "192k",
-            "-ar",
-            "48000",
-            "-ac",
-            "2",
-            "-shortest",
-            str(output_path),
+            "-filter_complex", filter_complex,
+            "-map", "0:v:0", "-map", "[a]",
+            "-c:v", "copy",
+            "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
+            "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
+            "-movflags", "+faststart", "-shortest", str(output_path),
         ],
-        capture_output=True,
-        text=True,
+        capture_output=True, text=True,
     )
     if process.returncode != 0:
-        raise RuntimeError(
-            process.stderr.strip() or "ffmpeg failed to attach the audio."
-        )
+        raise RuntimeError(process.stderr.strip() or "ffmpeg failed to attach the audio.")
     return output_path
-
 
 def render_production_video(
     approved_script: dict,
@@ -1859,6 +1878,8 @@ def render_production_video(
     headline_text: str | None = None,
     headline_enabled: bool = True,
     source_label: str | None = None,
+    logo_enabled: bool = False,
+    source_enabled: bool = True,
 ) -> Path:
     """Render an approved Cricket or Top-5 production handoff."""
     if (
@@ -1923,7 +1944,6 @@ def render_production_video(
                 static_frame = _draw_manual_subject_cutout(image, manual_subject_cutout).convert("RGB")
         elif isinstance(top5_card, dict):
             static_frame = _draw_top5_editorial_card(image, top5_card)
-            _paste_logo(static_frame)
             _paste_source(
                 static_frame,
                 str(visual.get("source") or source_label or "Commons").strip() or "Commons",
@@ -1931,7 +1951,6 @@ def render_production_video(
             static_frame = static_frame.convert("RGB")
         elif isinstance(quote_card, dict):
             static_frame = _draw_quote_card(image, quote_card)
-            _paste_logo(static_frame)
             quote_source_label = str(
                 quote_card.get("source_label")
                 or visual.get("source")
@@ -1968,37 +1987,67 @@ def render_production_video(
     output.parent.mkdir(parents=True, exist_ok=True)
     silent_video = output.with_name(f"{output.stem}.silent.mp4")
 
+
     def frames():
         frame_count = max(1, int(math.ceil(total_duration * FPS)))
         elapsed = 0.0
         scene_index = 0
         for frame_index in range(frame_count):
             t = frame_index / FPS
-            while (
-                scene_index < len(durations) - 1
-                and t >= elapsed + durations[scene_index]
-            ):
+            while scene_index < len(durations) - 1 and t >= elapsed + durations[scene_index]:
                 elapsed += durations[scene_index]
                 scene_index += 1
+
             visual = prepared_visuals[scene_index]
+            scene_time = max(0.0, t - elapsed)
+            scene_duration = durations[scene_index]
             subtitle_y = None
+
             if visual["is_stats_card"]:
                 image_height = visual["image_height"] or 860
                 subtitle_y = max(64, image_height - 96)
+
             if visual.get("static_frame") is not None:
                 yield visual["static_frame"]
-            else:
-                yield render_frame(
-                    visual["image"],
-                    t,
-                    subtitle_data,
-                    headline_text or HEADLINE_TEXT,
-                    headline_enabled,
-                    source_label,
-                    subtitle_y,
-                    None,
-                    False,
+                continue
+
+            base_image = visual["image"]
+            if not (
+                visual["is_stats_card"]
+                or visual.get("is_top5_card")
+                or visual.get("is_quote_card")
+                or visual.get("manual_subject_cutout")
+            ):
+                visual_seed = "|".join(
+                    str(visual.get(key) or "")
+                    for key in (
+                        "primary_entity",
+                        "visual_intent",
+                        "specific_search_prompt",
+                        "sport_or_topic_category",
+                        "source",
+                    )
+                ).strip("|")
+                if not visual_seed:
+                    visual_seed = hashlib.sha1(base_image.tobytes()).hexdigest()
+                base_image = _animate_visual(
+                    base_image, scene_time, scene_duration, visual_seed
                 )
+
+            yield render_frame(
+                base_image,
+                t,
+                subtitle_data,
+                headline_text or HEADLINE_TEXT,
+                headline_enabled,
+                source_label,
+                subtitle_y,
+                None,
+                False,
+                None,
+                logo_enabled=logo_enabled,
+                source_enabled=source_enabled,
+            )
 
     try:
         write_preview_video(frames(), silent_video)
