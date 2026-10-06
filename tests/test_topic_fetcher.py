@@ -1,4 +1,5 @@
 from dataclasses import replace
+import json
 from datetime import datetime, timedelta, timezone
 
 import topic_fetcher
@@ -382,3 +383,98 @@ def test_top5_fetcher_more_excludes_existing(monkeypatch):
     )
     assert result
     assert all(item.url != existing[0].url for item in result)
+
+
+def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch):
+    calls = []
+
+    class Response:
+        def __init__(self, text="", payload=None):
+            self.text = text
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    explore = {
+        "widgets": [{
+            "id": "RELATED_QUERIES_0",
+            "request": {"restriction": {"complexKeywordsRestriction": {"keyword": [{"value": "cricket"}]}}},
+            "token": "token",
+        }]
+    }
+    related = {
+        "default": {
+            "rankedList": [
+                {"rankedKeyword": [{"query": "India cricket", "value": 100}]},
+                {"rankedKeyword": [{"query": "India cricket today", "value": "Breakout"}]},
+            ]
+        }
+    }
+
+    def fake_post(url, **kwargs):
+        calls.append(("post", url, kwargs["params"]))
+        return Response(text=")]}'," + json.dumps(explore))
+
+    def fake_get(url, **kwargs):
+        calls.append(("get", url, kwargs.get("params") or {}))
+        if "relatedsearches" in url:
+            return Response(text=")]}'," + json.dumps(related))
+        return Response(payload=["", [["India cricket today", 0], ["cricket", 0]]])
+
+    monkeypatch.setattr(topic_fetcher.requests, "post", fake_post)
+    monkeypatch.setattr(topic_fetcher.requests, "get", fake_get)
+    rows = topic_fetcher._youtube_trend_queries("cricket", "IN")
+
+    assert any(
+        '"property": "youtube"' in params["req"]
+        for method, _, params in calls if method == "post"
+    )
+    assert rows[1]["autocomplete"] is True
+    assert any(row["breakout"] for row in rows)
+
+
+def test_fetch_youtube_search_trends_returns_ranked_keywords(monkeypatch):
+    def fake_queries(seed, geo):
+        return [
+            {
+                "keyword": "India cricket today",
+                "signal": "Rising",
+                "value": 100,
+                "breakout": False,
+                "seed": seed,
+                "autocomplete": True,
+            },
+            {
+                "keyword": "India cricket",
+                "signal": "Top",
+                "value": 80,
+                "breakout": False,
+                "seed": seed,
+                "autocomplete": False,
+            },
+        ]
+
+    monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
+    result = topic_fetcher.fetch_youtube_search_trends("cricket_india_asia", "IN", 10)
+    assert [item["keyword"] for item in result] == ["India cricket today", "India cricket"]
+    assert result[0]["hashtag"] == "#Indiacrickettoday"
+
+
+def test_fetch_youtube_trend_topics_passes_selected_market(monkeypatch):
+    rows = [
+        make_topic("Virat Kohli returns to India cricket", description="Cricket news", url="https://example.com/1"),
+        make_topic("Babar Azam reacts to selection", description="Cricket news", url="https://example.com/2"),
+    ]
+    captured = []
+
+    def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
+        captured.append((query, geo))
+        return rows
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    result = topic_fetcher.fetch_youtube_trend_topics(
+        "Virat Kohli", "cricket_india_asia", "IN", limit=2
+    )
+    assert len(result) == 2
+    assert all(geo == "IN" for _, geo in captured)
