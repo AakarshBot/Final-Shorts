@@ -855,6 +855,10 @@ if "test_top5_visual_card_results" not in st.session_state:
     st.session_state.test_top5_visual_card_results = {}
 if "test_top5_manual_subject_cutouts" not in st.session_state:
     st.session_state.test_top5_manual_subject_cutouts = {}
+if "manual_subject_cutout" not in st.session_state:
+    st.session_state.manual_subject_cutout = {}
+if "test_top5_manual_subject_playground" not in st.session_state:
+    st.session_state.test_top5_manual_subject_playground = {}
 if "test_top5_rendered_video_path" not in st.session_state:
     st.session_state.test_top5_rendered_video_path = None
 if "test_top5_upload_qc_approved" not in st.session_state:
@@ -5042,13 +5046,18 @@ def _render_manual_ai_images():
 
 def render_visuals():
     st.header("04 · Visuals")
+    cricket_test = st.session_state.get("topic_desk_profile") in {"cricket_india_asia", "cricket_global"}
+    visual_options = CRICKET_TEST_VISUAL_OPTIONS if cricket_test else VISUAL_OPTIONS
+    selected_option = st.session_state.get("visual_test_mode")
+    if selected_option not in visual_options:
+        selected_option = visual_options[0]
     mode = st.pills(
         "Visual test",
-        VISUAL_OPTIONS,
-        default=VISUAL_OPTIONS[0],
+        visual_options,
+        default=selected_option,
         key="visual_test_mode",
         label_visibility="collapsed",
-    ) or VISUAL_OPTIONS[0]
+    ) or visual_options[0]
 
     script = st.session_state.get("approved_script") or st.session_state.get("script_data")
     slide_count = len(script.get("script") or []) if isinstance(script, dict) else 4
@@ -5064,8 +5073,64 @@ def render_visuals():
         _render_manual_ai_images()
     elif mode.startswith("Option 5"):
         _render_stats_card(live=False, slide_count=slide_count)
-    else:
+    elif mode.startswith("Option 6"):
         _render_quote_card(live=False, slide_count=slide_count)
+    else:
+        entries = _stats_card_pool_entries(live=False)
+        state = st.session_state.manual_subject_cutout
+        assets = [
+            {
+                "asset_key": asset_key,
+                "bytes": image_bytes,
+                "source": source_name,
+                "label": str(
+                    asset.get("article_title")
+                    or asset.get("model")
+                    or source_name
+                ),
+            }
+            for asset_key, _index, asset, image_bytes, source_name in entries
+        ]
+        _render_manual_subject_cutout(
+            state=state,
+            assets=assets,
+            crop_store=st.session_state.visual_crops,
+            crop_store_name="visual_crops",
+            state_id="test-cricket-manual-subject",
+            default_headline=str((script or {}).get("headline") or ""),
+        )
+        preview = state.get("rendered_preview")
+        config = state.get("rendered_config")
+        selected = next(
+            (asset for asset in assets if asset["asset_key"] == state.get("image_key")),
+            None,
+        )
+        if preview and config and selected:
+            slide = st.selectbox(
+                "Use Text Cutout for slide",
+                list(range(1, slide_count + 1)),
+                key="test-cricket-manual-subject-slide",
+            )
+            if st.button(
+                "Use Text Cutout for this slide",
+                type="primary",
+                width="stretch",
+                key="test-cricket-manual-subject-use",
+            ):
+                working_bytes = st.session_state.visual_crops.get(
+                    selected["asset_key"]
+                ) or selected["bytes"]
+                st.session_state.visual_assignments[slide] = {
+                    "asset_key": f"manual-subject-{hashlib.sha1(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:12]}",
+                    "result_key": "manual-subject",
+                    "source": selected["source"],
+                    "label": "Manual Subject Cutout",
+                    "bytes": bytes(working_bytes),
+                    "preview_bytes": bytes(preview),
+                    "manual_subject_cutout": dict(config),
+                }
+                st.session_state.visuals_approved = False
+                st.rerun()
 
     _render_visual_board(slide_count)
 
@@ -6562,111 +6627,22 @@ elif st.session_state.app_mode == "test":
                             st.error(str(exc))
 
             elif visual_option == "Option 9 · Manual Subject Cutout":
-                from streamlit_cropper import st_cropper
-
-                st.caption(
-                    "English only. Draw a free-size rectangle over the image to show exactly where the headline should sit. "
-                    "Press Render Now. After rendering, the same rectangle returns so you can reposition or resize it; "
-                    "the text-size slider controls only font size."
+                state = st.session_state.test_top5_manual_subject_playground
+                image_buffer = BytesIO()
+                current_image.convert("RGB").save(image_buffer, format="JPEG", quality=92, optimize=True)
+                _render_manual_subject_cutout(
+                    state=state,
+                    assets=[{
+                        "asset_key": "top5-playground-current",
+                        "bytes": image_buffer.getvalue(),
+                        "source": current_source,
+                        "label": "Current test image",
+                    }],
+                    crop_store=st.session_state.test_top5_visual_crops,
+                    crop_store_name="test_top5_visual_crops",
+                    state_id="test-top5-manual-subject-playground",
+                    default_headline=st.session_state.test_top5_visual_playground_headline,
                 )
-                mode = st.pills(
-                    "Composition",
-                    ["Negative Space", "Behind Subject"],
-                    key="test-top5-manual-subject-playground-mode",
-                ) or "Negative Space"
-                selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
-                from renderer import MANUAL_SUBJECT_FONT_OPTIONS, MANUAL_SUBJECT_STYLE_OPTIONS
-
-                font = st.pills(
-                    "Font",
-                    list(MANUAL_SUBJECT_FONT_OPTIONS),
-                    default="Barlow Condensed",
-                    key="test-top5-manual-subject-playground-font",
-                ) or "Barlow Condensed"
-                style = st.pills(
-                    "Text style",
-                    list(MANUAL_SUBJECT_STYLE_OPTIONS),
-                    default="Crisp Outline",
-                    key="test-top5-manual-subject-playground-style",
-                ) or "Crisp Outline"
-
-                rendered_config = st.session_state.get("test-top5-manual-subject-playground-config")
-                if rendered_config and rendered_config.get("mode") != selected_mode:
-                    st.session_state["test-top5-manual-subject-playground-config"] = None
-                    st.session_state.test_top5_visual_playground_render = None
-                    rendered_config = None
-
-                marker_image = _top5_fit_preview(current_image, 1080, 1920)
-                default_coords = None
-                if rendered_config:
-                    bx, by, bw, bh = [int(value) for value in rendered_config["text_box"]]
-                    default_coords = (bx, bx + bw, by, by + bh)
-                    st.caption(
-                        f"Last rendered text area: {bw} × {bh}. "
-                        "Resize or move the rectangle, change the text size, then press Render Now."
-                    )
-
-                marker = st_cropper(
-                    marker_image,
-                    realtime_update=True,
-                    default_coords=default_coords,
-                    aspect_ratio=None,
-                    return_type="box",
-                    box_color="#2f6255",
-                    stroke_width=2,
-                    key=f"test-top5-manual-subject-playground-marker-{selected_mode}",
-                )
-                box = (
-                    int(marker["left"]),
-                    int(marker["top"]),
-                    int(marker["width"]),
-                    int(marker["height"]),
-                )
-
-                if rendered_config:
-                    size_key = "test-top5-manual-subject-playground-font-size"
-                    if size_key not in st.session_state:
-                        st.session_state[size_key] = int(rendered_config.get("font_size", 150))
-                    font_size = st.slider(
-                        "Text size",
-                        min_value=72,
-                        max_value=260,
-                        step=2,
-                        key=size_key,
-                    )
-                else:
-                    font_size = 150
-
-                if st.button(
-                    "Render Now",
-                    type="primary",
-                    width="stretch",
-                    key="test-top5-manual-subject-playground-render",
-                ):
-                    try:
-                        from renderer import build_manual_subject_cutout_preview
-                        rendered_config = {
-                            "headline": st.session_state.test_top5_visual_playground_headline,
-                            "mode": selected_mode,
-                            "text_box": tuple(box),
-                            "font_size": int(font_size),
-                            "font": font,
-                            "style": style,
-                        }
-                        st.session_state["test-top5-manual-subject-playground-config"] = rendered_config
-                        st.session_state.test_top5_visual_playground_render = build_manual_subject_cutout_preview(
-                            current_image,
-                            rendered_config["headline"],
-                            mode=rendered_config["mode"],
-                            text_box=rendered_config["text_box"],
-                            font_size=rendered_config["font_size"],
-                            font=rendered_config["font"],
-                            style=rendered_config["style"],
-                            source_label=current_source,
-                        )
-                    except (ValueError, OSError, RuntimeError, ImportError) as exc:
-                        st.session_state.test_top5_visual_playground_render = None
-                        st.error(str(exc))
 
             elif visual_option == "Option 8 · Body Card · WIP":
                 st.info("Option 8 · Body Card is WIP. No Body Card renderer is active yet.")
@@ -6925,10 +6901,16 @@ elif st.session_state.app_mode == "test":
                                         selected_bytes,
                                         str(card_data.get("headline") or selected_headline),
                                         mode=str(card_data.get("mode") or "negative-space"),
-                                        text_box=tuple(card_data.get("text_box") or (0, 0, 1, 1)),
+                                        text_box=(
+                                            tuple(card_data.get("text_box"))
+                                            if card_data.get("text_box") is not None
+                                            else None
+                                        ),
+                                        text_polygon=card_data.get("text_polygon"),
                                         font_size=int(card_data.get("font_size") or 150),
-                                        x=card_data.get("x"),
-                                        y=card_data.get("y"),
+                                        font=str(card_data.get("font") or "Barlow Condensed"),
+                                        style=str(card_data.get("style") or "Crisp Outline"),
+                                        include_overlays=bool(card_data.get("include_overlays", True)),
                                         source_label=source,
                                     )
                             except (ValueError, OSError, RuntimeError, ImportError) as exc:
@@ -7206,194 +7188,51 @@ elif st.session_state.app_mode == "test":
                             )
 
                     if visual_option == "Option 9 · Manual Subject Cutout":
-                        image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
-                        image_assets = list(image_result.get("assets") or [])
-                        if not image_assets:
-                            st.info(
-                                "Run one of Options 1–4 for this slide first. Manual Subject Cutout reuses the existing image pool and does not run another image search."
-                            )
-                        else:
-                            choices = []
-                            for index, asset in enumerate(image_assets):
-                                asset_key = _visual_asset_key(f"manual-subject-{active_slide}", index, asset)
-                                choices.append((
-                                    index,
-                                    asset,
-                                    asset_key,
-                                    _top5_asset_source(asset),
-                                    _top5_asset_label(asset),
-                                ))
-
-                            state = st.session_state.test_top5_manual_subject_cutouts.setdefault(active_slide, {})
-                            selected_index = min(
-                                max(0, int(state.get("image_index", 0))),
-                                len(choices) - 1,
-                            )
-                            selected_index = st.selectbox(
-                                "Source image",
-                                list(range(len(choices))),
-                                index=selected_index,
-                                key=f"test-top5-manual-subject-image-{active_slide}",
-                                format_func=lambda i: choices[i][4][:90],
-                            )
-                            if int(selected_index) != int(state.get("image_index", 0)):
-                                state.clear()
-                                state["image_index"] = int(selected_index)
+                        manual_state = st.session_state.test_top5_manual_subject_cutouts.setdefault(active_slide, {})
+                        manual_assets = [
+                            {
+                                "asset_key": _visual_asset_key(f"manual-subject-{active_slide}", index, asset),
+                                "bytes": asset.get("bytes"),
+                                "source": _top5_asset_source(asset),
+                                "label": _top5_asset_label(asset),
+                            }
+                            for index, asset in enumerate(image_assets)
+                        ]
+                        _render_manual_subject_cutout(
+                            state=manual_state,
+                            assets=manual_assets,
+                            crop_store=st.session_state.test_top5_visual_crops,
+                            crop_store_name="test_top5_visual_crops",
+                            state_id=f"test-top5-manual-subject-{active_slide}",
+                            default_headline=headline,
+                        )
+                        preview = manual_state.get("rendered_preview")
+                        config = manual_state.get("rendered_config")
+                        selected = next(
+                            (asset for asset in manual_assets if asset["asset_key"] == manual_state.get("image_key")),
+                            None,
+                        )
+                        if preview and config and selected:
+                            working_bytes = st.session_state.test_top5_visual_crops.get(
+                                selected["asset_key"]
+                            ) or selected["bytes"]
+                            if working_bytes and st.button(
+                                f"Use Manual Subject Cutout for slide {active_slide}",
+                                type="primary",
+                                width="stretch",
+                                key=f"test-top5-manual-subject-use-{active_slide}",
+                            ):
+                                _top5_store_assignment(
+                                    {"bytes": bytes(working_bytes), "asset_key": selected["asset_key"]},
+                                    bytes(working_bytes),
+                                    "manual-subject",
+                                    selected["source"],
+                                    selected["label"],
+                                    card_type="manual-subject",
+                                    card_data=config,
+                                    preview_bytes=preview,
+                                )
                                 st.rerun()
-
-                            selected_image = choices[int(selected_index)]
-                            selected_label = selected_image[4]
-                            card_image = selected_image[1].get("bytes")
-                            selected_crop = st.session_state.test_top5_visual_crops.get(selected_image[2])
-                            working_bytes = bytes(selected_crop) if selected_crop else bytes(card_image or b"")
-                            working_image = _asset_to_image(working_bytes)
-
-                            if working_image is None:
-                                st.error("This image could not be decoded.")
-                            else:
-                                crop_col, source_col = st.columns([1, .28], gap="medium")
-                                with crop_col:
-                                    if st.button(
-                                        "Crop / reposition source image",
-                                        width="stretch",
-                                        key=f"test-top5-manual-subject-source-crop-{active_slide}",
-                                    ):
-                                        _crop_visual_dialog(
-                                            selected_image[2],
-                                            bytes(card_image or b""),
-                                            selected_label,
-                                            crop_store="test_top5_visual_crops",
-                                        )
-                                    st.image(_top5_fit_preview(working_bytes), width=330)
-                                with source_col:
-                                    st.caption(f"{_top5_asset_source(selected_image[1])} · {selected_label}")
-
-                                mode = st.pills(
-                                    "Composition mode",
-                                    ["Negative Space", "Behind Subject"],
-                                    default="Negative Space",
-                                    key=f"test-top5-manual-subject-mode-{active_slide}",
-                                ) or "Negative Space"
-                                selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
-                                from renderer import MANUAL_SUBJECT_FONT_OPTIONS, MANUAL_SUBJECT_STYLE_OPTIONS
-
-                                font = st.pills(
-                                    "Font",
-                                    list(MANUAL_SUBJECT_FONT_OPTIONS),
-                                    default="Barlow Condensed",
-                                    key=f"test-top5-manual-subject-font-{active_slide}",
-                                ) or "Barlow Condensed"
-                                style = st.pills(
-                                    "Text style",
-                                    list(MANUAL_SUBJECT_STYLE_OPTIONS),
-                                    default="Crisp Outline",
-                                    key=f"test-top5-manual-subject-style-{active_slide}",
-                                ) or "Crisp Outline"
-
-                                rendered_config = state.get("rendered_config")
-                                if rendered_config and rendered_config.get("mode") != selected_mode:
-                                    state.pop("rendered_config", None)
-                                    state.pop("rendered_preview", None)
-                                    rendered_config = None
-
-                                from streamlit_cropper import st_cropper
-                                default_coords = None
-                                if rendered_config:
-                                    bx, by, bw, bh = [int(value) for value in rendered_config["text_box"]]
-                                    default_coords = (bx, bx + bw, by, by + bh)
-                                    st.caption(
-                                        f"Last rendered text area: {bw} × {bh}. "
-                                        "Resize or move the rectangle, change the text size, then press Render Now."
-                                    )
-                                else:
-                                    st.caption(
-                                        "Draw a free-size rectangle over the image to show exactly where the headline should sit."
-                                    )
-
-                                marker = st_cropper(
-                                    _top5_fit_preview(working_bytes, 1080, 1920),
-                                    realtime_update=True,
-                                    default_coords=default_coords,
-                                    aspect_ratio=None,
-                                    return_type="box",
-                                    box_color="#2f6255",
-                                    stroke_width=2,
-                                    key=f"test-top5-manual-subject-marker-{active_slide}-{selected_mode}",
-                                )
-                                box = (
-                                    int(marker["left"]),
-                                    int(marker["top"]),
-                                    int(marker["width"]),
-                                    int(marker["height"]),
-                                )
-
-                                if rendered_config:
-                                    size_key = f"test-top5-manual-subject-size-{active_slide}"
-                                    if size_key not in st.session_state:
-                                        st.session_state[size_key] = int(rendered_config.get("font_size", 150))
-                                    font_size = st.slider(
-                                        "Text size",
-                                        min_value=72,
-                                        max_value=260,
-                                        step=2,
-                                        key=size_key,
-                                    )
-                                else:
-                                    font_size = 150
-
-                                if st.button(
-                                    "Render Now",
-                                    type="primary",
-                                    width="stretch",
-                                    key=f"test-top5-manual-subject-render-{active_slide}",
-                                ):
-                                    try:
-                                        rendered_config = {
-                                            "headline": headline,
-                                            "mode": selected_mode,
-                                            "text_box": tuple(box),
-                                            "font_size": int(font_size),
-                                            "font": font,
-                                            "style": style,
-                                        }
-                                        preview = build_manual_subject_cutout_preview(
-                                            working_image,
-                                            headline,
-                                            mode=rendered_config["mode"],
-                                            text_box=rendered_config["text_box"],
-                                            font_size=rendered_config["font_size"],
-                                            font=rendered_config["font"],
-                                            style=rendered_config["style"],
-                                            source_label=_top5_asset_source(selected_image[1]),
-                                        )
-                                        state["image_index"] = int(selected_index)
-                                        state["rendered_config"] = rendered_config
-                                        state["rendered_preview"] = preview
-                                    except (ValueError, OSError, RuntimeError, ImportError) as exc:
-                                        st.error(str(exc))
-
-                                rendered_config = state.get("rendered_config")
-                                preview = state.get("rendered_preview")
-                                if rendered_config and preview:
-                                    st.markdown('<div class="mini-label">RENDERED MANUAL CUTOUT</div>', unsafe_allow_html=True)
-                                    st.image(preview, width=420)
-                                    if st.button(
-                                        f"Use Manual Subject Cutout for slide {active_slide}",
-                                        type="primary",
-                                        width="stretch",
-                                        key=f"test-top5-manual-subject-use-{active_slide}",
-                                    ):
-                                        _top5_store_assignment(
-                                            selected_image[1],
-                                            working_bytes,
-                                            "manual-subject",
-                                            _top5_asset_source(selected_image[1]),
-                                            selected_label,
-                                            card_type="manual-subject",
-                                            card_data=rendered_config,
-                                            preview_bytes=preview,
-                                        )
-                                        st.rerun()
 
                     if visual_option in {"Option 5 · Stats Card", "Option 6 · Quote Card"}:
                         image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
