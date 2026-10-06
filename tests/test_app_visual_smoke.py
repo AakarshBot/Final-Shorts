@@ -1,5 +1,8 @@
 from io import BytesIO
 from pathlib import Path
+from datetime import datetime, timezone
+
+from topic_fetcher import Topic
 
 from PIL import Image
 from streamlit.testing.v1 import AppTest
@@ -129,7 +132,13 @@ def test_live_cricket_text_cutout_loads_and_switches_images():
     at.session_state["live_desk"] = "cricket"
     at.session_state["live_cricket_profile"] = "cricket_india_asia"
     at.session_state["live_topics_profile"] = "cricket_india_asia"
-    at.session_state["live_topics"] = [{"title": "Test story"}]
+    at.session_state["live_topics"] = [Topic(
+        title="Test story",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/test-story",
+    )]
+    at.session_state["live_selected_topic"] = 0
     at.session_state["live_stage"] = "04 · Visuals + Render"
     at.session_state["live_approved_script"] = {
         "headline": "Test headline",
@@ -206,7 +215,13 @@ def test_live_text_cutout_prefers_the_existing_9x16_crop():
     at.session_state["live_desk"] = "cricket"
     at.session_state["live_cricket_profile"] = "cricket_india_asia"
     at.session_state["live_topics_profile"] = "cricket_india_asia"
-    at.session_state["live_topics"] = [{"title": "Test story"}]
+    at.session_state["live_topics"] = [Topic(
+        title="Test story",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/test-story",
+    )]
+    at.session_state["live_selected_topic"] = 0
     at.session_state["live_stage"] = "04 · Visuals + Render"
     at.session_state["live_approved_script"] = {
         "headline": "Test headline",
