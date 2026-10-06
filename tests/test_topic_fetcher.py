@@ -462,6 +462,43 @@ def test_fetch_youtube_search_trends_returns_news_backed_story_pool(monkeypatch)
     assert result[0]["profile"] == "cricket_india_asia"
     assert result[0]["hashtag"] == "#indiacricket"
     assert result[0]["news_count"] == 1
+    assert [topic.title for topic in result[0]["topics"]] == ["India announce new cricket squad"]
+
+
+def test_youtube_trends_use_broad_trend_query_for_news_matching(monkeypatch):
+    def fake_queries(seed):
+        if seed == "tennis":
+            return [{
+                "keyword": "tennis player disqualified",
+                "signal": "Rising",
+                "rank": 1,
+                "breakout": False,
+                "seed": seed,
+                "autocomplete": True,
+            }]
+        return []
+
+    monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
+    captured = []
+
+    def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
+        captured.append(query)
+        return [
+            make_topic(
+                "Player disqualified after tennis tournament incident",
+                source="ATP",
+                description="Tennis disciplinary decision",
+            )
+        ]
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    result = topic_fetcher.fetch_youtube_search_trends(20)
+
+    assert result
+    assert result[0]["keyword"] == "tennis player disqualified"
+    assert "tennis player disqualified" in captured[0].lower()
+    assert result[0]["topics"][0].title.startswith("Player disqualified")
+    assert result[0]["top_news_title"] == result[0]["topics"][0].title
 
 
 def test_youtube_trends_reject_generic_queries_and_validate_real_story_signals(monkeypatch):
