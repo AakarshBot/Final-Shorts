@@ -359,11 +359,11 @@ Image flow:
 
 State/render behavior:
 - Polygon, headline, font, style and Text Size edits do not regenerate the rendered frame.
-- The editor runs inside a Streamlit fragment, so polygon, headline and size edits refresh only this editor. The full dashboard reruns only when Render Now is pressed.
-- Text Size is feature state separate from the Streamlit widget key. The first render starts at 150px. After the first render, the slider uses 80–260px in 10px increments so each step is materially visible and can be changed on every later render without rewriting its own widget state.
-- Render Now is the explicit generation action. It stores the current headline, mode, polygon, font, style, text size and exact rendered frame, then triggers the full dashboard rerun.
+- The editor is one Streamlit fragment. Its widgets and the polygon component rerun only the cutout editor; they must not refresh the full dashboard.
+- Text Size remains feature state separate from the Streamlit widget key. The first render starts at 150px. After the first render, the slider uses 80–260px in 10px increments and the selected value must change the actual rendered text size on the next explicit Render Now.
+- Render Now is the explicit generation action. It stores the current headline, mode, polygon, font, style, text size and rendered frame. It must not call a full-app rerun; the fragment interaction itself updates the editor.
 - After Render Now, the same polygon and controls remain available for another edit-and-render pass.
-- The production handoff consumes the exact rendered frame and its cutout configuration.
+- The production handoff consumes the rendered frame together with its cutout configuration.
 - The cutout frame itself has no logo, source label, permanent headline overlay, subtitles or other overlays.
 
 Cleanup rule:
@@ -542,14 +542,13 @@ There is no separate hook-scoring layer, retention-scoring layer, metadata stage
 Status: **Approved / cleaned.**
 
 ### Cricket + Top-5 runtime audit checkpoint
-- Startup: `app.py` now loads the project `.env` explicitly instead of performing a directory search on every Streamlit rerun.
-- Test Scriptwriter widget state is scoped to the selected story; stale headline/narration widget state is cleared on regeneration.
-- Topic Fetcher hot pure-string/entity normalization functions use bounded LRU caches to reduce repeated tokenization, URL canonicalization and entity parsing during ranking/clustering.
-- Cricket Scriptwriter fetches its up-to-two related reports concurrently after the selected story is researched.
-- Audio approval handoffs use shallow copies because they only add one top-level approval flag.
-- Renderer avoids re-resizing already-normalized frames, caches subtitle geometry per cue, and pre-renders static Top-5/Quote frames once per slide instead of rebuilding them for every video frame.
-- Top-5 Test image previews use a bounded cache across Streamlit reruns.
-- The audit deliberately did not modify the locked `visual_fetcher.py` implementation or its approved Cricket retrieval behavior.
+- Dashboard execution is prompt-driven: no story, script, audio, subtitle, render or upload function may start merely because Streamlit reran.
+- The only intentional automatic production action is the approved automatic visual scraper after its upstream manual approval; it runs once for that handoff and must not use polling reruns.
+- Test and Live manual controls are state-driven. A widget interaction may redraw its owning fragment, but must not refresh the full dashboard unless an explicit stage/action transition requires it.
+- Manual Subject Cutout uses exactly one shared fragment and one shared renderer across Top-5 Test Option 9, Cricket Test Option 7 and Cricket Live Option 7.
+- The cutout Text Size control must feed the actual Render Now frame; regression coverage compares rendered pixels across different size settings rather than checking only stored configuration.
+- Top-5 Live automatic visual fetching remains concurrent, but completion is collected when the Visuals stage is entered instead of using `sleep` + `st.rerun()` polling.
+- Startup remains free of project-wide file-watcher overhead; `.streamlit/config.toml` keeps `fileWatcherType = "none"` and `runOnSave = false`.
 - Full CI is the acceptance check for cleanup changes; no runtime claim is treated as final without validating the actual production/Test path.
 
 ### Test baseline after cleanup
