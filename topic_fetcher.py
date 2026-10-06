@@ -534,7 +534,7 @@ def _youtube_trend_queries(keyword: str) -> list[dict]:
         "category": 0,
         "property": "youtube",
     }
-    explore = requests.post(
+    explore = requests.get(
         YOUTUBE_TRENDS_EXPLORE_URL,
         params={"hl": language, "tz": "330", "req": json.dumps(request)},
         headers=HEADERS,
