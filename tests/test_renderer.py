@@ -1049,7 +1049,6 @@ def test_manual_subject_cutout_accepts_polygon_without_text_box():
         font="Barlow Condensed",
         style="Crisp Outline",
         text_polygon=polygon,
-        include_overlays=False,
     )
     assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
 
