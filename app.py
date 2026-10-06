@@ -1460,19 +1460,16 @@ def _render_manual_subject_cutout(
 
     state["polygon_points"] = polygon_points
 
-    if state.get("rendered_config") is not None:
-        st.session_state.setdefault(size_key, int(state["font_size"]))
-        font_size = int(st.slider(
-            "Text size",
-            min_value=80,
-            max_value=260,
-            step=10,
-            format="%d px",
-            key=size_key,
-        ))
-        state["font_size"] = font_size
-    else:
-        font_size = int(state["font_size"])
+    st.session_state.setdefault(size_key, int(state["font_size"]))
+    font_size = int(st.slider(
+        "Text size",
+        min_value=80,
+        max_value=260,
+        step=10,
+        format="%d px",
+        key=size_key,
+    ))
+    state["font_size"] = font_size
 
     st.caption(
         "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
@@ -1502,7 +1499,6 @@ def _render_manual_subject_cutout(
             )
             state["font_size"] = font_size
             state["rendered_config"] = config
-            st.rerun(scope="fragment")
         except (ValueError, OSError, RuntimeError, ImportError) as exc:
             state["rendered_preview"] = None
             st.error(str(exc))
