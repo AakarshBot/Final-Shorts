@@ -701,7 +701,11 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
     monkeypatch.setattr(
         renderer,
         "write_preview_video",
-        lambda frames, path: (next(iter(frames)), path.write_bytes(b"silent"), path)[-1],
+        lambda frames, path: (
+            rendered_frames.append(next(iter(frames)))
+            or path.write_bytes(b"silent")
+            or path
+        ),
     )
     monkeypatch.setattr(
         renderer,
@@ -926,8 +930,11 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
     audio_file.write_bytes(b"audio")
     visual = BytesIO()
     Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
+    rendered = BytesIO()
+    Image.new("RGB", (1080, 1920), (180, 40, 40)).save(rendered, format="PNG")
 
     calls = []
+    rendered_frames = []
     monkeypatch.setattr(
         renderer,
         "_draw_manual_subject_cutout",
@@ -985,6 +992,7 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
         [{
             "bytes": visual.getvalue(),
             "source": "Sports Desk",
+            "preview_bytes": rendered.getvalue(),
             "manual_subject_cutout": config,
         }],
         output,
