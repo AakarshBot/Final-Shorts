@@ -6640,11 +6640,12 @@ elif st.session_state.app_mode == "test":
                 state = st.session_state.test_top5_manual_subject_playground
                 image_buffer = BytesIO()
                 current_image.convert("RGB").save(image_buffer, format="JPEG", quality=92, optimize=True)
+                playground_bytes = image_buffer.getvalue()
                 _render_manual_subject_cutout(
                     state=state,
                     assets=[{
-                        "asset_key": "top5-playground-current",
-                        "bytes": image_buffer.getvalue(),
+                        "asset_key": f"top5-playground-{hashlib.sha1(playground_bytes).hexdigest()[:12]}",
+                        "bytes": playground_bytes,
                         "source": current_source,
                         "label": "Current test image",
                     }],
@@ -7198,8 +7199,15 @@ elif st.session_state.app_mode == "test":
                             )
 
                     if visual_option == "Option 9 · Manual Subject Cutout":
-                        manual_state = st.session_state.test_top5_manual_subject_cutouts.setdefault(active_slide, {})
-                        manual_assets = [
+                        image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+                        image_assets = list(image_result.get("assets") or [])
+                        if not image_assets:
+                            st.info(
+                                "Run one of Options 1–4 for this slide first. Manual Subject Cutout reuses the existing image pool and does not run another image search."
+                            )
+                        else:
+                            manual_state = st.session_state.test_top5_manual_subject_cutouts.setdefault(active_slide, {})
+                            manual_assets = [
                             {
                                 "asset_key": _visual_asset_key(f"manual-subject-{active_slide}", index, asset),
                                 "bytes": asset.get("bytes"),
@@ -7207,42 +7215,42 @@ elif st.session_state.app_mode == "test":
                                 "label": _top5_asset_label(asset),
                             }
                             for index, asset in enumerate(image_assets)
-                        ]
-                        _render_manual_subject_cutout(
-                            state=manual_state,
-                            assets=manual_assets,
-                            crop_store=st.session_state.test_top5_visual_crops,
-                            crop_store_name="test_top5_visual_crops",
-                            state_id=f"test-top5-manual-subject-{active_slide}",
-                            default_headline=headline,
-                        )
-                        preview = manual_state.get("rendered_preview")
-                        config = manual_state.get("rendered_config")
-                        selected = next(
-                            (asset for asset in manual_assets if asset["asset_key"] == manual_state.get("image_key")),
-                            None,
-                        )
-                        if preview and config and selected:
-                            working_bytes = st.session_state.test_top5_visual_crops.get(
-                                selected["asset_key"]
-                            ) or selected["bytes"]
-                            if working_bytes and st.button(
-                                f"Use Manual Subject Cutout for slide {active_slide}",
-                                type="primary",
-                                width="stretch",
-                                key=f"test-top5-manual-subject-use-{active_slide}",
-                            ):
-                                _top5_store_assignment(
-                                    {"bytes": bytes(working_bytes), "asset_key": selected["asset_key"]},
-                                    bytes(working_bytes),
-                                    "manual-subject",
-                                    selected["source"],
-                                    selected["label"],
-                                    card_type="manual-subject",
-                                    card_data=config,
-                                    preview_bytes=preview,
-                                )
-                                st.rerun()
+                            ]
+                            _render_manual_subject_cutout(
+                                state=manual_state,
+                                assets=manual_assets,
+                                crop_store=st.session_state.test_top5_visual_crops,
+                                crop_store_name="test_top5_visual_crops",
+                                state_id=f"test-top5-manual-subject-{active_slide}",
+                                default_headline=headline,
+                            )
+                            preview = manual_state.get("rendered_preview")
+                            config = manual_state.get("rendered_config")
+                            selected = next(
+                                (asset for asset in manual_assets if asset["asset_key"] == manual_state.get("image_key")),
+                                None,
+                            )
+                            if preview and config and selected:
+                                working_bytes = st.session_state.test_top5_visual_crops.get(
+                                    selected["asset_key"]
+                                ) or selected["bytes"]
+                                if working_bytes and st.button(
+                                    f"Use Manual Subject Cutout for slide {active_slide}",
+                                    type="primary",
+                                    width="stretch",
+                                    key=f"test-top5-manual-subject-use-{active_slide}",
+                                ):
+                                    _top5_store_assignment(
+                                        {"bytes": bytes(working_bytes), "asset_key": selected["asset_key"]},
+                                        bytes(working_bytes),
+                                        "manual-subject",
+                                        selected["source"],
+                                        selected["label"],
+                                        card_type="manual-subject",
+                                        card_data=config,
+                                        preview_bytes=preview,
+                                    )
+                                    st.rerun()
 
                     if visual_option in {"Option 5 · Stats Card", "Option 6 · Quote Card"}:
                         image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
