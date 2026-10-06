@@ -4297,7 +4297,6 @@ def render_live_dashboard():
                             "01 · DEEP-DIVE": "deep_dive",
                             "02 · TOP-5": "top_5",
                             "03 · OTD": "otd",
-                            "04 · YOUTUBE TRENDS": "youtube_trends",
                         }[eyebrow]
                         _live_reset_downstream()
                         if eyebrow == "02 · TOP-5":
