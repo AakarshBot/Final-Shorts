@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 
 from topic_fetcher import Topic
 
-from PIL import Image
+from PIL import Image, ImageChops
 from streamlit.testing.v1 import AppTest
 
 
@@ -373,12 +373,18 @@ def test_top5_option9_second_run_preserves_text_size():
     next(button for button in at.button if button.label == "Render Now").click().run()
     assert not at.exception, at.exception
 
-    at.slider[0].set_value(180).run()
+    first_preview = bytes(at.session_state["test_top5_manual_subject_playground"]["rendered_preview"])
+    at.slider[0].set_value(220).run()
     assert not at.exception, at.exception
     assert at.session_state["test_top5_manual_subject_playground"]["rendered_config"]["font_size"] == 150
     next(button for button in at.button if button.label == "Render Now").click().run()
     assert not at.exception, at.exception
-    assert at.session_state["test_top5_manual_subject_playground"]["rendered_config"]["font_size"] == 180
+    assert at.session_state["test_top5_manual_subject_playground"]["rendered_config"]["font_size"] == 220
+    second_preview = bytes(at.session_state["test_top5_manual_subject_playground"]["rendered_preview"])
+    assert ImageChops.difference(
+        Image.open(BytesIO(first_preview)).convert("RGB"),
+        Image.open(BytesIO(second_preview)).convert("RGB"),
+    ).getbbox() is not None
 
 
 def test_live_cricket_text_cutout_second_run_preserves_text_size():
@@ -397,14 +403,20 @@ def test_live_cricket_text_cutout_second_run_preserves_text_size():
     assert not at.exception, at.exception
     assert [slider.label for slider in at.slider] == ["Text size"]
 
-    at.slider[0].set_value(180).run()
+    first_preview = bytes(at.session_state["live_manual_subject_cutout"]["rendered_preview"])
+    at.slider[0].set_value(220).run()
     assert not at.exception, at.exception
     assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["font_size"] == 150
 
     render = next(button for button in at.button if button.label == "Render Now")
     render.click().run()
     assert not at.exception, at.exception
-    assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["font_size"] == 180
+    assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["font_size"] == 220
+    second_preview = bytes(at.session_state["live_manual_subject_cutout"]["rendered_preview"])
+    assert ImageChops.difference(
+        Image.open(BytesIO(first_preview)).convert("RGB"),
+        Image.open(BytesIO(second_preview)).convert("RGB"),
+    ).getbbox() is not None
 
 
 
