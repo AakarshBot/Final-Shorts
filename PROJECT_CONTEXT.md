@@ -54,7 +54,7 @@ Production lines:
 2. **On This Day** — **Test-first / WIP**
 3. **YouTube Search Trends** — **Test + Live / rebuilt and awaiting validation**
 
-Top-5 is currently Test-only / WIP. **Option 7 · Subject Cutout is experimental and must remain untouched. Option 9 · Manual Subject Cutout is the canonical manual subject cutout feature in Top-5 Test.** Cricket has the same canonical feature as **Option 7 · Text Cutout** in both Test and Live. Top-5 Live remains WIP and is not being added yet.
+Top-5 is currently Test-only / WIP. **Option 7 · Subject Cutout is experimental and must remain untouched. Option 9 · Manual Subject Cutout is the canonical manual subject cutout feature in Top-5 Test.** Cricket has the same canonical feature as **Option 7 · Text Cutout** in both Test and Live. **YT Trends now exposes that same Option 7 · Text Cutout implementation in Test and Live.** Top-5 Live remains WIP and is not being added yet.
 
 ## Factory order
 
@@ -183,7 +183,7 @@ Top-5 has nine visual options in Test:
 8. Body Card — **WIP**.
 9. Manual Subject Cutout.
 
-The established Cricket/Deep-Dive visual retrieval options remain unchanged. Top-5 Option 3 is the manual real-image fetcher: it accepts a manual query and returns the real-image provider pool only. It does not render a text card. Top-5 Option 8 is the future Body Card text-based visual and remains dashboard WIP with no active renderer.
+The established Cricket/Deep-Dive visual retrieval options remain unchanged. YT Trends uses the same single-story visual framework and now exposes **Option 7 · Text Cutout** alongside Options 1–6 in Test and Live. Top-5 Option 3 is the manual real-image fetcher: it accepts a manual query and returns the real-image provider pool only. It does not render a text card. Top-5 Option 8 is the future Body Card text-based visual and remains dashboard WIP with no active renderer.
 
 Top-5 Test Visuals remains independently runnable. The six-slide production Visual QC uses the approved Top-5 Scriptwriter handoff, while the standalone Test playground can exercise visual functions without upstream approvals.
 
@@ -332,7 +332,7 @@ Feature contract:
 - The whole polygon can be dragged rigidly inside the frame.
 - Clicking an edge adds a point.
 - No X/Y position sliders.
-- The polygon is the complete text field. For the requested font size, the renderer finds every valid word line-break combination that fits the polygon and previews them all. The user can choose any valid combination for the slide. Larger text stays at the requested size and uses additional line breaks to fill the field from edge to edge as the polygon permits; smaller text may use fewer lines and sit naturally centered inside the polygon. Each line remains centered inside its usable polygon span, including irregular/sloped regions, with no cutoff.
+- The polygon is the complete text field. For the requested font size, the renderer finds every valid word line-break combination that fits the polygon and previews them all. The user can choose any valid combination for the slide. Each rendered line starts 2px inside the left edge of its usable polygon span and extends toward the right edge as far as the requested text width permits. Line breaks are used when needed to keep the requested size inside the polygon without cutoff. Text is no longer re-centered inside the box.
 - Negative Space never runs BiRefNet.
 - Behind Subject uses the existing BiRefNet model and restores detected foreground subjects, including multiple subjects and genuine gaps.
 
@@ -360,7 +360,7 @@ Cleanup rule:
 - Do not modify Top-5 Option 7 · Subject Cutout.
 - Do not add Top-5 Live support yet.
 
-Status: **Implementation complete in the shared Test/Live paths. Not yet user-approved. The next implementation step is the main Factory Renderer change.**
+Status: **Implementation complete in the shared Test/Live paths, including YT Trends Option 7. The polygon text field now anchors each rendered line 2px inside its usable left edge. Not yet user-approved.**
 
 Fragment audit: Manual Subject Cutout is the only @st.fragment in app.py. Its rendered-state-dependent handoff controls now live inside the fragment. The two @st.dialog crop editors are self-contained.
 
@@ -369,7 +369,7 @@ Fragment audit: Manual Subject Cutout is the only @st.fragment in app.py. Its re
 - The **production-line menu is the first menu in Test**.
 - The four production-line choices are **Deep-Dive**, **Top-5**, **OTD**, and **YouTube Search Trends**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The renderer v2 change is now merged into main.**.
+- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. YT Trends Test/Live now exposes that same Text Cutout as Option 7. Top-5 Live remains WIP. The renderer v2 change is now merged into main.**.
 - **OTD** is **WIP**.
 - **YouTube Search Trends** is **Test + Live / rebuilt and awaiting validation**. It is a sports-focused Topic Fetcher source. Selecting **YT Trends** fetches current YouTube search signals, removes generic query-intent and sports-only terms, validates the remaining signals against relevant news in the last 24 hours in Asia/Kolkata, and returns one mixed pool of up to 20 news-backed story opportunities. The UI does not segregate the trends by sport, country or market. Selecting one story uses the cleaned story keyword and the existing downstream Scriptwriter path; the raw YouTube query is not handed downstream. Any downstream Cricket/Niche classification is internal to the selected trend and is not a dashboard choice.
 - All four production lines use the same seven-stage factory framework.
@@ -496,6 +496,7 @@ Status: **Test + Live rebuilt / universal Scriptwriter handoff implemented / awa
 - The displayed headline is the representative current news story. The raw YouTube trend remains visible only as discovery evidence.
 - The selected Topic retains its normal title, description, source, published_at and real URL. The raw trend query is never handed to Scriptwriter as the story.
 - **Scriptwriter handoff:** every YT Trends story uses the new Universal Niche Sports + YT Trends Scriptwriter, even when the selected story is about cricket. The protected Cricket Scriptwriter is never used for YT Trends.
+- The YT Trends Visuals stage uses the shared single-story visual implementation and exposes **Option 7 · Text Cutout** in both Test and Live.
 - After selection, Live moves into the existing single-story Script stage and then uses the existing Audio + Subtitles → Visuals + Render → Upload flow.
 - Test uses the same Universal Scriptwriter handoff for YT Trends and then its existing downstream Test stages.
 - No second YT Trends Scriptwriter, metadata stage, renderer path or upload path is introduced.
@@ -594,7 +595,7 @@ Status: **Rewritten from scratch / ready for Test validation.**
 - Dashboard execution is prompt-driven: no story, script, audio, subtitle, render or upload function may start merely because Streamlit reran.
 - The only intentional automatic production action is the approved automatic visual scraper after its upstream manual approval; it runs once for that handoff and must not use polling reruns.
 - Test and Live manual controls are state-driven. A widget interaction may redraw its owning fragment, but must not refresh the full dashboard unless an explicit stage/action transition requires it.
-- Manual Subject Cutout uses exactly one shared fragment and one shared renderer across Top-5 Test Option 9, Cricket Test Option 7 and Cricket Live Option 7.
+- Manual Subject Cutout uses exactly one shared fragment and one shared renderer across Top-5 Test Option 9, Cricket Test Option 7, Cricket Live Option 7, and YT Trends Test/Live Option 7.
 - The cutout Text Size control must feed the actual Render Now frame; regression coverage compares rendered pixels across different size settings rather than checking only stored configuration.
 - Top-5 Live automatic visual fetching remains concurrent, but completion is collected when the Visuals stage is entered instead of using `sleep` + `st.rerun()` polling.
 - Startup remains free of project-wide file-watcher overhead; `.streamlit/config.toml` keeps `fileWatcherType = "none"` and `runOnSave = false`.
@@ -605,7 +606,7 @@ Status: **Rewritten from scratch / ready for Test validation.**
 - Python compile check passed.
 - The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
 - Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
-- Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, Top-5 Option 9 standalone and per-slide Test paths, Cricket Test Option 7, and Cricket Live Option 7. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
+- Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, exact left-edge anchoring, Top-5 Option 9 standalone and per-slide Test paths, Cricket Test Option 7, Cricket Live Option 7, and YT Trends Test/Live Option 7. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
 - Top-5 Option 7 remains experimental and is not part of this consolidation. Top-5 Option 9 and Cricket Option 7 must stay on the same shared implementation; Top-5 Live is deferred until Top-5 Test is approved.
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
