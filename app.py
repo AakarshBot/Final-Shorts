@@ -1578,7 +1578,7 @@ def _render_manual_subject_cutout(
             cols = st.columns(min(3, len(current_layouts) - start), gap="medium")
             for col, option in zip(cols, current_layouts[start:start + 3]):
                 with col:
-                    st.image(option["preview"], width="stretch")
+                    st.image(option["preview"], width=300)
                     st.markdown(
                         '<div class="visual-detail">'
                         + " / ".join(option["lines"])
@@ -4694,13 +4694,13 @@ def render_youtube_trends_topic_fetcher(*, live=False):
 
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">01 · YT TRENDS</div>'
-        '<div class="canvas-title">Choose a current YouTube search trend</div>'
-        '<div class="canvas-copy">Choose one trend. The factory then shows news published today that matches that keyword.</div></div></div>',
+        '<div class="canvas-title">Choose a story driven by current YouTube search trends</div>'
+        '<div class="canvas-copy">These are current YouTube search signals that already have relevant news published today.</div></div></div>',
         unsafe_allow_html=True,
     )
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">TOP 20</div>'
-        '<div class="section-title">YouTube search trends</div></div>'
+        '<div class="section-title">Story opportunities</div></div>'
         '<div class="section-count">single trend pool</div></div>',
         unsafe_allow_html=True,
     )
@@ -4709,15 +4709,21 @@ def render_youtube_trends_topic_fetcher(*, live=False):
         left, mid, right = st.columns([1.65, .75, .42], gap="small")
         with left:
             st.markdown(
-                f'<div class="topic-title">{item["keyword"]}</div>'
+                f'<div class="topic-title">{item["top_news_title"]}</div>'
                 f'<div class="topic-meta">{item["signal"]}'
                 f'{" · BREAKOUT" if item["breakout"] else ""}'
                 f'{" · autocomplete" if item["youtube_autocomplete"] else ""}</div>',
                 unsafe_allow_html=True,
             )
+            st.caption(
+                f'Story subject: {item["keyword"]} · '
+                f'Trend: {item["trend_query"]} · '
+                f'{item["news_count"]} current '
+                f'{"story" if item["news_count"] == 1 else "stories"}'
+            )
             st.caption(item["hashtag"])
         with mid:
-            st.caption(f'Signal score {item["score"]:.0f}')
+            st.caption(f'Story signal {item["score"]:.0f}')
         with right:
             selected = st.session_state[selected_key] == index
             if st.button(
@@ -4748,12 +4754,16 @@ def render_youtube_trends_topic_fetcher(*, live=False):
                     st.session_state.visuals_approved = False
                     st.session_state.rendered_video_path = None
                 try:
-                    with st.spinner(f'Searching today’s news for “{keyword}”…'):
-                        st.session_state[topics_key] = fetch_youtube_trend_topics(
-                            keyword,
-                            item["profile"],
-                            limit=20,
-                        )
+                    stories = list(item.get("topics") or [])
+                    if stories:
+                        st.session_state[topics_key] = stories
+                    else:
+                        with st.spinner(f'Searching today’s news for “{keyword}”…'):
+                            st.session_state[topics_key] = fetch_youtube_trend_topics(
+                                keyword,
+                                item["profile"],
+                                limit=20,
+                            )
                 except (RuntimeError, ValueError, OSError) as exc:
                     st.session_state[error_key] = str(exc)
                     st.session_state[topics_key] = []

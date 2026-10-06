@@ -367,11 +367,11 @@ Fragment audit: Manual Subject Cutout is the only @st.fragment in app.py. Its re
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
-- The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
+- The four production-line choices are **Deep-Dive**, **Top-5**, **OTD**, and **YouTube Search Trends**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
 - **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The renderer v2 change is now merged into main.**.
 - **OTD** is **WIP**.
-- **YouTube Search Trends** is **Test + Live / Approved**. It is a sports-focused Topic Fetcher source. Selecting **YT Trends** immediately fetches one mixed pool of the top 20 current YouTube search-trend signals; the UI does not segregate the trends by sport, country or market. Selecting one trend then searches the existing news source for articles published on the current calendar day in Asia/Kolkata, and the resulting headline is handed to the existing downstream Scriptwriter path. Any downstream Cricket/Niche classification is internal to the selected trend and is not a dashboard choice.
+- **YouTube Search Trends** is **Test + Live / rebuilt and awaiting validation**. It is a sports-focused Topic Fetcher source. Selecting **YT Trends** fetches current YouTube search signals, removes generic query-intent and sports-only terms, validates the remaining signals against relevant news published on the current calendar day in Asia/Kolkata, and returns one mixed pool of up to 20 news-backed story opportunities. The UI does not segregate the trends by sport, country or market. Selecting one story uses the cleaned story keyword and the existing downstream Scriptwriter path; the raw YouTube query is not handed downstream. Any downstream Cricket/Niche classification is internal to the selected trend and is not a dashboard choice.
 - All four production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
 - Build new production lines in **Test** first; Top-5 remains in Test/WIP until its current visual work is accepted. OTD remains Test-first.
@@ -480,19 +480,23 @@ Status: **Approved / cleaned / entity tiles implemented / keyword tile implement
 
 ### Function 01B — YouTube Search Trends
 
-Status: **Test + Live implementation approved / merged to main.**
+Status: **Test + Live implementation rebuilt / awaiting user validation.**
 
-- This is a Test-only Topic Fetcher source; it does not create a separate downstream pipeline.
-- Selecting the **YT Trends** dashboard option immediately fetches one unsegregated pool of the top 20 current YouTube search-trend signals.
-- The trend collector uses Google Trends with the YouTube property (gprop=youtube) for top/rising related queries around a small hidden sports-seed set and checks YouTube autocomplete for query wording.
-- The UI does not show Cricket/Niche/India/Global trend categories.
-- The trend board uses normalized evidence ranking rather than claiming exact public YouTube search-volume counts.
-- The user chooses one trend keyword.
-- The selected keyword is searched through the existing Google News path with an explicit current-day date filter and a final publication-date check in Asia/Kolkata. Only articles published today are handed forward.
-- The resulting Topic keeps the normal title, description, source, published_at and real news URL fields.
-- The selected trend carries its downstream Cricket/Niche profile internally so the existing Scriptwriter, Audio, Visuals, Subtitles, Renderer and Upload stages continue through their existing contracts without a second pipeline.
-- Test and Live use the same YT Trends Topic Fetcher and downstream handoff. Live has its own production state but no duplicate trend-fetch implementation.
+- YT Trends remains a shared Topic Fetcher source, not a separate downstream pipeline.
+- The collector uses Google Trends with the YouTube property and YouTube autocomplete with the existing hidden sports seed set.
+- The trend board is one unsegregated pool; it does not expose sport, country or market categories.
+- Raw YouTube queries are discovery signals only. Generic search-intent terms such as live/today/news/watch/streaming are removed, while sport terms are retained as useful context when paired with a specific subject or event.
+- Sports-only queries are rejected; ordinal forms such as t20th are normalized before filtering.
+- Each surviving trend is used to query the existing current-news source with a broad trend query plus cleaned form and the current calendar-day filter. The news results are passed through the existing freshness, profile relevance, clustering and selection logic.
+- Only trends with at least one relevant article published today in Asia/Kolkata enter the board.
+- Each trend result caches its validated Topic articles. Selecting a trend uses those cached articles directly; it does not perform a second fragile keyword-only news search.
+- The board presents the representative current news headline as the main story opportunity, with the original YouTube trend query shown underneath for transparency.
+- The cleaned story keyword, original trend query, normalized internal signal, current validated story count, and real Topic article handoff remain available.
+- The raw YouTube query is never handed to Scriptwriter. The selected Topic retains its normal title, description, source, published_at and real URL.
+- The trend score is normalized internal evidence, not exact public YouTube search volume.
+- Test and Live call the same render_youtube_trends_topic_fetcher() and the same topic-fetching functions. Live has separate production state only; there is no duplicate YT Trends implementation.
 - No new Python dependency is introduced.
+- The rebuild deliberately reuses the existing Google News parsing, freshness, profile filtering, event clustering and selection logic rather than creating a second news-selection architecture.
 
 ### Cricket Pipeline Checkpoint — 6/10
 

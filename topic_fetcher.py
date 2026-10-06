@@ -42,6 +42,20 @@ YOUTUBE_TREND_SEEDS = (
     ("basketball", "niche_sports"),
     ("sports news", "niche_sports"),
 )
+YOUTUBE_TREND_NOISE_TERMS = {
+    "aaj", "tak", "live", "today", "news", "latest", "update", "updates",
+    "match", "matches", "watch", "watching", "stream", "streaming", "telecast",
+    "score", "scores", "result", "results", "highlights", "highlight", "online",
+    "full", "video", "videos", "channel", "channels", "official", "time",
+    "schedule", "schedules", "fixture", "fixtures", "prediction", "predicted",
+    "lineup", "lineups",
+}
+YOUTUBE_TREND_GENERIC_TERMS = {
+    "cricket", "football", "soccer", "tennis", "badminton", "basketball",
+    "hockey", "formula", "f1", "motogp", "motorsport", "athletics", "boxing",
+    "wrestling", "volleyball", "kabaddi", "squash", "golf", "chess", "swimming",
+    "cycling", "t20", "odi", "test", "sport", "sports",
+}
 LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 
@@ -419,7 +433,10 @@ def _profile_relevant(title: str, description: str, profile: str | None) -> bool
             "tennis", "badminton", "squash", "athletics", "swimming", "cycling",
             "golf", "boxing", "wrestling", "hockey", "kabaddi", "volleyball",
             "basketball", "chess", "motorsport", "motogp", "formula 1",
-        )) and not any(term in text for term in CRICKET_TERMS)
+        )) and not any(
+            re.search(r"(?<!\w)" + re.escape(term) + r"(?!\w)", text)
+            for term in CRICKET_TERMS
+        )
     if profile not in {"cricket_india_asia", "cricket_global"}:
         return False
     text = f"{title} {description}".casefold()
@@ -610,14 +627,14 @@ def fetch_youtube_search_trends(
                 continue
 
             for row in rows:
-                keyword = _clean(row.get("keyword"))
-                key = keyword.casefold()
-                if not keyword or _utility(keyword):
+                raw_keyword = _clean(row.get("keyword"))
+                key = raw_keyword.casefold()
+                if not raw_keyword or _utility(raw_keyword):
                     continue
                 item = grouped.setdefault(
                     key,
                     {
-                        "keyword": keyword,
+                        "keyword": raw_keyword,
                         "evidence": 0.0,
                         "rising": False,
                         "breakout": False,
@@ -640,13 +657,33 @@ def fetch_youtube_search_trends(
                 item["seeds"].add(seed.casefold())
                 item["profiles"].add(profile)
 
-    results = []
+    candidates = []
     for item in grouped.values():
-        score = item["evidence"]
-        if item["autocomplete"]:
-            score += 0.2
-        if len(item["seeds"]) > 1:
-            score += 0.4 * (len(item["seeds"]) - 1)
+        raw_keyword = item["keyword"]
+        normalized = re.sub(
+            r"\bt(\d+)(?:st|nd|rd|th)\b",
+            r"t\1",
+            raw_keyword.casefold(),
+        )
+        tokens = re.findall(r"[a-z0-9]+", normalized)
+        meaningful = [
+            token
+            for token in tokens
+            if token not in YOUTUBE_TREND_NOISE_TERMS
+            and (not token.isdigit() or len(token) == 4)
+        ]
+        subject_tokens = [
+            token
+            for token in meaningful
+            if token not in YOUTUBE_TREND_GENERIC_TERMS and not token.isdigit()
+        ]
+        if not subject_tokens or not meaningful:
+            continue
+
+        story_keyword = " ".join(meaningful).strip()
+        if len(story_keyword) < 4:
+            continue
+
         profile = (
             "cricket_india_asia"
             if "cricket_india_asia" in item["profiles"]
@@ -654,29 +691,79 @@ def fetch_youtube_search_trends(
             if "cricket_global" in item["profiles"]
             else "niche_sports"
         )
-        results.append({
-            "keyword": item["keyword"],
-            "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
-            "signal": "Rising" if item["rising"] or item["breakout"] else "Top",
-            "breakout": item["breakout"],
-            "youtube_autocomplete": item["autocomplete"],
-            "seed_count": len(item["seeds"]),
+        candidates.append({
+            **item,
+            "keyword": story_keyword,
+            "trend_query": raw_keyword,
             "profile": profile,
-            "score": score,
         })
 
-    if not results:
-        raise RuntimeError("YouTube search trend services returned no usable signals. Retry the trend fetch.")
-    maximum = max(item["score"] for item in results)
-    for item in results:
+    if not candidates:
+        raise RuntimeError("YouTube search trends did not produce any story-worthy signals.")
+
+    candidates.sort(
+        key=lambda item: (item["evidence"], item["keyword"].casefold()),
+        reverse=True,
+    )
+    target_date = _today_local_date()
+    date_filter = f"after:{target_date.isoformat()} before:{(target_date + timedelta(days=1)).isoformat()}"
+    validated = []
+
+    with ThreadPoolExecutor(max_workers=min(12, len(candidates))) as pool:
+        futures = {}
+        for item in candidates[: max(limit * 3, 40)]:
+            context = "cricket" if item["profile"] != "niche_sports" else "sports"
+            query = (
+                f'({item["trend_query"]}) OR ({item["keyword"]}) '
+                f'{context} {date_filter}'
+            )
+            futures[pool.submit(_fetch_google, query, TIMEOUT, geo=None)] = item
+
+        for future in as_completed(futures):
+            item = futures[future]
+            try:
+                rows = future.result()
+            except (requests.RequestException, ET.ParseError, ValueError):
+                continue
+
+            prepared = _prepare(rows, set(), profile=item["profile"])
+            prepared = [
+                row
+                for row in prepared
+                if row.published_at.astimezone(LOCAL_TIMEZONE).date() == target_date
+            ]
+            stories = _select(prepared, 3, set(), profile=item["profile"])
+            if not stories:
+                continue
+
+            score = item["evidence"] + min(1.5, 0.5 * len(stories))
+            validated.append({
+                "keyword": item["keyword"],
+                "trend_query": item["trend_query"],
+                "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
+                "signal": "Rising" if item["rising"] or item["breakout"] else "Top",
+                "breakout": item["breakout"],
+                "youtube_autocomplete": item["autocomplete"],
+                "seed_count": len(item["seeds"]),
+                "profile": item["profile"],
+                "news_count": len(stories),
+                "top_news_title": stories[0].title,
+                "topics": stories,
+                "score": score,
+            })
+
+    if not validated:
+        raise RuntimeError("YouTube search trend services returned no news-backed story signals. Retry the trend fetch.")
+
+    maximum = max(item["score"] for item in validated)
+    for item in validated:
         item["score"] = round(item["score"] / maximum * 100, 1)
 
-    results.sort(
+    validated.sort(
         key=lambda item: (item["score"], item["keyword"].casefold()),
         reverse=True,
     )
-    return results[:limit]
-
+    return validated[:limit]
 
 def _today_local_date():
     return datetime.now(LOCAL_TIMEZONE).date()
@@ -698,12 +785,12 @@ def fetch_youtube_trend_topics(
     target_date = _today_local_date()
     next_date = target_date + timedelta(days=1)
     date_filter = f"after:{target_date.isoformat()} before:{next_date.isoformat()}"
-    quoted = f'"{clean_keyword}"'
+    context = "cricket" if profile != "niche_sports" else "sports"
     queries = [
-        f"{quoted} {date_filter}",
-        f"{quoted} (latest OR news OR update OR reaction OR statement) {date_filter}",
-        f"{quoted} (record OR injury OR transfer OR appointment OR controversy OR result) {date_filter}",
-        f"{quoted} (confirms OR reveals OR announces OR returns OR wins) {date_filter}",
+        f"{clean_keyword} {context} {date_filter}",
+        f"{clean_keyword} {context} (latest OR news OR update OR reaction OR statement) {date_filter}",
+        f"{clean_keyword} {context} (record OR injury OR transfer OR appointment OR controversy OR result) {date_filter}",
+        f"{clean_keyword} {context} (confirms OR reveals OR announces OR returns OR wins) {date_filter}",
     ]
     if more:
         queries = queries[:3]
