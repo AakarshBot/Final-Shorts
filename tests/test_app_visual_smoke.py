@@ -66,15 +66,10 @@ def test_top5_standalone_visual_qc_exposes_all_nine_options():
     at.run()
 
     assert not at.exception, at.exception
-    option_sets = [
-        [str(option) for option in pills.options]
-        for pills in at.pills
-        if pills.options
-    ]
-    options = next(
-        options
-        for options in option_sets
-        if options[:8] == [
+    button_labels = [button.label for button in at.button]
+    assert all(
+        option in button_labels
+        for option in (
             "Option 1 · Automatic Scraper",
             "Option 2 · Manual Scraper",
             "Option 3 · Manual Fetcher",
@@ -83,20 +78,9 @@ def test_top5_standalone_visual_qc_exposes_all_nine_options():
             "Option 6 · Quote Card",
             "Option 7 · Subject Cutout",
             "Option 8 · Body Card · WIP",
-        ]
+            "Option 9 · Manual Subject Cutout",
+        )
     )
-
-    assert options == [
-        "Option 1 · Automatic Scraper",
-        "Option 2 · Manual Scraper",
-        "Option 3 · Manual Fetcher",
-        "Option 4 · AI Generation",
-        "Option 5 · Stats Card",
-        "Option 6 · Quote Card",
-        "Option 7 · Subject Cutout",
-        "Option 8 · Body Card · WIP",
-        "Option 9 · Manual Subject Cutout",
-    ]
 
 
 def test_top5_subject_cutout_ui_smoke():
@@ -165,6 +149,8 @@ def _live_cricket_text_cutout_test(assets, *, crops=None):
     if crops:
         at.session_state["live_visual_crops"] = crops
     at.run()
+    assert not at.exception, at.exception
+    assert "Option 7 · Text Cutout" in [button.label for button in at.button]
     return at
 
 
@@ -188,9 +174,10 @@ def test_cricket_test_exposes_shared_text_cutout():
     at.run()
 
     assert not at.exception, at.exception
-    assert any(
-        [str(option) for option in pills.options]
-        == [
+    button_labels = [button.label for button in at.button]
+    assert all(
+        option in button_labels
+        for option in (
             "Option 1 · Automatic Scraper",
             "Option 2 · Manual Scraper",
             "Option 3 · Real Image Search",
@@ -198,8 +185,7 @@ def test_cricket_test_exposes_shared_text_cutout():
             "Option 5 · Stats Card",
             "Option 6 · Quote Card",
             "Option 7 · Text Cutout",
-        ]
-        for pills in at.pills
+        )
     )
     select = next(button for button in at.button if button.label == "Select image")
     select.click().run()

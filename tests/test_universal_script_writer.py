@@ -58,6 +58,85 @@ def valid_result(scene_count=4):
     }
 
 
+def test_angle_schema_requires_exactly_three_options():
+    assert writer.ANGLE_SCHEMA["properties"]["angles"]["minItems"] == 3
+    assert writer.ANGLE_SCHEMA["properties"]["angles"]["maxItems"] == 3
+
+
+def test_suggest_universal_story_angles_reads_research_once(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        writer,
+        "_research_story",
+        lambda story: "FULL STORY WITH POST-MATCH QUOTE",
+    )
+
+    def fake_request(model, prompt, source, **kwargs):
+        calls.append((model, prompt, source, kwargs))
+        return {
+            "angles": [
+                {
+                    "title": "What Alcaraz Said",
+                    "description": "Focus on his post-match comments and what they revealed.",
+                    "evidence_basis": "The research contains his direct post-match statement.",
+                },
+                {
+                    "title": "How He Won",
+                    "description": "Focus on the decisive moments of the Tokyo final.",
+                    "evidence_basis": "The research documents the final's turning points.",
+                },
+                {
+                    "title": "Why Tokyo Matters",
+                    "description": "Focus on the significance of the title for his season.",
+                    "evidence_basis": "The research confirms the title and current season context.",
+                },
+            ]
+        }
+
+    monkeypatch.setattr(writer, "_request", fake_request)
+    result = writer.suggest_universal_story_angles(
+        {"title": "Carlos Alcaraz wins Tokyo"},
+        language="english",
+    )
+
+    assert len(calls) == 1
+    assert calls[0][2] == "FULL STORY WITH POST-MATCH QUOTE"
+    assert calls[0][3]["schema"] is writer.ANGLE_SCHEMA
+    assert [item["title"] for item in result["angles"]] == [
+        "What Alcaraz Said",
+        "How He Won",
+        "Why Tokyo Matters",
+    ]
+    assert result["source_evidence"] == "FULL STORY WITH POST-MATCH QUOTE"
+
+
+def test_writer_honors_selected_editorial_angle(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        writer,
+        "_research_story",
+        lambda story: "FULL STORY WITH POST-MATCH QUOTE",
+    )
+
+    def fake_request(model, prompt, source):
+        calls.append((model, prompt, source))
+        return valid_result()
+
+    monkeypatch.setattr(writer, "_request", fake_request)
+    angle = "What Alcaraz Said: Focus on his post-match comments and what they revealed."
+    result = writer.write_universal_script(
+        {"title": "Carlos Alcaraz wins Tokyo"},
+        angle=angle,
+    )
+
+    assert len(calls) == 1
+    assert "SELECTED EDITORIAL ANGLE (AUTHORITATIVE)" in calls[0][1]
+    assert angle in calls[0][1]
+    assert result["story_angle"] == angle
+
+
 def test_schema_allows_three_to_five_slides():
     schema = writer.SCHEMA["properties"]["script"]
     assert schema["minItems"] == 3

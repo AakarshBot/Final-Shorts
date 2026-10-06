@@ -98,6 +98,29 @@ SCHEMA = {
     "additionalProperties": False,
 }
 
+ANGLE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "angles": {
+            "type": "array",
+            "minItems": 3,
+            "maxItems": 3,
+            "items": {
+                "type": "object",
+                "properties": {
+                    "title": {"type": "string"},
+                    "description": {"type": "string"},
+                    "evidence_basis": {"type": "string"},
+                },
+                "required": ["title", "description", "evidence_basis"],
+                "additionalProperties": False,
+            },
+        },
+    },
+    "required": ["angles"],
+    "additionalProperties": False,
+}
+
 FILLER_PHRASES = (
     "wait till the end",
     "wait until the end",
@@ -296,7 +319,15 @@ def _research_story(story) -> str:
     return "\n\n".join(sections)[:MAX_SOURCE_CHARS]
 
 
-def _request(model: str, prompt: str, source: str) -> dict:
+def _request(
+    model: str,
+    prompt: str,
+    source: str,
+    *,
+    schema: dict = SCHEMA,
+    schema_name: str = "universal_sports_shorts_script",
+    max_completion_tokens: int = 1800,
+) -> dict:
     key = _clean(os.getenv("GROQ_API_KEY"))
     if not key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
@@ -316,15 +347,15 @@ def _request(model: str, prompt: str, source: str) -> dict:
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "universal_sports_shorts_script",
+                    "name": schema_name,
                     "strict": True,
-                    "schema": SCHEMA,
+                    "schema": schema,
                 },
             },
             "include_reasoning": False,
             "reasoning_effort": "low",
             "temperature": 0.35,
-            "max_completion_tokens": 1800,
+            "max_completion_tokens": max_completion_tokens,
         },
         timeout=TIMEOUT,
     )
@@ -341,6 +372,16 @@ This writer serves Niche Sports stories and YouTube Search Trends stories. The s
 
 SOURCE USE
 - Read the entire research packet before writing.
+EDITORIAL ANGLE
+- If a user-selected editorial angle is supplied, it is authoritative.
+- The entire Short must be built around that angle.
+- Do not switch back to the most obvious event/result merely because it is easier to summarize.
+- The underlying event may be used as context, but it must not replace the selected angle.
+- For a statement, reaction or quote angle, make the person's reported comments the core development when the research supports them.
+- For a consequence or significance angle, prioritize the concrete impact and only use event details that explain it.
+- For a process or performance angle, prioritize how the development happened rather than repeating the outcome.
+- The selected angle may be custom-written by the user; follow it exactly within the facts supported by the research.
+- Never invent evidence just to satisfy an angle.
 - Treat the selected article as the primary source. Use related reports to confirm facts, fill factual gaps, add current context, or clarify the latest status.
 - Build your own version of the story. Do not mechanically summarize the article and do not copy complete source sentences.
 - Use only facts supported by the research packet.
@@ -570,6 +611,7 @@ def validate_universal_script(
 
 
 def _finish_result(result: dict, story, source: str, model: str, language_key: str) -> dict:
+    result.setdefault("story_angle", "")
     result["provider_used"] = model
     result["delivery_profile"] = "UNIVERSAL SPORTS"
     result["language_used"] = language_key
@@ -581,7 +623,57 @@ def _finish_result(result: dict, story, source: str, model: str, language_key: s
     return result
 
 
-def write_universal_script(story, language: str = "english") -> dict:
+
+ANGLE_PROMPT = """You are the editorial planning desk for a human-reviewed sports YouTube Shorts channel.
+
+Read the entire research packet and propose exactly three genuinely different story angles for the same story.
+
+RULES
+- Each angle must be directly supported by the research packet.
+- The angles must be materially different, not three phrasings of the same summary.
+- Prefer angles that create a useful editorial choice: event/result, statement/reaction, consequence/significance, performance/process, controversy, background or another evidence-backed lens.
+- When the research contains a meaningful post-match, post-event or public statement, one of the three angles must be a statement/reaction angle centered on that evidence.
+- Never invent a quote, motive, consequence, or interpretation that the research does not support.
+- Each title must be concise, about 2–5 words, and immediately communicate the lens.
+- Each description must be one short sentence explaining what the Short would focus on.
+- evidence_basis must name the concrete evidence in the research that makes the angle viable.
+- Do not recommend an angle that would require unsupported facts.
+- The strongest angle does not have to be the obvious event/result angle.
+- Return only JSON matching the supplied schema.
+"""
+
+def _validate_story_angles(result: dict) -> tuple[bool, str]:
+    if not isinstance(result, dict):
+        return False, "The angle planner returned no object."
+    angles = result.get("angles")
+    if not isinstance(angles, list) or len(angles) != 3:
+        return False, "The angle planner must return exactly 3 angles."
+
+    seen = set()
+    for index, angle in enumerate(angles, 1):
+        if not isinstance(angle, dict):
+            return False, f"Angle {index} is malformed."
+        title = _clean(angle.get("title"))
+        description = _clean(angle.get("description"))
+        evidence_basis = _clean(angle.get("evidence_basis"))
+        if not title or not description or not evidence_basis:
+            return False, f"Angle {index} is incomplete."
+        key = _normalise(title)
+        if key in seen:
+            return False, "The angle planner returned duplicate angles."
+        seen.add(key)
+        if not 2 <= _words(title) <= 5:
+            return False, f"Angle {index} title must contain 2–5 words."
+    return True, ""
+
+def _angle_text(angle) -> str:
+    if isinstance(angle, dict):
+        title = _clean(angle.get("title"))
+        description = _clean(angle.get("description"))
+        return _clean(f"{title}: {description}" if description else title)
+    return _clean(angle)
+
+def suggest_universal_story_angles(story, language: str = "english") -> dict:
     source = _research_story(story)
     if not source:
         source = _source_text(story)
@@ -590,10 +682,69 @@ def write_universal_script(story, language: str = "english") -> dict:
 
     language_key = str(language or "english").strip().lower()
     instruction = (
+        ANGLE_PROMPT
+        + "\nLANGUAGE:\n"
+        + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
+    )
+    errors = []
+
+    for model in MODELS:
+        try:
+            result = _request(
+                model,
+                instruction,
+                source,
+                schema=ANGLE_SCHEMA,
+                schema_name="universal_story_angles",
+                max_completion_tokens=900,
+            )
+            valid, reason = _validate_story_angles(result)
+            if valid:
+                return {
+                    "angles": result["angles"],
+                    "source_evidence": source,
+                    "source_title": _story_value(story, "title"),
+                    "language_used": language_key,
+                    "provider_used": model,
+                }
+            errors.append(f"{model}: {reason}")
+        except Exception as exc:
+            errors.append(f"{model}: {type(exc).__name__}: {exc}")
+
+    raise RuntimeError(
+        "Universal story-angle generation failed: " + " | ".join(errors)
+    )
+
+def write_universal_script(
+    story,
+    language: str = "english",
+    angle=None,
+    research_source: str | None = None,
+) -> dict:
+    source = research_source or _research_story(story)
+    if not source:
+        source = _source_text(story)
+    if not source:
+        raise ValueError("The selected story contains no usable evidence.")
+
+    language_key = str(language or "english").strip().lower()
+    angle_text = _angle_text(angle)
+    instruction = (
         SYSTEM_PROMPT
         + "\nLANGUAGE:\n"
         + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
     )
+    if angle_text:
+        instruction += (
+            "\n\nSELECTED EDITORIAL ANGLE (AUTHORITATIVE):\n"
+            + angle_text
+            + "\nBuild the whole narration around this lens. Do not replace it with the obvious event/result summary."
+        )
+    else:
+        instruction += (
+            "\n\nNO USER ANGLE SELECTED:\n"
+            "Choose the strongest evidence-backed editorial angle yourself and keep the entire Short centered on it."
+        )
 
     errors = []
     for attempt, model in enumerate(MODELS):
@@ -609,6 +760,8 @@ def write_universal_script(story, language: str = "english") -> dict:
                     f"Validation failure: {errors[-1]}"
                 )
             result = _request(model, model_instruction, source)
+            if angle_text:
+                result["story_angle"] = angle_text
             valid, reason = validate_universal_script(result)
             if valid:
                 return _finish_result(result, story, source, model, language_key)
