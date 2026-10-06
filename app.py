@@ -4663,12 +4663,12 @@ def render_youtube_trends_topic_fetcher(*, live=False):
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">01 · YT TRENDS</div>'
         '<div class="canvas-title">Choose a current YouTube search trend</div>'
-        '<div class="canvas-copy">Choose one trend. The factory then shows news published today that matches that keyword.</div></div></div>',
+        '<div class="canvas-copy">These are current YouTube search signals that already have relevant news published today.</div></div></div>',
         unsafe_allow_html=True,
     )
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">TOP 20</div>'
-        '<div class="section-title">YouTube search trends</div></div>'
+        '<div class="section-title">Story opportunities</div></div>'
         '<div class="section-count">single trend pool</div></div>',
         unsafe_allow_html=True,
     )
@@ -4683,9 +4683,14 @@ def render_youtube_trends_topic_fetcher(*, live=False):
                 f'{" · autocomplete" if item["youtube_autocomplete"] else ""}</div>',
                 unsafe_allow_html=True,
             )
+            st.caption(
+                f'Trend: {item["trend_query"]} · '
+                f'{item["news_count"]} current '
+                f'{"story" if item["news_count"] == 1 else "stories"}'
+            )
             st.caption(item["hashtag"])
         with mid:
-            st.caption(f'Signal score {item["score"]:.0f}')
+            st.caption(f'Story signal {item["score"]:.0f}')
         with right:
             selected = st.session_state[selected_key] == index
             if st.button(
