@@ -44,7 +44,7 @@ The factory's seven functional stages are **Approved** for the established Deep-
 03. Audio — **Approved**
 04. Visuals — **Approved**
 05. Subtitles — **Approved**
-06. Renderer — **Under active v2 rewrite/test**
+06. Renderer — **Approved**
 07. YouTube Upload — **Approved**
 
 The Dashboard UI/UX remains **WIP**.
@@ -215,7 +215,7 @@ Contract:
 Status: **Approved.**
 
 ## Renderer — Function 06
-Renderer v2 is the current active implementation on branch `renderer-v2`, pending Test approval before promotion to `main`.
+Renderer v2 is the current active implementation on `main`.
 
 - One shared renderer is used by Test and Live; there is no separate Test/Live encoder implementation.
 - Rendering is direct Python/Pillow frame composition into FFmpeg. MoviePy is not used.
@@ -226,7 +226,7 @@ Renderer v2 is the current active implementation on branch `renderer-v2`, pendin
 - Stats Cards, Quote Cards, Top-5 editorial cards and Manual Subject Cutout remain static/composition-led where motion would reduce readability.
 - Channel logo is optional and disabled by default. Source credit remains independently available.
 - Existing headline, subtitle, Top-5, Quote Card, Stats Card and Manual Subject Cutout contracts remain direct renderer features with no wrapper layer.
-- Renderer v2 must be validated in Test before promotion to Live.
+- Renderer v2 is merged into `main` and is the shared Test/Live renderer.
 ## YouTube Upload — Function 07
 
 Authentication:
