@@ -27,141 +27,172 @@ VISUAL_OPTIONS = (
 LIVE_TEXT_CUTOUT_POLYGON_EDITOR = None
 if not st.get_option("global.appTest"):
     LIVE_TEXT_CUTOUT_POLYGON_EDITOR = st.components.v2.component(
-            name="live_text_cutout_polygon_editor",
-            html="<div class=\"text-cutout-editor\"><svg viewBox=\"0 0 1080 1920\" aria-label=\"Text Cutout polygon editor\"><image id=\"background\" x=\"0\" y=\"0\" width=\"1080\" height=\"1920\" preserveAspectRatio=\"none\"></image><polygon id=\"polygon\" fill=\"rgba(47,98,85,.16)\" stroke=\"#2f6255\" stroke-width=\"5\" vector-effect=\"non-scaling-stroke\"></polygon><g id=\"handles\"></g></svg><div class=\"help\">Drag a point to reshape. Drag inside the polygon to move it. Click an edge to add a point.</div><button id=\"render\" type=\"button\">Render Now</button></div>",
-            css=".text-cutout-editor{width:100%;height:100%;font-family:Inter,ui-sans-serif,sans-serif}.text-cutout-editor svg{display:block;width:100%;height:640px;border:1px solid #d4d4cc;border-radius:12px;background:#111;touch-action:none}.text-cutout-editor .handle{cursor:move}.text-cutout-editor .help{margin:6px 0;color:var(--st-text-color);font-size:12px;line-height:1.2;opacity:.7}.text-cutout-editor #render{width:100%;height:40px;border:1px solid var(--st-primary-color);border-radius:10px;background:var(--st-primary-color);color:#fff;font:700 14px Inter,ui-sans-serif,sans-serif;cursor:pointer}",
-            js="""
-    export default function(component) {
-        const { data, setTriggerValue, parentElement } = component;
-        const svg = parentElement.querySelector("svg");
-        const image = parentElement.querySelector("#background");
-        const polygon = parentElement.querySelector("#polygon");
-        const handles = parentElement.querySelector("#handles");
-        const renderButton = parentElement.querySelector("#render");
-        if (!svg || !image || !polygon || !handles || !renderButton) return;
-    
-        image.setAttribute("href", "data:image/jpeg;base64," + data.image);
-        let points = (data.points || []).map((point) => [Number(point[0]), Number(point[1])]);
-        let handleEls = [];
-        let draggingPoint = false;
-        let draggingPolygon = false;
-        let suppressClick = false;
-        let dragStart = null;
-        let originalPoints = null;
-    
-        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-    
-        const svgPoint = (event) => {
-            const rect = svg.getBoundingClientRect();
-            return [
-                clamp((event.clientX - rect.left) / rect.width * 1080, 0, 1080),
-                clamp((event.clientY - rect.top) / rect.height * 1920, 0, 1920),
-            ];
-        };
-    
-        const render = () => {
-            polygon.setAttribute("points", points.map((point) => point.join(",")).join(" "));
-            while (handleEls.length < points.length) {
-                const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-                handle.setAttribute("class", "handle");
-                handle.setAttribute("r", "13");
-                handle.setAttribute("fill", "#ffffff");
-                handle.setAttribute("stroke", "#2f6255");
-                handle.setAttribute("stroke-width", "4");
-                handle.setAttribute("vector-effect", "non-scaling-stroke");
-                handles.appendChild(handle);
-                handle.addEventListener("pointerdown", (event) => {
-                    event.preventDefault();
-                    event.stopPropagation();
-                    draggingPoint = true;
-                    suppressClick = true;
-                    const index = Number(handle.dataset.index);
-                    handle.setPointerCapture(event.pointerId);
-                    const move = (moveEvent) => {
-                        const next = svgPoint(moveEvent);
-                        points[index] = [Math.round(next[0]), Math.round(next[1])];
-                        render();
-                    };
-                    const up = () => {
-                        handle.removeEventListener("pointermove", move);
-                        draggingPoint = false;
-                    };
-                    handle.addEventListener("pointermove", move);
-                    handle.addEventListener("pointerup", up, {once:true});
-                });
-                handleEls.push(handle);
-            }
-            points.forEach((point, index) => {
-                const handle = handleEls[index];
-                handle.dataset.index = String(index);
-                handle.setAttribute("cx", point[0]);
-                handle.setAttribute("cy", point[1]);
-            });
-        };
-    
-        polygon.addEventListener("pointerdown", (event) => {
-            event.preventDefault();
-            event.stopPropagation();
-            draggingPolygon = true;
-            suppressClick = false;
-            dragStart = svgPoint(event);
-            originalPoints = points.map((point) => [point[0], point[1]]);
-            svg.setPointerCapture(event.pointerId);
-        });
-    
-        svg.addEventListener("pointermove", (event) => {
-            if (!draggingPolygon || !dragStart || !originalPoints) return;
-            const next = svgPoint(event);
-            const dx = next[0] - dragStart[0];
-            const dy = next[1] - dragStart[1];
-            if (Math.hypot(dx, dy) > 2) suppressClick = true;
-            points = originalPoints.map((point) => [
-                Math.round(clamp(point[0] + dx, 0, 1080)),
-                Math.round(clamp(point[1] + dy, 0, 1920)),
-            ]);
-            render();
-        });
-    
-        svg.addEventListener("pointerup", () => {
-            draggingPolygon = false;
-            dragStart = null;
-            originalPoints = null;
-        });
-    
-        svg.addEventListener("click", (event) => {
-            if (suppressClick || draggingPoint || draggingPolygon) {
-                suppressClick = false;
-                return;
-            }
-            if (event.target.classList && event.target.classList.contains("handle")) return;
-            const point = svgPoint(event);
-            let best = null;
-            points.forEach((start, index) => {
-                const end = points[(index + 1) % points.length];
-                const dx = end[0] - start[0];
-                const dy = end[1] - start[1];
-                const length2 = dx * dx + dy * dy;
-                const t = length2 ? clamp(((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2, 0, 1) : 0;
-                const projected = [start[0] + t * dx, start[1] + t * dy];
-                const distance = Math.hypot(point[0] - projected[0], point[1] - projected[1]);
-                if (!best || distance < best.distance) best = {index, distance, point: projected};
-            });
-            if (!best || best.distance > 32) return;
-            points.splice(best.index + 1, 0, [Math.round(best.point[0]), Math.round(best.point[1])]);
-            render();
-        });
-    
-        renderButton.onclick = () => {
-            setTriggerValue("render_now", points.map((point) => [Math.round(point[0]), Math.round(point[1])]));
-        };
-    
-        render();
-    }
-    """,
-        )
-           render();\n        send();\n    };\n    render();\n}\n",
-    )
+        name="live_text_cutout_polygon_editor",
+        html="""
+<div class="text-cutout-editor">
+  <svg viewBox="0 0 1080 1920" aria-label="Text Cutout polygon editor">
+    <image id="background" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
+    <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
+    <g id="handles"></g>
+  </svg>
+  <div class="help">Drag a point to reshape. Drag inside the polygon to move it. Click an edge to add a point.</div>
+</div>
+""",
+        css="""
+.text-cutout-editor{width:100%;height:100%;font-family:Inter,ui-sans-serif,sans-serif}
+.text-cutout-editor svg{display:block;width:100%;height:100%;border:1px solid #d4d4cc;border-radius:12px;background:#111;touch-action:none}
+.text-cutout-editor .handle{cursor:move}
+.text-cutout-editor .help{margin:6px 0;color:#52574f;font-size:12px;line-height:1.2;opacity:.78}
+""",
+        js="""
+export default function(component) {
+    const { data, setStateValue, parentElement } = component;
+    const svg = parentElement.querySelector("svg");
+    const image = parentElement.querySelector("#background");
+    const polygon = parentElement.querySelector("#polygon");
+    const handles = parentElement.querySelector("#handles");
+    if (!svg || !image || !polygon || !handles) return;
 
+    image.setAttribute("href", "data:image/jpeg;base64," + data.image);
+
+    let points = (data.points || []).map((point) => [Number(point[0]), Number(point[1])]);
+    let handleEls = [];
+    let draggingPoint = false;
+    let draggingPolygon = false;
+    let suppressClick = false;
+    let dragStart = null;
+    let originalPoints = null;
+    let polygonMoved = false;
+
+    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    const svgPoint = (event) => {
+        const rect = svg.getBoundingClientRect();
+        return [
+            clamp((event.clientX - rect.left) / rect.width * 1080, 0, 1080),
+            clamp((event.clientY - rect.top) / rect.height * 1920, 0, 1920),
+        ];
+    };
+    const persist = () => {
+        setStateValue("points", points.map((point) => [
+            Math.round(point[0]),
+            Math.round(point[1]),
+        ]));
+    };
+    const render = () => {
+        polygon.setAttribute(
+            "points",
+            points.map((point) => point.join(",")).join(" ")
+        );
+        while (handleEls.length < points.length) {
+            const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+            handle.setAttribute("class", "handle");
+            handle.setAttribute("r", "13");
+            handle.setAttribute("fill", "#fff");
+            handle.setAttribute("stroke", "#2f6255");
+            handle.setAttribute("stroke-width", "4");
+            handle.setAttribute("vector-effect", "non-scaling-stroke");
+            handles.appendChild(handle);
+            handle.addEventListener("pointerdown", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                draggingPoint = true;
+                suppressClick = true;
+                const index = Number(handle.dataset.index);
+                handle.setPointerCapture(event.pointerId);
+                const move = (moveEvent) => {
+                    const next = svgPoint(moveEvent);
+                    points[index] = [Math.round(next[0]), Math.round(next[1])];
+                    render();
+                };
+                const up = () => {
+                    handle.removeEventListener("pointermove", move);
+                    draggingPoint = false;
+                    persist();
+                };
+                handle.addEventListener("pointermove", move);
+                handle.addEventListener("pointerup", up, {once:true});
+            });
+            handleEls.push(handle);
+        }
+        points.forEach((point, index) => {
+            const handle = handleEls[index];
+            handle.dataset.index = String(index);
+            handle.setAttribute("cx", point[0]);
+            handle.setAttribute("cy", point[1]);
+        });
+    };
+
+    polygon.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        draggingPolygon = true;
+        polygonMoved = false;
+        suppressClick = false;
+        dragStart = svgPoint(event);
+        originalPoints = points.map((point) => [point[0], point[1]]);
+        svg.setPointerCapture(event.pointerId);
+    });
+
+    svg.addEventListener("pointermove", (event) => {
+        if (!draggingPolygon || !dragStart || !originalPoints) return;
+        const next = svgPoint(event);
+        const dx = next[0] - dragStart[0];
+        const dy = next[1] - dragStart[1];
+        if (Math.hypot(dx, dy) > 2) {
+            polygonMoved = true;
+            suppressClick = true;
+        }
+        points = originalPoints.map((point) => [
+            Math.round(clamp(point[0] + dx, 0, 1080)),
+            Math.round(clamp(point[1] + dy, 0, 1920)),
+        ]);
+        render();
+    });
+
+    svg.addEventListener("pointerup", () => {
+        if (draggingPolygon && polygonMoved) persist();
+        draggingPolygon = false;
+        dragStart = null;
+        originalPoints = null;
+        polygonMoved = false;
+    });
+
+    svg.addEventListener("click", (event) => {
+        if (suppressClick || draggingPoint || draggingPolygon) {
+            suppressClick = false;
+            return;
+        }
+        if (event.target.classList && event.target.classList.contains("handle")) return;
+
+        const point = svgPoint(event);
+        let best = null;
+        points.forEach((start, index) => {
+            const end = points[(index + 1) % points.length];
+            const dx = end[0] - start[0];
+            const dy = end[1] - start[1];
+            const length2 = dx * dx + dy * dy;
+            const t = length2
+                ? clamp(((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2, 0, 1)
+                : 0;
+            const projected = [start[0] + t * dx, start[1] + t * dy];
+            const distance = Math.hypot(point[0] - projected[0], point[1] - projected[1]);
+            if (!best || distance < best.distance) {
+                best = {index, distance, point: projected};
+            }
+        });
+        if (!best || best.distance > 32) return;
+        points.splice(best.index + 1, 0, [
+            Math.round(best.point[0]),
+            Math.round(best.point[1]),
+        ]);
+        render();
+        persist();
+    });
+
+    render();
+}
+""",
+    )
 TOP5_VISUAL_OPTIONS = (
     "Option 1 · Automatic Scraper",
     "Option 2 · Manual Scraper",
@@ -2212,6 +2243,7 @@ def _live_generate_script():
     st.session_state.live_text_cutout_font = "Barlow Condensed"
     st.session_state.live_text_cutout_style = "Crisp Outline"
     st.session_state.live_text_cutout_font_size = 150
+    st.session_state.live_text_cutout_polygon_points = None
     return script
 
 
@@ -2728,8 +2760,8 @@ def _render_live_visuals(slide_count: int):
             )
 
             st.caption(
-                "English only. Select an existing image, draw the complete text area directly on the 1080 × 1920 frame, "
-                "then Render Now. Drag polygon points to shape the text area; click an edge to add a point."
+                "English only. Select an existing image, shape the text polygon on the 1080 × 1920 frame, "
+                "then Render Now. Drag points to reshape, drag inside to move the whole polygon, or click an edge to add a point."
             )
 
             entries = _stats_card_pool_entries(live=True)
@@ -2872,55 +2904,54 @@ def _render_live_visuals(slide_count: int):
                             (960, 1200),
                             (120, 1200),
                         ]
-                        if rendered_config and rendered_config.get("text_polygon"):
-                            default_polygon = [
-                                (int(point[0]), int(point[1]))
-                                for point in rendered_config["text_polygon"]
-                            ]
-                        elif st.session_state.get("live_text_cutout_polygon_points"):
+                        if st.session_state.get("live_text_cutout_polygon_points"):
                             default_polygon = [
                                 (int(point[0]), int(point[1]))
                                 for point in st.session_state.live_text_cutout_polygon_points
                             ]
+                        elif rendered_config and rendered_config.get("text_polygon"):
+                            default_polygon = [
+                                (int(point[0]), int(point[1]))
+                                for point in rendered_config["text_polygon"]
+                            ]
 
                         image_buffer = BytesIO()
-                        source_image.convert("RGB").save(image_buffer, format="JPEG", quality=88, optimize=True)
+                        source_image.convert("RGB").save(
+                            image_buffer,
+                            format="JPEG",
+                            quality=88,
+                            optimize=True,
+                        )
                         image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+                        source_digest = hashlib.sha1(bytes(source_bytes)).hexdigest()[:8]
 
                         polygon_editor_result = None
                         if LIVE_TEXT_CUTOUT_POLYGON_EDITOR is not None:
                             polygon_editor_result = LIVE_TEXT_CUTOUT_POLYGON_EDITOR(
                                 data={"image": image_data, "points": default_polygon},
                                 default={"points": default_polygon},
-                                key=f"live-text-cutout-polygon-{selected_asset_key}-{selected_mode}",
-                                on_render_now_change=lambda: None,
-                                width=360,
-                                height=700,
+                                on_points_change=lambda: None,
+                                key=f"live-text-cutout-polygon-{selected_asset_key}-{selected_mode}-{source_digest}",
+                                width=270,
+                                height=480,
                             )
                         else:
-                            st.image(source_image, width=360)
+                            st.image(source_image, width=270)
 
                         polygon_points = default_polygon
                         if polygon_editor_result is not None:
-                            returned_render = getattr(polygon_editor_result, "render_now", None)
-                            if returned_render:
+                            current_points = getattr(polygon_editor_result, "points", None)
+                            if current_points:
                                 try:
                                     polygon_points = [
-                                        (int(point[0]), int(point[1]))
-                                        for point in returned_render
+                                        (
+                                            max(0, min(1080, int(point[0]))),
+                                            max(0, min(1920, int(point[1]))),
+                                        )
+                                        for point in current_points
                                     ]
                                 except (TypeError, ValueError, IndexError):
                                     polygon_points = default_polygon
-                            elif st.session_state.get("live_text_cutout_polygon_points"):
-                                polygon_points = [
-                                    (int(point[0]), int(point[1]))
-                                    for point in st.session_state.live_text_cutout_polygon_points
-                                ]
-                        elif st.session_state.get("live_text_cutout_polygon_points"):
-                            polygon_points = [
-                                (int(point[0]), int(point[1]))
-                                for point in st.session_state.live_text_cutout_polygon_points
-                            ]
                         if len(polygon_points) < 3:
                             polygon_points = default_polygon
                         st.session_state.live_text_cutout_polygon_points = polygon_points
@@ -2930,8 +2961,6 @@ def _render_live_visuals(slide_count: int):
                                 f'Last rendered polygon: {len(rendered_config.get("text_polygon") or [])} points. '
                                 "Move points or add points, change the text size, then press Render Now."
                             )
-
-                        if rendered_config:
                             font_size = st.slider(
                                 "Text size",
                                 min_value=72,
@@ -2943,16 +2972,15 @@ def _render_live_visuals(slide_count: int):
                         else:
                             font_size = 150
 
-                        render_now = (
-                            polygon_editor_result is not None
-                            and getattr(polygon_editor_result, "render_now", None)
-                        )
-                        if render_now:
+                        if st.button(
+                            "Render Now",
+                            type="primary",
+                            width="stretch",
+                            key="live-text-cutout-render",
+                        ):
                             try:
-                                polygon_points = [
-                                    (int(point[0]), int(point[1]))
-                                    for point in render_now
-                                ]
+                                if len(polygon_points) < 3:
+                                    raise ValueError("Text Cutout requires at least three polygon points.")
                                 box_left = min(point[0] for point in polygon_points)
                                 box_top = min(point[1] for point in polygon_points)
                                 box_right = max(point[0] for point in polygon_points)
@@ -2985,6 +3013,7 @@ def _render_live_visuals(slide_count: int):
                                 st.session_state.live_text_cutout_polygon_points = polygon_points
                                 st.session_state.live_text_cutout_config = rendered_config
                                 st.session_state.live_text_cutout_render = preview_bytes
+                                st.rerun()
                             except (ValueError, OSError, RuntimeError, ImportError) as exc:
                                 st.session_state.live_text_cutout_render = None
                                 st.error(str(exc))

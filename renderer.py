@@ -536,7 +536,6 @@ def _top5_editorial_layout(
         raise ValueError("Top-5 Subject Cutout returned no usable foreground subjects.")
 
     sx1, sy1, sx2, sy2 = bbox
-    subject_width = max(1, sx2 - sx1)
     subject_height = max(1, sy2 - sy1)
     words = clean_headline.split()
 
