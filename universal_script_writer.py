@@ -23,7 +23,7 @@ RESEARCH_TIMEOUT = 10
 MIN_ARTICLE_CHARS = 500
 MAX_SOURCE_CHARS = 28000
 MAX_RELATED_ARTICLES = 2
-MIN_WORDS = 45
+MIN_WORDS = 50
 MAX_WORDS = 74
 MAX_SLIDE_ONE_WORDS = 13
 MIN_SCENES = 3
@@ -375,8 +375,8 @@ NARRATION CONTRACT
 - Use 5 slides when five distinct factual beats are needed.
 - Slide 1 MUST contain fewer than 14 words. This is a generation rule.
 - The complete spoken narration MUST be at least 18 seconds and strictly under 30 seconds at normal channel delivery.
-- As a generation proxy, keep the complete narration between 45 and 74 spoken words. This protects the 18-second minimum and the under-30-second ceiling without padding.
-- Target roughly 50–68 words when the story permits.
+- As a generation proxy, keep the complete narration between 50 and 74 spoken words. This protects the 18-second minimum and the under-30-second ceiling without padding.
+- Target roughly 52–68 words when the story permits.
 - Never add words merely to reach the minimum.
 - The minimum duration must come from useful story information, context, evidence or consequence.
 - Every slide must add genuinely new information.

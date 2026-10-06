@@ -8,7 +8,7 @@ def valid_result(scene_count=4):
         voiceovers = [
             "Carlos Alcaraz wins a dramatic Tokyo final against a tough opponent.",
             "He recovered from a slow start, changed the momentum, and finished the final with a strong closing stretch.",
-            "The confirmed victory adds another major result to Alcaraz's season and gives him the Tokyo championship.",
+            "The confirmed victory adds another major result to Alcaraz's season and gives him the Tokyo championship for this tournament campaign again.",
         ]
     elif scene_count == 4:
         voiceovers = [
