@@ -23,7 +23,7 @@ def valid_result(scene_count=4):
             "He recovered from the opening setback and regained control in the final.",
             "The key turning point came when Alcaraz changed the momentum.",
             "That comeback produced a decisive result in Tokyo.",
-            "The confirmed victory gives Alcaraz the tournament title.",
+            "The confirmed victory gives Alcaraz the tournament title this season.",
         ]
     else:
         voiceovers = ["Carlos Alcaraz wins Tokyo."] * scene_count
@@ -95,7 +95,7 @@ def test_validator_rejects_two_slides():
 def test_validator_rejects_slide_one_at_14_words():
     result = valid_result()
     result["script"][0]["voiceover"] = (
-        "Carlos Alcaraz wins the dramatic Tokyo final against a very tough opponent right now today"
+        "Carlos Alcaraz wins the dramatic Tokyo final against a very tough opponent right now"
     )
     assert writer._words(result["script"][0]["voiceover"]) == 14
     valid, reason = writer.validate_universal_script(result)
