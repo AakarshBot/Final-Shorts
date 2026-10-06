@@ -53,7 +53,7 @@ Production lines:
 1. **Top 5 cricket stories of the day** — **Test-only / WIP**
 2. **On This Day** — **Test-first / WIP**
 
-Top-5 is currently Test-only / WIP. Its Option 9 Manual Subject Cutout remains a Top-5-only experiment. Live Cricket now includes the approved visual option `Option 7 · Text Cutout`, using the proven manual subject cutout rendering path without changing Top-5 Option 7 or Option 9.
+Top-5 is currently Test-only / WIP. **Option 7 · Subject Cutout is experimental and must remain untouched. Option 9 · Manual Subject Cutout is the canonical manual subject cutout feature in Top-5 Test.** Cricket has the same canonical feature as **Option 7 · Text Cutout** in both Test and Live. Top-5 Live remains WIP and is not being added yet.
 
 ## Factory order
 
@@ -323,39 +323,41 @@ Purpose:
 
 Status: **Planned / Test framework WIP.**
 
-### Live Cricket Option 7 · Text Cutout
+### Shared Manual Subject Cutout · Top-5 Option 9 + Cricket Option 7
 
-Live Cricket's Text Cutout is the visual counterpart of the proven Top-5 manual subject cutout composition, while remaining a separate Live option. It is English-only, has no subtitles, and its own editable headline defaults to the approved Cricket Script headline only as filler. It supports Negative Space and Behind Subject composition, the same font/style choices, and an editable polygon text area drawn directly on the 1080 × 1920 frame. It starts as a four-point rectangle; dragging points reshapes it, and clicking an edge adds another point. The polygon is the sole position/area control; there are no X/Y sliders. Text auto-fits line by line against the usable width of the polygon. Behind Subject restores the detected foreground subjects above the complete text/effects stack, including multiple people and real gaps between them.
+Top-5 **Option 9 · Manual Subject Cutout** and Cricket **Option 7 · Text Cutout** are the same feature and must use one implementation. Only the surrounding pipeline orchestration and menu label differ. Top-5 Live is WIP and does not consume this feature yet.
 
-Text Cutout shows the same source-image crop control used by the other visual options: **Crop / reposition** opens the existing 9:16 crop function, with the same framing behavior and output path. Each source image keeps its own crop in the existing `live_visual_crops` store, and Text Cutout uses that cropped image when selected. Switching between images, modes, fonts, styles, headlines, sizes and crops is valid and must not crash or contaminate another image's state. The cropper state is keyed to the selected image and composition mode.
+The feature is English-only, has no subtitles, and uses an editable headline. The default headline is the approved/script headline only as filler; the user can edit it. It supports **Negative Space** and **Behind Subject**, the same approved font/style choices, and a polygon text region on the 1080 × 1920 frame. The polygon starts as a four-point rectangle. Vertices can be dragged, the whole polygon can be dragged rigidly, and clicking an edge adds a point. The polygon is the only text-position/area control; there are no X/Y sliders. Text fitting is calculated line by line from the polygon's usable scanline width.
 
-The rendered Text Cutout frame is preserved exactly for production handoff: no logo, no source label and no other overlays. A Text Cutout slide also has no subtitles. The headline, text size, font, style, mode and polygon points only become the production configuration when the user presses **Render Now**. Changing polygon points or controls must not regenerate the rendered preview automatically. The editor is an inline Streamlit v2 component with no added package dependency. Polygon changes and text-size changes persist between fragment reruns. The Text Cutout UI is isolated from the full dashboard so editing the polygon or text size does not refresh the rest of the Live dashboard; **Render Now** is the explicit full-dashboard update. The final rendered frame can be attached to any Cricket slide.
+Negative Space never runs BiRefNet. Behind Subject runs the existing BiRefNet subject detector and restores all detected foreground subjects above the text/effects stack, including multiple people and real gaps.
+
+Both Test and Live use the existing source-image pools and the existing 9:16 **Crop / reposition** function. A selected crop is reused; the image pools are not reduced and no new search path is added.
+
+The rendered frame is preserved exactly for handoff. The frame contains no logo, source label or other permanent overlay, and Text Cutout has no subtitles. Headline, polygon, text size, font, style and mode are pending edits until **Render Now**. Editing them must not regenerate the rendered preview. The editor is an inline Streamlit v2 component with no added package dependency, uses a medium 360 × 640 editor preview, and stays isolated from the dashboard while editing. **Render Now** is the only action allowed to replace the rendered preview and may perform the full-dashboard rerun. The last rendered polygon/config/frame remains available for another edit-and-render pass.
 
 ### Test / Live architecture audit
 
-The factory still follows one core implementation per production stage. Test and Live differ in orchestration, not in approved stage logic.
+The factory has one implementation per approved stage. Test and Live differ in orchestration, not approved feature logic.
 
-For Top-5 during the current WIP period:
-- Test is the only place where Top-5 visual changes are being developed and evaluated.
-- Option 3 is active in Test as the manual image fetcher.
-- Option 8 is explicitly a dashboard WIP choice with no active renderer.
-- Top-5's shared card renderer remains the component that will be promoted to Live after its Test approval.
-- Existing Cricket visual retrieval/rendering paths remain unchanged. Live Cricket Option 7 · Text Cutout is a separate visual choice alongside the existing scraper/search/card options.
-- Subject Cutout segmentation is never invoked by normal Top-5 rendering.
-- No duplicate Live-only Subject Cutout implementation is permitted.
+For Manual Subject Cutout:
+- **Top-5 Option 9** is Test-only/WIP for now.
+- **Cricket Option 7 · Text Cutout** is available in both Test and Live.
+- **Top-5 Option 7 · Subject Cutout** is experimental and must remain separate/untouched.
+- Top-5 Live support is deferred until the Top-5 Test implementation is approved.
+- The polygon editor, text fitting, font/style set, subject-mask path, crop reuse, render handoff and state behavior are shared; duplicate Test/Live implementations are not permitted.
 
 Cleanup rules:
-- Delete obsolete Top-5 Option 3 and Subject Cutout code rather than layering patches around it.
+- Delete obsolete rectangle-only UI/state and duplicate Text Cutout code instead of layering compatibility patches around it.
 - Keep the active implementation direct and small.
-- Do not add new dependencies, wrappers, compatibility layers, fallback pipelines or parallel card renderers.
-- Do not change Cricket behavior while iterating on Top-5.
+- Do not add new dependencies, wrappers, compatibility layers, fallback pipelines or parallel renderers.
+- Do not change unrelated Cricket, Niche Sports or Top-5 Option 7 behaviour.
 
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is being tested, and Option 8 Body Card is WIP. Live Cricket Option 7 · Text Cutout is active in the Cricket Visuals desk.**.
+- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout is the shared manual-cutout implementation under Test. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP.**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
