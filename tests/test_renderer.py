@@ -48,6 +48,30 @@ def _test_base():
     return Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), "white")
 
 
+def test_manual_subject_cutout_anchors_text_to_polygon_left_edge(monkeypatch):
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: font_path.read_bytes(),
+    )
+
+    data = renderer._manual_subject_cutout_layout_data(
+        "India win today",
+        ((80, 700), (1000, 700), (1000, 1200), (80, 1200)),
+        140,
+        "Barlow Condensed",
+        "Crisp Outline",
+    )
+
+    assert data["layouts"]
+    for layout in data["layouts"]:
+        for _line, _line_top, left, bbox in layout["placements"]:
+            line_width = bbox[2] - bbox[0]
+            assert left == 82
+            assert left + line_width <= 998
+
+
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
     assert renderer.HEADLINE_SECONDS == 1.35
