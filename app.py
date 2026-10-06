@@ -24,11 +24,12 @@ VISUAL_OPTIONS = (
     "Option 5 · Stats Card",
     "Option 6 · Quote Card",
 )
-CRICKET_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS + ("Option 7 · Text Cutout",)
-LIVE_TEXT_CUTOUT_POLYGON_EDITOR = None
+CRICKET_TEST_VISUAL_OPTIONS = VISUAL_OPTIONS + ("Option 7 · Text Cutout",)
+CRICKET_LIVE_VISUAL_OPTIONS = CRICKET_TEST_VISUAL_OPTIONS
+MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR = None
 if not st.get_option("global.appTest"):
-    LIVE_TEXT_CUTOUT_POLYGON_EDITOR = st.components.v2.component(
-        name="live_text_cutout_polygon_editor",
+    MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR = st.components.v2.component(
+        name="manual_subject_cutout_polygon_editor",
         html="""
 <div class="text-cutout-editor">
   <svg viewBox="0 0 1080 1920" aria-label="Text Cutout polygon editor">
@@ -36,7 +37,7 @@ if not st.get_option("global.appTest"):
     <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
     <g id="handles"></g>
   </svg>
-  <div class="help">Drag a point to reshape. Drag inside the polygon to move it. Click an edge to add a point.</div>
+  <div class="help">Drag a point to reshape. Drag inside the polygon to move the whole area. Click an edge to add a point.</div>
 </div>
 """,
         css="""
@@ -1009,26 +1010,8 @@ if "live_quote_card_attribution" not in st.session_state:
     st.session_state.live_quote_card_attribution = ""
 if "live_quote_card_slide" not in st.session_state:
     st.session_state.live_quote_card_slide = 1
-if "live_text_cutout_image_selection" not in st.session_state:
-    st.session_state.live_text_cutout_image_selection = None
-if "live_text_cutout_headline" not in st.session_state:
-    st.session_state.live_text_cutout_headline = ""
-if "live_text_cutout_config" not in st.session_state:
-    st.session_state.live_text_cutout_config = None
-if "live_text_cutout_render" not in st.session_state:
-    st.session_state.live_text_cutout_render = None
-if "live_text_cutout_slide" not in st.session_state:
-    st.session_state.live_text_cutout_slide = 1
-if "live_text_cutout_mode" not in st.session_state:
-    st.session_state.live_text_cutout_mode = "Negative Space"
-if "live_text_cutout_font" not in st.session_state:
-    st.session_state.live_text_cutout_font = "Barlow Condensed"
-if "live_text_cutout_style" not in st.session_state:
-    st.session_state.live_text_cutout_style = "Crisp Outline"
-if "live_text_cutout_font_size" not in st.session_state:
-    st.session_state.live_text_cutout_font_size = 150
-if "live_text_cutout_polygon_points" not in st.session_state:
-    st.session_state.live_text_cutout_polygon_points = None
+if "live_manual_subject_cutout" not in st.session_state:
+    st.session_state.live_manual_subject_cutout = {}
 if "live_visual_option" not in st.session_state:
     st.session_state.live_visual_option = "Option 1 · Automatic Scraper"
 if "live_script_language" not in st.session_state:
@@ -1199,15 +1182,6 @@ def _crop_visual_dialog(
             cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
             crop_bytes = buffer.getvalue()
             store[asset_key] = crop_bytes
-            if (
-                crop_store == "live_visual_crops"
-                and isinstance(st.session_state.get("live_text_cutout_image_selection"), dict)
-                and st.session_state.live_text_cutout_image_selection.get("asset_key") == asset_key
-            ):
-                st.session_state.live_text_cutout_config = None
-                st.session_state.live_text_cutout_render = None
-                st.session_state.live_text_cutout_font_size = 150
-                st.session_state.live_text_cutout_polygon_points = None
             assignments = st.session_state.get("live_visual_assignments") or {}
             for assignment in assignments.values():
                 if assignment.get("asset_key") == asset_key:
@@ -2235,16 +2209,7 @@ def _live_generate_script():
     st.session_state.live_quote_card_image_selection = None
     st.session_state.live_quote_card_image_crop = None
     st.session_state.live_quote_card_preview = None
-    st.session_state.live_text_cutout_image_selection = None
-    st.session_state.live_text_cutout_headline = str(script.get("headline") or "")
-    st.session_state.live_text_cutout_config = None
-    st.session_state.live_text_cutout_render = None
-    st.session_state.live_text_cutout_slide = 1
-    st.session_state.live_text_cutout_mode = "Negative Space"
-    st.session_state.live_text_cutout_font = "Barlow Condensed"
-    st.session_state.live_text_cutout_style = "Crisp Outline"
-    st.session_state.live_text_cutout_font_size = 150
-    st.session_state.live_text_cutout_polygon_points = None
+    st.session_state.live_manual_subject_cutout = {}
     return script
 
 
@@ -2755,9 +2720,9 @@ def _render_live_visuals(slide_count: int):
         @st.fragment
         def render_text_cutout():
             from renderer import (
-                TOP5_MANUAL_SUBJECT_FONT_OPTIONS,
-                TOP5_MANUAL_SUBJECT_STYLE_OPTIONS,
-                build_top5_manual_subject_cutout_preview,
+                MANUAL_SUBJECT_FONT_OPTIONS,
+                MANUAL_SUBJECT_STYLE_OPTIONS,
+                build_manual_subject_cutout_preview,
             )
 
             st.caption(
@@ -2878,14 +2843,14 @@ def _render_live_visuals(slide_count: int):
 
                         font = st.pills(
                             "Font",
-                            list(TOP5_MANUAL_SUBJECT_FONT_OPTIONS),
+                            list(MANUAL_SUBJECT_FONT_OPTIONS),
                             default=st.session_state.live_text_cutout_font,
                             key="live_text_cutout_font",
                             label_visibility="collapsed",
                         ) or st.session_state.live_text_cutout_font
                         style = st.pills(
                             "Text style",
-                            list(TOP5_MANUAL_SUBJECT_STYLE_OPTIONS),
+                            list(MANUAL_SUBJECT_STYLE_OPTIONS),
                             default=st.session_state.live_text_cutout_style,
                             key="live_text_cutout_style",
                             label_visibility="collapsed",
@@ -2927,8 +2892,8 @@ def _render_live_visuals(slide_count: int):
                         source_digest = hashlib.sha1(bytes(source_bytes)).hexdigest()[:8]
 
                         polygon_editor_result = None
-                        if LIVE_TEXT_CUTOUT_POLYGON_EDITOR is not None:
-                            polygon_editor_result = LIVE_TEXT_CUTOUT_POLYGON_EDITOR(
+                        if MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR is not None:
+                            polygon_editor_result = MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR(
                                 data={"image": image_data, "points": default_polygon},
                                 default={"points": default_polygon},
                                 on_points_change=lambda: None,
@@ -2995,7 +2960,7 @@ def _render_live_visuals(slide_count: int):
                                     "style": style,
                                     "include_overlays": False,
                                 }
-                                preview_bytes = build_top5_manual_subject_cutout_preview(
+                                preview_bytes = build_manual_subject_cutout_preview(
                                     source_image,
                                     headline,
                                     mode=selected_mode,
@@ -6343,7 +6308,7 @@ elif st.session_state.app_mode == "test":
             from renderer import (
                 build_top5_card_preview,
                 build_quote_card_preview,
-                build_top5_manual_subject_cutout_preview,
+                build_manual_subject_cutout_preview,
             )
             from visual_fetcher import crawl_visuals, manual_crawl_visuals
             from visual_search import search_images
@@ -6572,17 +6537,17 @@ elif st.session_state.app_mode == "test":
                     key="test-top5-manual-subject-playground-mode",
                 ) or "Negative Space"
                 selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
-                from renderer import TOP5_MANUAL_SUBJECT_FONT_OPTIONS, TOP5_MANUAL_SUBJECT_STYLE_OPTIONS
+                from renderer import MANUAL_SUBJECT_FONT_OPTIONS, MANUAL_SUBJECT_STYLE_OPTIONS
 
                 font = st.pills(
                     "Font",
-                    list(TOP5_MANUAL_SUBJECT_FONT_OPTIONS),
+                    list(MANUAL_SUBJECT_FONT_OPTIONS),
                     default="Barlow Condensed",
                     key="test-top5-manual-subject-playground-font",
                 ) or "Barlow Condensed"
                 style = st.pills(
                     "Text style",
-                    list(TOP5_MANUAL_SUBJECT_STYLE_OPTIONS),
+                    list(MANUAL_SUBJECT_STYLE_OPTIONS),
                     default="Crisp Outline",
                     key="test-top5-manual-subject-playground-style",
                 ) or "Crisp Outline"
@@ -6641,7 +6606,7 @@ elif st.session_state.app_mode == "test":
                     key="test-top5-manual-subject-playground-render",
                 ):
                     try:
-                        from renderer import build_top5_manual_subject_cutout_preview
+                        from renderer import build_manual_subject_cutout_preview
                         rendered_config = {
                             "headline": st.session_state.test_top5_visual_playground_headline,
                             "mode": selected_mode,
@@ -6651,7 +6616,7 @@ elif st.session_state.app_mode == "test":
                             "style": style,
                         }
                         st.session_state["test-top5-manual-subject-playground-config"] = rendered_config
-                        st.session_state.test_top5_visual_playground_render = build_top5_manual_subject_cutout_preview(
+                        st.session_state.test_top5_visual_playground_render = build_manual_subject_cutout_preview(
                             current_image,
                             rendered_config["headline"],
                             mode=rendered_config["mode"],
@@ -6918,7 +6883,7 @@ elif st.session_state.app_mode == "test":
                                         source_label=source,
                                     )
                                 elif card_type == "manual-subject" and isinstance(card_data, dict):
-                                    preview_bytes = build_top5_manual_subject_cutout_preview(
+                                    preview_bytes = build_manual_subject_cutout_preview(
                                         selected_bytes,
                                         str(card_data.get("headline") or selected_headline),
                                         mode=str(card_data.get("mode") or "negative-space"),
@@ -7272,17 +7237,17 @@ elif st.session_state.app_mode == "test":
                                     key=f"test-top5-manual-subject-mode-{active_slide}",
                                 ) or "Negative Space"
                                 selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
-                                from renderer import TOP5_MANUAL_SUBJECT_FONT_OPTIONS, TOP5_MANUAL_SUBJECT_STYLE_OPTIONS
+                                from renderer import MANUAL_SUBJECT_FONT_OPTIONS, MANUAL_SUBJECT_STYLE_OPTIONS
 
                                 font = st.pills(
                                     "Font",
-                                    list(TOP5_MANUAL_SUBJECT_FONT_OPTIONS),
+                                    list(MANUAL_SUBJECT_FONT_OPTIONS),
                                     default="Barlow Condensed",
                                     key=f"test-top5-manual-subject-font-{active_slide}",
                                 ) or "Barlow Condensed"
                                 style = st.pills(
                                     "Text style",
-                                    list(TOP5_MANUAL_SUBJECT_STYLE_OPTIONS),
+                                    list(MANUAL_SUBJECT_STYLE_OPTIONS),
                                     default="Crisp Outline",
                                     key=f"test-top5-manual-subject-style-{active_slide}",
                                 ) or "Crisp Outline"
@@ -7353,7 +7318,7 @@ elif st.session_state.app_mode == "test":
                                             "font": font,
                                             "style": style,
                                         }
-                                        preview = build_top5_manual_subject_cutout_preview(
+                                        preview = build_manual_subject_cutout_preview(
                                             working_image,
                                             headline,
                                             mode=rendered_config["mode"],
