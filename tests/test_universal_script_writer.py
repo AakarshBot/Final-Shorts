@@ -95,7 +95,7 @@ def test_validator_rejects_two_slides():
 def test_validator_rejects_slide_one_at_14_words():
     result = valid_result()
     result["script"][0]["voiceover"] = (
-        "Carlos Alcaraz wins the dramatic Tokyo final against a very tough opponent today"
+        "Carlos Alcaraz wins the dramatic Tokyo final against a very tough opponent right now today"
     )
     assert writer._words(result["script"][0]["voiceover"]) == 14
     valid, reason = writer.validate_universal_script(result)

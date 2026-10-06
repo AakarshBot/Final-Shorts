@@ -448,7 +448,7 @@ Before returning JSON, silently verify:
 1. The story is understandable without the article.
 2. There are 3–5 slides, preferably 4.
 3. Slide 1 has fewer than 14 words.
-4. Total narration is 45–74 words.
+4. Total narration is 50–74 words.
 5. The exact main subject name appears in the narration.
 6. No filler or retention-bait phrase appears.
 7. Every slide adds new factual information.
