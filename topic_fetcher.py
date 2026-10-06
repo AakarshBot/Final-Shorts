@@ -49,11 +49,13 @@ YOUTUBE_TREND_NOISE_TERMS = {
     "full", "video", "videos", "channel", "channels", "official", "time",
     "schedule", "schedules", "fixture", "fixtures", "prediction", "predicted",
     "lineup", "lineups",
+}
+YOUTUBE_TREND_GENERIC_TERMS = {
     "cricket", "football", "soccer", "tennis", "badminton", "basketball",
     "hockey", "formula", "f1", "motogp", "motorsport", "athletics", "boxing",
     "wrestling", "volleyball", "kabaddi", "squash", "golf", "chess", "swimming",
-    "cycling", "t20", "odi", "test",
-)
+    "cycling", "t20", "odi", "test", "sport", "sports",
+}
 LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 
@@ -664,10 +666,12 @@ def fetch_youtube_search_trends(
         meaningful = [
             token for token in tokens
             if token not in YOUTUBE_TREND_NOISE_TERMS
-            and not token.isdigit()
+            and (not token.isdigit() or len(token) == 4)
         ]
+        if not meaningful or all(token in YOUTUBE_TREND_GENERIC_TERMS for token in meaningful):
+            continue
         story_keyword = " ".join(meaningful).strip()
-        if len(story_keyword) < 4 or not meaningful:
+        if len(story_keyword) < 4:
             continue
 
         profile = (
@@ -683,6 +687,9 @@ def fetch_youtube_search_trends(
             "trend_query": raw_keyword,
             "profile": profile,
         })
+
+    if not candidates:
+        raise RuntimeError("YouTube search trends did not produce any story-worthy signals.")
 
     candidates.sort(
         key=lambda item: (item["evidence"], item["keyword"].casefold()),
