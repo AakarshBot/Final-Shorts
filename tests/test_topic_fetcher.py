@@ -450,6 +450,7 @@ def test_fetch_youtube_search_trends_returns_news_backed_story_pool(monkeypatch)
         lambda query, timeout=topic_fetcher.TIMEOUT, *, geo="IN": [
             make_topic(
                 "India announce new cricket squad",
+                hours=0,
                 source="ESPNcricinfo",
                 description="India cricket selection",
             )
@@ -486,6 +487,7 @@ def test_youtube_trends_use_broad_trend_query_for_news_matching(monkeypatch):
         return [
             make_topic(
                 "Player disqualified after tennis tournament incident",
+                hours=0,
                 source="ATP",
                 description="Tennis disciplinary decision",
             )
@@ -531,6 +533,7 @@ def test_youtube_trends_reject_generic_queries_and_validate_real_story_signals(m
             return [
                 make_topic(
                     "Carlos Alcaraz advances after straight sets win",
+                    hours=0,
                     source="ATP",
                     description="Tennis result",
                 )
@@ -567,7 +570,7 @@ def test_fetch_youtube_trend_topics_uses_only_today_and_global_news(monkeypatch)
     today = topic_fetcher._today_local_date()
     current = make_topic(
         "Virat Kohli returns to India cricket",
-        hours=1,
+        hours=0,
         description="Cricket news",
         url="https://example.com/today",
     )
