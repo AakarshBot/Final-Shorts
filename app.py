@@ -3192,7 +3192,7 @@ def _render_live_visuals(slide_count: int):
         return
 
     visual_options = (
-        CRICKET_LIVE_VISUAL_OPTIONS
+        YT_TRENDS_VISUAL_OPTIONS
         if st.session_state.get("live_production_line") == "youtube_trends"
         else CRICKET_LIVE_VISUAL_OPTIONS
         if st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
