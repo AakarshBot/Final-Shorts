@@ -777,23 +777,11 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         raise ValueError("Manual Subject Cutout requires a headline.")
 
     polygon = config.get("text_polygon")
-    if polygon is None:
-        box = config.get("text_box")
-        if not isinstance(box, (list, tuple)) or len(box) != 4:
-            raise ValueError("Manual Subject Cutout requires a polygon text area.")
-        try:
-            left, top, width, height = [int(value) for value in box]
-        except (TypeError, ValueError) as exc:
-            raise ValueError("Manual Subject Cutout has invalid text area values.") from exc
-        polygon = (
-            (left, top),
-            (left + width, top),
-            (left + width, top + height),
-            (left, top + height),
-        )
+    if not isinstance(polygon, (list, tuple)) or len(polygon) < 3:
+        raise ValueError("Manual Subject Cutout requires a polygon text area.")
 
     try:
-        polygon_points = [
+        points = [
             (
                 max(0, min(WIDTH, int(point[0]))),
                 max(0, min(HEIGHT, int(point[1]))),
@@ -803,13 +791,10 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
     except (TypeError, ValueError, IndexError) as exc:
         raise ValueError("Manual Subject Cutout has invalid polygon points.") from exc
 
-    if len(polygon_points) < 3:
-        raise ValueError("Manual Subject Cutout requires at least three polygon points.")
-
-    box_left = min(x for x, _ in polygon_points)
-    box_top = min(y for _, y in polygon_points)
-    box_right = max(x for x, _ in polygon_points)
-    box_bottom = max(y for _, y in polygon_points)
+    box_left = min(x for x, _ in points)
+    box_top = min(y for _, y in points)
+    box_right = max(x for x, _ in points)
+    box_bottom = max(y for _, y in points)
     box_width = box_right - box_left
     box_height = box_bottom - box_top
     if box_width <= 0 or box_height <= 0:
@@ -850,11 +835,11 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         "Chromatic Echo": 3,
     }[style]
 
-    def polygon_intervals(y_value: float) -> list[tuple[int, int]]:
+    def polygon_intervals(y_value: float) -> list[tuple[float, float]]:
         y_value = max(0.0, min(HEIGHT - 0.001, y_value))
         intersections = []
-        for index, (x1, y1) in enumerate(polygon_points):
-            x2, y2 = polygon_points[(index + 1) % len(polygon_points)]
+        for index, (x1, y1) in enumerate(points):
+            x2, y2 = points[(index + 1) % len(points)]
             if y1 == y2:
                 continue
             if (y1 <= y_value < y2) or (y2 <= y_value < y1):
@@ -863,12 +848,17 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
                 )
         intersections.sort()
         return [
-            (int(round(intersections[index])), int(round(intersections[index + 1])))
-            for index in range(0, len(intersections) - 1, 2)
-            if intersections[index + 1] > intersections[index]
+            (left, right)
+            for left, right in zip(intersections[0::2], intersections[1::2])
+            if right > left
         ]
 
-    def line_position(line: str, font, line_top: float, line_bottom: float):
+    def line_position(
+        line: str,
+        font: ImageFont.FreeTypeFont,
+        line_top: float,
+        line_bottom: float,
+    ):
         bbox = probe.textbbox(
             (0, 0),
             line,
@@ -876,44 +866,37 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             stroke_width=stroke_width,
         )
         line_width = bbox[2] - bbox[0]
-        sample_y = (
-            line_top + 2,
-            (line_top + line_bottom) / 2,
-            line_bottom - 2,
-        )
+        sample_y = [
+            line_top + (line_bottom - line_top) * fraction
+            for fraction in (0.08, 0.28, 0.5, 0.72, 0.92)
+        ]
         regions = [polygon_intervals(y_value) for y_value in sample_y]
         if any(not region for region in regions):
             return None
 
         widest = [
-            max(region, key=lambda item: item[1] - item[0])
+            max(region, key=lambda interval: interval[1] - interval[0])
             for region in regions
         ]
-        if line_width > min(right - left for left, right in widest):
+        common_left = max(interval[0] for interval in widest)
+        common_right = min(interval[1] for interval in widest)
+        if common_right - common_left < line_width:
             return None
 
-        centers = [
-            (left + right) / 2
-            for left, right in widest
-        ]
-        common_left = max(left for left, _ in widest)
-        common_right = min(right for _, right in widest)
-        if common_right > common_left:
-            centers.insert(0, (common_left + common_right) / 2)
-
-        for center in centers:
-            left = center - line_width / 2
-            right = center + line_width / 2
-            if all(
-                any(
-                    interval_left <= left and right <= interval_right
-                    for interval_left, interval_right in region
-                )
-                for region in regions
-            ):
-                return int(round(left)), bbox
-
+        center = (common_left + common_right) / 2
+        left = center - line_width / 2
+        right = center + line_width / 2
+        if all(
+            any(
+                interval_left <= left and right <= interval_right
+                for interval_left, interval_right in region
+            )
+            for region in regions
+        ):
+            return int(round(left)), bbox
         return None
+
+    words = headline.split()
 
     def fit_layout(size: int):
         font = ImageFont.truetype(BytesIO(font_data), size)
@@ -923,8 +906,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             font=font,
             stroke_width=stroke_width,
         )
-        line_height = line_box[3] - line_box[1]
-        words = headline.split()
+        line_height = max(1, line_box[3] - line_box[1])
 
         for line_count in range(1, len(words) + 1):
             total_height = (
@@ -935,41 +917,47 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
                 continue
 
             start_y = box_top + (box_height - total_height) / 2
-            placements = []
-            word_index = 0
-            fits = True
-
-            for line_index in range(line_count):
-                line_top = start_y + line_index * (
-                    line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+            specs = [
+                (
+                    start_y + index * (
+                        line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+                    ),
+                    start_y + index * (
+                        line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+                    ) + line_height,
                 )
-                line_bottom = line_top + line_height
-                current = []
+                for index in range(line_count)
+            ]
 
-                while word_index < len(words):
-                    trial = " ".join(current + [words[word_index]])
-                    position = line_position(trial, font, line_top, line_bottom)
-                    remaining_words = len(words) - word_index - 1
-                    remaining_lines = line_count - line_index - 1
-                    if position is None or remaining_words < remaining_lines:
-                        break
-                    current.append(words[word_index])
-                    word_index += 1
+            @lru_cache(maxsize=None)
+            def place(line_index: int, word_index: int):
+                if line_index == line_count:
+                    return () if word_index == len(words) else None
 
-                if not current:
-                    fits = False
-                    break
+                remaining_lines = line_count - line_index - 1
+                max_end = len(words) - remaining_lines
+                line_top, line_bottom = specs[line_index]
 
-                line = " ".join(current)
-                position = line_position(line, font, line_top, line_bottom)
-                if position is None:
-                    fits = False
-                    break
+                for end in range(max_end, word_index, -1):
+                    if end - word_index <= 0:
+                        continue
+                    if len(words) - end < remaining_lines:
+                        continue
+                    line = " ".join(words[word_index:end])
+                    position = line_position(line, font, line_top, line_bottom)
+                    if position is None:
+                        continue
+                    rest = place(line_index + 1, end)
+                    if rest is not None:
+                        return (
+                            (line, line_top, position[0], position[1]),
+                            *rest,
+                        )
+                return None
 
-                placements.append((line, line_top, position[0], position[1]))
-
-            if fits and word_index == len(words):
-                return font, placements
+            placements = place(0, 0)
+            if placements is not None:
+                return font, list(placements)
 
         return None
 
@@ -978,6 +966,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         min(MANUAL_SUBJECT_MAX_FONT_SIZE, int(font_size)),
     )
     start_size -= start_size % 2
+
     fit = None
     for size in range(start_size, MANUAL_SUBJECT_MIN_FONT_SIZE - 1, -2):
         fit = fit_layout(size)
@@ -992,10 +981,11 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
     font, placements = fit
     canvas = _top5_full_frame_image(base).convert("RGBA")
 
+    subject_mask = None
     if mode == "behind-subject":
-        source_bytes = BytesIO()
-        canvas.convert("RGB").save(source_bytes, format="PNG", optimize=False)
-        subject_mask = _top5_subject_mask(source_bytes.getvalue())
+        source = BytesIO()
+        canvas.convert("RGB").save(source, format="PNG", optimize=False)
+        subject_mask = _top5_subject_mask(source.getvalue())
         if subject_mask is None:
             raise ValueError("Manual Subject Cutout could not produce a usable subject mask.")
         subject_mask = subject_mask.convert("L").point(
@@ -1007,8 +997,6 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             0.18,
         )
         canvas = Image.composite(canvas, backdrop, subject_mask)
-    else:
-        subject_mask = None
 
     text_mask = Image.new("L", canvas.size, 0)
     text_draw = ImageDraw.Draw(text_mask)
@@ -1022,7 +1010,13 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             stroke_fill=255,
         )
 
-    def shifted_layer(offset_x: int, offset_y: int, alpha: int, blur: int = 0, fill=DARK) -> None:
+    def shifted_layer(
+        offset_x: int,
+        offset_y: int,
+        alpha: int,
+        blur: int = 0,
+        fill=DARK,
+    ) -> None:
         layer_mask = text_mask.filter(ImageFilter.GaussianBlur(blur)) if blur else text_mask
         layer_mask = layer_mask.point(lambda value: value * alpha // 255)
         layer = Image.new("RGBA", canvas.size, fill + (0,))
@@ -1062,9 +1056,10 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
 
     draw = ImageDraw.Draw(canvas, "RGBA")
     for line, line_top, cursor_x, bbox in placements:
+        position = (cursor_x - bbox[0], line_top - bbox[1])
         if style == "Double Edge":
             draw.text(
-                (cursor_x - bbox[0], line_top - bbox[1]),
+                position,
                 line,
                 font=font,
                 fill=WHITE + (255,),
@@ -1072,7 +1067,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
                 stroke_fill=DARK + (255,),
             )
             draw.text(
-                (cursor_x - bbox[0], line_top - bbox[1]),
+                position,
                 line,
                 font=font,
                 fill=WHITE + (255,),
@@ -1081,7 +1076,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             )
         else:
             draw.text(
-                (cursor_x - bbox[0], line_top - bbox[1]),
+                position,
                 line,
                 font=font,
                 fill=WHITE + (255,),
@@ -1098,26 +1093,17 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
 
     return canvas
 
+
 def build_manual_subject_cutout_preview(
     source_image: bytes | bytearray | Image.Image,
     headline: str,
     *,
     mode: str,
-    text_box: tuple[int, int, int, int] | None = None,
     font_size: int,
     font: str = "Barlow Condensed",
     style: str = "Crisp Outline",
-    text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] | None = None,
+    text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
 ) -> bytes:
-    if text_polygon is None and text_box is not None:
-        left, top, width, height = [int(value) for value in text_box]
-        text_polygon = (
-            (left, top),
-            (left + width, top),
-            (left + width, top + height),
-            (left, top + height),
-        )
-
     frame = _draw_manual_subject_cutout(
         source_image,
         {
