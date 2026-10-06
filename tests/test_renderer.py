@@ -86,7 +86,7 @@ def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
 
     data = renderer._manual_subject_cutout_layout_data(
         "India win",
-        ((80, 700), (1000, 700), (1000, 1200), (700, 1200)),
+        ((80, 700), (1000, 700), (1000, 1600), (300, 1600), (80, 1200)),
         140,
         "Barlow Condensed",
         "Crisp Outline",
@@ -94,7 +94,7 @@ def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
 
     assert data["layouts"]
     one_line = next(layout for layout in data["layouts"] if len(layout["lines"]) == 1)
-    assert one_line["placements"][0][2] == 392
+    assert one_line["placements"][0][2] == 82
 
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
