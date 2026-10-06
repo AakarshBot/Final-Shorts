@@ -480,26 +480,26 @@ Status: **Approved / cleaned / entity tiles implemented / keyword tile implement
 
 ### Function 01B — YouTube Search Trends
 
-Status: **Test + Live implementation rebuilt / awaiting user validation.**
+Status: **Test + Live rebuilt / universal Scriptwriter handoff implemented / awaiting Test validation.**
 
-- YT Trends remains a shared Topic Fetcher source, not a separate downstream pipeline.
+- YT Trends remains a shared Topic Fetcher source, not a separate downstream production architecture.
 - The collector uses Google Trends with the YouTube property and YouTube autocomplete with the existing hidden sports seed set.
 - The trend board is one unsegregated pool; it does not expose sport, country or market categories.
-- Raw YouTube queries are discovery signals only. Generic search-intent terms such as live/today/news/watch/streaming are removed, while sport terms are retained as useful context when paired with a specific subject or event.
+- Raw YouTube queries are discovery signals only. Generic search-intent terms are removed while useful specific sport/event context is retained.
 - Sports-only queries are rejected; ordinal forms such as t20th are normalized before filtering.
-- Each surviving trend is queried directly against the existing news source using the original trend query plus its cleaned story keyword and a when:1d search window. The returned articles then pass through the existing freshness, profile relevance, clustering and selection logic.
-- The final validation window is an exact rolling 24 hours in Asia/Kolkata, so a story from the previous calendar day can still qualify when it is less than 24 hours old.
-- Only trends with at least one relevant article in that rolling 24-hour window enter the board.
-- Each trend result caches its validated Topic articles. Selecting a trend uses those cached articles directly; it does not perform a second keyword-only news search.
-- “Find up to 20 more” runs the same direct trend-based news retrieval and can append up to 20 additional topics while excluding already selected topic events.
-- The initial board validates only the requested number of candidates, rather than fanning out to a larger fixed candidate pool.
-- The board presents the representative current news headline as the main story opportunity, with the original YouTube trend query shown underneath for transparency.
-- The cleaned story keyword, original trend query, normalized internal signal, current validated story count, and real Topic article handoff remain available.
-- The raw YouTube query is never handed to Scriptwriter. The selected Topic retains its normal title, description, source, published_at and real URL.
-- The trend score is normalized internal evidence, not exact public YouTube search volume.
-- Test and Live call the same render_youtube_trends_topic_fetcher() and the same topic-fetching functions. Live has separate production state only; there is no duplicate YT Trends implementation.
+- Each surviving trend is queried directly against the existing news source with the original trend query plus its cleaned story keyword and a when:1d window.
+- Final validation is an exact rolling 24 hours in Asia/Kolkata.
+- Only trends with at least one relevant current article enter the board.
+- Each trend caches its validated Topic articles. Selecting a trend uses those cached Topics directly; it does not perform a second keyword-only search.
+- “Find up to 20 more” uses the same retrieval path and can append up to 20 additional Topics while excluding already returned events.
+- The initial board validates only the requested number of candidates.
+- The displayed headline is the representative current news story. The raw YouTube trend remains visible only as discovery evidence.
+- The selected Topic retains its normal title, description, source, published_at and real URL. The raw trend query is never handed to Scriptwriter as the story.
+- **Scriptwriter handoff:** every YT Trends story uses the new Universal Niche Sports + YT Trends Scriptwriter, even when the selected story is about cricket. The protected Cricket Scriptwriter is never used for YT Trends.
+- After selection, Live moves into the existing single-story Script stage and then uses the existing Audio + Subtitles → Visuals + Render → Upload flow.
+- Test uses the same Universal Scriptwriter handoff for YT Trends and then its existing downstream Test stages.
+- No second YT Trends Scriptwriter, metadata stage, renderer path or upload path is introduced.
 - No new Python dependency is introduced.
-- The implementation reuses the existing Google News parsing, freshness, profile filtering, event clustering and selection logic rather than creating a second news-selection architecture.
 
 ### Cricket Pipeline Checkpoint — 6/10
 
@@ -520,41 +520,74 @@ Checkpoint rule:
 - Use **Cricket line = 6/10** as the starting quality baseline for future Cricket pipeline improvements.
 - Do not reopen already-approved Cricket components without a concrete regression or a clearly scoped improvement.
 
-### Function 02 — Cricket Scriptwriter
+### Function 02 — Scriptwriters
 
-The Cricket Scriptwriter is a direct four-slide writer with bounded research, one primary generation call and one hidden recovery rewrite.
+#### Cricket Scriptwriter — protected / read-only
 
-Active flow:
-1. Research the selected story from the source article and up to two related current reports when available.
+The existing Cricket Scriptwriter remains untouched by the Niche/YT Trends rewrite.
+
+- Normal Cricket production continues to use the existing Cricket writer exactly as it does today.
+- Its prompt, schema, validation, research flow, metadata package, quote handling, manual-edit handoff and downstream behavior are outside this change.
+- Do not modify this writer as part of Universal Niche Sports or YT Trends work.
+
+Status: **Protected / unchanged.**
+
+#### Universal Niche Sports + YouTube Search Trends Scriptwriter
+
+The old Niche Sports writer was deleted and replaced from scratch with one direct universal sports writer.
+
+Scope:
+- Normal Niche Sports production uses this writer.
+- YouTube Search Trends uses this writer regardless of whether the selected story happens to be cricket.
+- The normal Cricket production line never uses this writer.
+- Top-5 never uses this writer.
+
+Core flow:
+1. Read the selected article and build a full research packet with the primary article plus up to two related reports when available.
 2. Generate the complete package with `openai/gpt-oss-120b`.
-3. Validate locally.
-4. If generation/provider validation fails, make exactly one hidden complete rewrite with `openai/gpt-oss-20b`, using the exact failure reason.
-5. Never expose an invalid draft to Manual QC.
-6. Return the complete approved handoff package for Audio/Visuals and later Upload QC.
+3. Validate the generated package locally before Manual QC.
+4. If the first draft fails, make exactly one hidden complete rewrite with `openai/gpt-oss-20b` using the exact failure.
+5. Never expose an invalid generated draft to Manual QC.
 
-The current local validation enforces structural/downstream requirements:
-- Exactly 4 scenes.
-- Slide 1 contains at most 13 words, i.e. fewer than 14.
-- Estimated narration is at most 32 seconds for the Scriptwriter handoff; Audio remains the final encoded-duration check for the production's sub-30-second target.
-- The main subject name is present and appears in spoken narration.
-- Headline is exactly 3–4 words.
-- Exactly 3 title candidates are generated.
-- Description is non-empty.
-- Hashtags contain 3–5 entries beginning with `#`.
-- A public-upload comment is present.
-- Every scene contains `primary_entity`, `visual_intent`, `specific_search_prompt` and `sport_or_topic_category`.
+Universal narration contract:
+- 3–5 spoken slides are allowed.
+- Two-slide scripts are forbidden.
+- Four slides are preferred when they are the cleanest complete story.
+- Slide 1 contains fewer than 14 words.
+- Total narration is at least 18 seconds and strictly under 30 seconds.
+- The writer targets a 50–74 word narration envelope as the generation proxy for the 18–<30 second window.
+- The minimum duration must come from useful story information, context, evidence or consequence, never padding.
+- Every slide must add genuinely new information.
 
-Cleanup applied:
-- Removed the unused Cricket-side `HOOK_MAX_SECONDS` constant.
-- Removed Niche-only `GENERIC_OPENERS`, `RETENTION_BAIT` and the generic `validate_script()` from the Cricket module.
-- Moved the Niche-only generic validator into `niche_sports_script_writer.py`, where it belongs.
-- Removed the unnecessary generic `schema` argument from `_request()`; Cricket always uses the Cricket schema.
-- Removed the unused `source` parameter from `validate_cricket_script()`.
-- Removed the dead `result = None` exception-path assignment.
+Editorial behavior:
+- The writer reads the full research packet and creates its own editorial version rather than mechanically paraphrasing the source.
+- The actual sport/topic is identified from the evidence; there is no cricket-default framing.
+- Exact named subjects are resolved from descriptors. When a story/headline says a "legend", "champion", "star", "defending champion", "world number one" or similar label, the writer identifies the actual person/team from the research and names them naturally in narration.
+- The main subject is a required field and must appear in spoken narration.
+- Editorial value comes from selecting the strongest development, explaining concrete significance and closing with the latest confirmed status, without inventing opinion or facts.
+- No generic intros, viewer-directed retention bait or disposable filler. Phrases such as "wait till the end", "stay tuned", "don't scroll", "you won't believe this", "here is the latest" and similar bait are explicitly prohibited and locally rejected.
+- The writer must respect each sport's actual event structure and terminology.
 
-There is no separate hook-scoring layer, retention-scoring layer, metadata stage, wrapper runtime or manual AI-rewrite layer in the Cricket Scriptwriter.
+Publish metadata and downstream handoff:
+- `headline`: exactly 3–4 words.
+- `titles`: exactly 3 candidates using the existing SEO/Search, Consequence/Why It Matters and Curiosity angles.
+- `seo_description`: concise story-specific description.
+- `hashtags`: 3–5 relevant hashtags.
+- `comment`: concise story-specific discussion question.
+- `quote`, `quote_attribution`, `quote_slide`: faithful optional quote treatment attached to an existing narration slide.
+- Every scene retains `primary_entity`, `visual_intent`, `specific_search_prompt` and `sport_or_topic_category` for the existing Visuals handoff.
+- The existing Audio, Visuals, Renderer and Upload functions consume the same Scriptwriter handoff shape; no new downstream dependency or stage is introduced.
+- Quote-slide handoff now follows the actual generated scene count, including a possible fifth slide.
 
-Status: **Approved / cleaned.**
+YT Trends handoff:
+- Selecting a YT Trends headline enters the normal Live Script stage.
+- YT Trends does not return to its Topic Fetcher after selection.
+- The selected real news Topic, not the raw trend query, is handed to the universal Scriptwriter.
+- The rest of the Live pipeline remains the existing single-story flow.
+
+No new Python dependency is introduced. The universal writer is self-contained and no longer imports implementation helpers from the protected Cricket writer.
+
+Status: **Rewritten from scratch / ready for Test validation.**
 
 ### Cricket + Top-5 runtime audit checkpoint
 - Dashboard execution is prompt-driven: no story, script, audio, subtitle, render or upload function may start merely because Streamlit reran.

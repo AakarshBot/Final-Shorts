@@ -2581,11 +2581,17 @@ def _story_payload(topic) -> dict:
     }
 
 
-def _script_for_topic(topic, profile: str, language: str) -> dict:
-    from niche_sports_script_writer import write_niche_sports_script
+def _script_for_topic(
+    topic,
+    profile: str,
+    language: str,
+    *,
+    universal: bool = False,
+) -> dict:
+    from universal_script_writer import write_universal_script
     from script_writer import write_script
 
-    writer = write_niche_sports_script if profile == "niche_sports" else write_script
+    writer = write_universal_script if universal or profile == "niche_sports" else write_script
     return writer(
         _story_payload(topic),
         language=language,
@@ -2705,6 +2711,7 @@ def _live_generate_script():
         topic,
         st.session_state.get("live_topics_profile") or "",
         st.session_state.get("live_script_language", "english"),
+        universal=st.session_state.get("live_production_line") == "youtube_trends",
     )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
@@ -2718,7 +2725,8 @@ def _live_generate_script():
         script.get("quote_attribution") or ""
     )
     quote_slide = int(script.get("quote_slide") or 1)
-    st.session_state.live_quote_card_slide = max(1, min(4, quote_slide))
+    slide_count = len(script.get("script") or [])
+    st.session_state.live_quote_card_slide = max(1, min(slide_count or 1, quote_slide))
     st.session_state.live_quote_card_image_selection = None
     st.session_state.live_quote_card_image_crop = None
     st.session_state.live_quote_card_preview = None
@@ -3406,9 +3414,12 @@ def _render_live_script():
         key="live-approve-script",
     ):
         try:
-            if st.session_state.get("live_topics_profile") == "niche_sports":
-                from niche_sports_script_writer import apply_niche_script_edits
-                approved = apply_niche_script_edits(
+            if (
+                st.session_state.get("live_production_line") == "youtube_trends"
+                or st.session_state.get("live_topics_profile") == "niche_sports"
+            ):
+                from universal_script_writer import apply_universal_script_edits
+                approved = apply_universal_script_edits(
                     script,
                     edited_voiceovers,
                     headline=edited_headline if st.session_state.live_headline_enabled else "",
@@ -4364,7 +4375,10 @@ def render_live_dashboard():
                         st.rerun()
         return
 
-    if st.session_state.live_production_line == "youtube_trends":
+    if (
+        st.session_state.live_production_line == "youtube_trends"
+        and st.session_state.live_stage == "01 · Story"
+    ):
         render_youtube_trends_topic_fetcher(live=True)
         return
 
@@ -5088,6 +5102,7 @@ def render_scriptwriter():
                     topic,
                     st.session_state.get("topic_desk_profile") or "",
                     language.casefold(),
+                    universal=st.session_state.get("test_production_line") == "youtube_trends",
                 )
             st.session_state.approved_script=None
             st.session_state.audio_data=None
@@ -5135,9 +5150,12 @@ def render_scriptwriter():
                 edited_voiceovers.append(st.text_area("Narration",value=scene.get("voiceover",""),height=105,key=f"script-slide-{story_key}-{index}",label_visibility="collapsed"))
             if st.button("Approve script",type="primary",width="stretch"):
                 try:
-                    if st.session_state.get("topic_desk_profile") == "niche_sports":
-                        from niche_sports_script_writer import apply_niche_script_edits
-                        approved = apply_niche_script_edits(
+                    if (
+                        st.session_state.get("test_production_line") == "youtube_trends"
+                        or st.session_state.get("topic_desk_profile") == "niche_sports"
+                    ):
+                        from universal_script_writer import apply_universal_script_edits
+                        approved = apply_universal_script_edits(
                             script,
                             edited_voiceovers,
                             headline=edited_headline if headline_enabled else "",
@@ -5178,7 +5196,8 @@ def render_scriptwriter():
                         approved.get("quote_attribution") or ""
                     )
                     quote_slide = int(approved.get("quote_slide") or 1)
-                    st.session_state.quote_card_slide = max(1, min(4, quote_slide))
+                    slide_count = len(approved.get("script") or [])
+                    st.session_state.quote_card_slide = max(1, min(slide_count or 1, quote_slide))
                     st.session_state.quote_card_image_selection = None
                     st.session_state.quote_card_image_crop = None
                     st.session_state.quote_card_preview = None

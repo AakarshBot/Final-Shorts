@@ -260,8 +260,3 @@ def test_apply_script_edits_keeps_contract():
     )
     assert edited["approved_for_audio"] is True
 
-
-def test_niche_writer_import_contract_remains_available():
-    from niche_sports_script_writer import write_niche_sports_script
-
-    assert callable(write_niche_sports_script)
