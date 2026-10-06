@@ -453,7 +453,13 @@ def test_fetch_youtube_search_trends_returns_news_backed_story_pool(monkeypatch)
                 hours=0,
                 source="ESPNcricinfo",
                 description="India cricket selection",
-            )
+            ),
+            make_topic(
+                "India announced a cricket squad yesterday",
+                hours=25,
+                source="ESPNcricinfo",
+                description="India cricket selection",
+            ),
         ],
     )
     result = topic_fetcher.fetch_youtube_search_trends(20)
@@ -464,6 +470,45 @@ def test_fetch_youtube_search_trends_returns_news_backed_story_pool(monkeypatch)
     assert result[0]["hashtag"] == "#indiacricket"
     assert result[0]["news_count"] == 1
     assert [topic.title for topic in result[0]["topics"]] == ["India announce new cricket squad"]
+
+
+
+def test_fetch_youtube_search_trends_checks_only_requested_number_of_candidates(monkeypatch):
+    def fake_queries(seed):
+        if seed == "tennis":
+            return [
+                {
+                    "keyword": f"Tennis player story {index}",
+                    "signal": "Rising",
+                    "rank": index,
+                    "breakout": False,
+                    "seed": seed,
+                    "autocomplete": True,
+                }
+                for index in range(1, 9)
+            ]
+        return []
+
+    monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
+    calls = []
+
+    def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
+        calls.append(query)
+        return [
+            make_topic(
+                "Tennis player story becomes breaking news",
+                hours=0,
+                source="ATP",
+                description="Tennis news",
+                url=f"https://example.com/{len(calls)}",
+            )
+        ]
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    result = topic_fetcher.fetch_youtube_search_trends(5)
+
+    assert len(result) == 5
+    assert len(calls) == 5
 
 
 def test_youtube_trends_use_broad_trend_query_for_news_matching(monkeypatch):
@@ -566,19 +611,18 @@ def test_youtube_trends_reject_sports_only_queries(monkeypatch):
 
 
 
-def test_fetch_youtube_trend_topics_uses_only_today_and_global_news(monkeypatch):
-    today = topic_fetcher._today_local_date()
+def test_fetch_youtube_trend_topics_uses_only_last_24_hours_and_global_news(monkeypatch):
     current = make_topic(
         "Virat Kohli returns to India cricket",
-        hours=0,
+        hours=23.5,
         description="Cricket news",
-        url="https://example.com/today",
+        url="https://example.com/current",
     )
     previous = make_topic(
         "Virat Kohli returns to India cricket yesterday",
-        hours=26,
+        hours=24.5,
         description="Cricket news",
-        url="https://example.com/yesterday",
+        url="https://example.com/previous",
     )
     captured = []
 
@@ -596,5 +640,5 @@ def test_fetch_youtube_trend_topics_uses_only_today_and_global_news(monkeypatch)
     assert result[0].published_at == current.published_at
     assert captured
     assert all(geo is None for _, geo in captured)
-    assert all(f"after:{today.isoformat()}" in query for query, _ in captured)
-    assert all(f"before:{(today + timedelta(days=1)).isoformat()}" in query for query, _ in captured)
+    assert all("when:1d" in query for query, _ in captured)
+    assert all("after:" not in query and "before:" not in query for query, _ in captured)

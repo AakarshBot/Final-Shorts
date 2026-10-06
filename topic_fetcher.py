@@ -705,17 +705,16 @@ def fetch_youtube_search_trends(
         key=lambda item: (item["evidence"], item["keyword"].casefold()),
         reverse=True,
     )
-    target_date = _today_local_date()
-    date_filter = f"after:{target_date.isoformat()} before:{(target_date + timedelta(days=1)).isoformat()}"
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     validated = []
+    candidates_to_check = candidates[:limit]
 
-    with ThreadPoolExecutor(max_workers=min(12, len(candidates))) as pool:
+    with ThreadPoolExecutor(max_workers=min(MAX_GOOGLE_WORKERS, len(candidates_to_check))) as pool:
         futures = {}
-        for item in candidates[: max(limit * 3, 40)]:
-            context = "cricket" if item["profile"] != "niche_sports" else "sports"
+        for item in candidates_to_check:
             query = (
                 f'({item["trend_query"]}) OR ({item["keyword"]}) '
-                f'{context} {date_filter}'
+                f'when:1d'
             )
             futures[pool.submit(_fetch_google, query, TIMEOUT, geo=None)] = item
 
@@ -730,7 +729,7 @@ def fetch_youtube_search_trends(
             prepared = [
                 row
                 for row in prepared
-                if row.published_at.astimezone(LOCAL_TIMEZONE).date() == target_date
+                if row.published_at >= cutoff
             ]
             stories = _select(prepared, 3, set(), profile=item["profile"])
             if not stories:
@@ -753,7 +752,7 @@ def fetch_youtube_search_trends(
             })
 
     if not validated:
-        raise RuntimeError("YouTube search trend services returned no news-backed story signals. Retry the trend fetch.")
+        raise RuntimeError("YouTube search trends returned no news-backed story signals in the last 24 hours. Retry the trend fetch.")
 
     maximum = max(item["score"] for item in validated)
     for item in validated:
@@ -764,9 +763,6 @@ def fetch_youtube_search_trends(
         reverse=True,
     )
     return validated[:limit]
-
-def _today_local_date():
-    return datetime.now(LOCAL_TIMEZONE).date()
 
 
 def fetch_youtube_trend_topics(
@@ -782,15 +778,12 @@ def fetch_youtube_trend_topics(
     if not clean_keyword or limit <= 0:
         return []
 
-    target_date = _today_local_date()
-    next_date = target_date + timedelta(days=1)
-    date_filter = f"after:{target_date.isoformat()} before:{next_date.isoformat()}"
-    context = "cricket" if profile != "niche_sports" else "sports"
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     queries = [
-        f"{clean_keyword} {context} {date_filter}",
-        f"{clean_keyword} {context} (latest OR news OR update OR reaction OR statement) {date_filter}",
-        f"{clean_keyword} {context} (record OR injury OR transfer OR appointment OR controversy OR result) {date_filter}",
-        f"{clean_keyword} {context} (confirms OR reveals OR announces OR returns OR wins) {date_filter}",
+        f"{clean_keyword} when:1d",
+        f"{clean_keyword} (latest OR news OR update OR reaction OR statement) when:1d",
+        f"{clean_keyword} (record OR injury OR transfer OR appointment OR controversy OR result) when:1d",
+        f"{clean_keyword} (confirms OR reveals OR announces OR returns OR wins) when:1d",
     ]
     if more:
         queries = queries[:3]
@@ -815,8 +808,9 @@ def fetch_youtube_trend_topics(
 
     prepared = _prepare(rows, seen_urls, profile=profile)
     prepared = [
-        row for row in prepared
-        if row.published_at.astimezone(LOCAL_TIMEZONE).date() == target_date
+        row
+        for row in prepared
+        if row.published_at >= cutoff
     ]
     chosen = _select(
         prepared,
@@ -826,7 +820,6 @@ def fetch_youtube_trend_topics(
         profile=profile,
     )
     return chosen[:limit]
-
 
 
 def _score_niche(topic: Topic) -> float:

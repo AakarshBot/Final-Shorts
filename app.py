@@ -4695,7 +4695,7 @@ def render_youtube_trends_topic_fetcher(*, live=False):
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">01 · YT TRENDS</div>'
         '<div class="canvas-title">Choose a story driven by current YouTube search trends</div>'
-        '<div class="canvas-copy">These are current YouTube search signals that already have relevant news published today.</div></div></div>',
+        '<div class="canvas-copy">These are current YouTube search signals with relevant news published in the last 24 hours.</div></div></div>',
         unsafe_allow_html=True,
     )
     st.markdown(
@@ -4758,7 +4758,7 @@ def render_youtube_trends_topic_fetcher(*, live=False):
                     if stories:
                         st.session_state[topics_key] = stories
                     else:
-                        with st.spinner(f'Searching today’s news for “{keyword}”…'):
+                        with st.spinner(f'Searching news from the last 24 hours for “{keyword}”…'):
                             st.session_state[topics_key] = fetch_youtube_trend_topics(
                                 keyword,
                                 item["profile"],
@@ -4773,26 +4773,26 @@ def render_youtube_trends_topic_fetcher(*, live=False):
     if not topics:
         if st.session_state[selected_key] is not None:
             st.warning(
-                f'No news published today matched “{st.session_state[keyword_key]}”. Choose another trend.'
+                f'No news in the last 24 hours matched “{st.session_state[keyword_key]}”. Choose another trend.'
             )
         return
 
     keyword = st.session_state[keyword_key]
     st.divider()
     st.markdown(
-        f'<div class="section-head"><div><div class="eyebrow">NEWS PUBLISHED TODAY</div>'
+        f'<div class="section-head"><div><div class="eyebrow">NEWS PUBLISHED IN THE LAST 24 HOURS</div>'
         f'<div class="section-title">{keyword}</div></div>'
         f'<div class="section-count">{len(topics)} headlines</div></div>',
         unsafe_allow_html=True,
     )
-    st.caption("Only articles published today in the factory timezone are included.")
+    st.caption("Only articles published in the last 24 hours in the factory timezone are included.")
 
     if st.button(
-        "Find 20 more from today",
+        "Find up to 20 more from the last 24 hours",
         width="stretch",
         key=f"{button_prefix}more",
     ):
-        with st.spinner(f'Finding more news published today for “{keyword}”…'):
+        with st.spinner(f'Finding more news from the last 24 hours for “{keyword}”…'):
             try:
                 existing = list(topics)
                 more_topics = fetch_youtube_trend_topics(
