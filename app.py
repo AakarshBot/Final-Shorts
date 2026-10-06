@@ -916,6 +916,18 @@ if "topics" not in st.session_state:
     st.session_state.topics = []
 if "topic_keyword" not in st.session_state:
     st.session_state.topic_keyword = ""
+if "youtube_trend_results" not in st.session_state:
+    st.session_state.youtube_trend_results = []
+if "youtube_trend_selected" not in st.session_state:
+    st.session_state.youtube_trend_selected = None
+if "youtube_trend_keyword" not in st.session_state:
+    st.session_state.youtube_trend_keyword = ""
+if "youtube_trend_lane" not in st.session_state:
+    st.session_state.youtube_trend_lane = "Cricket India / Asia"
+if "youtube_trend_geo" not in st.session_state:
+    st.session_state.youtube_trend_geo = "IN"
+if "youtube_trend_profile" not in st.session_state:
+    st.session_state.youtube_trend_profile = "cricket_india_asia"
 if "selected_topic" not in st.session_state:
     st.session_state.selected_topic = None
 if "topic_open_tile" not in st.session_state:
@@ -4285,6 +4297,7 @@ def render_live_dashboard():
                             "01 · DEEP-DIVE": "deep_dive",
                             "02 · TOP-5": "top_5",
                             "03 · OTD": "otd",
+                            "04 · YOUTUBE TRENDS": "youtube_trends",
                         }[eyebrow]
                         _live_reset_downstream()
                         if eyebrow == "02 · TOP-5":
@@ -4581,6 +4594,213 @@ profiles = {
     "Niche Sports": "niche_sports",
 }
 
+
+
+def render_youtube_trends_topic_fetcher():
+    from topic_fetcher import fetch_youtube_search_trends, fetch_youtube_trend_topics
+
+    lane_options = {
+        "Cricket India / Asia": "cricket_india_asia",
+        "Cricket Global": "cricket_global",
+        "Niche Sports": "niche_sports",
+    }
+    geo_options = {"India": "IN", "Worldwide": None}
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">01 · YOUTUBE SEARCH TRENDS</div>'
+        '<div class="canvas-title">Start from YouTube search demand</div>'
+        '<div class="canvas-copy">Choose a sports lane and market, then fetch the ten strongest current YouTube-specific search signals. '
+        'The signal board is not presented as exact search-volume data.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([1.5, 1], gap="medium")
+    with left:
+        lane = st.pills(
+            "Sports lane",
+            list(lane_options),
+            default=st.session_state.youtube_trend_lane,
+            key="youtube-trend-lane",
+            label_visibility="collapsed",
+        ) or st.session_state.youtube_trend_lane
+    with right:
+        geo_label = st.pills(
+            "Market",
+            list(geo_options),
+            default="India" if st.session_state.youtube_trend_geo == "IN" else "Worldwide",
+            key="youtube-trend-market",
+            label_visibility="collapsed",
+        ) or ("India" if st.session_state.youtube_trend_geo == "IN" else "Worldwide")
+
+    profile = lane_options[lane]
+    geo = geo_options[geo_label]
+    changed = (
+        profile != st.session_state.youtube_trend_profile
+        or geo != st.session_state.youtube_trend_geo
+    )
+    if changed:
+        st.session_state.youtube_trend_profile = profile
+        st.session_state.youtube_trend_lane = lane
+        st.session_state.youtube_trend_geo = geo
+        st.session_state.youtube_trend_results = []
+        st.session_state.youtube_trend_selected = None
+        st.session_state.youtube_trend_keyword = ""
+        st.session_state.topics = []
+        st.session_state.selected_topic = None
+        st.session_state.topic_open_tile = None
+    else:
+        st.session_state.youtube_trend_lane = lane
+        st.session_state.youtube_trend_geo = geo
+
+    if st.button(
+        "Fetch current YouTube trends",
+        type="primary",
+        width="stretch",
+        key="youtube-trends-fetch",
+    ):
+        with st.spinner("Reading current YouTube search signals…"):
+            try:
+                st.session_state.youtube_trend_results = fetch_youtube_search_trends(
+                    profile,
+                    geo=geo,
+                    limit=10,
+                )
+                st.session_state.youtube_trend_selected = None
+                st.session_state.youtube_trend_keyword = ""
+                st.session_state.topics = []
+                st.session_state.selected_topic = None
+                st.session_state.topic_open_tile = None
+            except (RuntimeError, ValueError, OSError) as exc:
+                st.session_state.youtube_trend_results = []
+                st.error(str(exc))
+        st.rerun()
+
+    results = st.session_state.youtube_trend_results
+    if not results:
+        st.info("Fetch the current board to see YouTube-specific search signals.")
+        return
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">SEARCH SIGNALS</div>'
+        '<div class="section-title">Choose a search phrase</div></div>'
+        f'<div class="section-count">{len(results)} current signals</div></div>',
+        unsafe_allow_html=True,
+    )
+    for index, item in enumerate(results):
+        left, mid, right = st.columns([1.55, .8, .45], gap="small")
+        with left:
+            st.markdown(
+                f'<div class="topic-title">{item["keyword"]}</div>'
+                f'<div class="topic-meta">{item["signal"]} · signal {item["score"]:.0f} · '
+                f'{"YouTube autocomplete match" if item["youtube_autocomplete"] else "YouTube Trends signal"}</div>',
+                unsafe_allow_html=True,
+            )
+            st.caption(item["hashtag"])
+        with mid:
+            if item["breakout"]:
+                st.markdown('<span class="badge">BREAKOUT</span>', unsafe_allow_html=True)
+            st.caption(f'{item["seed_count"]} seed{"s" if item["seed_count"] != 1 else ""} contributed')
+        with right:
+            selected = st.session_state.youtube_trend_selected == index
+            if st.button(
+                "Selected" if selected else "Use",
+                type="primary" if selected else "secondary",
+                width="stretch",
+                key=f"youtube-trend-select-{index}",
+            ):
+                keyword = item["keyword"]
+                with st.spinner(f'Searching news for “{keyword}”…'):
+                    st.session_state.topics = fetch_youtube_trend_topics(
+                        keyword,
+                        profile,
+                        geo=geo,
+                        limit=20,
+                    )
+                st.session_state.youtube_trend_selected = index
+                st.session_state.youtube_trend_keyword = keyword
+                st.session_state.topic_keyword = keyword
+                st.session_state.topic_desk_profile = profile
+                st.session_state.selected_topic = None
+                st.session_state.topic_open_tile = None
+                st.session_state.script_data = None
+                st.session_state.approved_script = None
+                st.session_state.audio_data = None
+                st.session_state.approved_audio = None
+                st.session_state.subtitle_data = None
+                st.session_state.approved_subtitles = None
+                st.session_state.visual_result = None
+                st.session_state.visual_loaded_story = None
+                st.session_state.visual_assignments = {}
+                st.session_state.approved_visuals = None
+                st.session_state.visuals_approved = False
+                st.session_state.rendered_video_path = None
+                st.rerun()
+
+    topics = st.session_state.topics
+    if not topics:
+        return
+
+    keyword = st.session_state.youtube_trend_keyword
+    st.divider()
+    st.markdown(
+        f'<div class="section-head"><div><div class="eyebrow">NEWS FROM SELECTED SEARCH</div>'
+        f'<div class="section-title">{keyword}</div></div>'
+        f'<div class="section-count">{len(topics)} tiles</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    if st.button(
+        "Find 20 more unique stories",
+        width="stretch",
+        key="youtube-trends-more",
+    ):
+        with st.spinner(f'Finding more stories for “{keyword}”…'):
+            existing = list(topics)
+            more_topics = fetch_youtube_trend_topics(
+                keyword,
+                profile,
+                geo=geo,
+                more=True,
+                exclude_topics=existing,
+                limit=20,
+            )
+            st.session_state.topics = existing + more_topics
+        st.rerun()
+
+    selection = _render_topic_tiles(
+        topics,
+        st.session_state.selected_topic,
+        columns=3,
+        open_state_key="topic_open_tile",
+        key_prefix="youtube-trend-",
+    )
+    if selection:
+        index, member, members = selection
+        st.session_state.topics[index] = replace(
+            member,
+            group_key=topics[index].group_key,
+            group_members=members,
+        )
+        st.session_state.selected_topic = index
+        st.session_state.topic_open_tile = None
+        st.session_state.topic_desk_profile = profile
+        st.session_state.test_stage = "02 · Scriptwriter"
+        st.session_state.test_pipeline_notice = {
+            "confirmed": "Trend-driven story confirmed",
+            "next": "Moving to Script.",
+        }
+        st.session_state.script_data = None
+        st.session_state.approved_script = None
+        st.session_state.audio_data = None
+        st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
+        st.session_state.renderer_previews = None
+        st.session_state.rendered_video_path = None
+        st.session_state.upload_qc_approved = False
+        st.session_state.upload_result = None
+        st.session_state.upload_qc = None
+        st.rerun()
 
 def render_topic_fetcher():
     st.markdown(
@@ -5896,8 +6116,14 @@ elif st.session_state.app_mode == "test":
                 "ON THIS DAY",
                 "A date-driven historical package.",
             ),
+            (
+                "test-line-youtube-trends",
+                "04 · YOUTUBE TRENDS",
+                "YOUTUBE TRENDS",
+                "Start from current YouTube search signals.",
+            ),
         ]
-        cols = st.columns(3, gap="small")
+        cols = st.columns(4, gap="small")
         for col, (key, eyebrow, title, copy) in zip(cols, choices):
             with col:
                 with st.container(key=key):
@@ -5909,6 +6135,7 @@ elif st.session_state.app_mode == "test":
                         "01 · DEEP-DIVE": "Open Deep-Dive",
                         "02 · TOP-5": "Open Top-5",
                         "03 · OTD": "Open OTD",
+                        "04 · YOUTUBE TRENDS": "Open YouTube Trends",
                     }[eyebrow]
                     if st.button(button_label, type="primary", width="stretch", key=f"{key}-button"):
                         st.session_state.test_production_line = {
@@ -5925,6 +6152,7 @@ elif st.session_state.app_mode == "test":
             "deep_dive": "Deep-Dive",
             "top_5": "Top-5",
             "otd": "OTD",
+            "youtube_trends": "YouTube Trends",
         }.get(
             st.session_state.test_production_line,
             str(st.session_state.test_production_line).replace("_", " ").title(),
@@ -5947,7 +6175,9 @@ elif st.session_state.app_mode == "test":
         )
         _render_pipeline_notice("test_pipeline_notice")
 
-        if line_name == "Deep-Dive":
+        if line_name == "YouTube Trends" and stage == "01 · Topic Fetcher":
+            render_youtube_trends_topic_fetcher()
+        elif line_name in {"Deep-Dive", "YouTube Trends"}:
             if stage == "01 · Topic Fetcher":
                 render_topic_fetcher()
             elif stage == "02 · Scriptwriter":
