@@ -26,6 +26,7 @@ VISUAL_OPTIONS = (
 )
 CRICKET_TEST_VISUAL_OPTIONS = VISUAL_OPTIONS + ("Option 7 · Text Cutout",)
 CRICKET_LIVE_VISUAL_OPTIONS = CRICKET_TEST_VISUAL_OPTIONS
+YT_TRENDS_VISUAL_OPTIONS = CRICKET_TEST_VISUAL_OPTIONS
 MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR = None
 if not st.get_option("global.appTest"):
     MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR = st.components.v2.component(
@@ -1620,7 +1621,7 @@ def _render_manual_subject_cutout(
 
     st.caption(
         "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
-        "Polygon is the full text field; larger text uses line breaks to fill it, while smaller text may sit centered. "
+        "Polygon is the full text field; each line starts 2px inside its left edge, with line breaks used to keep the requested size inside the field. "
         "Render Now replaces the rendered frame."
     )
 
@@ -3191,7 +3192,9 @@ def _render_live_visuals(slide_count: int):
         return
 
     visual_options = (
-        CRICKET_LIVE_VISUAL_OPTIONS
+        YT_TRENDS_VISUAL_OPTIONS
+        if st.session_state.get("live_production_line") == "youtube_trends"
+        else CRICKET_LIVE_VISUAL_OPTIONS
         if st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
         else VISUAL_OPTIONS
     )
@@ -5752,7 +5755,14 @@ def _render_manual_ai_images():
 def render_visuals():
     st.header("04 · Visuals")
     cricket_test = st.session_state.get("topic_desk_profile") in {"cricket_india_asia", "cricket_global"}
-    visual_options = CRICKET_TEST_VISUAL_OPTIONS if cricket_test else VISUAL_OPTIONS
+    youtube_trends_test = st.session_state.get("test_production_line") == "youtube_trends"
+    visual_options = (
+        YT_TRENDS_VISUAL_OPTIONS
+        if youtube_trends_test
+        else CRICKET_TEST_VISUAL_OPTIONS
+        if cricket_test
+        else VISUAL_OPTIONS
+    )
     selected_option = st.session_state.get("visual_test_mode")
     if selected_option not in visual_options:
         selected_option = visual_options[0]
@@ -5778,7 +5788,7 @@ def render_visuals():
         _render_stats_card(live=False, slide_count=slide_count)
     elif mode.startswith("Option 6"):
         _render_quote_card(live=False, slide_count=slide_count)
-    else:
+    elif mode == "Option 7 · Text Cutout":
         entries = _stats_card_pool_entries(live=False)
         state = st.session_state.manual_subject_cutout
         assets = [
