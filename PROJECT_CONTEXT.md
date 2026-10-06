@@ -480,18 +480,20 @@ Status: **Approved / cleaned / entity tiles implemented / keyword tile implement
 Status: **Test + Live implementation rebuilt / awaiting user validation.**
 
 - YT Trends remains a shared Topic Fetcher source, not a separate downstream pipeline.
-- The collector still uses Google Trends with the YouTube property and YouTube autocomplete, with the existing hidden sports seed set.
-- The trend board remains one unsegregated pool; it does not expose sport, country or market categories.
-- Raw YouTube search queries are treated only as discovery signals. Generic search-intent queries such as live/today/news/watch/streaming and sport-only queries such as live cricket or live tennis are removed before story validation.
-- Useful sport context is preserved when it is paired with a specific subject or event. Ordinal forms such as t20th are normalized before filtering.
-- Each surviving trend signal is validated against the existing current-news source using the factory timezone and the selected Cricket/Niche profile. Only signals with at least one relevant article published on the current calendar day enter the trend board.
-- The trend board therefore presents news-backed story opportunities, not raw search strings.
-- Each result keeps the cleaned story keyword plus the original YouTube trend query for transparency, along with the normalized trend signal and the number of current validated stories.
-- Selecting a trend searches today's news using the cleaned story keyword and existing downstream Topic handoff. The raw YouTube query is never handed to Scriptwriter.
-- The trend score remains a normalized internal evidence score; it is not presented as exact YouTube search volume.
+- The collector uses Google Trends with the YouTube property and YouTube autocomplete with the existing hidden sports seed set.
+- The trend board is one unsegregated pool; it does not expose sport, country or market categories.
+- Raw YouTube queries are discovery signals only. Generic search-intent terms such as live/today/news/watch/streaming are removed, while sport terms are retained as useful context when paired with a specific subject or event.
+- Sports-only queries are rejected; ordinal forms such as t20th are normalized before filtering.
+- Each surviving trend is used to query the existing current-news source with a broad trend query plus cleaned form and the current calendar-day filter. The news results are passed through the existing freshness, profile relevance, clustering and selection logic.
+- Only trends with at least one relevant article published today in Asia/Kolkata enter the board.
+- Each trend result caches its validated Topic articles. Selecting a trend uses those cached articles directly; it does not perform a second fragile keyword-only news search.
+- The board presents the representative current news headline as the main story opportunity, with the original YouTube trend query shown underneath for transparency.
+- The cleaned story keyword, original trend query, normalized internal signal, current validated story count, and real Topic article handoff remain available.
+- The raw YouTube query is never handed to Scriptwriter. The selected Topic retains its normal title, description, source, published_at and real URL.
+- The trend score is normalized internal evidence, not exact public YouTube search volume.
 - Test and Live call the same render_youtube_trends_topic_fetcher() and the same topic-fetching functions. Live has separate production state only; there is no duplicate YT Trends implementation.
 - No new Python dependency is introduced.
-- The current rebuild deliberately reuses the existing Google News parsing, freshness, profile filtering, event clustering and selection logic rather than creating a second news-selection architecture.
+- The rebuild deliberately reuses the existing Google News parsing, freshness, profile filtering, event clustering and selection logic rather than creating a second news-selection architecture.
 
 ### Cricket Pipeline Checkpoint — 6/10
 
