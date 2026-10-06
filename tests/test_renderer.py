@@ -66,6 +66,9 @@ def test_manual_subject_cutout_anchors_text_to_polygon_left_edge(monkeypatch):
 
     assert data["layouts"]
     for layout in data["layouts"]:
+        assert layout["placements"][0][1] == 702
+        last_line, last_top, left, bbox = layout["placements"][-1]
+        assert last_top + (bbox[3] - bbox[1]) <= 1198
         for _line, _line_top, left, bbox in layout["placements"]:
             line_width = bbox[2] - bbox[0]
             assert left == 82
