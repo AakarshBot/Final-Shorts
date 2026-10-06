@@ -888,11 +888,11 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
         lambda _font_name: local_font,
     )
 
-    assert len(renderer.TOP5_MANUAL_SUBJECT_FONT_OPTIONS) == 9
-    assert len(renderer.TOP5_MANUAL_SUBJECT_STYLE_OPTIONS) == 9
+    assert len(renderer.MANUAL_SUBJECT_FONT_OPTIONS) == 9
+    assert len(renderer.MANUAL_SUBJECT_STYLE_OPTIONS) == 9
 
-    for font in renderer.TOP5_MANUAL_SUBJECT_FONT_OPTIONS:
-        preview = renderer.build_top5_manual_subject_cutout_preview(
+    for font in renderer.MANUAL_SUBJECT_FONT_OPTIONS:
+        preview = renderer.build_manual_subject_cutout_preview(
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode="negative-space",
@@ -903,8 +903,8 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
         )
         assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
 
-    for style in renderer.TOP5_MANUAL_SUBJECT_STYLE_OPTIONS:
-        preview = renderer.build_top5_manual_subject_cutout_preview(
+    for style in renderer.MANUAL_SUBJECT_STYLE_OPTIONS:
+        preview = renderer.build_manual_subject_cutout_preview(
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode="negative-space",
@@ -916,7 +916,7 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
         assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
 
     assert all(
-        renderer.TOP5_MANUAL_SUBJECT_FONT_OPTIONS[name].get("url")
+        renderer.MANUAL_SUBJECT_FONT_OPTIONS[name].get("url")
         for name in ("Bebas Neue", "Teko", "Khand", "Kanit", "Fjalla One")
     )
 
@@ -930,7 +930,7 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
     calls = []
     monkeypatch.setattr(
         renderer,
-        "_draw_top5_manual_subject_cutout",
+        "_draw_manual_subject_cutout",
         lambda base, config: (calls.append(("draw", config)) or base),
     )
     monkeypatch.setattr(
@@ -957,7 +957,12 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
     config = {
         "headline": "Text Cutout Headline",
         "mode": "negative-space",
-        "text_box": (80, 700, 920, 420),
+        "text_polygon": (
+            (80, 700),
+            (1000, 700),
+            (1000, 1120),
+            (80, 1120),
+        ),
         "font_size": 140,
         "font": "Barlow Condensed",
         "style": "Heavy Drop",
@@ -1015,7 +1020,7 @@ def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
         (80, 930),
     )
     for mode in ("negative-space", "behind-subject"):
-        preview = renderer.build_top5_manual_subject_cutout_preview(
+        preview = renderer.build_manual_subject_cutout_preview(
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode=mode,
@@ -1029,8 +1034,30 @@ def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
         image = Image.open(BytesIO(preview))
         assert image.size == (renderer.WIDTH, renderer.HEIGHT)
 
+def test_manual_subject_cutout_accepts_polygon_without_text_box():
+    polygon = (
+        (80, 660),
+        (1000, 660),
+        (1000, 930),
+        (760, 1180),
+        (320, 1180),
+        (80, 930),
+    )
+    preview = renderer.build_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India dominate the latest result",
+        mode="negative-space",
+        font_size=140,
+        font="Barlow Condensed",
+        style="Crisp Outline",
+        text_polygon=polygon,
+        include_overlays=False,
+    )
+    assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
+
+
 def test_top5_manual_subject_cutout_uses_barlow_condensed():
-    preview = renderer.build_top5_manual_subject_cutout_preview(
+    preview = renderer.build_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
         "India dominate the latest result",
         mode="negative-space",
@@ -1047,7 +1074,7 @@ def test_top5_manual_subject_cutout_accepts_both_modes(monkeypatch):
     monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
 
     for mode in ("negative-space", "behind-subject"):
-        preview = renderer.build_top5_manual_subject_cutout_preview(
+        preview = renderer.build_manual_subject_cutout_preview(
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode=mode,
@@ -1065,7 +1092,7 @@ def test_top5_manual_subject_cutout_negative_space_does_not_use_subject_mask(mon
         raise AssertionError("Negative Space must not run subject detection.")
 
     monkeypatch.setattr(renderer, "_top5_subject_mask", fail)
-    preview = renderer.build_top5_manual_subject_cutout_preview(
+    preview = renderer.build_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (240, 240, 240)),
         "India dominate the latest result",
         mode="negative-space",
@@ -1078,7 +1105,7 @@ def test_top5_manual_subject_cutout_negative_space_does_not_use_subject_mask(mon
 
 
 def test_top5_manual_subject_cutout_wraps_headline_inside_box():
-    preview = renderer.build_top5_manual_subject_cutout_preview(
+    preview = renderer.build_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
         "India dominate the latest cricket result today",
         mode="negative-space",
@@ -1088,7 +1115,7 @@ def test_top5_manual_subject_cutout_wraps_headline_inside_box():
 
     assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
 
-    preview = renderer.build_top5_manual_subject_cutout_preview(
+    preview = renderer.build_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
         "India dominate the latest cricket result today",
         mode="negative-space",
@@ -1111,7 +1138,7 @@ def test_top5_manual_subject_cutout_keeps_two_subjects_above_text(monkeypatch):
     subject_draw.rectangle((720, 620, 920, 1440), fill=255)
     monkeypatch.setattr(renderer, "_top5_subject_mask", lambda *_args: subject)
 
-    preview = renderer.build_top5_manual_subject_cutout_preview(
+    preview = renderer.build_manual_subject_cutout_preview(
         background,
         "India dominate the latest result",
         mode="behind-subject",
