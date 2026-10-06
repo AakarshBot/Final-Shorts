@@ -412,23 +412,20 @@ def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch
         }
     }
 
-    def fake_post(url, **kwargs):
-        calls.append(("post", url, kwargs["params"]))
-        return Response(text=")]}'," + json.dumps(explore))
-
     def fake_get(url, **kwargs):
         calls.append(("get", url, kwargs.get("params") or {}))
+        if "explore" in url:
+            return Response(text=")]}'," + json.dumps(explore))
         if "relatedsearches" in url:
             return Response(text=")]}'," + json.dumps(related))
         return Response(payload=["", [["India cricket today", 0], ["cricket", 0]]])
 
-    monkeypatch.setattr(topic_fetcher.requests, "post", fake_post)
     monkeypatch.setattr(topic_fetcher.requests, "get", fake_get)
     rows = topic_fetcher._youtube_trend_queries("cricket")
 
     assert any(
         '"property": "youtube"' in params["req"]
-        for method, _, params in calls if method == "post"
+        for method, _, params in calls if method == "get" and "explore" in _
     )
     assert rows[1]["autocomplete"] is True
     assert any(row["breakout"] for row in rows)
