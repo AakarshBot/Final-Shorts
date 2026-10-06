@@ -6067,7 +6067,7 @@ elif st.session_state.app_mode == "test":
                         "01 · DEEP-DIVE": "Open Deep-Dive",
                         "02 · TOP-5": "Open Top-5",
                         "03 · OTD": "Open OTD",
-                        "04 · YOUTUBE TRENDS": "Open YouTube Trends",
+                        "04": "Open YT Trends",
                     }[eyebrow]
                     if st.button(button_label, type="primary", width="stretch", key=f"{key}-button"):
                         st.session_state.test_production_line = {
