@@ -220,7 +220,7 @@ Renderer v2 is the current active implementation on `main`.
 - One shared renderer is used by Test and Live; there is no separate Test/Live encoder implementation.
 - Rendering is direct Python/Pillow frame composition into FFmpeg. MoviePy is not used.
 - Final output is 1080 × 1920 progressive H.264 High Profile, 4:2:0, two B-frames, closed GOP, GOP of half the frame rate, constant frame rate, BT.709, Fast Start and quality-controlled CRF 18 encoding, aligned with YouTube's current published upload guidance.
-- Final audio is AAC-LC, stereo, 48 kHz at 192 kbps with final loudness normalization targeting approximately -14 LUFS / -1.5 dBTP.
+- Final audio is AAC-LC, stereo, 48 kHz at 192 kbps with final loudness normalization targeting approximately -14 LUFS / -1.5 dBTP. Concatenated approved audio scenes are normalized inside the single FFmpeg complex audio filtergraph; `-af` is not used on the already-filtered output.
 - The renderer contains no detector-evasion, metadata-fingerprinting, pixel-perturbation, or other mechanism intended to bypass YouTube systems.
 - Ordinary photographic scenes use deterministic, subtle asset/story-derived push and pan motion instead of one fixed factory animation sequence.
 - Stats Cards, Quote Cards, Top-5 editorial cards and Manual Subject Cutout remain static/composition-led where motion would reduce readability.
