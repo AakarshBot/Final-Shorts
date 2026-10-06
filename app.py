@@ -1573,7 +1573,7 @@ def _render_manual_subject_cutout(
             cols = st.columns(min(3, len(current_layouts) - start), gap="medium")
             for col, option in zip(cols, current_layouts[start:start + 3]):
                 with col:
-                    st.image(option["preview"], width="stretch")
+                    st.image(option["preview"], width=300)
                     st.markdown(
                         '<div class="visual-detail">'
                         + " / ".join(option["lines"])
