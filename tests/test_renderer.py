@@ -694,6 +694,7 @@ def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
         "headline": "Quote headline",
     }
     seen = []
+    rendered_frames = []
 
     monkeypatch.setattr(renderer, "_draw_quote_card", lambda base, card: base)
     monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
@@ -900,7 +901,7 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode="negative-space",
-            text_box=(60, 700, 960, 500),
+            text_polygon=((60, 700), (1020, 700), (1020, 1200), (60, 1200)),
             font_size=140,
             font=font,
             style="Crisp Outline",
@@ -912,7 +913,7 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode="negative-space",
-            text_box=(60, 700, 960, 500),
+            text_polygon=((60, 700), (1020, 700), (1020, 1200), (60, 1200)),
             font_size=140,
             font="Barlow Condensed",
             style=style,
@@ -933,28 +934,19 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
     rendered = BytesIO()
     Image.new("RGB", (1080, 1920), (180, 40, 40)).save(rendered, format="PNG")
 
-    calls = []
     rendered_frames = []
-    monkeypatch.setattr(
-        renderer,
-        "_draw_manual_subject_cutout",
-        lambda base, config: (calls.append(("draw", config)) or base),
-    )
-    monkeypatch.setattr(
-        renderer,
-        "_paste_logo",
-        lambda *args: calls.append(("logo",)),
-    )
-    monkeypatch.setattr(
-        renderer,
-        "_paste_source",
-        lambda *args: calls.append(("source",)),
-    )
-    monkeypatch.setattr(
-        renderer,
-        "write_preview_video",
-        lambda frames, path: (next(iter(frames)), path.write_bytes(b"silent"), path)[-1],
-    )
+
+    def capture_frame(frames, path):
+        rendered_frames.append(next(iter(frames)).copy())
+        path.write_bytes(b"silent")
+        return path
+
+    def fail_overlay(*_args):
+        raise AssertionError("Manual Subject Cutout must not receive permanent overlays.")
+
+    monkeypatch.setattr(renderer, "_paste_logo", fail_overlay)
+    monkeypatch.setattr(renderer, "_paste_source", fail_overlay)
+    monkeypatch.setattr(renderer, "write_preview_video", capture_frame)
     monkeypatch.setattr(
         renderer,
         "_mux_audio",
@@ -998,10 +990,9 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
         output,
     )
 
-    assert calls == [("draw", config)]
-
-
-
+    assert len(rendered_frames) == 1
+    expected = Image.open(BytesIO(rendered.getvalue())).convert("RGB")
+    assert ImageChops.difference(rendered_frames[0], expected).getbbox() is None
 
 def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
     local_font = (
@@ -1031,7 +1022,7 @@ def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode=mode,
-            text_box=(80, 660, 920, 520),
+            text_polygon=((80, 660), (1000, 660), (1000, 1180), (80, 1180)),
             text_polygon=polygon,
             font_size=140,
             font="Barlow Condensed",
@@ -1066,7 +1057,7 @@ def test_top5_manual_subject_cutout_uses_barlow_condensed():
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
         "India dominate the latest result",
         mode="negative-space",
-        text_box=(80, 650, 920, 500),
+        text_polygon=((80, 650), (1000, 650), (1000, 1150), (80, 1150)),
         font_size=150,
     )
     image = Image.open(BytesIO(preview))
@@ -1083,7 +1074,7 @@ def test_top5_manual_subject_cutout_accepts_both_modes(monkeypatch):
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode=mode,
-            text_box=(60, 700, 960, 500),
+            text_polygon=((60, 700), (1020, 700), (1020, 1200), (60, 1200)),
             font_size=140,
         )
         assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
@@ -1101,7 +1092,7 @@ def test_top5_manual_subject_cutout_negative_space_does_not_use_subject_mask(mon
         Image.new("RGB", (1080, 1920), (240, 240, 240)),
         "India dominate the latest result",
         mode="negative-space",
-        text_box=(60, 700, 960, 500),
+        text_polygon=((60, 700), (1020, 700), (1020, 1200), (60, 1200)),
         font_size=130,
     )
 
@@ -1109,12 +1100,12 @@ def test_top5_manual_subject_cutout_negative_space_does_not_use_subject_mask(mon
     assert not called
 
 
-def test_top5_manual_subject_cutout_wraps_headline_inside_box():
+def test_top5_manual_subject_cutout_wraps_headline_inside_polygon():
     preview = renderer.build_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
         "India dominate the latest cricket result today",
         mode="negative-space",
-        text_box=(120, 700, 840, 560),
+        text_polygon=((120, 700), (960, 700), (960, 1260), (120, 1260)),
         font_size=110,
     )
 
@@ -1124,7 +1115,7 @@ def test_top5_manual_subject_cutout_wraps_headline_inside_box():
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
         "India dominate the latest cricket result today",
         mode="negative-space",
-        text_box=(120, 700, 840, 180),
+        text_polygon=((120, 700), (960, 700), (960, 880), (120, 880)),
         font_size=180,
     )
     assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
@@ -1147,7 +1138,7 @@ def test_top5_manual_subject_cutout_keeps_two_subjects_above_text(monkeypatch):
         background,
         "India dominate the latest result",
         mode="behind-subject",
-        text_box=(120, 680, 840, 500),
+        text_polygon=((120, 680), (960, 680), (960, 1180), (120, 1180)),
         font_size=140,
     )
     image = Image.open(BytesIO(preview)).convert("RGB")
