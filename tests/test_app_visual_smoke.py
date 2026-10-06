@@ -219,9 +219,13 @@ def test_cricket_test_exposes_shared_text_cutout():
     assert not at.exception, at.exception
     assert at.session_state["manual_subject_cutout"]["rendered_config"]["text_polygon"] == (
         (120, 700),
+        (540, 700),
         (960, 700),
+        (960, 950),
         (960, 1200),
+        (540, 1200),
         (120, 1200),
+        (120, 950),
     )
 
 
