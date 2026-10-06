@@ -602,33 +602,33 @@ def fetch_youtube_search_trends(
             except (requests.RequestException, ValueError, TypeError, KeyError):
                 continue
             for row in rows:
-            keyword = _clean(row.get("keyword"))
-            key = keyword.casefold()
-            if not keyword or _utility(keyword):
-                continue
-            item = grouped.setdefault(
-                key,
-                {
-                    "keyword": keyword,
-                    "evidence": 0.0,
-                    "rising": False,
-                    "breakout": False,
-                    "autocomplete": False,
-                    "seeds": set(),
-                },
-            )
-            item["seeds"].add(_clean(row.get("seed")).casefold())
-            item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
-            rank = max(1, int(row.get("rank") or 1))
-            weight = 1.5 if row.get("signal") == "Rising" else 1.0
-            item["evidence"] = max(
-                item["evidence"],
-                item["evidence"] + weight / rank,
-            )
-            if row.get("signal") == "Rising":
-                item["rising"] = True
-            if row.get("breakout"):
-                item["breakout"] = True
+                keyword = _clean(row.get("keyword"))
+                key = keyword.casefold()
+                if not keyword or _utility(keyword):
+                    continue
+                item = grouped.setdefault(
+                    key,
+                    {
+                        "keyword": keyword,
+                        "evidence": 0.0,
+                        "rising": False,
+                        "breakout": False,
+                        "autocomplete": False,
+                        "seeds": set(),
+                    },
+                )
+                item["seeds"].add(_clean(row.get("seed")).casefold())
+                item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
+                rank = max(1, int(row.get("rank") or 1))
+                weight = 1.5 if row.get("signal") == "Rising" else 1.0
+                item["evidence"] = max(
+                    item["evidence"],
+                    item["evidence"] + weight / rank,
+                )
+                if row.get("signal") == "Rising":
+                    item["rising"] = True
+                if row.get("breakout"):
+                    item["breakout"] = True
 
     results = []
     for item in grouped.values():
