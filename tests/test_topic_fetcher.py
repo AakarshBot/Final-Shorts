@@ -424,7 +424,7 @@ def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch
 
     monkeypatch.setattr(topic_fetcher.requests, "post", fake_post)
     monkeypatch.setattr(topic_fetcher.requests, "get", fake_get)
-    rows = topic_fetcher._youtube_trend_queries("cricket", None)
+    rows = topic_fetcher._youtube_trend_queries("cricket")
 
     assert any(
         '"property": "youtube"' in params["req"]
@@ -449,9 +449,8 @@ def test_fetch_youtube_search_trends_returns_one_unsegregated_pool(monkeypatch):
     result = topic_fetcher.fetch_youtube_search_trends(20)
     assert result
     assert result[0]["keyword"] == "India cricket today"
-    assert result[0]["profile"] in {"cricket_india_asia", "cricket_global", "niche_sports"}
-    assert result[0]["hashtag"] == "#Indiacrickettoday"
     assert result[0]["profile"] == "cricket_india_asia"
+    assert result[0]["hashtag"] == "#Indiacrickettoday"
 
 
 def test_fetch_youtube_trend_topics_uses_only_today_and_global_news(monkeypatch):
