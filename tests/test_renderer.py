@@ -485,8 +485,8 @@ def test_production_renderer_uses_stats_card_image_height_for_subtitles(monkeypa
 
     seen = []
 
-    def fake_frame(*args):
-        seen.append(args)
+    def fake_frame(*args, **kwargs):
+        seen.append((args, kwargs))
         return args[0]
 
     def fake_preview(frames, path):
