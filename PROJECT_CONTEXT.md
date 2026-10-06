@@ -332,7 +332,7 @@ Feature contract:
 - The whole polygon can be dragged rigidly inside the frame.
 - Clicking an edge adds a point.
 - No X/Y position sliders.
-- The polygon is the complete text field. For the requested font size, the renderer finds every valid word line-break combination that fits the polygon and previews them all. The user can choose any valid combination for the slide. Each rendered line starts 2px inside the left edge of its usable polygon span and extends toward the right edge as far as the requested text width permits. Line breaks are used when needed to keep the requested size inside the polygon without cutoff. Text is no longer re-centered inside the box.
+- The polygon is the complete text field. For the requested font size, the renderer finds every valid word line-break combination that fits the polygon and previews them all. The user can choose any valid combination for the slide. Each rendered line starts 2px inside the polygon's left edge at that line's vertical midpoint and extends toward the right edge as far as the requested text width permits. Line breaks are used when needed to keep the requested size inside the polygon without cutoff. Text is no longer re-centered inside the box.
 - Negative Space never runs BiRefNet.
 - Behind Subject uses the existing BiRefNet model and restores detected foreground subjects, including multiple subjects and genuine gaps.
 
