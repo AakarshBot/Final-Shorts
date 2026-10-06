@@ -483,7 +483,7 @@ Status: **Approved / cleaned / entity tiles implemented / keyword tile implement
 Status: **Test + Live rebuilt / universal Scriptwriter handoff implemented / awaiting Test validation.**
 
 - YT Trends remains a shared Topic Fetcher source, not a separate downstream production architecture.
-- The collector uses Google Trends with the YouTube property and YouTube autocomplete with the existing hidden sports seed set.
+- The collector uses Google Trends with the YouTube property and YouTube autocomplete with the existing hidden sports seed set. The primary sports seeds use India (geo=IN, en-IN) so the board is Indian-audience dominant; the international-cricket seed remains global, and India-sourced signals receive a ranking preference rather than excluding global stories.
 - The trend board is one unsegregated pool; it does not expose sport, country or market categories.
 - Raw YouTube queries are discovery signals only. Generic search-intent terms are removed while useful specific sport/event context is retained.
 - Sports-only queries are rejected; ordinal forms such as t20th are normalized before filtering.
