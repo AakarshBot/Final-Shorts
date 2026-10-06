@@ -1794,7 +1794,12 @@ def render_production_video(
         image = _fit_visual_to_frame(visual.get("bytes")).convert("RGBA")
         static_frame = None
         if isinstance(manual_subject_cutout, dict):
-            static_frame = _draw_manual_subject_cutout(image, manual_subject_cutout).convert("RGB")
+            preview_bytes = visual.get("preview_bytes")
+            if isinstance(preview_bytes, (bytes, bytearray)):
+                with Image.open(BytesIO(bytes(preview_bytes))) as preview_image:
+                    static_frame = preview_image.convert("RGB").copy()
+            else:
+                static_frame = _draw_manual_subject_cutout(image, manual_subject_cutout).convert("RGB")
         elif isinstance(top5_card, dict):
             static_frame = _draw_top5_editorial_card(image, top5_card)
             _paste_logo(static_frame)
