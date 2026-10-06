@@ -424,7 +424,7 @@ def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch
 
     monkeypatch.setattr(topic_fetcher.requests, "post", fake_post)
     monkeypatch.setattr(topic_fetcher.requests, "get", fake_get)
-    rows = topic_fetcher._youtube_trend_queries("cricket", "IN")
+    rows = topic_fetcher._youtube_trend_queries("cricket", None)
 
     assert any(
         '"property": "youtube"' in params["req"]
@@ -434,47 +434,51 @@ def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch
     assert any(row["breakout"] for row in rows)
 
 
-def test_fetch_youtube_search_trends_returns_ranked_keywords(monkeypatch):
+def test_fetch_youtube_search_trends_returns_one_unsegregated_pool(monkeypatch):
     def fake_queries(seed, geo):
-        return [
-            {
-                "keyword": "India cricket today",
-                "signal": "Rising",
-                "value": 100,
-                "breakout": False,
-                "seed": seed,
-                "autocomplete": True,
-            },
-            {
-                "keyword": "India cricket",
-                "signal": "Top",
-                "value": 80,
-                "breakout": False,
-                "seed": seed,
-                "autocomplete": False,
-            },
-        ]
+        return [{
+            "keyword": "India cricket today",
+            "signal": "Rising",
+            "rank": 1,
+            "breakout": True,
+            "seed": seed,
+            "autocomplete": True,
+        }]
 
     monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
-    result = topic_fetcher.fetch_youtube_search_trends("cricket_india_asia", "IN", 10)
-    assert [item["keyword"] for item in result] == ["India cricket today", "India cricket"]
+    result = topic_fetcher.fetch_youtube_search_trends(None, 20)
+    assert result
+    assert result[0]["keyword"] == "India cricket today"
+    assert result[0]["profile"] in {"cricket_india_asia", "cricket_global", "niche_sports"}
     assert result[0]["hashtag"] == "#Indiacrickettoday"
 
 
-def test_fetch_youtube_trend_topics_passes_selected_market(monkeypatch):
-    rows = [
-        make_topic("Virat Kohli returns to India cricket", description="Cricket news", url="https://example.com/1"),
-        make_topic("Babar Azam reacts to selection", description="Cricket news", url="https://example.com/2"),
-    ]
+def test_fetch_youtube_trend_topics_uses_only_today_and_selected_market(monkeypatch):
+    today = topic_fetcher._today_local_date()
+    current = make_topic(
+        "Virat Kohli returns to India cricket",
+        hours=1,
+        description="Cricket news",
+        url="https://example.com/today",
+    )
+    previous = make_topic(
+        "Virat Kohli returns to India cricket yesterday",
+        hours=26,
+        description="Cricket news",
+        url="https://example.com/yesterday",
+    )
     captured = []
 
     def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
         captured.append((query, geo))
-        return rows
+        return [current, previous]
 
     monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
     result = topic_fetcher.fetch_youtube_trend_topics(
-        "Virat Kohli", "cricket_india_asia", "IN", limit=2
+        "Virat Kohli", "cricket_india_asia", None, limit=20
     )
-    assert len(result) == 2
-    assert all(geo == "IN" for _, geo in captured)
+    assert result == [current]
+    assert captured
+    assert all(geo is None for _, geo in captured)
+    assert all(f"after:{today.isoformat()}" in query for query, _ in captured)
+    assert all(f"before:{(today + timedelta(days=1)).isoformat()}" in query for query, _ in captured)
