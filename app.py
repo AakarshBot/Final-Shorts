@@ -922,6 +922,8 @@ if "youtube_trend_selected" not in st.session_state:
     st.session_state.youtube_trend_selected = None
 if "youtube_trend_keyword" not in st.session_state:
     st.session_state.youtube_trend_keyword = ""
+if "youtube_trend_error" not in st.session_state:
+    st.session_state.youtube_trend_error = ""
 if "youtube_trend_lane" not in st.session_state:
     st.session_state.youtube_trend_lane = "Cricket India / Asia"
 if "youtube_trend_geo" not in st.session_state:
@@ -4596,39 +4598,31 @@ profiles = {
 
 
 def render_youtube_trends_topic_fetcher():
-    from topic_fetcher import fetch_youtube_search_trends, fetch_youtube_trend_topics
+    from topic_fetcher import fetch_youtube_trend_topics
+
+    if st.session_state.get("youtube_trend_error"):
+        st.error(st.session_state.youtube_trend_error)
+        if st.button("Retry YT trends", type="primary", width="stretch", key="youtube-trends-retry"):
+            from topic_fetcher import fetch_youtube_search_trends
+            st.session_state.youtube_trend_error = ""
+            try:
+                with st.spinner("Reading current YouTube search trends…"):
+                    st.session_state.youtube_trend_results = fetch_youtube_search_trends(limit=20)
+            except (RuntimeError, ValueError, OSError) as exc:
+                st.session_state.youtube_trend_error = str(exc)
+            st.rerun()
+
+    results = st.session_state.youtube_trend_results
+    if not results:
+        st.info("No current YouTube search trends were returned.")
+        return
 
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">01 · YT TRENDS</div>'
         '<div class="canvas-title">Choose a current YouTube search trend</div>'
-        '<div class="canvas-copy">Fetch the top 20 current sports search signals, choose one, then find news published today for that exact keyword.</div></div></div>',
+        '<div class="canvas-copy">Choose one trend. The factory then shows news published today that matches that keyword.</div></div></div>',
         unsafe_allow_html=True,
     )
-
-    if st.button(
-        "Fetch current YT trends",
-        type="primary",
-        width="stretch",
-        key="youtube-trends-fetch",
-    ):
-        with st.spinner("Reading current YouTube search trends…"):
-            try:
-                st.session_state.youtube_trend_results = fetch_youtube_search_trends(limit=20)
-                st.session_state.youtube_trend_selected = None
-                st.session_state.youtube_trend_keyword = ""
-                st.session_state.topics = []
-                st.session_state.selected_topic = None
-                st.session_state.topic_open_tile = None
-            except (RuntimeError, ValueError, OSError) as exc:
-                st.session_state.youtube_trend_results = []
-                st.error(str(exc))
-        st.rerun()
-
-    results = st.session_state.youtube_trend_results
-    if not results:
-        st.info("Press the button above to load the current trend list.")
-        return
-
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">TOP 20</div>'
         '<div class="section-title">YouTube search trends</div></div>'
@@ -4637,7 +4631,7 @@ def render_youtube_trends_topic_fetcher():
     )
 
     for index, item in enumerate(results):
-        left, mid, right = st.columns([1.6, .75, .42], gap="small")
+        left, mid, right = st.columns([1.65, .75, .42], gap="small")
         with left:
             st.markdown(
                 f'<div class="topic-title">{item["keyword"]}</div>'
@@ -4686,7 +4680,6 @@ def render_youtube_trends_topic_fetcher():
 
     topics = st.session_state.topics
     if not topics:
-        st.warning("No news published today matched that trend. Choose another trend.")
         return
 
     keyword = st.session_state.youtube_trend_keyword
@@ -6063,8 +6056,8 @@ elif st.session_state.app_mode == "test":
             ),
             (
                 "test-line-youtube-trends",
-                "04 · YT TRENDS",
-                "YT TRENDS",
+                "04",
+                "YT Trends",
                 "Start from current YouTube search trends.",
             ),
         ]
@@ -6087,18 +6080,25 @@ elif st.session_state.app_mode == "test":
                             "01 · DEEP-DIVE": "deep_dive",
                             "02 · TOP-5": "top_5",
                             "03 · OTD": "otd",
-                            "04 · YT TRENDS": "youtube_trends",
+                            "04": "youtube_trends",
                         }[eyebrow]
-                        if eyebrow in {"01 · DEEP-DIVE", "04 · YT TRENDS"}:
+                        if eyebrow in {"01 · DEEP-DIVE", "04"}:
                             st.session_state.test_stage = "01 · Topic Fetcher"
-                        if eyebrow == "04 · YT TRENDS":
+                        if eyebrow == "04":
+                            from topic_fetcher import fetch_youtube_search_trends
                             st.session_state.youtube_trend_results = []
                             st.session_state.youtube_trend_selected = None
                             st.session_state.youtube_trend_keyword = ""
+                            st.session_state.youtube_trend_error = ""
                             st.session_state.topics = []
                             st.session_state.selected_topic = None
                             st.session_state.topic_open_tile = None
                             st.session_state.topic_desk_profile = None
+                            try:
+                                with st.spinner("Reading current YouTube search trends…"):
+                                    st.session_state.youtube_trend_results = fetch_youtube_search_trends(limit=20)
+                            except (RuntimeError, ValueError, OSError) as exc:
+                                st.session_state.youtube_trend_error = str(exc)
                         st.session_state.test_pipeline_notice = None
                         st.rerun()
     elif st.session_state.test_production_line:
