@@ -1257,34 +1257,40 @@ def _render_manual_subject_cutout(
         st.info("No existing images are available for Manual Subject Cutout.")
         return
 
-    state.setdefault("image_key", None)
-    state.setdefault("mode", "Negative Space")
-    state.setdefault("font", "Barlow Condensed")
-    state.setdefault("style", "Crisp Outline")
-    state.setdefault("headline_source", "")
-    state.setdefault("headline_initialized", False)
-    state.setdefault("polygon_points", None)
-    state.setdefault("font_size", 150)
-    state.setdefault("rendered_config", None)
-    state.setdefault("rendered_preview", None)
-    state.setdefault("editor_image_digest", None)
-    state.setdefault("editor_image_data", None)
+    for key, value in {
+        "image_key": None,
+        "mode": "Negative Space",
+        "font": "Barlow Condensed",
+        "style": "Crisp Outline",
+        "headline_source": "",
+        "polygon_points": None,
+        "font_size": 150,
+        "rendered_config": None,
+        "rendered_preview": None,
+        "source_key": None,
+        "source_digest": None,
+        "editor_image_digest": None,
+        "editor_image_data": None,
+    }.items():
+        state.setdefault(key, value)
 
     default_headline = str(default_headline or "").strip()
+    headline_key = f"{state_id}-headline"
+    size_key = f"{state_id}-font-size"
+
     if state["headline_source"] != default_headline:
         state["headline_source"] = default_headline
-        state["headline_initialized"] = False
         state["rendered_config"] = None
         state["rendered_preview"] = None
         state["font_size"] = 150
-        st.session_state.pop(f"{state_id}-headline", None)
-        st.session_state.pop(f"{state_id}-font-size", None)
+        st.session_state.pop(headline_key, None)
+        st.session_state.pop(size_key, None)
 
     asset_map = {str(asset["asset_key"]): asset for asset in assets}
     selected_key = str(state.get("image_key") or "")
     if selected_key not in asset_map:
-        selected_key = ""
         state["image_key"] = None
+        selected_key = ""
 
     for start in range(0, len(assets), 3):
         row = assets[start:start + 3]
@@ -1334,16 +1340,17 @@ def _render_manual_subject_cutout(
                         type="primary" if selected else "secondary",
                         width="stretch",
                         key=f"{state_id}-select-{asset_key}",
-                    ):
-                        if selected_key != asset_key:
-                            state["image_key"] = asset_key
-                            state["polygon_points"] = None
-                            state["rendered_config"] = None
-                            state["rendered_preview"] = None
-                            state["font_size"] = 150
-                            state["editor_image_digest"] = None
-                            state["editor_image_data"] = None
-                            st.session_state.pop(f"{state_id}-font-size", None)
+                    ) and selected_key != asset_key:
+                        state["image_key"] = asset_key
+                        state["polygon_points"] = None
+                        state["rendered_config"] = None
+                        state["rendered_preview"] = None
+                        state["font_size"] = 150
+                        state["source_key"] = None
+                        state["source_digest"] = None
+                        state["editor_image_digest"] = None
+                        state["editor_image_data"] = None
+                        st.session_state.pop(size_key, None)
 
     selected = asset_map.get(str(state.get("image_key") or ""))
     if selected is None:
@@ -1356,8 +1363,10 @@ def _render_manual_subject_cutout(
 
     working_bytes = bytes(working_bytes)
     source_digest = hashlib.sha1(working_bytes).hexdigest()[:12]
-
-    if state.get("source_key") != selected["asset_key"] or state.get("source_digest") != source_digest:
+    if (
+        state.get("source_key") != selected["asset_key"]
+        or state.get("source_digest") != source_digest
+    ):
         state["source_key"] = selected["asset_key"]
         state["source_digest"] = source_digest
         state["polygon_points"] = None
@@ -1366,12 +1375,10 @@ def _render_manual_subject_cutout(
         state["font_size"] = 150
         state["editor_image_digest"] = None
         state["editor_image_data"] = None
-        st.session_state.pop(f"{state_id}-font-size", None)
+        st.session_state.pop(size_key, None)
 
-    headline_key = f"{state_id}-headline"
-    if not state["headline_initialized"]:
+    if headline_key not in st.session_state:
         st.session_state[headline_key] = default_headline
-        state["headline_initialized"] = True
     headline = st.text_area(
         "Manual Subject Cutout headline",
         key=headline_key,
@@ -1379,40 +1386,36 @@ def _render_manual_subject_cutout(
         label_visibility="collapsed",
     ).strip()
 
-    mode = st.pills(
+    state["mode"] = st.pills(
         "Composition",
         ["Negative Space", "Behind Subject"],
         default=state["mode"],
         key=f"{state_id}-mode",
         label_visibility="collapsed",
     ) or state["mode"]
-    state["mode"] = mode
-    selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
-
-    font = st.pills(
+    state["font"] = st.pills(
         "Font",
         list(MANUAL_SUBJECT_FONT_OPTIONS),
         default=state["font"],
         key=f"{state_id}-font",
         label_visibility="collapsed",
     ) or state["font"]
-    state["font"] = font
-
-    style = st.pills(
+    state["style"] = st.pills(
         "Text style",
         list(MANUAL_SUBJECT_STYLE_OPTIONS),
         default=state["style"],
         key=f"{state_id}-style",
         label_visibility="collapsed",
     ) or state["style"]
-    state["style"] = style
 
-    default_polygon = [
+    selected_mode = "behind-subject" if state["mode"] == "Behind Subject" else "negative-space"
+
+    default_polygon = (
         (120, 700),
         (960, 700),
         (960, 1200),
         (120, 1200),
-    ]
+    )
     polygon_points = state.get("polygon_points") or default_polygon
     try:
         polygon_points = [
@@ -1423,9 +1426,9 @@ def _render_manual_subject_cutout(
             for point in polygon_points
         ]
     except (TypeError, ValueError, IndexError):
-        polygon_points = default_polygon
+        polygon_points = list(default_polygon)
     if len(polygon_points) < 3:
-        polygon_points = default_polygon
+        polygon_points = list(default_polygon)
 
     source_image = _asset_to_image(working_bytes)
     if source_image is None:
@@ -1461,7 +1464,7 @@ def _render_manual_subject_cutout(
 
     if editor is not None:
         current_points = getattr(editor, "points", None)
-        if current_points:
+        if current_points is not None:
             try:
                 polygon_points = [
                     (
@@ -1472,28 +1475,30 @@ def _render_manual_subject_cutout(
                 ]
             except (TypeError, ValueError, IndexError):
                 pass
+            if len(polygon_points) < 3:
+                polygon_points = list(default_polygon)
 
     state["polygon_points"] = polygon_points
 
-    if state.get("rendered_config"):
-        size_key = f"{state_id}-font-size"
+    if state.get("rendered_config") is not None:
         if size_key not in st.session_state:
             st.session_state[size_key] = int(state["font_size"])
-        font_size = st.slider(
-            "Text size",
-            min_value=72,
-            max_value=260,
-            step=2,
-            value=int(state["font_size"]),
-            key=size_key,
+        font_size = int(
+            st.slider(
+                "Text size",
+                min_value=72,
+                max_value=260,
+                step=2,
+                key=size_key,
+            )
         )
-        state["font_size"] = int(font_size)
+        state["font_size"] = font_size
     else:
-        font_size = 150
+        font_size = int(state["font_size"])
 
     st.caption(
         "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
-        "Edit the polygon freely; Render Now replaces the rendered frame."
+        "Drag points or the whole polygon; Render Now replaces the rendered frame."
     )
 
     if st.button(
@@ -1507,23 +1512,24 @@ def _render_manual_subject_cutout(
                 "headline": headline,
                 "mode": selected_mode,
                 "text_polygon": tuple(polygon_points),
-                "font_size": int(font_size),
-                "font": font,
-                "style": style,
+                "font_size": font_size,
+                "font": state["font"],
+                "style": state["style"],
                 "source_key": selected["asset_key"],
                 "source_digest": source_digest,
             }
-            state["font_size"] = int(font_size)
-            state["rendered_config"] = config
-            state["rendered_preview"] = build_manual_subject_cutout_preview(
+            preview = build_manual_subject_cutout_preview(
                 working_bytes,
                 headline,
                 mode=selected_mode,
-                font_size=int(font_size),
-                font=font,
-                style=style,
+                font_size=font_size,
+                font=state["font"],
+                style=state["style"],
                 text_polygon=config["text_polygon"],
             )
+            state["font_size"] = font_size
+            state["rendered_config"] = config
+            state["rendered_preview"] = preview
             st.rerun()
         except (ValueError, OSError, RuntimeError, ImportError) as exc:
             state["rendered_preview"] = None
