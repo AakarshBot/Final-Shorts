@@ -6966,12 +6966,7 @@ elif st.session_state.app_mode == "test":
                                         selected_bytes,
                                         str(card_data.get("headline") or selected_headline),
                                         mode=str(card_data.get("mode") or "negative-space"),
-                                        text_box=(
-                                            tuple(card_data.get("text_box"))
-                                            if card_data.get("text_box") is not None
-                                            else None
-                                        ),
-                                        text_polygon=card_data.get("text_polygon"),
+                                        text_polygon=card_data.get("text_polygon") or (),
                                         font_size=int(card_data.get("font_size") or 150),
                                         font=str(card_data.get("font") or "Barlow Condensed"),
                                         style=str(card_data.get("style") or "Crisp Outline"),
