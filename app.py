@@ -104,6 +104,31 @@ export default function(component) {
                     handle.setAttribute("vector-effect", "non-scaling-stroke");
                     handles.appendChild(handle);
                     this.handles.push(handle);
+
+                    handle.addEventListener("pointerdown", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        const index = Number(handle.dataset.index);
+                        editor.draggingPoint = index;
+                        editor.suppressClick = true;
+                        handle.setPointerCapture(event.pointerId);
+                        const move = (moveEvent) => {
+                            const next = editor.svgPoint(moveEvent);
+                            editor.points[index] = [
+                                Math.round(next[0]),
+                                Math.round(next[1]),
+                            ];
+                            editor.render();
+                        };
+                        const stop = () => {
+                            handle.removeEventListener("pointermove", move);
+                            editor.draggingPoint = null;
+                            editor.persist();
+                        };
+                        handle.addEventListener("pointermove", move);
+                        handle.addEventListener("pointerup", stop, {once: true});
+                        handle.addEventListener("pointercancel", stop, {once: true});
+                    });
                 }
                 this.handles.forEach((handle, index) => {
                     handle.dataset.index = String(index);
@@ -117,32 +142,6 @@ export default function(component) {
 
         parentElement.__manualSubjectCutoutEditor = editor;
 
-        editor.handles.forEach((handle) => {
-            handle.addEventListener("pointerdown", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                const index = Number(handle.dataset.index);
-                editor.draggingPoint = index;
-                editor.suppressClick = true;
-                handle.setPointerCapture(event.pointerId);
-                const move = (moveEvent) => {
-                    const next = editor.svgPoint(moveEvent);
-                    editor.points[index] = [
-                        Math.round(next[0]),
-                        Math.round(next[1]),
-                    ];
-                    editor.render();
-                };
-                const stop = () => {
-                    handle.removeEventListener("pointermove", move);
-                    editor.draggingPoint = null;
-                    editor.persist();
-                };
-                handle.addEventListener("pointermove", move);
-                handle.addEventListener("pointerup", stop, {once: true});
-                handle.addEventListener("pointercancel", stop, {once: true});
-            });
-        });
 
         polygon.addEventListener("pointerdown", (event) => {
             event.preventDefault();
