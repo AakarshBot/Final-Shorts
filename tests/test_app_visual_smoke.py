@@ -1,5 +1,6 @@
 from io import BytesIO
 from io import BytesIO
+import hashlib
 from pathlib import Path
 from datetime import datetime, timezone
 
@@ -58,7 +59,7 @@ def test_card_visual_options_load():
         assert not at.exception, at.exception
 
 
-def test_top5_standalone_visual_qc_exposes_all_seven_options():
+def test_top5_standalone_visual_qc_exposes_all_nine_options():
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "top_5"
@@ -232,7 +233,11 @@ def test_top5_option9_uses_shared_editor():
     at.session_state["test_production_line"] = "top_5"
     at.session_state["test_stage"] = "04 · Visuals"
     at.session_state["test_top5_visual_playground_option"] = "Option 9 · Manual Subject Cutout"
-    at.session_state["test_top5_visual_playground_image"] = _image_bytes()
+    at.session_state["test_top5_visual_playground_image"] = Image.new(
+        "RGB",
+        (1080, 1920),
+        (40, 40, 40),
+    )
     at.session_state["test_top5_visual_playground_source"] = "Test image"
     at.session_state["test_top5_visual_playground_headline"] = "India win again"
     at.run()
@@ -242,14 +247,60 @@ def test_top5_option9_uses_shared_editor():
         button.label == "Crop / reposition"
         for button in at.button
     )
-    assert any(
-        button.label == "Select image"
-        for button in at.button
-    ) is False
+    select = next(button for button in at.button if button.label == "Select image")
+    select.click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["test_top5_manual_subject_playground"]["polygon_points"] == [
+        (120, 700),
+        (960, 700),
+        (960, 1200),
+        (120, 1200),
+    ]
     assert any(field.label == "Manual Subject Cutout headline" for field in at.text_area)
     render = next(button for button in at.button if button.label == "Render Now")
-    assert render is not None
+    render.click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["test_top5_manual_subject_playground"]["rendered_config"]["text_polygon"]
 
+
+
+
+def test_top5_option9_per_slide_uses_shared_editor():
+    asset = {
+        "bytes": _image_bytes(),
+        "source": "source-a",
+        "article_title": "Image A",
+    }
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "top_5"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["test_top5_script_handoff"] = {
+        "slides": [
+            {
+                "headline": f"Story {index} headline",
+                "body": "",
+                "specific_search_prompt": "cricket",
+                "visual_intent": "editorial",
+            }
+            for index in range(1, 7)
+        ],
+        "stories": [{"title": f"Story {index}"} for index in range(1, 6)],
+    }
+    at.session_state["test_top5_visual_option"] = "Option 9 · Manual Subject Cutout"
+    at.session_state["test_top5_visual_results"] = {
+        1: {"assets": [asset]},
+    }
+    at.run()
+
+    assert not at.exception, at.exception
+    select = next(button for button in at.button if button.label == "Select image")
+    select.click().run()
+    assert not at.exception, at.exception
+    render = next(button for button in at.button if button.label == "Render Now")
+    render.click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["test_top5_manual_subject_cutouts"][1]["rendered_config"]["text_polygon"]
 
 def test_live_cricket_text_cutout_switches_images_and_reuses_crop():
     assets = [
@@ -264,7 +315,6 @@ def test_live_cricket_text_cutout_switches_images_and_reuses_crop():
             "article_title": "Image B",
         },
     ]
-    import hashlib
     identity = "|".join([
         str(assets[0].get("source_page_url") or assets[0].get("url") or ""),
         str(assets[0].get("article_title") or assets[0].get("model") or ""),
