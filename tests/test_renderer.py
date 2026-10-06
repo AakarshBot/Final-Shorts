@@ -49,7 +49,7 @@ def _test_base():
 
 
 def test_production_upload_encode_settings_are_youtube_ready():
-    assert renderer.FPS == 24
+    assert renderer.FPS == 30
     assert renderer.HEADLINE_SECONDS == 1.35
 
 
@@ -1327,3 +1327,22 @@ def test_top5_card_preview_renders_the_shared_editorial_treatment():
 
     image = Image.open(BytesIO(preview))
     assert image.size == (renderer.WIDTH, renderer.HEIGHT)
+
+
+def test_final_renderer_quality_contract():
+    import inspect
+    import renderer
+
+    source = inspect.getsource(renderer.write_preview_video)
+    assert renderer.FPS == 30
+    assert renderer._motion_profile("same") == renderer._motion_profile("same")
+    assert renderer._motion_profile("visual-a") != renderer._motion_profile("visual-b")
+    for setting in (
+        '"-preset", "fast"',
+        '"-crf", "18"',
+        '"-profile:v", "high"',
+        '"-bf", "2"',
+        '"-flags", "+cgop"',
+        '"-movflags", "+faststart"',
+    ):
+        assert setting in source
