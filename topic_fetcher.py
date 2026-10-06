@@ -664,12 +664,19 @@ def fetch_youtube_search_trends(
         )
         tokens = re.findall(r"[a-z0-9]+", normalized)
         meaningful = [
-            token for token in tokens
+            token
+            for token in tokens
             if token not in YOUTUBE_TREND_NOISE_TERMS
             and (not token.isdigit() or len(token) == 4)
         ]
-        if not meaningful or all(token in YOUTUBE_TREND_GENERIC_TERMS for token in meaningful):
+        subject_tokens = [
+            token
+            for token in meaningful
+            if token not in YOUTUBE_TREND_GENERIC_TERMS and not token.isdigit()
+        ]
+        if not subject_tokens or not meaningful:
             continue
+
         story_keyword = " ".join(meaningful).strip()
         if len(story_keyword) < 4:
             continue
@@ -703,7 +710,10 @@ def fetch_youtube_search_trends(
         futures = {}
         for item in candidates[: max(limit * 3, 40)]:
             context = "cricket" if item["profile"] != "niche_sports" else "sports"
-            query = f'{item["keyword"]} {context} {date_filter}'
+            query = (
+                f'({item["trend_query"]}) OR ({item["keyword"]}) '
+                f'{context} {date_filter}'
+            )
             futures[pool.submit(_fetch_google, query, TIMEOUT, geo=None)] = item
 
         for future in as_completed(futures):
@@ -715,15 +725,11 @@ def fetch_youtube_search_trends(
 
             prepared = _prepare(rows, set(), profile=item["profile"])
             prepared = [
-                row for row in prepared
+                row
+                for row in prepared
                 if row.published_at.astimezone(LOCAL_TIMEZONE).date() == target_date
             ]
-            stories = _select(
-                prepared,
-                3,
-                set(),
-                profile=item["profile"],
-            )
+            stories = _select(prepared, 3, set(), profile=item["profile"])
             if not stories:
                 continue
 
@@ -739,6 +745,7 @@ def fetch_youtube_search_trends(
                 "profile": item["profile"],
                 "news_count": len(stories),
                 "top_news_title": stories[0].title,
+                "topics": stories,
                 "score": score,
             })
 
