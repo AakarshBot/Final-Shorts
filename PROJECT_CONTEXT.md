@@ -374,14 +374,14 @@ Cleanup rule:
 - Do not modify Top-5 Option 7 · Subject Cutout.
 - Do not add Top-5 Live support yet.
 
-Status: **Implementation complete in the shared Test/Live paths. Not yet user-approved. The next implementation step is the main Factory Renderer change.**
+Status: **Implementation complete in the shared Test/Live paths. Not yet user-approved. The YouTube Search Trends Test line is now the next Test-only addition; its Live promotion is deferred until user approval.**
 
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The next implementation step after this completed cutout work is the main Factory Renderer change.**.
+- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The next line-specific work is now the Test-only YouTube Search Trends source; its Live promotion is deferred until approval.**.
 - **OTD** is **WIP**.
 - **YouTube Search Trends** is **Test-only / WIP**. It is a sports-focused Topic Fetcher source that starts from current YouTube-specific search signals, lets the user choose one keyword, then searches current news for that keyword. The selected Cricket or Niche Sports lane becomes the existing downstream profile.
 - All four production lines use the same seven-stage factory framework.
