@@ -138,26 +138,35 @@ export default function(component) {
     svg.addEventListener("pointermove", (event) => {
         if (!draggingPolygon || !dragStart || !originalPoints) return;
         const next = svgPoint(event);
-        const dx = next[0] - dragStart[0];
-        const dy = next[1] - dragStart[1];
+        const rawDx = next[0] - dragStart[0];
+        const rawDy = next[1] - dragStart[1];
+        const minDx = -Math.min(...originalPoints.map((point) => point[0]));
+        const maxDx = 1080 - Math.max(...originalPoints.map((point) => point[0]));
+        const minDy = -Math.min(...originalPoints.map((point) => point[1]));
+        const maxDy = 1920 - Math.max(...originalPoints.map((point) => point[1]));
+        const dx = clamp(rawDx, minDx, maxDx);
+        const dy = clamp(rawDy, minDy, maxDy);
         if (Math.hypot(dx, dy) > 2) {
             polygonMoved = true;
             suppressClick = true;
         }
         points = originalPoints.map((point) => [
-            Math.round(clamp(point[0] + dx, 0, 1080)),
-            Math.round(clamp(point[1] + dy, 0, 1920)),
+            Math.round(point[0] + dx),
+            Math.round(point[1] + dy),
         ]);
         render();
     });
 
-    svg.addEventListener("pointerup", () => {
+    const stopPolygon = () => {
         if (draggingPolygon && polygonMoved) persist();
         draggingPolygon = false;
         dragStart = null;
         originalPoints = null;
         polygonMoved = false;
-    });
+    };
+
+    svg.addEventListener("pointerup", stopPolygon);
+    svg.addEventListener("pointercancel", stopPolygon);
 
     svg.addEventListener("click", (event) => {
         if (suppressClick || draggingPoint || draggingPolygon) {
