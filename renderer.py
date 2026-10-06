@@ -1325,7 +1325,8 @@ def build_top5_card_preview(
             "subject_cutout": bool(subject_cutout),
         },
     )
-    _paste_logo(frame)
+    if logo_enabled:
+        _paste_logo(frame)
     _paste_top5_source(frame, source_label)
     buffer = BytesIO()
     frame.convert("RGB").save(buffer, format="PNG", optimize=True)
@@ -1945,20 +1946,26 @@ def render_production_video(
                 static_frame = _draw_manual_subject_cutout(image, manual_subject_cutout).convert("RGB")
         elif isinstance(top5_card, dict):
             static_frame = _draw_top5_editorial_card(image, top5_card)
-            _paste_source(
-                static_frame,
-                str(visual.get("source") or source_label or "Commons").strip() or "Commons",
-            )
+            if logo_enabled:
+                _paste_logo(static_frame)
+            if source_enabled:
+                _paste_source(
+                    static_frame,
+                    str(visual.get("source") or source_label or "Commons").strip() or "Commons",
+                )
             static_frame = static_frame.convert("RGB")
         elif isinstance(quote_card, dict):
             static_frame = _draw_quote_card(image, quote_card)
-            quote_source_label = str(
-                quote_card.get("source_label")
-                or visual.get("source")
-                or source_label
-                or "Commons"
-            ).strip() or "Commons"
-            _paste_source(static_frame, quote_source_label)
+            if logo_enabled:
+                _paste_logo(static_frame)
+            if source_enabled:
+                quote_source_label = str(
+                    quote_card.get("source_label")
+                    or visual.get("source")
+                    or source_label
+                    or "Commons"
+                ).strip() or "Commons"
+                _paste_source(static_frame, quote_source_label)
             static_frame = static_frame.convert("RGB")
 
         prepared_visuals.append({
