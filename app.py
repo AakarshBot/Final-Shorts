@@ -866,6 +866,8 @@ if "live_text_cutout_style" not in st.session_state:
     st.session_state.live_text_cutout_style = "Crisp Outline"
 if "live_text_cutout_font_size" not in st.session_state:
     st.session_state.live_text_cutout_font_size = 150
+if "live_text_cutout_polygon_points" not in st.session_state:
+    st.session_state.live_text_cutout_polygon_points = None
 if "live_visual_option" not in st.session_state:
     st.session_state.live_visual_option = "Option 1 · Automatic Scraper"
 if "live_script_language" not in st.session_state:
@@ -1044,6 +1046,7 @@ def _crop_visual_dialog(
                 st.session_state.live_text_cutout_config = None
                 st.session_state.live_text_cutout_render = None
                 st.session_state.live_text_cutout_font_size = 150
+                st.session_state.live_text_cutout_polygon_points = None
             assignments = st.session_state.get("live_visual_assignments") or {}
             for assignment in assignments.values():
                 if assignment.get("asset_key") == asset_key:
@@ -1882,6 +1885,7 @@ def _live_reset_downstream():
         "live_text_cutout_font": "Barlow Condensed",
         "live_text_cutout_style": "Crisp Outline",
         "live_text_cutout_font_size": 150,
+        "live_text_cutout_polygon_points": None,
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
         "live_visual_deleted": set(),
@@ -2679,6 +2683,7 @@ def _render_live_visuals(slide_count: int):
                                         st.session_state.live_text_cutout_config = None
                                         st.session_state.live_text_cutout_render = None
                                         st.session_state.live_text_cutout_font_size = 150
+                                        st.session_state.live_text_cutout_polygon_points = None
 
                 selected = st.session_state.live_text_cutout_image_selection
                 if isinstance(selected, dict):
@@ -2729,6 +2734,7 @@ def _render_live_visuals(slide_count: int):
                             st.session_state.live_text_cutout_config = None
                             st.session_state.live_text_cutout_render = None
                             st.session_state.live_text_cutout_font_size = 150
+                            st.session_state.live_text_cutout_polygon_points = None
                             rendered_config = None
 
                         default_polygon = [
@@ -2738,176 +2744,39 @@ def _render_live_visuals(slide_count: int):
                             (120, 1200),
                         ]
                         if rendered_config and rendered_config.get("text_polygon"):
-                            try:
-                                default_polygon = [
-                                    (int(point[0]), int(point[1]))
-                                    for point in rendered_config["text_polygon"]
-                                ]
-                            except (TypeError, ValueError, IndexError):
-                                pass
-
-                        polygon_key = f"live-text-cutout-polygon-{selected_asset_key}-{selected_mode}"
-                        polygon_input = st.text_input(
-                            "Polygon points",
-                            value=json.dumps(default_polygon),
-                            key=polygon_key,
-                            label_visibility="collapsed",
-                        )
-                        try:
-                            polygon_points = [
+                            default_polygon = [
                                 (int(point[0]), int(point[1]))
-                                for point in json.loads(polygon_input)
+                                for point in rendered_config["text_polygon"]
                             ]
-                            if len(polygon_points) < 3:
-                                raise ValueError
-                        except (TypeError, ValueError, IndexError, json.JSONDecodeError):
-                            polygon_points = default_polygon
+                        elif st.session_state.get("live_text_cutout_polygon_points"):
+                            default_polygon = [
+                                (int(point[0]), int(point[1]))
+                                for point in st.session_state.live_text_cutout_polygon_points
+                            ]
 
                         image_buffer = BytesIO()
                         source_image.convert("RGB").save(image_buffer, format="JPEG", quality=88, optimize=True)
                         image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
-                        editor_points = json.dumps(polygon_points)
-                        editor_html = f"""
-<div id="live-text-cutout-editor" style="max-width:520px;">
-  <div style="position:relative;width:100%;aspect-ratio:9/16;background:#111;border-radius:12px;overflow:hidden;border:1px solid #d4d4cc;">
-    <svg id="live-text-cutout-svg" viewBox="0 0 1080 1920" style="width:100%;height:100%;display:block;cursor:crosshair;touch-action:none;" aria-label="Text Cutout polygon editor">
-      <image href="data:image/jpeg;base64,{image_data}" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
-      <polygon id="live-text-cutout-polygon" points="" fill="rgba(47,98,85,.14)" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
-      <g id="live-text-cutout-handles"></g>
-    </svg>
-  </div>
-  <div style="font:600 12px Inter,ui-sans-serif,sans-serif;color:#52574f;margin-top:7px;">
-    Drag points to shape the text area. Click any edge to add a point.
-  </div>
-</div>
-<script>
-(() => {{
-  const root = document.getElementById("live-text-cutout-editor");
-  const svg = document.getElementById("live-text-cutout-svg");
-  const polygon = document.getElementById("live-text-cutout-polygon");
-  const handles = document.getElementById("live-text-cutout-handles");
-  const input = Array.from(document.querySelectorAll("input")).find(
-    (element) => element.getAttribute("aria-label") === "Polygon points"
-  );
-  if (!root || !svg || !polygon || !handles || !input) return;
-
-  const inputWrap = input.closest('[data-testid="stTextInput"]');
-  if (inputWrap) inputWrap.style.display = "none";
-
-  let points = {editor_points};
-  let handleEls = [];
-  let dragged = false;
-
-  const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-
-  const svgPoint = (event) => {{
-    const rect = svg.getBoundingClientRect();
-    return {{
-      x: clamp((event.clientX - rect.left) / rect.width * 1080, 0, 1080),
-      y: clamp((event.clientY - rect.top) / rect.height * 1920, 0, 1920),
-    }};
-  }};
-
-  const nearestEdge = (point) => {{
-    let best = null;
-    points.forEach((start, index) => {{
-      const end = points[(index + 1) % points.length];
-      const dx = end[0] - start[0];
-      const dy = end[1] - start[1];
-      const length2 = dx * dx + dy * dy;
-      const t = length2 ? clamp(((point.x - start[0]) * dx + (point.y - start[1]) * dy) / length2, 0, 1) : 0;
-      const projection = {{
-        x: start[0] + t * dx,
-        y: start[1] + t * dy,
-      }};
-      const distance = Math.hypot(point.x - projection.x, point.y - projection.y);
-      if (!best || distance < best.distance) {{
-        best = {{
-          index,
-          distance,
-          point: projection,
-        }};
-      }}
-    }});
-    return best;
-  }};
-
-  const setStreamlitValue = () => {{
-    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
-    setter.call(input, JSON.stringify(points));
-    input.dispatchEvent(new Event("input", {{bubbles:true}}));
-    input.dispatchEvent(new Event("change", {{bubbles:true}}));
-  }};
-
-  const render = () => {{
-    polygon.setAttribute("points", points.map((point) => point.join(",")).join(" "));
-    points.forEach((point, index) => {{
-      let handle = handleEls[index];
-      if (!handle) {{
-        handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-        handle.setAttribute("class", "handle");
-        handle.setAttribute("r", "13");
-        handle.setAttribute("fill", "#ffffff");
-        handle.setAttribute("stroke", "#2f6255");
-        handle.setAttribute("stroke-width", "4");
-        handle.setAttribute("vector-effect", "non-scaling-stroke");
-        handle.style.cursor = "move";
-        handles.appendChild(handle);
-        handle.addEventListener("pointerdown", (event) => {{
-          event.preventDefault();
-          event.stopPropagation();
-          const activeIndex = Number(handle.dataset.index);
-          dragged = false;
-          handle.setPointerCapture(event.pointerId);
-          const move = (moveEvent) => {{
-            const next = svgPoint(moveEvent);
-            if (!dragged && Math.hypot(next.x - points[activeIndex][0], next.y - points[activeIndex][1]) > 2) {{
-              dragged = true;
-            }}
-            points[activeIndex] = [Math.round(next.x), Math.round(next.y)];
-            render();
-          }};
-          const up = () => {{
-            handle.removeEventListener("pointermove", move);
-            handle.removeEventListener("pointerup", up);
-            if (dragged) setStreamlitValue();
-          }};
-          handle.addEventListener("pointermove", move);
-          handle.addEventListener("pointerup", up, {{once:true}});
-        }});
-        handleEls.push(handle);
-      }}
-      handle.dataset.index = String(index);
-      handle.setAttribute("cx", point[0]);
-      handle.setAttribute("cy", point[1]);
-      handle.style.display = "";
-    }});
-    while (handleEls.length > points.length) {{
-      const handle = handleEls.pop();
-      handle.remove();
-    }}
-  }};
-
-  svg.addEventListener("click", (event) => {{
-    if (dragged) {{
-      dragged = false;
-      return;
-    }}
-    if (event.target.classList && event.target.classList.contains("handle")) return;
-    const point = svgPoint(event);
-    const edge = nearestEdge(point);
-    if (!edge || edge.distance > 32) return;
-    points.splice(edge.index + 1, 0, [Math.round(edge.point.x), Math.round(edge.point.y)]);
-    render();
-    setStreamlitValue();
-  }});
-
-  render();
-}})();
-</script>
-"""
-                        st.html(editor_html, width=520, unsafe_allow_javascript=True)
-
+                        polygon_editor = LIVE_TEXT_CUTOUT_POLYGON_EDITOR(
+                            data={"image": image_data, "points": default_polygon},
+                            default={"points": default_polygon},
+                            key=f"live-text-cutout-polygon-{selected_asset_key}-{selected_mode}",
+                            on_points_change=lambda: None,
+                        )
+                        returned_points = getattr(polygon_editor, "points", None)
+                        if returned_points:
+                            try:
+                                polygon_points = [
+                                    (int(point[0]), int(point[1]))
+                                    for point in returned_points
+                                ]
+                            except (TypeError, ValueError, IndexError):
+                                polygon_points = default_polygon
+                        else:
+                            polygon_points = default_polygon
+                        if len(polygon_points) < 3:
+                            polygon_points = default_polygon
+                        st.session_state.live_text_cutout_polygon_points = polygon_points
                         if rendered_config:
                             st.caption(
                                 f'Last rendered polygon: {len(rendered_config.get("text_polygon") or [])} points. '
