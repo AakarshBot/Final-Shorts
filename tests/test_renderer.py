@@ -514,8 +514,8 @@ def test_production_renderer_uses_stats_card_image_height_for_subtitles(monkeypa
     )
 
     assert seen
-    assert seen[0][0].size == (1080, 1920)
-    assert seen[0][6] == 764
+    assert seen[0][0][0].size == (1080, 1920)
+    assert seen[0][0][6] == 764
 
 
 def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(monkeypatch, tmp_path):
@@ -562,7 +562,7 @@ def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(m
     )
 
     assert seen
-    assert seen[0][6] is None
+    assert seen[0][0][6] is None
 
 
 
