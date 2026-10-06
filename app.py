@@ -3072,6 +3072,7 @@ def _render_live_visuals(slide_count: int):
         default=st.session_state.live_visual_option,
         key="live_visual_option",
         label_visibility="collapsed",
+        wrap=True,
     ) or visual_options[0]
 
     _render_visual_board(slide_count, live=True)
@@ -4038,6 +4039,7 @@ def render_live_top5():
             default=st.session_state.live_visual_option,
             key="live_visual_option",
             label_visibility="collapsed",
+            wrap=True,
         ) or VISUAL_OPTIONS[0]
 
         if option == "Option 3 · Real Image Search":
@@ -5472,6 +5474,7 @@ def render_visuals():
         default=selected_option,
         key="visual_test_mode",
         label_visibility="collapsed",
+        wrap=True,
     ) or visual_options[0]
 
     script = st.session_state.get("approved_script") or st.session_state.get("script_data")
@@ -7219,6 +7222,7 @@ elif st.session_state.app_mode == "test":
                         TOP5_VISUAL_OPTIONS,
                         key="test_top5_visual_option",
                         label_visibility="collapsed",
+                        wrap=True,
                     ) or TOP5_VISUAL_OPTIONS[0]
 
                     def _top5_asset_source(asset):
