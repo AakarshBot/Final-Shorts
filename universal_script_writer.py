@@ -127,19 +127,6 @@ FILLER_PHRASES = (
     "what happens next remains to be seen",
 )
 
-GENERIC_EVENT_LABELS = (
-    "the legend",
-    "a legend",
-    "the champion",
-    "a champion",
-    "the star",
-    "the superstar",
-    "the former champion",
-    "the defending champion",
-    "the world number one",
-    "world number one",
-)
-
 
 def _clean(value) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
@@ -667,20 +654,3 @@ def apply_universal_script_edits(
     result["approved_for_audio"] = True
     return result
 
-
-def write_niche_sports_script(story, language: str = "english") -> dict:
-    """Compatibility entry point for the universal Niche Sports/YT Trends writer."""
-    return write_universal_script(story, language=language)
-
-
-def apply_niche_script_edits(
-    script: dict,
-    voiceovers: list[str],
-    headline: str | None = None,
-) -> dict:
-    """Compatibility entry point for the universal Scriptwriter editor."""
-    return apply_universal_script_edits(
-        script,
-        voiceovers,
-        headline=headline,
-    )

@@ -1,6 +1,6 @@
 import pytest
 
-import niche_sports_script_writer as writer
+import universal_script_writer as writer
 
 
 def valid_result(

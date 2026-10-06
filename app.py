@@ -2588,7 +2588,7 @@ def _script_for_topic(
     *,
     universal: bool = False,
 ) -> dict:
-    from niche_sports_script_writer import write_universal_script
+    from universal_script_writer import write_universal_script
     from script_writer import write_script
 
     writer = write_universal_script if universal or profile == "niche_sports" else write_script
@@ -3418,7 +3418,7 @@ def _render_live_script():
                 st.session_state.get("live_production_line") == "youtube_trends"
                 or st.session_state.get("live_topics_profile") == "niche_sports"
             ):
-                from niche_sports_script_writer import apply_universal_script_edits
+                from universal_script_writer import apply_universal_script_edits
                 approved = apply_universal_script_edits(
                     script,
                     edited_voiceovers,
@@ -5154,7 +5154,7 @@ def render_scriptwriter():
                         st.session_state.get("test_production_line") == "youtube_trends"
                         or st.session_state.get("topic_desk_profile") == "niche_sports"
                     ):
-                        from niche_sports_script_writer import apply_universal_script_edits
+                        from universal_script_writer import apply_universal_script_edits
                         approved = apply_universal_script_edits(
                             script,
                             edited_voiceovers,
