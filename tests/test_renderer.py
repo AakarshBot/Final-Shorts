@@ -535,8 +535,8 @@ def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(m
     }
     seen = []
 
-    def fake_frame(*args):
-        seen.append(args)
+    def fake_frame(*args, **kwargs):
+        seen.append((args, kwargs))
         return args[0]
 
     def fake_preview(frames, path):
