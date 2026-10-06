@@ -928,6 +928,17 @@ if "selected_topic" not in st.session_state:
     st.session_state.selected_topic = None
 if "topic_open_tile" not in st.session_state:
     st.session_state.topic_open_tile = None
+if "test_universal_angles" not in st.session_state:
+    st.session_state.test_universal_angles = None
+if "test_universal_angle_source" not in st.session_state:
+    st.session_state.test_universal_angle_source = None
+if "test_universal_angle_selected" not in st.session_state:
+    st.session_state.test_universal_angle_selected = 0
+if "test_universal_angle_custom" not in st.session_state:
+    st.session_state.test_universal_angle_custom = ""
+if "test_universal_angle_story_key" not in st.session_state:
+    st.session_state.test_universal_angle_story_key = None
+
 if "script_data" not in st.session_state:
     st.session_state.script_data = None
 if "approved_script" not in st.session_state:
@@ -1015,6 +1026,17 @@ if "live_youtube_trend_keyword" not in st.session_state:
     st.session_state.live_youtube_trend_keyword = ""
 if "live_youtube_trend_error" not in st.session_state:
     st.session_state.live_youtube_trend_error = ""
+if "live_universal_angles" not in st.session_state:
+    st.session_state.live_universal_angles = None
+if "live_universal_angle_source" not in st.session_state:
+    st.session_state.live_universal_angle_source = None
+if "live_universal_angle_selected" not in st.session_state:
+    st.session_state.live_universal_angle_selected = 0
+if "live_universal_angle_custom" not in st.session_state:
+    st.session_state.live_universal_angle_custom = ""
+if "live_universal_angle_story_key" not in st.session_state:
+    st.session_state.live_universal_angle_story_key = None
+
 if "live_script_data" not in st.session_state:
     st.session_state.live_script_data = None
 if "live_approved_script" not in st.session_state:
@@ -2516,6 +2538,11 @@ def _live_reset_downstream():
         "live_script_data": None,
         "live_approved_script": None,
         "live_script_error": "",
+        "live_universal_angles": None,
+        "live_universal_angle_source": None,
+        "live_universal_angle_selected": 0,
+        "live_universal_angle_custom": "",
+        "live_universal_angle_story_key": None,
         "live_audio_data": None,
         "live_approved_audio": None,
         "live_subtitle_data": None,
@@ -2587,12 +2614,20 @@ def _script_for_topic(
     language: str,
     *,
     universal: bool = False,
+    angle=None,
+    research_source=None,
 ) -> dict:
     from universal_script_writer import write_universal_script
     from script_writer import write_script
 
-    writer = write_universal_script if universal or profile == "niche_sports" else write_script
-    return writer(
+    if universal or profile == "niche_sports":
+        return write_universal_script(
+            _story_payload(topic),
+            language=language,
+            angle=angle,
+            research_source=research_source,
+        )
+    return write_script(
         _story_payload(topic),
         language=language,
     )
@@ -2690,6 +2725,97 @@ def _render_topic_tiles(
     return selection
 
 
+def _render_universal_angle_picker(
+    angles: list[dict],
+    *,
+    selected_key: str,
+    custom_key: str,
+    button_prefix: str,
+) -> str | None:
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">STORY ANGLE</div>'
+        '<div class="section-title">Choose what this Short is actually about</div></div>'
+        '<div class="section-count">3 research-backed angles</div></div>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "The selected angle is authoritative. The Scriptwriter will build the narration around it instead of defaulting to the most obvious event."
+    )
+
+    selected_index = int(st.session_state.get(selected_key, 0) or 0)
+    selected_index = max(0, min(selected_index, len(angles) - 1))
+    cols = st.columns(3, gap="medium")
+    for index, angle in enumerate(angles):
+        with cols[index]:
+            title = str(angle.get("title") or f"Angle {index + 1}")
+            description = str(angle.get("description") or "")
+            evidence = str(angle.get("evidence_basis") or "")
+            st.markdown(f"**{title}**")
+            st.caption(description)
+            st.caption(f"Evidence: {evidence}")
+            if st.button(
+                "Selected" if selected_index == index else "Choose",
+                type="primary" if selected_index == index else "secondary",
+                width="stretch",
+                key=f"{button_prefix}-angle-{index}",
+            ):
+                st.session_state[selected_key] = index
+                st.session_state[custom_key] = ""
+                selected_index = index
+
+    custom = st.text_area(
+        "Custom angle",
+        value=str(st.session_state.get(custom_key) or ""),
+        height=80,
+        placeholder='e.g. "Focus on exactly what Alcaraz said after the final."',
+        key=custom_key,
+    ).strip()
+    if custom:
+        selected_text = custom
+        st.caption("Custom angle selected.")
+    else:
+        angle = angles[selected_index]
+        selected_text = (
+            f'{str(angle.get("title") or "").strip()}: '
+            f'{str(angle.get("description") or "").strip()}'
+        ).strip(": ")
+
+    if st.button(
+        "Generate Script from selected angle",
+        type="primary",
+        width="stretch",
+        key=f"{button_prefix}-generate",
+    ):
+        return selected_text
+    return None
+
+
+def _render_visual_option_grid(
+    options: tuple[str, ...],
+    *,
+    session_key: str,
+    button_prefix: str,
+) -> str:
+    current = st.session_state.get(session_key)
+    if current not in options:
+        current = options[0]
+        st.session_state[session_key] = current
+
+    for start in range(0, len(options), 4):
+        cols = st.columns(min(4, len(options) - start), gap="small")
+        for col, option in zip(cols, options[start:start + 4]):
+            with col:
+                if st.button(
+                    option,
+                    type="primary" if option == current else "secondary",
+                    width="stretch",
+                    key=f"{button_prefix}-{options.index(option)}",
+                ):
+                    current = option
+                    st.session_state[session_key] = option
+    return current
+
+
 def _live_start_story(index: int):
     _live_reset_downstream()
     st.session_state.live_selected_topic = index
@@ -2700,7 +2826,10 @@ def _live_start_story(index: int):
     }
 
 
-def _live_generate_script():
+def _live_generate_script(
+    angle=None,
+    research_source=None,
+):
     selected_index = st.session_state.get("live_selected_topic")
     topics = st.session_state.get("live_topics") or []
     if selected_index is None or not 0 <= selected_index < len(topics):
@@ -2712,6 +2841,8 @@ def _live_generate_script():
         st.session_state.get("live_topics_profile") or "",
         st.session_state.get("live_script_language", "english"),
         universal=st.session_state.get("live_production_line") == "youtube_trends",
+        angle=angle,
+        research_source=research_source,
     )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
