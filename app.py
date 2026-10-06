@@ -2995,312 +2995,72 @@ def _render_live_visuals(slide_count: int):
             )
 
     if visual_option == "Option 7 · Text Cutout":
-        @st.fragment
-        def render_text_cutout():
-            from renderer import (
-                MANUAL_SUBJECT_FONT_OPTIONS,
-                MANUAL_SUBJECT_STYLE_OPTIONS,
-                build_manual_subject_cutout_preview,
+        entries = _stats_card_pool_entries(live=True)
+        state = st.session_state.live_manual_subject_cutout
+        assets = [
+            {
+                "asset_key": asset_key,
+                "bytes": image_bytes,
+                "source": source_name,
+                "label": str(
+                    asset.get("article_title")
+                    or asset.get("model")
+                    or source_name
+                ),
+            }
+            for asset_key, _index, asset, image_bytes, source_name in entries
+        ]
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">TEXT CUTOUT</div>'
+            '<div class="section-title">Manual Subject Cutout</div></div>'
+            '<div class="section-count">Tested composition · Live</div></div>',
+            unsafe_allow_html=True,
+        )
+        _render_manual_subject_cutout(
+            state=state,
+            assets=assets,
+            crop_store=st.session_state.live_visual_crops,
+            crop_store_name="live_visual_crops",
+            state_id="live-cricket-manual-subject",
+            default_headline=str(
+                (st.session_state.get("live_approved_script") or {}).get("headline") or ""
+            ),
+        )
+        preview = state.get("rendered_preview")
+        config = state.get("rendered_config")
+        selected = next(
+            (asset for asset in assets if asset["asset_key"] == state.get("image_key")),
+            None,
+        )
+        if preview and config and selected:
+            slide = st.selectbox(
+                "Use Text Cutout for slide",
+                list(range(1, slide_count + 1)),
+                key="live-cricket-manual-subject-slide",
             )
-
-            st.caption(
-                "English only. Select an existing image, shape the text polygon on the 1080 × 1920 frame, "
-                "then Render Now. Drag points to reshape, drag inside to move the whole polygon, or click an edge to add a point."
-            )
-
-            entries = _stats_card_pool_entries(live=True)
-            if not entries:
-                st.info("Run one of the existing visual options first so Text Cutout has an image to work from.")
-            else:
-                current_selection = st.session_state.live_text_cutout_image_selection
-                crop_store = st.session_state.get("live_visual_crops") or {}
-                st.markdown(
-                    '<div class="section-head"><div><div class="eyebrow">SOURCE IMAGE</div>'
-                    '<div class="section-title">Choose an existing visual</div></div>'
-                    '<div class="section-count">existing image pools</div></div>',
-                    unsafe_allow_html=True,
-                )
-                for start_index in range(0, len(entries), 3):
-                    row = entries[start_index:start_index + 3]
-                    cols = st.columns(len(row), gap="medium")
-                    for col, (asset_key, index, asset, image_bytes, source_name) in zip(cols, row):
-                        with col:
-                            source = str(
-                                asset.get("publisher")
-                                or asset.get("source")
-                                or asset.get("model")
-                                or source_name
-                            ).strip()
-                            label = str(
-                                asset.get("article_title")
-                                or asset.get("model")
-                                or source_name
-                            ).strip()
-                            preview = _asset_to_image(image_bytes)
-                            with st.container(key=f"live-text-cutout-image-{asset_key}"):
-                                if preview is not None:
-                                    preview.thumbnail((420, 420), Image.Resampling.LANCZOS)
-                                    st.image(preview, width="stretch")
-                                st.markdown(
-                                    f'<div class="visual-source">{source}</div>'
-                                    f'<div class="visual-detail">{label}</div>',
-                                    unsafe_allow_html=True,
-                                )
-                                if asset_key in crop_store:
-                                    st.markdown(
-                                        '<div class="visual-crop-label">CROP APPLIED</div>',
-                                        unsafe_allow_html=True,
-                                    )
-                                selected = (
-                                    isinstance(current_selection, dict)
-                                    and current_selection.get("asset_key") == asset_key
-                                )
-                                crop_col, select_col = st.columns(2, gap="small")
-                                with crop_col:
-                                    if st.button(
-                                        "Crop / reposition",
-                                        width="stretch",
-                                        key=f"live-text-cutout-crop-{asset_key}",
-                                    ):
-                                        raw = asset.get("bytes")
-                                        if isinstance(raw, (bytes, bytearray)):
-                                            _crop_visual_dialog(
-                                                asset_key,
-                                                bytes(raw),
-                                                source,
-                                                crop_store="live_visual_crops",
-                                            )
-                                        else:
-                                            st.warning("This visual does not have a crop-ready payload.")
-                                with select_col:
-                                    if st.button(
-                                        "Selected" if selected else "Select image",
-                                        type="primary" if selected else "secondary",
-                                        width="stretch",
-                                        key=f"live-text-cutout-select-{asset_key}",
-                                    ):
-                                        st.session_state.live_text_cutout_image_selection = {
-                                            "asset_key": asset_key,
-                                            "source": source,
-                                            "label": label,
-                                            "bytes": image_bytes,
-                                        }
-                                        st.session_state.live_text_cutout_config = None
-                                        st.session_state.live_text_cutout_render = None
-                                        st.session_state.live_text_cutout_font_size = 150
-                                        st.session_state.live_text_cutout_polygon_points = None
-
-                selected = st.session_state.live_text_cutout_image_selection
-                if isinstance(selected, dict):
-                    selected_asset_key = str(selected.get("asset_key") or "")
-                    source_bytes = crop_store.get(selected_asset_key) or selected.get("bytes")
-                    source_image = _asset_to_image(source_bytes)
-                    if source_image is None:
-                        st.error("The selected image could not be opened.")
-                    else:
-                        st.markdown(
-                            '<div class="section-head"><div><div class="eyebrow">TEXT CUTOUT</div>'
-                            '<div class="section-title">Build the headline treatment</div></div>'
-                            '<div class="section-count">render manually</div></div>',
-                            unsafe_allow_html=True,
-                        )
-                        headline = st.text_area(
-                            "Text Cutout headline",
-                            key="live_text_cutout_headline",
-                            height=82,
-                            label_visibility="collapsed",
-                        )
-                        mode = st.pills(
-                            "Composition",
-                            ["Negative Space", "Behind Subject"],
-                            default=st.session_state.live_text_cutout_mode,
-                            key="live_text_cutout_mode",
-                            label_visibility="collapsed",
-                        ) or st.session_state.live_text_cutout_mode
-                        selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
-
-                        font = st.pills(
-                            "Font",
-                            list(MANUAL_SUBJECT_FONT_OPTIONS),
-                            default=st.session_state.live_text_cutout_font,
-                            key="live_text_cutout_font",
-                            label_visibility="collapsed",
-                        ) or st.session_state.live_text_cutout_font
-                        style = st.pills(
-                            "Text style",
-                            list(MANUAL_SUBJECT_STYLE_OPTIONS),
-                            default=st.session_state.live_text_cutout_style,
-                            key="live_text_cutout_style",
-                            label_visibility="collapsed",
-                        ) or st.session_state.live_text_cutout_style
-
-                        rendered_config = st.session_state.get("live_text_cutout_config")
-                        if rendered_config and rendered_config.get("mode") != selected_mode:
-                            st.session_state.live_text_cutout_config = None
-                            st.session_state.live_text_cutout_render = None
-                            st.session_state.live_text_cutout_font_size = 150
-                            st.session_state.live_text_cutout_polygon_points = None
-                            rendered_config = None
-
-                        default_polygon = [
-                            (120, 700),
-                            (960, 700),
-                            (960, 1200),
-                            (120, 1200),
-                        ]
-                        if st.session_state.get("live_text_cutout_polygon_points"):
-                            default_polygon = [
-                                (int(point[0]), int(point[1]))
-                                for point in st.session_state.live_text_cutout_polygon_points
-                            ]
-                        elif rendered_config and rendered_config.get("text_polygon"):
-                            default_polygon = [
-                                (int(point[0]), int(point[1]))
-                                for point in rendered_config["text_polygon"]
-                            ]
-
-                        image_buffer = BytesIO()
-                        source_image.convert("RGB").save(
-                            image_buffer,
-                            format="JPEG",
-                            quality=88,
-                            optimize=True,
-                        )
-                        image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
-                        source_digest = hashlib.sha1(bytes(source_bytes)).hexdigest()[:8]
-
-                        polygon_editor_result = None
-                        if MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR is not None:
-                            polygon_editor_result = MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR(
-                                data={"image": image_data, "points": default_polygon},
-                                default={"points": default_polygon},
-                                on_points_change=lambda: None,
-                                key=f"live-text-cutout-polygon-{selected_asset_key}-{selected_mode}-{source_digest}",
-                                width=270,
-                                height=480,
-                            )
-                        else:
-                            st.image(source_image, width=270)
-
-                        polygon_points = default_polygon
-                        if polygon_editor_result is not None:
-                            current_points = getattr(polygon_editor_result, "points", None)
-                            if current_points:
-                                try:
-                                    polygon_points = [
-                                        (
-                                            max(0, min(1080, int(point[0]))),
-                                            max(0, min(1920, int(point[1]))),
-                                        )
-                                        for point in current_points
-                                    ]
-                                except (TypeError, ValueError, IndexError):
-                                    polygon_points = default_polygon
-                        if len(polygon_points) < 3:
-                            polygon_points = default_polygon
-                        st.session_state.live_text_cutout_polygon_points = polygon_points
-
-                        if rendered_config:
-                            st.caption(
-                                f'Last rendered polygon: {len(rendered_config.get("text_polygon") or [])} points. '
-                                "Move points or add points, change the text size, then press Render Now."
-                            )
-                            font_size = st.slider(
-                                "Text size",
-                                min_value=72,
-                                max_value=260,
-                                step=2,
-                                value=int(st.session_state.live_text_cutout_font_size),
-                                key="live_text_cutout_font_size",
-                            )
-                        else:
-                            font_size = 150
-
-                        if st.button(
-                            "Render Now",
-                            type="primary",
-                            width="stretch",
-                            key="live-text-cutout-render",
-                        ):
-                            try:
-                                if len(polygon_points) < 3:
-                                    raise ValueError("Text Cutout requires at least three polygon points.")
-                                box_left = min(point[0] for point in polygon_points)
-                                box_top = min(point[1] for point in polygon_points)
-                                box_right = max(point[0] for point in polygon_points)
-                                box_bottom = max(point[1] for point in polygon_points)
-                                rendered_config = {
-                                    "headline": headline,
-                                    "mode": selected_mode,
-                                    "text_polygon": tuple(polygon_points),
-                                    "font_size": int(font_size),
-                                    "font": font,
-                                    "style": style,
-                                    "include_overlays": False,
-                                }
-                                preview_bytes = build_manual_subject_cutout_preview(
-                                    source_image,
-                                    headline,
-                                    mode=selected_mode,
-                                    text_box=(
-                                        box_left,
-                                        box_top,
-                                        box_right - box_left,
-                                        box_bottom - box_top,
-                                    ),
-                                    text_polygon=rendered_config["text_polygon"],
-                                    font_size=rendered_config["font_size"],
-                                    font=rendered_config["font"],
-                                    style=rendered_config["style"],
-                                    include_overlays=False,
-                                )
-                                st.session_state.live_text_cutout_polygon_points = polygon_points
-                                st.session_state.live_text_cutout_config = rendered_config
-                                st.session_state.live_text_cutout_render = preview_bytes
-                                st.rerun()
-                            except (ValueError, OSError, RuntimeError, ImportError) as exc:
-                                st.session_state.live_text_cutout_render = None
-                                st.error(str(exc))
-
-                        rendered = st.session_state.get("live_text_cutout_render")
-                        if rendered:
-                            st.markdown(
-                                '<div class="section-head"><div><div class="eyebrow">RENDERED PREVIEW</div>'
-                                '<div class="section-title">Exact Text Cutout frame</div></div>'
-                                '<div class="section-count">1080 × 1920 · no overlays</div></div>',
-                                unsafe_allow_html=True,
-                            )
-                            st.image(rendered, width=420)
-                            slide = st.selectbox(
-                                "Use Text Cutout for slide",
-                                list(range(1, slide_count + 1)),
-                                key="live-text-cutout-slide",
-                            )
-                            if st.button(
-                                "Use Text Cutout for this slide",
-                                type="primary",
-                                width="stretch",
-                                key="live-text-cutout-attach",
-                            ):
-                                config = dict(st.session_state.live_text_cutout_config or {})
-                                assignment_key = hashlib.sha1(
-                                    (
-                                        str(selected.get("asset_key") or "")
-                                        + json.dumps(config, sort_keys=True)
-                                    ).encode("utf-8")
-                                ).hexdigest()[:12]
-                                st.session_state.live_visual_assignments[slide] = {
-                                    "asset_key": f"text-cutout-{assignment_key}",
-                                    "result_key": "text-cutout",
-                                    "source": str(selected.get("source") or "Text Cutout"),
-                                    "label": "Text Cutout",
-                                    "bytes": bytes(source_bytes),
-                                    "preview_bytes": bytes(rendered),
-                                    "manual_subject_cutout": config,
-                                }
-                                st.session_state.live_visuals_approved = False
-                                st.rerun()
-        render_text_cutout()
+            if st.button(
+                "Use Text Cutout for this slide",
+                type="primary",
+                width="stretch",
+                key="live-cricket-manual-subject-use",
+            ):
+                working_bytes = st.session_state.live_visual_crops.get(
+                    selected["asset_key"]
+                ) or selected["bytes"]
+                assignment_key = hashlib.sha1(
+                    json.dumps(config, sort_keys=True).encode("utf-8")
+                ).hexdigest()[:12]
+                st.session_state.live_visual_assignments[slide] = {
+                    "asset_key": f"text-cutout-{assignment_key}",
+                    "result_key": "text-cutout",
+                    "source": selected["source"],
+                    "label": "Text Cutout",
+                    "bytes": bytes(working_bytes),
+                    "preview_bytes": bytes(preview),
+                    "manual_subject_cutout": dict(config),
+                }
+                st.session_state.live_visuals_approved = False
+                st.rerun()
 
     if visual_option == "Option 5 · Stats Card":
         _render_stats_card(live=True, slide_count=slide_count)
