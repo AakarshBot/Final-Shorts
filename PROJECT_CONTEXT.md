@@ -553,6 +553,7 @@ Universal narration contract:
 - 3–5 spoken slides are allowed.
 - Two-slide scripts are forbidden.
 - Four slides are preferred when they are the cleanest complete story.
+- For Universal Niche Sports and YouTube Search Trends, Generate Script first produces exactly three research-backed story angles. The user selects one of those angles or writes a Custom Angle before the actual script is generated. The selected angle is authoritative and remains attached to the script as story_angle; the writer must build the Short around that lens instead of reverting to the most obvious event/result summary.
 - Slide 1 contains fewer than 14 words.
 - Total narration is at least 18 seconds and strictly under 30 seconds.
 - The writer targets a 50–74 word narration envelope as the generation proxy for the 18–<30 second window.
