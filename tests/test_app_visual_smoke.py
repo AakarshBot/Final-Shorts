@@ -328,11 +328,13 @@ def test_live_cricket_text_cutout_switches_images_and_reuses_crop():
     )
     assert not at.exception, at.exception
     selects = [button for button in at.button if button.label == "Select image"]
+    assert len(selects) == 2
     selects[0].click().run()
     assert not at.exception, at.exception
     assert at.session_state["live_manual_subject_cutout"]["image_key"] == asset_key
     selects = [button for button in at.button if button.label == "Select image"]
-    selects[0].click().run()
+    assert len(selects) == 2
+    selects[1].click().run()
     assert not at.exception, at.exception
     assert at.session_state["live_manual_subject_cutout"]["image_key"] != asset_key
 
