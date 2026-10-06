@@ -4662,7 +4662,7 @@ def render_youtube_trends_topic_fetcher(*, live=False):
 
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">01 · YT TRENDS</div>'
-        '<div class="canvas-title">Choose a current YouTube search trend</div>'
+        '<div class="canvas-title">Choose a story driven by current YouTube search trends</div>'
         '<div class="canvas-copy">These are current YouTube search signals that already have relevant news published today.</div></div></div>',
         unsafe_allow_html=True,
     )
@@ -4677,13 +4677,14 @@ def render_youtube_trends_topic_fetcher(*, live=False):
         left, mid, right = st.columns([1.65, .75, .42], gap="small")
         with left:
             st.markdown(
-                f'<div class="topic-title">{item["keyword"]}</div>'
+                f'<div class="topic-title">{item["top_news_title"]}</div>'
                 f'<div class="topic-meta">{item["signal"]}'
                 f'{" · BREAKOUT" if item["breakout"] else ""}'
                 f'{" · autocomplete" if item["youtube_autocomplete"] else ""}</div>',
                 unsafe_allow_html=True,
             )
             st.caption(
+                f'Story subject: {item["keyword"]} · '
                 f'Trend: {item["trend_query"]} · '
                 f'{item["news_count"]} current '
                 f'{"story" if item["news_count"] == 1 else "stories"}'
