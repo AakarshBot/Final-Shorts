@@ -30,9 +30,9 @@ YOUTUBE_TRENDS_EXPLORE_URL = "https://trends.google.com/trends/api/explore"
 YOUTUBE_TRENDS_RELATED_URL = "https://trends.google.com/trends/api/widgetdata/relatedsearches"
 YOUTUBE_AUTOCOMPLETE_URL = "https://suggestqueries.google.com/complete/search"
 YOUTUBE_TREND_PROFILES = {
-    "cricket_india_asia": ("cricket", "india cricket", "virat kohli", "india vs pakistan"),
-    "cricket_global": ("cricket", "test cricket", "international cricket", "ashes cricket"),
-    "niche_sports": ("football", "tennis", "formula 1", "badminton"),
+    "cricket_india_asia": ("cricket", "cricket news", "india cricket", "cricket today"),
+    "cricket_global": ("cricket", "cricket news", "international cricket", "test cricket"),
+    "niche_sports": ("sports", "sports news", "football", "tennis", "formula 1"),
 }
 
 CRICKET_QUERIES = {
@@ -650,6 +650,8 @@ def fetch_youtube_search_trends(
             "geo": geo or "WORLDWIDE",
         })
 
+    if not results:
+        raise RuntimeError("YouTube search trend services returned no usable signals. Retry the trend fetch.")
     maximum = max(item["score"] for item in results)
     if maximum > 0:
         for item in results:
@@ -659,8 +661,6 @@ def fetch_youtube_search_trends(
         key=lambda item: (item["score"], item["keyword"].casefold()),
         reverse=True,
     )
-    if not results:
-        raise RuntimeError("YouTube search trend services returned no usable signals. Retry the trend fetch.")
     return results[:limit]
 
 
