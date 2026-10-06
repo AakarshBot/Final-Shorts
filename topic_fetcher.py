@@ -673,7 +673,7 @@ def fetch_youtube_search_trends(
                 item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
                 item["seeds"].add(seed.casefold())
                 item["profiles"].add(profile)
-                item["indian_signal"] = item["indian_signal"] or row.get("geo") == "IN"
+                item["indian_signal"] = item["indian_signal"] or seed.casefold() in YOUTUBE_TREND_INDIAN_SEEDS
 
     candidates = []
     for item in grouped.values():
