@@ -1243,6 +1243,11 @@ def _render_manual_subject_cutout(
     crop_store_name: str,
     state_id: str,
     default_headline: str,
+    handoff: str | None = None,
+    slide_count: int = 0,
+    active_slide: int | None = None,
+    assignment_store: dict | None = None,
+    approval_state: str | None = None,
 ):
     from renderer import (
         MANUAL_SUBJECT_FONT_OPTIONS,
@@ -1646,6 +1651,64 @@ def _render_manual_subject_cutout(
             unsafe_allow_html=True,
         )
         st.image(state["rendered_preview"], width=360)
+
+        if handoff == "cricket" and assignment_store is not None and slide_count > 0:
+            slide = st.selectbox(
+                "Add this to slide",
+                list(range(1, slide_count + 1)),
+                key=f"{state_id}-slide",
+            )
+            if st.button(
+                "Add this to Slide →",
+                type="primary",
+                width="stretch",
+                key=f"{state_id}-use",
+            ):
+                working_bytes = crop_store.get(selected["asset_key"]) or selected["bytes"]
+                assignment_key = hashlib.sha1(
+                    json.dumps(state["rendered_config"], sort_keys=True).encode("utf-8")
+                ).hexdigest()[:12]
+                assignment_store[slide] = {
+                    "asset_key": f"text-cutout-{assignment_key}",
+                    "result_key": "text-cutout",
+                    "source": selected["source"],
+                    "label": "Text Cutout",
+                    "bytes": bytes(working_bytes),
+                    "preview_bytes": bytes(state["rendered_preview"]),
+                    "manual_subject_cutout": dict(state["rendered_config"]),
+                }
+                if approval_state:
+                    st.session_state[approval_state] = False
+                st.rerun()
+
+        if handoff == "top5" and active_slide is not None:
+            if st.button(
+                f"Add this to Slide {active_slide} →",
+                type="primary",
+                width="stretch",
+                key=f"{state_id}-use",
+            ):
+                working_bytes = crop_store.get(selected["asset_key"]) or selected["bytes"]
+                image = _asset_to_image(working_bytes)
+                if image is None:
+                    st.warning("This visual could not be decoded as an image.")
+                else:
+                    buffer = BytesIO()
+                    image.save(buffer, format="JPEG", quality=94, optimize=True)
+                    selected_bytes = buffer.getvalue()
+                    st.session_state.test_top5_visual_assignments[active_slide] = {
+                        "asset_key": selected["asset_key"],
+                        "result_key": "manual-subject",
+                        "source": selected["source"],
+                        "label": "Manual Subject Cutout",
+                        "bytes": selected_bytes,
+                        "preview_bytes": bytes(state["rendered_preview"]),
+                        "manual_subject_cutout": dict(state["rendered_config"]),
+                    }
+                    st.session_state.test_top5_visual_handoff = None
+                    st.session_state.test_top5_rendered_video_path = None
+                    st.session_state.test_top5_visual_card_results.pop(active_slide, None)
+                    st.rerun()
 
 
 def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
@@ -3197,42 +3260,11 @@ def _render_live_visuals(slide_count: int):
             default_headline=str(
                 (st.session_state.get("live_approved_script") or {}).get("headline") or ""
             ),
+            handoff="cricket",
+            slide_count=slide_count,
+            assignment_store=st.session_state.live_visual_assignments,
+            approval_state="live_visuals_approved",
         )
-        preview = state.get("rendered_preview")
-        config = state.get("rendered_config")
-        selected = next(
-            (asset for asset in assets if asset["asset_key"] == state.get("image_key")),
-            None,
-        )
-        if preview and config and selected:
-            slide = st.selectbox(
-                "Use Text Cutout for slide",
-                list(range(1, slide_count + 1)),
-                key="live-cricket-manual-subject-slide",
-            )
-            if st.button(
-                "Use Text Cutout for this slide",
-                type="primary",
-                width="stretch",
-                key="live-cricket-manual-subject-use",
-            ):
-                working_bytes = st.session_state.live_visual_crops.get(
-                    selected["asset_key"]
-                ) or selected["bytes"]
-                assignment_key = hashlib.sha1(
-                    json.dumps(config, sort_keys=True).encode("utf-8")
-                ).hexdigest()[:12]
-                st.session_state.live_visual_assignments[slide] = {
-                    "asset_key": f"text-cutout-{assignment_key}",
-                    "result_key": "text-cutout",
-                    "source": selected["source"],
-                    "label": "Text Cutout",
-                    "bytes": bytes(working_bytes),
-                    "preview_bytes": bytes(preview),
-                    "manual_subject_cutout": dict(config),
-                }
-                st.session_state.live_visuals_approved = False
-                st.rerun()
 
     if visual_option == "Option 5 · Stats Card":
         _render_stats_card(live=True, slide_count=slide_count)
@@ -5452,39 +5484,11 @@ def render_visuals():
             crop_store_name="visual_crops",
             state_id="test-cricket-manual-subject",
             default_headline=str((script or {}).get("headline") or ""),
+            handoff="cricket",
+            slide_count=slide_count,
+            assignment_store=st.session_state.visual_assignments,
+            approval_state="visuals_approved",
         )
-        preview = state.get("rendered_preview")
-        config = state.get("rendered_config")
-        selected = next(
-            (asset for asset in assets if asset["asset_key"] == state.get("image_key")),
-            None,
-        )
-        if preview and config and selected:
-            slide = st.selectbox(
-                "Use Text Cutout for slide",
-                list(range(1, slide_count + 1)),
-                key="test-cricket-manual-subject-slide",
-            )
-            if st.button(
-                "Use Text Cutout for this slide",
-                type="primary",
-                width="stretch",
-                key="test-cricket-manual-subject-use",
-            ):
-                working_bytes = st.session_state.visual_crops.get(
-                    selected["asset_key"]
-                ) or selected["bytes"]
-                st.session_state.visual_assignments[slide] = {
-                    "asset_key": f"manual-subject-{hashlib.sha1(json.dumps(config, sort_keys=True).encode('utf-8')).hexdigest()[:12]}",
-                    "result_key": "manual-subject",
-                    "source": selected["source"],
-                    "label": "Manual Subject Cutout",
-                    "bytes": bytes(working_bytes),
-                    "preview_bytes": bytes(preview),
-                    "manual_subject_cutout": dict(config),
-                }
-                st.session_state.visuals_approved = False
-                st.rerun()
 
     _render_visual_board(slide_count)
 
@@ -7586,34 +7590,9 @@ elif st.session_state.app_mode == "test":
                                 crop_store_name="test_top5_visual_crops",
                                 state_id=f"test-top5-manual-subject-{active_slide}",
                                 default_headline=headline,
+                                handoff="top5",
+                                active_slide=active_slide,
                             )
-                            preview = manual_state.get("rendered_preview")
-                            config = manual_state.get("rendered_config")
-                            selected = next(
-                                (asset for asset in manual_assets if asset["asset_key"] == manual_state.get("image_key")),
-                                None,
-                            )
-                            if preview and config and selected:
-                                working_bytes = st.session_state.test_top5_visual_crops.get(
-                                    selected["asset_key"]
-                                ) or selected["bytes"]
-                                if working_bytes and st.button(
-                                    f"Use Manual Subject Cutout for slide {active_slide}",
-                                    type="primary",
-                                    width="stretch",
-                                    key=f"test-top5-manual-subject-use-{active_slide}",
-                                ):
-                                    _top5_store_assignment(
-                                        {"bytes": bytes(working_bytes), "asset_key": selected["asset_key"]},
-                                        bytes(working_bytes),
-                                        "manual-subject",
-                                        selected["source"],
-                                        selected["label"],
-                                        card_type="manual-subject",
-                                        card_data=config,
-                                        preview_bytes=preview,
-                                    )
-                                    st.rerun()
 
                     if visual_option in {"Option 5 · Stats Card", "Option 6 · Quote Card"}:
                         image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
