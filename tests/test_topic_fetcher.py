@@ -432,6 +432,104 @@ def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch
     assert any(row["breakout"] for row in rows)
 
 
+def test_youtube_trend_queries_use_indian_geo_for_primary_seeds(monkeypatch):
+    calls = []
+
+    class Response:
+        def __init__(self, text="", payload=None):
+            self.text = text
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    explore = {
+        "widgets": [{
+            "id": "RELATED_QUERIES_0",
+            "request": {"restriction": {"complexKeywordsRestriction": {"keyword": [{"value": "cricket"}]}}},
+            "token": "token",
+        }]
+    }
+    related = {
+        "default": {
+            "rankedList": [
+                {"rankedKeyword": [{"query": "Virat Kohli", "value": 100}]},
+            ]
+        }
+    }
+
+    def fake_get(url, **kwargs):
+        calls.append((url, kwargs.get("params") or {}))
+        if "explore" in url:
+            return Response(text=")]}'," + json.dumps(explore))
+        if "relatedsearches" in url:
+            return Response(text=")]}'," + json.dumps(related))
+        return Response(payload=["", []])
+
+    monkeypatch.setattr(topic_fetcher.requests, "get", fake_get)
+
+    topic_fetcher._youtube_trend_queries("cricket")
+    params = next(params for url, params in calls if "explore" in url)
+    request = json.loads(params["req"])
+    assert request["comparisonItem"][0]["geo"] == "IN"
+    assert params["hl"] == "en-IN"
+
+
+def test_fetch_youtube_search_trends_india_signals_rank_above_global(monkeypatch):
+    def fake_queries(seed):
+        if seed == "cricket":
+            return [{
+                "keyword": "Virat Kohli return",
+                "signal": "Rising",
+                "rank": 1,
+                "breakout": False,
+                "seed": seed,
+                "autocomplete": False,
+            }]
+        if seed == "international cricket":
+            return [{
+                "keyword": "International cricket return",
+                "signal": "Rising",
+                "rank": 1,
+                "breakout": False,
+                "seed": seed,
+                "autocomplete": False,
+            }]
+        return []
+
+    monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
+
+    def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
+        if "virat kohli" in query.casefold():
+            return [
+                make_topic(
+                    "Virat Kohli return confirmed",
+                    hours=0,
+                    source="ESPNcricinfo",
+                    description="India cricket development",
+                    url="https://example.com/india-story",
+                )
+            ]
+        return [
+            make_topic(
+                "International cricket return confirmed",
+                hours=0,
+                source="ESPNcricinfo",
+                description="International cricket development",
+                url="https://example.com/global-story",
+            )
+        ]
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    result = topic_fetcher.fetch_youtube_search_trends(2)
+
+    assert [item["keyword"] for item in result] == [
+        "virat kohli return",
+        "international cricket return",
+    ]
+    assert result[0]["score"] > result[1]["score"]
+
+
 def test_fetch_youtube_search_trends_returns_news_backed_story_pool(monkeypatch):
     def fake_queries(seed):
         return [{
