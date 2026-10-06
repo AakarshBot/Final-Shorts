@@ -477,7 +477,7 @@ Status: **Approved / cleaned / entity tiles implemented / keyword tile implement
 
 ### Function 01B — YouTube Search Trends
 
-Status: **Test implementation approved / merged to main. Live remains untouched.**
+Status: **Test + Live implementation approved / merged to main.**
 
 - This is a Test-only Topic Fetcher source; it does not create a separate downstream pipeline.
 - Selecting the **YT Trends** dashboard option immediately fetches one unsegregated pool of the top 20 current YouTube search-trend signals.
