@@ -42,6 +42,18 @@ YOUTUBE_TREND_SEEDS = (
     ("basketball", "niche_sports"),
     ("sports news", "niche_sports"),
 )
+YOUTUBE_TREND_INDIAN_SEEDS = {
+    "cricket",
+    "cricket news",
+    "football",
+    "football news",
+    "tennis",
+    "formula 1",
+    "badminton",
+    "basketball",
+    "sports news",
+}
+YOUTUBE_TREND_INDIA_SCORE_MULTIPLIER = 1.35
 YOUTUBE_TREND_NOISE_TERMS = {
     "aaj", "tak", "live", "today", "news", "latest", "update", "updates",
     "match", "matches", "watch", "watching", "stream", "streaming", "telecast",
@@ -541,11 +553,14 @@ def _youtube_autocomplete(keyword: str) -> list[str]:
 
 
 def _youtube_trend_queries(keyword: str) -> list[dict]:
-    language = "en-US"
+    clean_keyword = _clean(keyword)
+    indian = clean_keyword.casefold() in YOUTUBE_TREND_INDIAN_SEEDS
+    geo = "IN" if indian else ""
+    language = "en-IN" if indian else "en-US"
     request = {
         "comparisonItem": [{
-            "keyword": _clean(keyword),
-            "geo": "",
+            "keyword": clean_keyword,
+            "geo": geo,
             "time": "now 1-d",
         }],
         "category": 0,
@@ -595,7 +610,8 @@ def _youtube_trend_queries(keyword: str) -> list[dict]:
                 "value": value,
                 "rank": rank,
                 "breakout": str(raw_value).casefold() == "breakout",
-                "seed": _clean(keyword),
+                "seed": clean_keyword,
+                "geo": geo,
             })
 
     try:
@@ -641,6 +657,7 @@ def fetch_youtube_search_trends(
                         "autocomplete": False,
                         "seeds": set(),
                         "profiles": set(),
+                        "indian_signal": False,
                     },
                 )
                 rank = max(1, int(row.get("rank") or 1))
@@ -656,6 +673,7 @@ def fetch_youtube_search_trends(
                 item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
                 item["seeds"].add(seed.casefold())
                 item["profiles"].add(profile)
+                item["indian_signal"] = item["indian_signal"] or row.get("geo") == "IN"
 
     candidates = []
     for item in grouped.values():
@@ -735,7 +753,8 @@ def fetch_youtube_search_trends(
             if not stories:
                 continue
 
-            score = item["evidence"] + min(1.5, 0.5 * len(stories))
+            region_multiplier = YOUTUBE_TREND_INDIA_SCORE_MULTIPLIER if item["indian_signal"] else 1.0
+            score = item["evidence"] * region_multiplier + min(1.5, 0.5 * len(stories))
             validated.append({
                 "keyword": item["keyword"],
                 "trend_query": item["trend_query"],
