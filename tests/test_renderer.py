@@ -884,7 +884,7 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
     ).read_bytes()
     monkeypatch.setattr(
         renderer,
-        "_top5_manual_subject_font_bytes",
+        "_manual_subject_font_bytes",
         lambda _font_name: local_font,
     )
 
@@ -1004,7 +1004,7 @@ def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
     ).read_bytes()
     monkeypatch.setattr(
         renderer,
-        "_top5_manual_subject_font_bytes",
+        "_manual_subject_font_bytes",
         lambda _font_name: local_font,
     )
     subject = Image.new("L", (1080, 1920), 0)
