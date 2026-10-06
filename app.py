@@ -3197,14 +3197,11 @@ def _render_live_visuals(slide_count: int):
     )
     if st.session_state.get("live_visual_option") not in visual_options:
         st.session_state.live_visual_option = visual_options[0]
-    visual_option = st.pills(
-        "Visual source",
+    visual_option = _render_visual_option_grid(
         visual_options,
-        default=st.session_state.live_visual_option,
-        key="live_visual_option",
-        label_visibility="collapsed",
-        wrap=True,
-    ) or visual_options[0]
+        session_key="live_visual_option",
+        button_prefix="live-visual-source",
+    )
 
     _render_visual_board(slide_count, live=True)
 
@@ -3573,6 +3570,30 @@ def _render_live_script():
     st.caption(
         "Manual QC is the final editorial decision. The opening headline is optional; leaving it empty is accepted."
     )
+    if universal_story and str(script.get("story_angle") or "").strip():
+        st.caption("Selected story angle: " + str(script.get("story_angle") or "").strip())
+        if st.button(
+            "Change angle and regenerate",
+            width="stretch",
+            key=f"live-change-angle-{story_id}",
+        ):
+            st.session_state.live_script_data = None
+            st.session_state.live_approved_script = None
+            st.session_state.live_script_error = ""
+            st.session_state.live_audio_data = None
+            st.session_state.live_approved_audio = None
+            st.session_state.live_subtitle_data = None
+            st.session_state.live_handoff_error = ""
+            st.session_state.live_visual_result = None
+            st.session_state.live_manual_visual_result = None
+            st.session_state.live_real_image_result = None
+            st.session_state.live_ai_image_result = None
+            st.session_state.live_visual_assignments = {}
+            st.session_state.live_visuals_approved = False
+            st.session_state.live_rendered_video_path = None
+            st.session_state.live_render_error = ""
+            st.session_state.live_stage = "02 · Script"
+            st.rerun()
 
     st.session_state.live_headline_enabled = st.toggle(
         "Use opening headline",
@@ -4224,14 +4245,11 @@ def render_live_top5():
         if specific_prompt:
             st.caption(f"Visual search prompt: {specific_prompt}")
 
-        option = st.pills(
-            "Visual source",
+        option = _render_visual_option_grid(
             VISUAL_OPTIONS,
-            default=st.session_state.live_visual_option,
-            key="live_visual_option",
-            label_visibility="collapsed",
-            wrap=True,
-        ) or VISUAL_OPTIONS[0]
+            session_key="live_visual_option",
+            button_prefix="live-top5-visual-source",
+        )
 
         if option == "Option 3 · Real Image Search":
             st.info("Option 3 · Real Image Search is WIP in the Top-5 pipeline.")
@@ -5279,38 +5297,117 @@ def render_scriptwriter():
         f'<div class="canvas-copy">{topic.title}</div></div></div>',
         unsafe_allow_html=True,
     )
+    universal_story = (
+        st.session_state.get("test_production_line") == "youtube_trends"
+        or st.session_state.get("topic_desk_profile") == "niche_sports"
+    )
+
     top_left, top_right=st.columns([1,.72],gap="medium")
     with top_left:
         language=st.pills("Language",["English","Hindi","Telugu"],default="English",key="script_language",label_visibility="collapsed") or "English"
-    with top_right:
-        if st.button("Generate script",type="primary",width="stretch"):
+
+    if universal_story and st.session_state.get("test_universal_angle_story_key") != story_key:
+        st.session_state.test_universal_angles = None
+        st.session_state.test_universal_angle_source = None
+        st.session_state.test_universal_angle_selected = 0
+        st.session_state.test_universal_angle_custom = ""
+        st.session_state.test_universal_angle_story_key = story_key
+
+    if not universal_story:
+        with top_right:
+            if st.button("Generate script",type="primary",width="stretch"):
+                for key in (
+                    headline_toggle_key,
+                    headline_text_key,
+                    *(f"script-slide-{story_key}-{index}" for index in range(1, 7)),
+                ):
+                    st.session_state.pop(key, None)
+                with st.spinner("Writing the Short…"):
+                    st.session_state.script_data = _script_for_topic(
+                        topic,
+                        st.session_state.get("topic_desk_profile") or "",
+                        language.casefold(),
+                    )
+    elif not st.session_state.get("test_universal_angles"):
+        with top_right:
+            if st.button("Generate script",type="primary",width="stretch",key="test-generate-script"):
+                try:
+                    with st.spinner("Reading the full story and finding the strongest angles…"):
+                        from universal_script_writer import suggest_universal_story_angles
+                        angle_result = suggest_universal_story_angles(
+                            _story_payload(topic),
+                            language=language.casefold(),
+                        )
+                    st.session_state.test_universal_angles = angle_result["angles"]
+                    st.session_state.test_universal_angle_source = angle_result["source_evidence"]
+                    st.session_state.test_universal_angle_selected = 0
+                    st.session_state.test_universal_angle_custom = ""
+                    st.session_state.test_universal_angle_story_key = story_key
+                except Exception as exc:
+                    st.error(f"Scriptwriter failed: {type(exc).__name__}: {exc}")
+    else:
+        selected_angle = _render_universal_angle_picker(
+            st.session_state.test_universal_angles,
+            selected_key="test_universal_angle_selected",
+            custom_key="test_universal_angle_custom",
+            button_prefix=f"test-{story_key}",
+        )
+        if selected_angle:
             for key in (
                 headline_toggle_key,
                 headline_text_key,
                 *(f"script-slide-{story_key}-{index}" for index in range(1, 7)),
             ):
                 st.session_state.pop(key, None)
-            with st.spinner("Writing the Short…"):
-                st.session_state.script_data = _script_for_topic(
-                    topic,
-                    st.session_state.get("topic_desk_profile") or "",
-                    language.casefold(),
-                    universal=st.session_state.get("test_production_line") == "youtube_trends",
-                )
-            st.session_state.approved_script=None
-            st.session_state.audio_data=None
-            st.session_state.approved_audio=None
-            st.session_state.subtitle_data=None
-            st.session_state.approved_subtitles=None
-            st.session_state.renderer_previews=None
-            st.session_state.rendered_video_path=None
-            st.session_state.upload_qc_approved=False
-            st.session_state.upload_result=None
-            st.session_state.upload_qc=None
+            try:
+                with st.spinner("Writing the Short from the selected angle…"):
+                    st.session_state.script_data = _script_for_topic(
+                        topic,
+                        st.session_state.get("topic_desk_profile") or "",
+                        language.casefold(),
+                        universal=True,
+                        angle=selected_angle,
+                        research_source=st.session_state.test_universal_angle_source,
+                    )
+            except Exception as exc:
+                st.error(f"Scriptwriter failed: {type(exc).__name__}: {exc}")
+            else:
+                st.session_state.approved_script=None
+                st.session_state.audio_data=None
+                st.session_state.approved_audio=None
+                st.session_state.subtitle_data=None
+                st.session_state.approved_subtitles=None
+                st.session_state.renderer_previews=None
+                st.session_state.rendered_video_path=None
+                st.session_state.upload_qc_approved=False
+                st.session_state.upload_result=None
+                st.session_state.upload_qc=None
+                st.rerun()
+
 
     script=st.session_state.script_data
     if not script:
         return
+
+    if universal_story and str(script.get("story_angle") or "").strip():
+        st.caption("Selected story angle: " + str(script.get("story_angle") or "").strip())
+        if st.button(
+            "Change angle and regenerate",
+            width="stretch",
+            key=f"test-change-angle-{story_key}",
+        ):
+            st.session_state.script_data = None
+            st.session_state.approved_script = None
+            st.session_state.audio_data = None
+            st.session_state.approved_audio = None
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
+            st.session_state.renderer_previews = None
+            st.session_state.rendered_video_path = None
+            st.session_state.upload_qc_approved = False
+            st.session_state.upload_result = None
+            st.session_state.upload_qc = None
+            st.rerun()
 
     left,right=st.columns([1.55,.55],gap="large")
     with left:
@@ -5659,14 +5756,11 @@ def render_visuals():
     selected_option = st.session_state.get("visual_test_mode")
     if selected_option not in visual_options:
         selected_option = visual_options[0]
-    mode = st.pills(
-        "Visual test",
+    mode = _render_visual_option_grid(
         visual_options,
-        default=selected_option,
-        key="visual_test_mode",
-        label_visibility="collapsed",
-        wrap=True,
-    ) or visual_options[0]
+        session_key="visual_test_mode",
+        button_prefix="test-visual-source",
+    )
 
     script = st.session_state.get("approved_script") or st.session_state.get("script_data")
     slide_count = len(script.get("script") or []) if isinstance(script, dict) else 4
@@ -7056,12 +7150,11 @@ elif st.session_state.app_mode == "test":
             )
 
             st.markdown('<div class="mini-label">9 VISUAL OPTIONS</div>', unsafe_allow_html=True)
-            visual_option = st.pills(
-                "Visual source",
+            visual_option = _render_visual_option_grid(
                 TOP5_VISUAL_OPTIONS,
-                key="test_top5_visual_playground_option",
-                label_visibility="collapsed",
-            ) or TOP5_VISUAL_OPTIONS[2]
+                session_key="test_top5_visual_playground_option",
+                button_prefix="test-top5-playground-visual-source",
+            )
 
             image_col, editor_col = st.columns([.85, 1.15], gap="large")
             with image_col:
@@ -7408,13 +7501,11 @@ elif st.session_state.app_mode == "test":
                     if specific_prompt:
                         st.caption(f"Script visual search prompt: {specific_prompt}")
 
-                    visual_option = st.pills(
-                        "Visual source",
+                    visual_option = _render_visual_option_grid(
                         TOP5_VISUAL_OPTIONS,
-                        key="test_top5_visual_option",
-                        label_visibility="collapsed",
-                        wrap=True,
-                    ) or TOP5_VISUAL_OPTIONS[0]
+                        session_key="test_top5_visual_option",
+                        button_prefix="test-top5-production-visual-source",
+                    )
 
                     def _top5_asset_source(asset):
                         return str(
