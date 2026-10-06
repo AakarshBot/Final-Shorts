@@ -553,7 +553,7 @@ def _youtube_trend_queries(keyword: str, geo: str | None) -> list[dict]:
     rows = []
     for index, signal in enumerate(("Top", "Rising")):
         items = ranked[index].get("rankedKeyword", []) if index < len(ranked) else []
-        for item in items:
+        for rank, item in enumerate(items, 1):
             query = _clean(item.get("query"))
             if not query:
                 continue
@@ -566,6 +566,7 @@ def _youtube_trend_queries(keyword: str, geo: str | None) -> list[dict]:
                 "keyword": query,
                 "signal": signal,
                 "value": value,
+                "rank": rank,
                 "breakout": str(raw_value).casefold() == "breakout",
                 "seed": _clean(keyword),
             })
@@ -609,8 +610,7 @@ def fetch_youtube_search_trends(
                 key,
                 {
                     "keyword": keyword,
-                    "top": 0.0,
-                    "rising": 0.0,
+                    "evidence": 0.0,
                     "breakout": False,
                     "autocomplete": False,
                     "seeds": set(),
@@ -618,28 +618,29 @@ def fetch_youtube_search_trends(
             )
             item["seeds"].add(_clean(row.get("seed")).casefold())
             item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
-            if row.get("signal") == "Rising":
-                item["rising"] = max(item["rising"], float(row.get("value") or 0))
-                item["breakout"] = item["breakout"] or bool(row.get("breakout"))
-            else:
-                item["top"] = max(item["top"], float(row.get("value") or 0))
+            rank = max(1, int(row.get("rank") or 1))
+            weight = 1.5 if row.get("signal") == "Rising" else 1.0
+            item["evidence"] = max(
+                item["evidence"],
+                item["evidence"] + weight / rank,
+            )
+            if row.get("breakout"):
+                item["breakout"] = True
 
     results = []
     for item in grouped.values():
-        signal_value = max(item["rising"], item["top"])
-        score = min(100.0, signal_value)
+        score = item["evidence"]
         if item["breakout"]:
-            score += 20.0
+            score += 2.0
         if item["autocomplete"]:
-            score += 8.0
+            score += 0.2
         if len(item["seeds"]) > 1:
-            score += 7.0
-        score = min(100.0, score)
+            score += 0.4 * (len(item["seeds"]) - 1)
         results.append({
             "keyword": item["keyword"],
             "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
             "signal": "Rising" if item["rising"] > 0 or item["breakout"] else "Top",
-            "signal_value": round(signal_value, 1),
+            "signal_value": None,
             "breakout": item["breakout"],
             "youtube_autocomplete": item["autocomplete"],
             "seed_count": len(item["seeds"]),
@@ -647,8 +648,13 @@ def fetch_youtube_search_trends(
             "geo": geo or "WORLDWIDE",
         })
 
+    maximum = max(item["score"] for item in results)
+    if maximum > 0:
+        for item in results:
+            item["score"] = round(item["score"] / maximum * 100, 1)
+
     results.sort(
-        key=lambda item: (item["score"], item["signal_value"], item["keyword"].casefold()),
+        key=lambda item: (item["score"], item["keyword"].casefold()),
         reverse=True,
     )
     if not results:
