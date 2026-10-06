@@ -3474,26 +3474,86 @@ def _render_live_visuals(slide_count: int):
 
 def _render_live_script():
     script = st.session_state.get("live_script_data")
+    story = st.session_state.live_topics[st.session_state.live_selected_topic]
+    story_id = _live_story_key(story)
+    universal_story = (
+        st.session_state.get("live_production_line") == "youtube_trends"
+        or st.session_state.get("live_topics_profile") == "niche_sports"
+    )
 
     if not isinstance(script, dict):
-        if st.button(
-            "Retry Scriptwriter" if st.session_state.get("live_script_error") else "Generate Script",
-            type="primary",
-            width="stretch",
-            key="live-generate-script",
-        ):
+        if not universal_story:
+            if st.button(
+                "Retry Scriptwriter" if st.session_state.get("live_script_error") else "Generate Script",
+                type="primary",
+                width="stretch",
+                key="live-generate-script",
+            ):
+                st.session_state.live_script_error = ""
+                try:
+                    with st.spinner("Writing the Short…"):
+                        _live_generate_script()
+                except Exception as exc:
+                    st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+                st.rerun()
+            if st.session_state.get("live_script_error"):
+                st.error("Scriptwriter failed: " + st.session_state.live_script_error)
+            else:
+                st.info("Press Generate Script to start the Scriptwriter.")
+            return
+
+        angles = st.session_state.get("live_universal_angles")
+        if not angles:
+            if st.button(
+                "Retry angle discovery" if st.session_state.get("live_script_error") else "Generate Script",
+                type="primary",
+                width="stretch",
+                key="live-generate-script",
+            ):
+                st.session_state.live_script_error = ""
+                try:
+                    with st.spinner("Reading the full story and finding the strongest angles…"):
+                        from universal_script_writer import suggest_universal_story_angles
+                        result = suggest_universal_story_angles(
+                            _story_payload(story),
+                            language=st.session_state.get("live_script_language", "english"),
+                        )
+                    st.session_state.live_universal_angles = result["angles"]
+                    st.session_state.live_universal_angle_source = result["source_evidence"]
+                    st.session_state.live_universal_angle_selected = 0
+                    st.session_state.live_universal_angle_custom = ""
+                except Exception as exc:
+                    st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+                st.rerun()
+            if st.session_state.get("live_script_error"):
+                st.error("Scriptwriter failed: " + st.session_state.live_script_error)
+            else:
+                st.info("Press Generate Script to identify three evidence-backed story angles.")
+            return
+
+        selected_angle = _render_universal_angle_picker(
+            angles,
+            selected_key="live_universal_angle_selected",
+            custom_key="live_universal_angle_custom",
+            button_prefix=f"live-{story_id}",
+        )
+        if selected_angle:
             st.session_state.live_script_error = ""
             try:
-                with st.spinner("Writing the Short…"):
-                    _live_generate_script()
+                with st.spinner("Writing the Short from the selected angle…"):
+                    _live_generate_script(
+                        angle=selected_angle,
+                        research_source=st.session_state.live_universal_angle_source,
+                    )
             except Exception as exc:
                 st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
-            st.rerun()
-        if st.session_state.get("live_script_error"):
-            st.error("Scriptwriter failed: " + st.session_state.live_script_error)
-        else:
-            st.info("Press Generate Script to start the Scriptwriter.")
-        return
+            else:
+                st.rerun()
+        if not isinstance(st.session_state.get("live_script_data"), dict):
+            if st.session_state.get("live_script_error"):
+                st.error("Scriptwriter failed: " + st.session_state.live_script_error)
+            return
+        script = st.session_state.live_script_data
 
     if st.session_state.get("live_script_error"):
         st.error(
