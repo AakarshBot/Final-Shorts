@@ -504,20 +504,21 @@ def validate_universal_script(
         narration_parts.append(_clean(scene.get("voiceover")))
 
     narration = " ".join(narration_parts)
+    narration_normalised = _normalise(narration)
+
+    for phrase in FILLER_PHRASES:
+        if _normalise(phrase) in narration_normalised:
+            return False, "The narration contains filler or retention bait."
+
     total_words = _words(narration)
     if total_words < MIN_WORDS:
         return False, "Narration is too short to reach the 18-second minimum without padding."
     if total_words > MAX_WORDS:
         return False, "Narration must stay under 30 seconds."
 
-    narration_normalised = _normalise(narration)
     subject_normalised = _normalise(subject)
     if subject_normalised and subject_normalised not in narration_normalised:
         return False, "The main subject is not named in the spoken narration."
-
-    for phrase in FILLER_PHRASES:
-        if _normalise(phrase) in narration_normalised:
-            return False, "The narration contains filler or retention bait."
 
     headline = _clean(result.get("headline"))
     if headline_required and not headline:
