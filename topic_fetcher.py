@@ -523,12 +523,12 @@ def _youtube_autocomplete(keyword: str) -> list[str]:
     ]
 
 
-def _youtube_trend_queries(keyword: str, geo: str | None) -> list[dict]:
-    language = "en-IN" if geo == "IN" else "en-US"
+def _youtube_trend_queries(keyword: str) -> list[dict]:
+    language = "en-US"
     request = {
         "comparisonItem": [{
             "keyword": _clean(keyword),
-            "geo": geo or "",
+            "geo": "",
             "time": "now 1-d",
         }],
         "category": 0,
@@ -591,7 +591,6 @@ def _youtube_trend_queries(keyword: str, geo: str | None) -> list[dict]:
 
 
 def fetch_youtube_search_trends(
-    geo: str | None = None,
     limit: int = 20,
 ) -> list[dict]:
     if limit <= 0:
@@ -600,7 +599,7 @@ def fetch_youtube_search_trends(
     grouped: dict[str, dict] = {}
     with ThreadPoolExecutor(max_workers=len(YOUTUBE_TREND_SEEDS)) as pool:
         futures = {
-            pool.submit(_youtube_trend_queries, seed, geo): (seed, profile)
+            pool.submit(_youtube_trend_queries, seed): (seed, profile)
             for seed, profile in YOUTUBE_TREND_SEEDS
         }
         for future in as_completed(futures):
@@ -686,7 +685,6 @@ def _today_local_date():
 def fetch_youtube_trend_topics(
     keyword: str,
     profile: str,
-    geo: str | None = None,
     more: bool = False,
     exclude_topics: list[Topic] | None = None,
     limit: int = TARGET,
@@ -719,7 +717,7 @@ def fetch_youtube_trend_topics(
     rows: list[Topic] = []
     with ThreadPoolExecutor(max_workers=min(4, len(queries))) as pool:
         futures = [
-            pool.submit(_fetch_google, query, TIMEOUT, geo=geo)
+            pool.submit(_fetch_google, query, TIMEOUT, geo=None)
             for query in queries
         ]
         for future in as_completed(futures):
