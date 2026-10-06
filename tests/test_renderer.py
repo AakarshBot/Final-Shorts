@@ -1435,7 +1435,8 @@ def test_top5_card_preview_honors_logo_enabled(monkeypatch):
 def test_production_top5_card_honors_logo_and_source_flags(monkeypatch, tmp_path):
     audio_file = tmp_path / "scene1.mp3"
     audio_file.write_bytes(b"audio")
-    visual = Image.new("RGB", (1080, 1920), "white")
+    visual = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
     calls = []
 
     monkeypatch.setattr(renderer, "_draw_top5_editorial_card", lambda base, card: base)
@@ -1458,7 +1459,7 @@ def test_production_top5_card_honors_logo_and_source_flags(monkeypatch, tmp_path
         script,
         audio,
         None,
-        [{"bytes": visual.tobytes(), "top5_card": {"headline": "Top five result"}}],
+        [{"bytes": visual.getvalue(), "top5_card": {"headline": "Top five result"}}],
         tmp_path / "top5.mp4",
         logo_enabled=True,
         source_enabled=False,
