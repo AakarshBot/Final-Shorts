@@ -3,32 +3,42 @@ import pytest
 import universal_script_writer as writer
 
 
-def valid_result(
-    scene_count=4,
-    total_words_scene1=10,
-):
-    scenes = []
-    for index in range(scene_count):
-        if index == 0:
-            voiceover = (
-                "Carlos Alcaraz wins a dramatic Tokyo final against a tough opponent."
-                if total_words_scene1 == 10
-                else "Alcaraz"
-            )
-        else:
-            voiceover = (
-                f"Alcaraz added concrete context in slide {index + 1} with a confirmed result."
-            )
-        scenes.append(
-            {
-                "voiceover": voiceover,
-                "narrative_role": "development",
-                "primary_entity": "Carlos Alcaraz",
-                "visual_intent": "Carlos Alcaraz tennis action",
-                "specific_search_prompt": "Carlos Alcaraz Tokyo tennis final",
-                "sport_or_topic_category": "Tennis",
-            }
-        )
+def valid_result(scene_count=4):
+    if scene_count == 3:
+        voiceovers = [
+            "Carlos Alcaraz wins a dramatic Tokyo final against a tough opponent.",
+            "He recovered from a slow start, changed the momentum, and finished the final with a strong closing stretch.",
+            "The confirmed victory adds another major result to Alcaraz's season and gives him the Tokyo championship.",
+        ]
+    elif scene_count == 4:
+        voiceovers = [
+            "Carlos Alcaraz wins a dramatic Tokyo final against a tough opponent.",
+            "He recovered from a slow start and controlled the decisive stages of the final.",
+            "The comeback changed the match, with Alcaraz producing the key points when they mattered most.",
+            "The confirmed victory gives Alcaraz the Tokyo championship and strengthens an important part of his season.",
+        ]
+    elif scene_count == 5:
+        voiceovers = [
+            "Carlos Alcaraz wins a dramatic Tokyo final against a tough opponent.",
+            "He recovered from the opening setback and regained control in the final.",
+            "The key turning point came when Alcaraz changed the momentum.",
+            "That comeback produced a decisive result in Tokyo.",
+            "The confirmed victory gives Alcaraz the tournament title.",
+        ]
+    else:
+        voiceovers = ["Carlos Alcaraz wins Tokyo."] * scene_count
+
+    scenes = [
+        {
+            "voiceover": voiceovers[index],
+            "narrative_role": "development",
+            "primary_entity": "Carlos Alcaraz",
+            "visual_intent": "Carlos Alcaraz tennis action",
+            "specific_search_prompt": "Carlos Alcaraz Tokyo tennis final",
+            "sport_or_topic_category": "Tennis",
+        }
+        for index in range(scene_count)
+    ]
 
     return {
         "subject_name": "Carlos Alcaraz",
@@ -223,7 +233,10 @@ def test_writer_hides_invalid_draft_and_rewrites_once(monkeypatch):
     calls = []
     monkeypatch.setattr(writer, "_research_story", lambda story: "FULL STORY")
     bad = valid_result()
-    bad["script"][0]["voiceover"] = "Wait till the end, Carlos Alcaraz wins this."
+    bad["script"][1]["voiceover"] = (
+        "Wait till the end. Alcaraz recovered from the opening setback and controlled "
+        "the final with a decisive response in Tokyo."
+    )
     good = valid_result()
 
     def fake_request(model, prompt, source):
