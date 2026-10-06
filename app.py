@@ -4722,12 +4722,16 @@ def render_youtube_trends_topic_fetcher(*, live=False):
                     st.session_state.visuals_approved = False
                     st.session_state.rendered_video_path = None
                 try:
-                    with st.spinner(f'Searching today’s news for “{keyword}”…'):
-                        st.session_state[topics_key] = fetch_youtube_trend_topics(
-                            keyword,
-                            item["profile"],
-                            limit=20,
-                        )
+                    stories = list(item.get("topics") or [])
+                    if stories:
+                        st.session_state[topics_key] = stories
+                    else:
+                        with st.spinner(f'Searching today’s news for “{keyword}”…'):
+                            st.session_state[topics_key] = fetch_youtube_trend_topics(
+                                keyword,
+                                item["profile"],
+                                limit=20,
+                            )
                 except (RuntimeError, ValueError, OSError) as exc:
                     st.session_state[error_key] = str(exc)
                     st.session_state[topics_key] = []
