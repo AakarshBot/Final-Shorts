@@ -431,7 +431,7 @@ def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch
     assert any(row["breakout"] for row in rows)
 
 
-def test_fetch_youtube_search_trends_returns_one_unsegregated_pool(monkeypatch):
+def test_fetch_youtube_search_trends_returns_news_backed_story_pool(monkeypatch):
     def fake_queries(seed):
         return [{
             "keyword": "India cricket today",
@@ -443,11 +443,97 @@ def test_fetch_youtube_search_trends_returns_one_unsegregated_pool(monkeypatch):
         }]
 
     monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
+    monkeypatch.setattr(
+        topic_fetcher,
+        "_fetch_google",
+        lambda query, timeout=topic_fetcher.TIMEOUT, *, geo="IN": [
+            make_topic(
+                "India announce new cricket squad",
+                source="ESPNcricinfo",
+                description="India cricket selection",
+            )
+        ],
+    )
     result = topic_fetcher.fetch_youtube_search_trends(20)
     assert result
-    assert result[0]["keyword"] == "India cricket today"
+    assert result[0]["keyword"] == "india cricket"
+    assert result[0]["trend_query"] == "India cricket today"
     assert result[0]["profile"] == "cricket_india_asia"
-    assert result[0]["hashtag"] == "#Indiacrickettoday"
+    assert result[0]["hashtag"] == "#indiacricket"
+    assert result[0]["news_count"] == 1
+
+
+def test_youtube_trends_reject_generic_queries_and_validate_real_story_signals(monkeypatch):
+    def fake_queries(seed):
+        if seed == "tennis":
+            return [
+                {
+                    "keyword": "Carlos Alcaraz",
+                    "signal": "Rising",
+                    "rank": 1,
+                    "breakout": False,
+                    "seed": seed,
+                    "autocomplete": True,
+                },
+                {
+                    "keyword": "tennis live today",
+                    "signal": "Rising",
+                    "rank": 2,
+                    "breakout": False,
+                    "seed": seed,
+                    "autocomplete": False,
+                },
+            ]
+        return []
+
+    monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
+
+    def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
+        if "carlos alcaraz" in query.casefold():
+            return [
+                make_topic(
+                    "Carlos Alcaraz advances after straight sets win",
+                    source="ATP",
+                    description="Tennis result",
+                )
+            ]
+        return []
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    result = topic_fetcher.fetch_youtube_search_trends(20)
+    assert [item["keyword"] for item in result] == ["carlos alcaraz"]
+    assert result[0]["news_count"] == 1
+
+
+def test_youtube_trends_normalize_ordinals_and_keep_current_news(monkeypatch):
+    def fake_queries(seed):
+        if seed == "cricket":
+            return [{
+                "keyword": "t20th cricket live today",
+                "signal": "Rising",
+                "rank": 1,
+                "breakout": True,
+                "seed": seed,
+                "autocomplete": True,
+            }]
+        return []
+
+    monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
+    captured = []
+
+    def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
+        captured.append(query)
+        return [
+            make_topic(
+                "T20 cricket tournament confirms new schedule",
+                description="Cricket tournament update",
+            )
+        ]
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    result = topic_fetcher.fetch_youtube_search_trends(20)
+    assert result[0]["keyword"] == "t20"
+    assert "t20 cricket" in captured[0]
 
 
 def test_fetch_youtube_trend_topics_uses_only_today_and_global_news(monkeypatch):
