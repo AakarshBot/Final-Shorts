@@ -1,23 +1,44 @@
-"""Function 02B: niche-sports Shorts script writing."""
+"""Function 02B: universal sports Shorts scriptwriter for Niche Sports and YouTube Trends."""
+
+from __future__ import annotations
 
 import json
 import os
+import re
+from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
+from urllib.parse import urlparse
 
 import requests
+import trafilatura
+from ddgs import DDGS
+from dotenv import load_dotenv
 
-from script_writer import (
-    GROQ_URL,
-    LANGUAGE_INSTRUCTIONS,
-    MODELS,
-    TIMEOUT,
-    _research_story,
-    _source_text,
-    _story_value,
-)
+load_dotenv(Path(__file__).resolve().with_name(".env"))
 
-NICHE_SCHEMA = {
+GROQ_URL = "https://api.groq.com/openai/v1/chat/completions"
+MODELS = ("openai/gpt-oss-120b", "openai/gpt-oss-20b")
+TIMEOUT = 30
+RESEARCH_TIMEOUT = 10
+MIN_ARTICLE_CHARS = 500
+MAX_SOURCE_CHARS = 28000
+MAX_RELATED_ARTICLES = 2
+MIN_WORDS = 45
+MAX_WORDS = 74
+MAX_SLIDE_ONE_WORDS = 13
+MIN_SCENES = 3
+MAX_SCENES = 5
+
+LANGUAGE_INSTRUCTIONS = {
+    "english": "Write all narration and publish metadata in punchy, natural spoken English.",
+    "hindi": "Write all narration and publish metadata in natural spoken Hindi using Devanagari script.",
+    "telugu": "Write all narration and publish metadata in natural spoken Telugu using Telugu script.",
+}
+
+SCHEMA = {
     "type": "object",
     "properties": {
+        "subject_name": {"type": "string"},
         "headline": {"type": "string"},
         "titles": {
             "type": "array",
@@ -33,10 +54,13 @@ NICHE_SCHEMA = {
             "items": {"type": "string"},
         },
         "comment": {"type": "string"},
+        "quote": {"type": "string"},
+        "quote_attribution": {"type": "string"},
+        "quote_slide": {"type": "integer", "minimum": 0, "maximum": MAX_SCENES},
         "script": {
             "type": "array",
-            "minItems": 4,
-            "maxItems": 5,
+            "minItems": MIN_SCENES,
+            "maxItems": MAX_SCENES,
             "items": {
                 "type": "object",
                 "properties": {
@@ -59,102 +83,234 @@ NICHE_SCHEMA = {
             },
         },
     },
-    "required": ["headline", "titles", "seo_description", "hashtags", "comment", "script"],
+    "required": [
+        "subject_name",
+        "headline",
+        "titles",
+        "seo_description",
+        "hashtags",
+        "comment",
+        "quote",
+        "quote_attribution",
+        "quote_slide",
+        "script",
+    ],
     "additionalProperties": False,
 }
 
-GENERIC_OPENERS = (
+FILLER_PHRASES = (
+    "wait till the end",
+    "wait until the end",
+    "watch till the end",
+    "watch until the end",
+    "keep watching",
+    "stay tuned",
+    "don't scroll",
+    "dont scroll",
+    "don't skip",
+    "dont skip",
+    "you won't believe",
+    "you wont believe",
+    "find out later",
+    "here is the latest",
+    "here's the latest",
+    "here’s the latest",
     "welcome to",
     "hey everyone",
     "hey guys",
     "in this video",
     "today we are going to",
     "let's talk about",
-    "here is the latest",
+    "lets talk about",
+    "sports world is buzzing",
+    "the sports world is buzzing",
+    "what happens next remains to be seen",
 )
 
-RETENTION_BAIT = (
-    "wait until the end",
-    "wait till the end",
-    "watch till the end",
-    "keep watching",
-    "stay tuned",
-    "don't skip",
-    "don't scroll",
-    "find out later",
+GENERIC_EVENT_LABELS = (
+    "the legend",
+    "a legend",
+    "the champion",
+    "a champion",
+    "the star",
+    "the superstar",
+    "the former champion",
+    "the defending champion",
+    "the world number one",
+    "world number one",
 )
 
 
-def _validate_script(result: dict) -> tuple[bool, str]:
-    if not isinstance(result, dict):
-        return False, "The provider returned no script object."
+def _clean(value) -> str:
+    return re.sub(r"\s+", " ", str(value or "")).strip()
 
-    headline = " ".join(str(result.get("headline") or "").split())
-    if not 3 <= len(headline.split()) <= 4:
-        return False, "The opening headline must contain 3 or 4 words."
 
-    titles = result.get("titles")
-    if not isinstance(titles, list) or len(titles) != 3 or not all(str(item or "").strip() for item in titles):
-        return False, "The Niche Sports Scriptwriter must produce exactly 3 titles."
+def _words(value) -> int:
+    return len(re.findall(r"\b[\w]+(?:['’][\w]+)?\b", str(value or ""), flags=re.UNICODE))
 
-    description = " ".join(str(result.get("seo_description") or "").split())
-    if not 15 <= len(description.split()) <= 30:
-        return False, "The Niche Sports SEO description must contain 15–30 words."
 
-    hashtags = result.get("hashtags")
-    if (
-        not isinstance(hashtags, list)
-        or not 3 <= len(hashtags) <= 5
-        or any(
-            not str(tag or "").strip().startswith("#")
-            or " " in str(tag or "").strip()
-            for tag in hashtags
-        )
-    ):
-        return False, "The Niche Sports Scriptwriter must produce 3–5 valid hashtags."
+def _normalise(value) -> str:
+    return re.sub(r"[^\w]+", " ", str(value or "").casefold(), flags=re.UNICODE).strip()
 
-    if not str(result.get("comment") or "").strip():
-        return False, "The Niche Sports Scriptwriter must produce a public comment."
 
-    scenes = result.get("script")
-    if not isinstance(scenes, list) or not 4 <= len(scenes) <= 5:
-        return False, "Niche Sports Scriptwriter must return 4 or 5 scenes."
+def _story_value(story, key: str) -> str:
+    if hasattr(story, "__dataclass_fields__") or hasattr(story, key):
+        return _clean(getattr(story, key, ""))
+    return _clean(dict(story or {}).get(key))
 
-    for number, scene in enumerate(scenes, 1):
-        if not isinstance(scene, dict) or not str(scene.get("voiceover") or "").strip():
-            return False, f"Scene {number} is empty or malformed."
-        for key in (
-            "primary_entity",
-            "visual_intent",
-            "specific_search_prompt",
-            "sport_or_topic_category",
-        ):
-            if not str(scene.get(key) or "").strip():
-                return False, f"Scene {number} is missing {key}."
 
-    total_words = sum(len(str(scene.get("voiceover") or "").split()) for scene in scenes)
-    if total_words > 75:
-        return False, "Niche Sports narration exceeds the 75-word hard cap."
+def _source_text(story) -> str:
+    if hasattr(story, "__dataclass_fields__"):
+        story = {name: getattr(story, name) for name in story.__dataclass_fields__}
+    story = dict(story or {})
+    parts = []
+    for key in ("title", "research_evidence_text", "text", "summary", "description", "topic"):
+        value = _clean(story.get(key))
+        if value and value not in parts:
+            parts.append(value)
+    return "\n\n".join(parts)[:MAX_SOURCE_CHARS]
 
-    first = " ".join(str((scenes[0] or {}).get("voiceover") or "").split()).casefold()
-    if len(first.split()) > 14:
-        return False, "Scene 1 exceeds 14 words."
-    if any(first.startswith(opener) for opener in GENERIC_OPENERS):
-        return False, "Scene 1 starts with a generic opener."
 
-    narration = " ".join(
-        " ".join(str(scene.get("voiceover") or "").split()).casefold()
-        for scene in scenes
-        if isinstance(scene, dict)
+def _source_domain(url: str) -> str:
+    try:
+        return urlparse(str(url or "")).netloc.casefold().removeprefix("www.")
+    except ValueError:
+        return ""
+
+
+def _extract_article(url: str) -> tuple[str, str]:
+    target = _clean(url)
+    if not target:
+        return "", ""
+
+    response = requests.get(
+        target,
+        headers={
+            "User-Agent": "Mozilla/5.0 Final-Shorts/1.0",
+            "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+            "Accept-Language": "en-IN,en;q=0.9",
+        },
+        timeout=RESEARCH_TIMEOUT,
+        allow_redirects=True,
     )
-    if any(phrase in narration for phrase in RETENTION_BAIT):
-        return False, "The narration contains retention bait."
+    response.raise_for_status()
+    resolved_url = str(response.url or target)
+    article = _clean(
+        trafilatura.extract(
+            response.text,
+            url=resolved_url,
+            favor_recall=True,
+            include_comments=False,
+            include_tables=False,
+            output_format="txt",
+        )
+    )
+    if len(article) >= MIN_ARTICLE_CHARS:
+        return article, resolved_url
 
-    return True, ""
+    try:
+        fallback = DDGS(timeout=5).extract(resolved_url, fmt="text_plain")
+        content = _clean(fallback.get("content") if isinstance(fallback, dict) else "")
+        if len(content) >= MIN_ARTICLE_CHARS:
+            return content, str(fallback.get("url") or resolved_url)
+    except Exception:
+        pass
+
+    return "", resolved_url
+
+
+def _related_article_urls(title: str, original_url: str) -> list[tuple[str, str]]:
+    if not title:
+        return []
+
+    try:
+        results = DDGS(timeout=5).news(
+            query=title,
+            region="in-en",
+            safesearch="off",
+            timelimit="w",
+            max_results=8,
+        ) or []
+    except Exception:
+        return []
+
+    original = _normalise(original_url.rstrip("/"))
+    title_words = set(re.findall(r"\b[\w]+\b", title.casefold()))
+    scored = []
+    seen = {original}
+    for result in results:
+        url = _clean(result.get("url") or result.get("href"))
+        result_title = _clean(result.get("title"))
+        if not url or not result_title:
+            continue
+        canonical = _normalise(url.rstrip("/"))
+        if not canonical or canonical in seen:
+            continue
+        domain = _source_domain(url)
+        if not domain or any(
+            blocked in domain
+            for blocked in ("twitter.", "x.com", "facebook.", "instagram.", "youtube.", "google.")
+        ):
+            continue
+        result_words = set(re.findall(r"\b[\w]+\b", result_title.casefold()))
+        overlap = len(title_words & result_words)
+        if overlap < 2:
+            continue
+        score = overlap + (0.5 if domain == _source_domain(original_url) else 0)
+        scored.append((score, result_title, url))
+        seen.add(canonical)
+
+    scored.sort(reverse=True)
+    return [(item[1], item[2]) for item in scored[:MAX_RELATED_ARTICLES]]
+
+
+def _research_story(story) -> str:
+    title = _story_value(story, "title")
+    description = _story_value(story, "description")
+    original_url = _story_value(story, "url")
+    sections = []
+
+    if title:
+        sections.append(f"[SELECTED STORY]\n{title}")
+    if description:
+        sections.append(f"[TOPIC SUMMARY]\n{description}")
+
+    if original_url:
+        try:
+            primary, resolved = _extract_article(original_url)
+        except (requests.RequestException, OSError, ValueError):
+            primary, resolved = "", original_url
+        if primary:
+            sections.append(
+                f"[PRIMARY ARTICLE — {resolved or original_url}]\n{primary[:16000]}"
+            )
+
+    related = _related_article_urls(title, original_url)
+    if related:
+        with ThreadPoolExecutor(max_workers=min(2, len(related))) as pool:
+            futures = [
+                pool.submit(_extract_article, related_url)
+                for _, related_url in related
+            ]
+            for number, ((related_title, related_url), future) in enumerate(
+                zip(related, futures),
+                1,
+            ):
+                try:
+                    article, resolved_url = future.result()
+                except (requests.RequestException, OSError, ValueError):
+                    continue
+                if article:
+                    sections.append(
+                        f"[RELATED REPORT {number} — {related_title} — "
+                        f"{resolved_url or related_url}]\n{article[:6000]}"
+                    )
+
+    return "\n\n".join(sections)[:MAX_SOURCE_CHARS]
 
 
 def _request(model: str, prompt: str, source: str) -> dict:
-    key = str(os.getenv("GROQ_API_KEY") or "").strip()
+    key = _clean(os.getenv("GROQ_API_KEY"))
     if not key:
         raise RuntimeError("GROQ_API_KEY is not configured.")
 
@@ -173,9 +329,9 @@ def _request(model: str, prompt: str, source: str) -> dict:
             "response_format": {
                 "type": "json_schema",
                 "json_schema": {
-                    "name": "niche_sports_shorts_script",
+                    "name": "universal_sports_shorts_script",
                     "strict": True,
-                    "schema": NICHE_SCHEMA,
+                    "schema": SCHEMA,
                 },
             },
             "include_reasoning": False,
@@ -190,230 +346,341 @@ def _request(model: str, prompt: str, source: str) -> dict:
     return content if isinstance(content, dict) else json.loads(content)
 
 
-def apply_niche_script_edits(
+SYSTEM_PROMPT = """You are the senior editorial sports writer for a human-reviewed YouTube Shorts channel.
+
+JOB
+Turn the supplied research packet into one original, factual, high-energy sports Short.
+This writer serves Niche Sports stories and YouTube Search Trends stories. The selected story may be about any sport, including cricket. Do not assume cricket.
+
+SOURCE USE
+- Read the entire research packet before writing.
+- Treat the selected article as the primary source. Use related reports to confirm facts, fill factual gaps, add current context, or clarify the latest status.
+- Build your own version of the story. Do not mechanically summarize the article and do not copy complete source sentences.
+- Use only facts supported by the research packet.
+- Never invent names, scores, rankings, records, quotes, dates, injuries, penalties, motives, schedules, statistics or consequences.
+- Preserve allegations, predictions, expectations and reported claims as such.
+- When the source contains conflicting reports, do not silently choose one. Use the supported latest position or state the uncertainty clearly.
+
+UNDERSTAND THE STORY FIRST
+Silently determine:
+- the actual sport or topic;
+- the dominant news development;
+- the exact main person/team/event/entity;
+- the most important consequence or significance;
+- the concrete fact that proves or sharpens the story;
+- the latest confirmed status or next development.
+
+Do not force a fixed event template. A transfer, injury, retirement, qualifying result, race penalty, disciplinary decision, record, statement, selection, tournament result and other developments need different story structures.
+
+NAMING PEOPLE AND ENTITIES
+- Identify the exact main subject in subject_name.
+- The exact subject_name must appear naturally in the spoken narration.
+- If the source or headline uses a descriptor such as "legend", "champion", "star", "former champion", "defending champion" or "world number one", resolve that descriptor to the actual named person or team from the story before writing.
+- Never make the viewer guess who a descriptor refers to when the research identifies the person.
+- Prefer the exact name early when the identity is central to the story.
+- Do not manufacture a subject name from unrelated context.
+
+NARRATION CONTRACT
+- Return 3, 4 or 5 spoken slides.
+- Never return only 1 or 2 slides.
+- Four slides are the preferred structure when they fit naturally.
+- Use 3 slides when the story is genuinely tight.
+- Use 5 slides when five distinct factual beats are needed.
+- Slide 1 MUST contain fewer than 14 words. This is a generation rule.
+- The complete spoken narration MUST be at least 18 seconds and strictly under 30 seconds at normal channel delivery.
+- As a generation proxy, keep the complete narration between 45 and 74 spoken words. This protects the 18-second minimum and the under-30-second ceiling without padding.
+- Target roughly 50–68 words when the story permits.
+- Never add words merely to reach the minimum.
+- The minimum duration must come from useful story information, context, evidence or consequence.
+- Every slide must add genuinely new information.
+
+EDITORIAL STYLE
+- One persona: HYPE COMMENTATOR — sharp, energetic, confident and credible.
+- Write for the ear: short clean sentences, active voice, concrete verbs and natural spoken rhythm.
+- The editorial touch comes from selecting and explaining why the reported development matters, not from inventing an opinion.
+- Compress the source into the strongest version a viewer can understand without reading the article.
+- Prefer specific facts over generic excitement.
+- Respect each sport's actual rules and event structure.
+- Do not call a qualifying result a race win, a round win a tournament title, a ranking movement a championship win, or a scheduled event a completed event.
+- Use sport-specific terminology only when supported and used correctly.
+- If the story is about cricket, write proper cricket language; if it is tennis, motorsport, badminton, chess or another sport, write the vocabulary appropriate to that story.
+
+NO FILLER OR RETENTION BAIT
+The narration must never contain viewer-directed bait or disposable filler such as:
+- "wait till the end", "wait until the end", "watch till the end", "watch until the end";
+- "keep watching", "stay tuned", "don't scroll", "don't skip";
+- "you won't believe this", "find out later";
+- generic openings such as "welcome to", "hey everyone", "hey guys", "in this video", "today we are going to", "let's talk about", "here is the latest";
+- empty phrases such as "the sports world is buzzing", "this is huge", "major update", "big news", "things could change", or similar hype without story-specific meaning.
+Do not ask the viewer a generic question merely to force curiosity.
+Curiosity must come from a real information gap created by the facts.
+
+STORY FLOW
+Use the structure that best fits the evidence, while normally following:
+1. HOOK — the strongest specific fact or development.
+2. DEVELOPMENT — a new fact that materially advances the story.
+3. CONTEXT / SIGNIFICANCE — the minimum context needed to understand why the event matters.
+4. CONSEQUENCE / STATUS — the latest confirmed outcome, effect or next development.
+For five slides, split context or consequence only when each extra slide carries a separate useful fact.
+For three slides, combine context and consequence when that produces a cleaner story.
+Never repeat the headline as narration. Never repeat the same fact across slides.
+
+PUBLISH METADATA
+- headline: exactly 3 or 4 words. It should identify the actual story, not use empty phrases.
+- titles: exactly 3 concise YouTube Shorts title candidates:
+  1. SEO / Search — lead with the strongest identifiable person, team, event or distinctive search term.
+  2. Consequence / Why It Matters — foreground the concrete impact or significance.
+  3. Curiosity — create an information gap from a confirmed fact without misleading the viewer.
+- Every title must be clearly about the selected story and materially different in angle.
+- Do not use generic titles such as "latest update", "breaking news", "big update" or "sports update".
+- seo_description: concise and story-specific.
+- hashtags: 3–5 relevant story-specific hashtags.
+- comment: one concise, story-specific discussion question grounded in a concrete fact.
+
+QUOTE
+- quote: the strongest meaningful direct quote from the research when one materially adds to the story; otherwise empty string.
+- quote_attribution: exact speaker/source of quote, or empty string when there is no quote.
+- quote_slide: the existing slide number where the quote naturally supports the story, or 0 when there is no quote.
+- Never invent, reconstruct or alter a quote.
+- A quote is a visual treatment for an existing story beat, never an additional narration beat.
+
+VISUAL HANDOFF
+Every slide must include:
+- primary_entity
+- visual_intent
+- specific_search_prompt
+- sport_or_topic_category
+Make each visual handoff match the fact narrated on that slide.
+Prefer identifiable people, teams, venues, cars, events, trophies, equipment or other concrete subjects.
+Search prompts must be specific and usable by the Visual Fetcher.
+Never use vague prompts such as "dramatic sports moment".
+Do not invent a visual moment unsupported by the research.
+
+FINAL SELF-CHECK
+Before returning JSON, silently verify:
+1. The story is understandable without the article.
+2. There are 3–5 slides, preferably 4.
+3. Slide 1 has fewer than 14 words.
+4. Total narration is 45–74 words.
+5. The exact main subject name appears in the narration.
+6. No filler or retention-bait phrase appears.
+7. Every slide adds new factual information.
+8. Every factual claim is grounded in the research packet.
+9. The headline is 3–4 words.
+10. Exactly 3 titles are present.
+11. Description, hashtags and comment are useful and story-specific.
+12. Any quote is faithful and attached to an existing slide.
+13. Every visual handoff field is complete and concrete.
+
+Return only JSON matching the supplied schema.
+
+LANGUAGE
+Follow the requested language exactly while preserving the same factual, compact editorial principles.
+"""
+
+def validate_universal_script(
+    result: dict,
+    *,
+    headline_required: bool = True,
+) -> tuple[bool, str]:
+    if not isinstance(result, dict):
+        return False, "The provider returned no script object."
+
+    scenes = result.get("script")
+    if not isinstance(scenes, list) or not MIN_SCENES <= len(scenes) <= MAX_SCENES:
+        return False, "Universal Scriptwriter must return 3–5 slides."
+
+    subject = _clean(result.get("subject_name"))
+    if not subject:
+        return False, "The Scriptwriter must identify the main subject."
+
+    first_words = _words(
+        scenes[0].get("voiceover")
+        if isinstance(scenes[0], dict)
+        else ""
+    )
+    if first_words > MAX_SLIDE_ONE_WORDS:
+        return False, "Slide 1 must contain fewer than 14 words."
+
+    narration_parts = []
+    for number, scene in enumerate(scenes, 1):
+        if not isinstance(scene, dict) or not _clean(scene.get("voiceover")):
+            return False, f"Slide {number} is empty or malformed."
+        for key in (
+            "primary_entity",
+            "visual_intent",
+            "specific_search_prompt",
+            "sport_or_topic_category",
+        ):
+            if not _clean(scene.get(key)):
+                return False, f"Slide {number} is missing {key}."
+        narration_parts.append(_clean(scene.get("voiceover")))
+
+    narration = " ".join(narration_parts)
+    total_words = _words(narration)
+    if total_words < MIN_WORDS:
+        return False, "Narration is too short to reach the 18-second minimum without padding."
+    if total_words > MAX_WORDS:
+        return False, "Narration must stay under 30 seconds."
+
+    narration_normalised = _normalise(narration)
+    subject_normalised = _normalise(subject)
+    if subject_normalised and subject_normalised not in narration_normalised:
+        return False, "The main subject is not named in the spoken narration."
+
+    for phrase in FILLER_PHRASES:
+        if _normalise(phrase) in narration_normalised:
+            return False, "The narration contains filler or retention bait."
+
+    headline = _clean(result.get("headline"))
+    if headline_required and not headline:
+        return False, "The opening headline is required."
+    if headline and not 3 <= _words(headline) <= 4:
+        return False, "The opening headline must contain 3 or 4 words."
+
+    titles = result.get("titles")
+    if (
+        not isinstance(titles, list)
+        or len(titles) != 3
+        or not all(_clean(item) for item in titles)
+    ):
+        return False, "The Scriptwriter must produce exactly 3 titles."
+
+    if not _clean(result.get("seo_description")):
+        return False, "The Scriptwriter must produce a description."
+
+    hashtags = result.get("hashtags")
+    if (
+        not isinstance(hashtags, list)
+        or not 3 <= len(hashtags) <= 5
+        or any(
+            not _clean(tag).startswith("#") or " " in _clean(tag)
+            for tag in hashtags
+        )
+    ):
+        return False, "The Scriptwriter must produce 3–5 valid hashtags."
+
+    if not _clean(result.get("comment")):
+        return False, "The Scriptwriter must produce a public comment."
+
+    quote = _clean(result.get("quote"))
+    attribution = _clean(result.get("quote_attribution"))
+    try:
+        quote_slide = int(result.get("quote_slide") or 0)
+    except (TypeError, ValueError):
+        return False, "The quote slide is invalid."
+
+    if quote:
+        if not attribution:
+            return False, "A quote requires an attribution."
+        if not 1 <= quote_slide <= len(scenes):
+            return False, "A quote must point to an existing slide."
+    elif attribution or quote_slide:
+        return False, "Quote attribution and slide must be empty when no quote is provided."
+
+    return True, ""
+
+
+def _finish_result(result: dict, story, source: str, model: str, language_key: str) -> dict:
+    result["provider_used"] = model
+    result["delivery_profile"] = "UNIVERSAL SPORTS"
+    result["language_used"] = language_key
+    result["word_count"] = _words(
+        " ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or [])
+    )
+    result["source_title"] = _story_value(story, "title")
+    result["source_evidence"] = source
+    return result
+
+
+def write_universal_script(story, language: str = "english") -> dict:
+    source = _research_story(story)
+    if not source:
+        source = _source_text(story)
+    if not source:
+        raise ValueError("The selected story contains no usable evidence.")
+
+    language_key = str(language or "english").strip().lower()
+    instruction = (
+        SYSTEM_PROMPT
+        + "\nLANGUAGE:\n"
+        + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
+    )
+
+    errors = []
+    for attempt, model in enumerate(MODELS):
+        try:
+            model_instruction = instruction
+            if attempt:
+                model_instruction += (
+                    "\nRECOVERY:\n"
+                    "The previous draft was rejected by local validation. "
+                    "Rewrite the complete package now. Fix the exact failure below "
+                    "while preserving every other hard rule and all supported facts. "
+                    "Return only the complete JSON package.\n"
+                    f"Validation failure: {errors[-1]}"
+                )
+            result = _request(model, model_instruction, source)
+            valid, reason = validate_universal_script(result)
+            if valid:
+                return _finish_result(result, story, source, model, language_key)
+            errors.append(reason)
+        except Exception as exc:
+            errors.append(f"{type(exc).__name__}: {exc}")
+
+    raise RuntimeError(
+        "Universal sports script generation failed after one hidden rewrite: "
+        + " | ".join(errors)
+    )
+
+
+def apply_universal_script_edits(
     script: dict,
     voiceovers: list[str],
     headline: str | None = None,
+    *,
+    validate: bool = True,
 ) -> dict:
     result = json.loads(json.dumps(script, ensure_ascii=False))
     scenes = result.get("script") or []
     if len(voiceovers) != len(scenes):
-        raise ValueError("The number of edited slides does not match the generated Niche Sports script.")
-    for scene, voiceover in zip(scenes, voiceovers):
-        scene["voiceover"] = " ".join(str(voiceover or "").split())
-    if headline is not None:
-        result["headline"] = " ".join(str(headline or "").split())
+        raise ValueError("The number of edited slides does not match the generated script.")
 
-    valid, reason = _validate_script(result)
-    if not valid:
-        raise ValueError(f"Edited Niche Sports script failed local validation: {reason}")
+    for scene, voiceover in zip(scenes, voiceovers):
+        scene["voiceover"] = _clean(voiceover)
+
+    if headline is not None:
+        result["headline"] = _clean(headline)
+
+    if validate:
+        valid, reason = validate_universal_script(
+            result,
+            headline_required=False,
+        )
+        if not valid:
+            raise ValueError(f"Edited script failed local validation: {reason}")
 
     result["human_script_edited"] = any(
-        " ".join(str(scene.get("voiceover") or "").split())
-        != " ".join(str(original.get("voiceover") or "").split())
+        _clean(scene.get("voiceover")) != _clean(original.get("voiceover"))
         for scene, original in zip(scenes, script.get("script") or [])
     )
     result["approved_for_audio"] = True
     return result
 
 
-NICHE_SYSTEM_PROMPT = """You are the original editorial writer for a human-reviewed niche-sports YouTube Shorts channel.
-
-Your job is to turn the strongest supported development in the selected niche-sports story into a fast, vivid, spoken Short. Do not summarize the article mechanically.
-
-SOURCE DISCIPLINE
-- Use only facts supported by the supplied story evidence.
-- Never invent scores, rankings, records, quotes, motives, injuries, penalties, results, schedules, statistics or consequences.
-- Treat the selected article as the primary evidence. Do not silently fill gaps from general sports knowledge.
-- If the article reports someone's claim, reaction or statement, attribute it naturally.
-- Never turn an allegation, prediction or expectation into a confirmed fact.
-- Never copy a complete source sentence.
-
-FIRST SILENTLY CLASSIFY THE STORY
-Choose the dominant event type before writing:
-- RESULT / UPSET
-- RECORD / BREAKTHROUGH
-- INJURY / WITHDRAWAL
-- SELECTION / OMISSION
-- DEBUT / COMEBACK / RETIREMENT
-- PENALTY / CONTROVERSY
-- CONTRACT / TEAM / COACHING CHANGE
-- QUALIFICATION / ELIMINATION
-- ANNOUNCEMENT / STATEMENT
-- OTHER CONCRETE DEVELOPMENT
-
-Then build the Short around:
-1. WHAT HAPPENED — the strongest confirmed development.
-2. WHY IT MATTERS — the immediate sporting significance.
-3. PROOF — the score, margin, time, position, record, opponent, round, event, penalty, ranking or other concrete fact that makes the story specific.
-4. WHAT NEXT — the latest confirmed status or consequence.
-
-NICHE-SPORTS EDITORIAL STYLE
-- One persona: HYPE COMMENTATOR — energetic, sharp and confident, but credible.
-- Sound like a strong digital sports desk update, not an article being read aloud.
-- Write for the ear: active voice, short clean sentences, concrete verbs and natural spoken rhythm.
-- Energy must come from the sporting fact, not generic hype.
-- Never use cricket-specific framing or vocabulary unless the selected story is actually about cricket.
-- Do not assume that every sport is a match. Respect the sport's actual event structure.
-- Do not force a winner, turning point or comeback into a story that does not contain one.
-- Do not force statistics. Use a number when it materially explains the story.
-- Avoid generic filler such as "the sports world", "fans will be watching", "this is a huge moment", "a major update", "things could change", or "what happens next remains to be seen" unless the evidence itself makes that wording necessary.
-- Avoid article-style chronology when the chronology is not the story.
-- Every sentence should either deliver the news, sharpen its significance, prove the claim, or close the loop.
-
-SPORT-SPECIFIC FACT PRIORITIES
-Use these only when the source supplies them. Never invent missing fields.
-
-RACKET SPORTS — tennis, badminton, squash, table tennis:
-- Prefer opponent + round/stage + result/score + decisive fact.
-- For rankings, seeds or qualification, state the exact supported ranking/seed and why it matters.
-- For injury or withdrawal stories, make the status and affected event clear.
-
-MOTORSPORT — Formula 1, MotoGP and other racing:
-- Prefer finishing position, qualifying/pole position, race/stage, incident, penalty, retirement/DNF, points or championship consequence when supported.
-- Distinguish qualifying, sprint, race and championship standings.
-- Never describe a driver as "winning" if the source only reports a pole, podium or provisional result.
-
-ATHLETICS / SWIMMING / CYCLING:
-- Prefer event + place + mark/time/distance + record or personal-best status when supported.
-- For cycling, distinguish stage result from overall/general-classification status.
-- For track or field events, do not confuse heat/qualifying/final with the final result.
-
-COMBAT SPORTS — boxing, wrestling and related:
-- Prefer opponent + bout/event + result + method/decision/round when supported.
-- Distinguish title fights from non-title bouts and confirmed results from scheduled fights.
-- Never infer a knockout, stoppage or judging detail that the source does not state.
-
-TEAM SPORTS — hockey, basketball, volleyball, kabaddi:
-- Prefer teams + score/result + competition/stage + decisive performer or sequence when supported.
-- For volleyball, preserve set-score information when it is central.
-- For tournaments, distinguish a single match result from qualification or title status.
-
-GOLF:
-- Prefer tournament + round + position + score relative to par/leader when supported.
-- Distinguish a round lead from winning the tournament.
-
-CHESS:
-- Prefer opponent + event/round + result + concrete turning point only if the source provides it.
-- Do not invent moves, openings or tactical explanations.
-
-HOOK
-- Scene 1 is a cold open, not an article lead.
-- Target 6–8 spoken words and keep the hook at or below 3 seconds of estimated natural speech.
-- Hard maximum 14 words remains a structural ceiling, but the 3-second time limit is the real hook constraint.
-- Choose the strongest truthful form for this particular event:
-  - result or upset;
-  - record or breakthrough;
-  - consequence;
-  - unexpected supported detail;
-  - concrete problem or withdrawal;
-  - penalty or decision.
-- Make the sport/event understandable immediately when needed.
-- Create curiosity through a real information gap, not fake suspense.
-- Never start with "Today...", "Here is the latest...", "X is...", or a generic sport introduction when a sharper fact exists.
-- Do not ask a generic question merely to create curiosity.
-
-STORY FLOW
-- Use exactly 4 or 5 narration scenes.
-- Scene 1 = HOOK: strongest concrete fact.
-- Scene 2 = DEVELOPMENT: immediately add a new, specific fact that changes or sharpens the story.
-- Middle scene(s) = CONTEXT / ESCALATION: give only the sporting context needed to understand the significance.
-- Final scene = CONSEQUENCE: state the latest confirmed status, qualification effect, ranking consequence, next event, recovery status, or other concrete outcome when supported.
-- Every scene must add new information. No scene may simply restate the previous one.
-- Prefer 4 strong scenes when a fifth would only pad the story.
-
-PACING
-- Target roughly 22–27 seconds.
-- Never exceed 30 seconds.
-- Aim for roughly 55–68 spoken words, with the existing 75-word hard cap.
-- Do not pad a short source to reach a target word count.
-
-RETENTION WITHOUT BAIT
-- No CTA, "keep watching", "stay tuned", "wait for it", "don't scroll", "don't skip", "watch till the end", "you won't believe", "find out later" or similar viewer-directed bait.
-- The next sentence should feel necessary because the facts create a real unresolved point.
-
-VISUAL HANDOFF
-- Every scene needs a supported primary visual entity, visual intent, specific search prompt and sport/topic category.
-- Match the visual entity to the scene's actual subject: athlete, opponent, team, venue, event, car, track, trophy, coach or other identifiable subject.
-- Make search prompts concrete and sport-aware.
-- Never use vague prompts such as "dramatic sports moment".
-- Do not invent a visual moment that the article does not support.
-
-PUBLISH METADATA
-- Generate exactly one factual 3- or 4-word opening headline.
-- Generate exactly 3 concise Shorts title candidates:
-  1. direct event/result angle;
-  2. consequence/context angle;
-  3. curiosity angle grounded in a specific supported fact.
-- Each title must contain a key person, team, competition, event or distinctive term from the selected story.
-- Avoid generic phrases such as "latest update", "breaking news", "big update", "sports update" or "what you need to know".
-- Generate a concise 15–30 word SEO description naming the key subject/event and what happened or why it matters.
-- Generate 3–5 relevant hashtags.
-- Generate one story-specific public-upload comment question tied to a concrete fact.
-
-FINAL EDITOR CHECK
-- Is the story understandable without the article?
-- Is Scene 1 specific rather than generic?
-- Does Scene 2 introduce genuinely new information?
-- Does every middle scene earn its place?
-- Are sport-specific facts used correctly and only when supported?
-- Does the final scene close the central question with a confirmed status or consequence?
-- Does it sound natural aloud?
-- Could any sentence be deleted without losing the story?
-- Is every claim grounded in the supplied evidence?
-- Return only JSON matching the existing schema.
-
-LANGUAGE
-Follow the requested language exactly. Preserve the same factual, compact editorial principles in English, Hindi or Telugu.
-"""
-
 def write_niche_sports_script(story, language: str = "english") -> dict:
-    """Generate one niche-sports Shorts script without changing the Cricket writer."""
-    source = _research_story(story)
-    has_story_url = bool(_story_value(story, "url"))
-    if not source and not has_story_url:
-        source = _source_text(story)
-    if not source:
-        if has_story_url:
-            raise RuntimeError(
-                "Story research failed: the selected article could not be extracted "
-                "and no corroborating full article was reachable."
-            )
-        raise ValueError("The selected story contains no usable evidence.")
+    """Compatibility entry point for the universal Niche Sports/YT Trends writer."""
+    return write_universal_script(story, language=language)
 
-    language_key = str(language or "english").strip().lower()
-    instruction = (
-        NICHE_SYSTEM_PROMPT
-        + "\nLANGUAGE:\n"
-        + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
+
+def apply_niche_script_edits(
+    script: dict,
+    voiceovers: list[str],
+    headline: str | None = None,
+) -> dict:
+    """Compatibility entry point for the universal Scriptwriter editor."""
+    return apply_universal_script_edits(
+        script,
+        voiceovers,
+        headline=headline,
     )
-
-    errors = []
-    recovery_reason = ""
-    for model in MODELS:
-        try:
-            model_instruction = instruction
-            if recovery_reason:
-                model_instruction += (
-                    "\nRECOVERY:\n"
-                    "The previous draft failed local validation. Regenerate the complete JSON "
-                    "while fixing this exact failure and preserving every other hard rule. "
-                    f"Validation failure: {recovery_reason}"
-                )
-
-            result = _request(model, model_instruction, source)
-            valid, reason = _validate_script(result)
-            if valid:
-                result["provider_used"] = model
-                result["delivery_profile"] = "NICHE SPORTS"
-                result["language_used"] = language_key
-                result["source_title"] = _story_value(story, "title")
-                result["source_evidence"] = source
-                return result
-            recovery_reason = reason
-            errors.append(f"{model}: {reason}")
-        except Exception as exc:
-            recovery_reason = f"{type(exc).__name__}: {exc}"
-            errors.append(f"{model}: {recovery_reason}")
-
-    raise RuntimeError("Niche sports script generation failed: " + " | ".join(errors))
