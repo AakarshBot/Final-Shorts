@@ -14,6 +14,7 @@ import json
 import re
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import requests
 from rapidfuzz import fuzz
@@ -29,11 +30,20 @@ MAX_GOOGLE_WORKERS = 12
 YOUTUBE_TRENDS_EXPLORE_URL = "https://trends.google.com/trends/api/explore"
 YOUTUBE_TRENDS_RELATED_URL = "https://trends.google.com/trends/api/widgetdata/relatedsearches"
 YOUTUBE_AUTOCOMPLETE_URL = "https://suggestqueries.google.com/complete/search"
-YOUTUBE_TREND_PROFILES = {
-    "cricket_india_asia": ("cricket", "cricket news", "india cricket", "cricket today"),
-    "cricket_global": ("cricket", "cricket news", "international cricket", "test cricket"),
-    "niche_sports": ("sports", "sports news", "football", "tennis", "formula 1"),
-}
+YOUTUBE_TREND_SEEDS = (
+    ("cricket", "cricket_india_asia"),
+    ("cricket news", "cricket_india_asia"),
+    ("international cricket", "cricket_global"),
+    ("football", "niche_sports"),
+    ("football news", "niche_sports"),
+    ("tennis", "niche_sports"),
+    ("formula 1", "niche_sports"),
+    ("badminton", "niche_sports"),
+    ("basketball", "niche_sports"),
+    ("sports news", "niche_sports"),
+)
+LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
+
 
 CRICKET_QUERIES = {
     "cricket_india_asia": [
@@ -581,26 +591,25 @@ def _youtube_trend_queries(keyword: str, geo: str | None) -> list[dict]:
 
 
 def fetch_youtube_search_trends(
-    profile: str,
-    geo: str | None = "IN",
-    limit: int = 10,
+    geo: str | None = None,
+    limit: int = 20,
 ) -> list[dict]:
-    if profile not in YOUTUBE_TREND_PROFILES:
-        raise ValueError(f"Unknown YouTube trend profile: {profile}")
     if limit <= 0:
         return []
 
     grouped: dict[str, dict] = {}
-    with ThreadPoolExecutor(max_workers=len(YOUTUBE_TREND_PROFILES[profile])) as pool:
+    with ThreadPoolExecutor(max_workers=len(YOUTUBE_TREND_SEEDS)) as pool:
         futures = {
-            pool.submit(_youtube_trend_queries, seed, geo): seed
-            for seed in YOUTUBE_TREND_PROFILES[profile]
+            pool.submit(_youtube_trend_queries, seed, geo): (seed, profile)
+            for seed, profile in YOUTUBE_TREND_SEEDS
         }
         for future in as_completed(futures):
+            seed, profile = futures[future]
             try:
                 rows = future.result()
             except (requests.RequestException, ValueError, TypeError, KeyError):
                 continue
+
             for row in rows:
                 keyword = _clean(row.get("keyword"))
                 key = keyword.casefold()
@@ -615,26 +624,25 @@ def fetch_youtube_search_trends(
                         "breakout": False,
                         "autocomplete": False,
                         "seeds": set(),
+                        "profile": profile,
                     },
                 )
-                item["seeds"].add(_clean(row.get("seed")).casefold())
-                item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
                 rank = max(1, int(row.get("rank") or 1))
                 weight = 1.5 if row.get("signal") == "Rising" else 1.0
                 item["evidence"] = max(
                     item["evidence"],
-                    item["evidence"] + weight / rank,
+                    weight / rank + (0.35 if row.get("breakout") else 0.0),
                 )
                 if row.get("signal") == "Rising":
                     item["rising"] = True
                 if row.get("breakout"):
                     item["breakout"] = True
+                item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
+                item["seeds"].add(seed.casefold())
 
     results = []
     for item in grouped.values():
         score = item["evidence"]
-        if item["breakout"]:
-            score += 2.0
         if item["autocomplete"]:
             score += 0.2
         if len(item["seeds"]) > 1:
@@ -646,16 +654,15 @@ def fetch_youtube_search_trends(
             "breakout": item["breakout"],
             "youtube_autocomplete": item["autocomplete"],
             "seed_count": len(item["seeds"]),
-            "score": round(score, 1),
-            "geo": geo or "WORLDWIDE",
+            "profile": item["profile"],
+            "score": score,
         })
 
     if not results:
         raise RuntimeError("YouTube search trend services returned no usable signals. Retry the trend fetch.")
     maximum = max(item["score"] for item in results)
-    if maximum > 0:
-        for item in results:
-            item["score"] = round(item["score"] / maximum * 100, 1)
+    for item in results:
+        item["score"] = round(item["score"] / maximum * 100, 1)
 
     results.sort(
         key=lambda item: (item["score"], item["keyword"].casefold()),
@@ -664,10 +671,14 @@ def fetch_youtube_search_trends(
     return results[:limit]
 
 
+def _today_local_date():
+    return datetime.now(LOCAL_TIMEZONE).date()
+
+
 def fetch_youtube_trend_topics(
     keyword: str,
     profile: str,
-    geo: str | None = "IN",
+    geo: str | None = None,
     more: bool = False,
     exclude_topics: list[Topic] | None = None,
     limit: int = TARGET,
@@ -678,12 +689,15 @@ def fetch_youtube_trend_topics(
     if not clean_keyword or limit <= 0:
         return []
 
+    target_date = _today_local_date()
+    next_date = target_date + timedelta(days=1)
+    date_filter = f"after:{target_date.isoformat()} before:{next_date.isoformat()}"
     quoted = f'"{clean_keyword}"'
     queries = [
-        f"{quoted} when:3d",
-        f"{quoted} (latest OR news OR update OR reaction OR statement) when:3d",
-        f"{quoted} (record OR injury OR transfer OR appointment OR controversy OR result) when:3d",
-        f"{quoted} (confirms OR reveals OR announces OR returns OR wins) when:3d",
+        f"{quoted} {date_filter}",
+        f"{quoted} (latest OR news OR update OR reaction OR statement) {date_filter}",
+        f"{quoted} (record OR injury OR transfer OR appointment OR controversy OR result) {date_filter}",
+        f"{quoted} (confirms OR reveals OR announces OR returns OR wins) {date_filter}",
     ]
     if more:
         queries = queries[:3]
@@ -696,7 +710,10 @@ def fetch_youtube_trend_topics(
     }
     rows: list[Topic] = []
     with ThreadPoolExecutor(max_workers=min(4, len(queries))) as pool:
-        futures = [pool.submit(_fetch_google, query, TIMEOUT, geo=geo) for query in queries]
+        futures = [
+            pool.submit(_fetch_google, query, TIMEOUT, geo=geo)
+            for query in queries
+        ]
         for future in as_completed(futures):
             try:
                 rows.extend(future.result())
@@ -704,6 +721,10 @@ def fetch_youtube_trend_topics(
                 continue
 
     prepared = _prepare(rows, seen_urls, profile=profile)
+    prepared = [
+        row for row in prepared
+        if row.published_at.astimezone(LOCAL_TIMEZONE).date() == target_date
+    ]
     chosen = _select(
         prepared,
         limit,
@@ -712,6 +733,7 @@ def fetch_youtube_trend_topics(
         profile=profile,
     )
     return chosen[:limit]
+
 
 
 def _score_niche(topic: Topic) -> float:
