@@ -10,6 +10,7 @@ from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 from email.utils import parsedate_to_datetime
 import html
+import json
 import re
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
@@ -25,6 +26,14 @@ LOOKBACK_HOURS = 72
 TARGET = 20
 MAX_QUERY_RESULTS = 100
 MAX_GOOGLE_WORKERS = 12
+YOUTUBE_TRENDS_EXPLORE_URL = "https://trends.google.com/trends/api/explore"
+YOUTUBE_TRENDS_RELATED_URL = "https://trends.google.com/trends/api/widgetdata/relatedsearches"
+YOUTUBE_AUTOCOMPLETE_URL = "https://suggestqueries.google.com/complete/search"
+YOUTUBE_TREND_PROFILES = {
+    "cricket_india_asia": ("cricket", "india cricket", "virat kohli"),
+    "cricket_global": ("cricket", "test cricket", "international cricket"),
+    "niche_sports": ("football", "tennis", "formula 1"),
+}
 
 CRICKET_QUERIES = {
     "cricket_india_asia": [
@@ -433,10 +442,23 @@ def _parse_rss(xml_text: str) -> list[Topic]:
             rows.append(Topic(title, source, _parse_date(item.findtext("pubDate") or ""), url, _clean(item.findtext("description") or "")))
     return rows
 
-def _fetch_google(query: str, timeout: float = TIMEOUT) -> list[Topic]:
+def _fetch_google(
+    query: str,
+    timeout: float = TIMEOUT,
+    *,
+    geo: str | None = "IN",
+) -> list[Topic]:
+    params = {"q": query}
+    if geo == "IN":
+        params.update({"hl": "en-IN", "gl": "IN", "ceid": "IN:en"})
+    elif geo:
+        code = str(geo).upper()
+        params.update({"hl": "en-US", "gl": code, "ceid": f"{code}:en"})
+    else:
+        params.update({"hl": "en", "ceid": "US:en"})
     response = requests.get(
         GOOGLE_NEWS_URL,
-        params={"q": query, "hl": "en-IN", "gl": "IN", "ceid": "IN:en"},
+        params=params,
         headers=HEADERS,
         timeout=timeout,
     )
@@ -465,6 +487,216 @@ def _fetch_gdelt(query: str) -> list[Topic]:
         and _clean(item.get("title", ""))
         and _clean(item.get("url", ""))
     ]
+
+
+def _decode_google_json(response_text: str) -> dict:
+    content = str(response_text or "").lstrip()
+    if content.startswith(")]}',"):
+        content = content[5:]
+    elif content.startswith(")]}'"):
+        content = content[4:]
+    return json.loads(content)
+
+
+def _youtube_autocomplete(keyword: str) -> list[str]:
+    response = requests.get(
+        YOUTUBE_AUTOCOMPLETE_URL,
+        params={"client": "youtube", "ds": "yt", "hl": "en", "q": _clean(keyword)},
+        headers=HEADERS,
+        timeout=TIMEOUT,
+    )
+    payload = response.json()
+    return [
+        _clean(item[0])
+        for item in (payload[1] if isinstance(payload, list) and len(payload) > 1 else [])
+        if isinstance(item, list) and item and _clean(item[0])
+    ]
+
+
+def _youtube_trend_queries(keyword: str, geo: str | None) -> list[dict]:
+    language = "en-IN" if geo == "IN" else "en-US"
+    request = {
+        "comparisonItem": [{
+            "keyword": _clean(keyword),
+            "geo": geo or "",
+            "time": "now 1-d",
+        }],
+        "category": 0,
+        "property": "youtube",
+    }
+    explore = requests.post(
+        YOUTUBE_TRENDS_EXPLORE_URL,
+        params={"hl": language, "tz": "330", "req": json.dumps(request)},
+        headers=HEADERS,
+        timeout=TIMEOUT,
+    )
+    widgets = _decode_google_json(explore.text).get("widgets") or []
+    widget = next(
+        (item for item in widgets if "RELATED_QUERIES" in str(item.get("id") or "")),
+        None,
+    )
+    if not widget:
+        return []
+
+    related = requests.get(
+        YOUTUBE_TRENDS_RELATED_URL,
+        params={
+            "hl": language,
+            "tz": "330",
+            "req": json.dumps(widget["request"]),
+            "token": widget["token"],
+        },
+        headers=HEADERS,
+        timeout=TIMEOUT,
+    )
+    ranked = _decode_google_json(related.text).get("default", {}).get("rankedList") or []
+    rows = []
+    for index, signal in enumerate(("Top", "Rising")):
+        items = ranked[index].get("rankedKeyword", []) if index < len(ranked) else []
+        for item in items:
+            query = _clean(item.get("query"))
+            if not query:
+                continue
+            raw_value = item.get("value")
+            try:
+                value = float(raw_value)
+            except (TypeError, ValueError):
+                value = 100.0 if str(raw_value).casefold() == "breakout" else 0.0
+            rows.append({
+                "keyword": query,
+                "signal": signal,
+                "value": value,
+                "breakout": str(raw_value).casefold() == "breakout",
+                "seed": _clean(keyword),
+            })
+
+    try:
+        suggestions = set(_youtube_autocomplete(keyword))
+    except (requests.RequestException, ValueError, TypeError):
+        suggestions = set()
+    for row in rows:
+        row["autocomplete"] = row["keyword"] in suggestions
+    return rows
+
+
+def fetch_youtube_search_trends(
+    profile: str,
+    geo: str | None = "IN",
+    limit: int = 10,
+) -> list[dict]:
+    if profile not in YOUTUBE_TREND_PROFILES:
+        raise ValueError(f"Unknown YouTube trend profile: {profile}")
+    if limit <= 0:
+        return []
+
+    grouped: dict[str, dict] = {}
+    for seed in YOUTUBE_TREND_PROFILES[profile]:
+        try:
+            rows = _youtube_trend_queries(seed, geo)
+        except (requests.RequestException, ValueError, TypeError, KeyError):
+            continue
+        for row in rows:
+            keyword = _clean(row.get("keyword"))
+            key = keyword.casefold()
+            if not keyword or _utility(keyword):
+                continue
+            item = grouped.setdefault(
+                key,
+                {
+                    "keyword": keyword,
+                    "top": 0.0,
+                    "rising": 0.0,
+                    "breakout": False,
+                    "autocomplete": False,
+                    "seeds": set(),
+                },
+            )
+            item["seeds"].add(_clean(row.get("seed")).casefold())
+            item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
+            if row.get("signal") == "Rising":
+                item["rising"] = max(item["rising"], float(row.get("value") or 0))
+                item["breakout"] = item["breakout"] or bool(row.get("breakout"))
+            else:
+                item["top"] = max(item["top"], float(row.get("value") or 0))
+
+    results = []
+    for item in grouped.values():
+        signal_value = max(item["rising"], item["top"])
+        score = min(100.0, signal_value)
+        if item["breakout"]:
+            score += 25.0
+        if item["autocomplete"]:
+            score += 10.0
+        if len(item["seeds"]) > 1:
+            score += 8.0
+        results.append({
+            "keyword": item["keyword"],
+            "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
+            "signal": "Rising" if item["rising"] > 0 or item["breakout"] else "Top",
+            "signal_value": round(signal_value, 1),
+            "breakout": item["breakout"],
+            "youtube_autocomplete": item["autocomplete"],
+            "seed_count": len(item["seeds"]),
+            "score": round(score, 1),
+            "geo": geo or "WORLDWIDE",
+        })
+
+    results.sort(
+        key=lambda item: (item["score"], item["signal_value"], item["keyword"].casefold()),
+        reverse=True,
+    )
+    return results[:limit]
+
+
+def fetch_youtube_trend_topics(
+    keyword: str,
+    profile: str,
+    geo: str | None = "IN",
+    more: bool = False,
+    exclude_topics: list[Topic] | None = None,
+    limit: int = TARGET,
+) -> list[Topic]:
+    if profile not in {"cricket_india_asia", "cricket_global", "niche_sports"}:
+        raise ValueError(f"Unknown YouTube trend profile: {profile}")
+    clean_keyword = _clean(keyword)
+    if not clean_keyword or limit <= 0:
+        return []
+
+    quoted = f'"{clean_keyword}"'
+    queries = [
+        f"{quoted} when:3d",
+        f"{quoted} (latest OR news OR update OR reaction OR statement) when:3d",
+        f"{quoted} (record OR injury OR transfer OR appointment OR controversy OR result) when:3d",
+        f"{quoted} (confirms OR reveals OR announces OR returns OR wins) when:3d",
+    ]
+    if more:
+        queries = queries[:3]
+
+    existing = list(exclude_topics or [])
+    seen_urls = {
+        _canonical_url(member.url)
+        for topic in existing
+        for member in (topic.group_members or (topic,))
+    }
+    rows: list[Topic] = []
+    with ThreadPoolExecutor(max_workers=min(4, len(queries))) as pool:
+        futures = [pool.submit(_fetch_google, query, TIMEOUT, geo=geo) for query in queries]
+        for future in as_completed(futures):
+            try:
+                rows.extend(future.result())
+            except (requests.RequestException, ET.ParseError, ValueError):
+                continue
+
+    prepared = _prepare(rows, seen_urls, profile=profile)
+    chosen = _select(
+        prepared,
+        limit,
+        seen_urls,
+        existing=existing if more else [],
+        profile=profile,
+    )
+    return chosen[:limit]
+
 
 def _score_niche(topic: Topic) -> float:
     age_hours = max(0.0, (datetime.now(timezone.utc) - topic.published_at).total_seconds() / 3600)
