@@ -206,9 +206,13 @@ def test_cricket_test_exposes_shared_text_cutout():
     assert not at.exception, at.exception
     assert at.session_state["manual_subject_cutout"]["polygon_points"] == [
         (120, 700),
+        (540, 700),
         (960, 700),
+        (960, 950),
         (960, 1200),
+        (540, 1200),
         (120, 1200),
+        (120, 950),
     ]
     render = next(button for button in at.button if button.label == "Render Now")
     render.click().run()
@@ -251,9 +255,13 @@ def test_top5_option9_uses_shared_editor():
     assert not at.exception, at.exception
     assert at.session_state["test_top5_manual_subject_playground"]["polygon_points"] == [
         (120, 700),
+        (540, 700),
         (960, 700),
+        (960, 950),
         (960, 1200),
+        (540, 1200),
         (120, 1200),
+        (120, 950),
     ]
     assert any(field.label == "Manual Subject Cutout headline" for field in at.text_area)
     render = next(button for button in at.button if button.label == "Render Now")
@@ -365,12 +373,12 @@ def test_top5_option9_second_run_preserves_text_size():
     next(button for button in at.button if button.label == "Render Now").click().run()
     assert not at.exception, at.exception
 
-    at.slider[0].set_value(174).run()
+    at.slider[0].set_value(180).run()
     assert not at.exception, at.exception
     assert at.session_state["test_top5_manual_subject_playground"]["rendered_config"]["font_size"] == 150
     next(button for button in at.button if button.label == "Render Now").click().run()
     assert not at.exception, at.exception
-    assert at.session_state["test_top5_manual_subject_playground"]["rendered_config"]["font_size"] == 174
+    assert at.session_state["test_top5_manual_subject_playground"]["rendered_config"]["font_size"] == 180
 
 
 def test_live_cricket_text_cutout_second_run_preserves_text_size():
@@ -389,12 +397,49 @@ def test_live_cricket_text_cutout_second_run_preserves_text_size():
     assert not at.exception, at.exception
     assert [slider.label for slider in at.slider] == ["Text size"]
 
-    at.slider[0].set_value(174).run()
+    at.slider[0].set_value(180).run()
     assert not at.exception, at.exception
     assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["font_size"] == 150
 
     render = next(button for button in at.button if button.label == "Render Now")
     render.click().run()
     assert not at.exception, at.exception
-    assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["font_size"] == 174
+    assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["font_size"] == 180
 
+
+
+def test_manual_subject_cutout_migrates_four_point_polygon_to_eight_points():
+    asset = {
+        "bytes": _image_bytes(),
+        "source": "source-a",
+        "article_title": "Image A",
+    }
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "top_5"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["test_top5_visual_playground_option"] = "Option 9 · Manual Subject Cutout"
+    at.session_state["test_top5_visual_playground_image"] = Image.new("RGB", (1080, 1920), (40, 40, 40))
+    at.session_state["test_top5_visual_playground_source"] = "Test image"
+    at.session_state["test_top5_visual_playground_headline"] = "India win again"
+    at.session_state["test_top5_manual_subject_playground"] = {
+        "polygon_points": [
+            (120, 700),
+            (960, 700),
+            (960, 1200),
+            (120, 1200),
+        ],
+    }
+    at.run()
+
+    assert not at.exception, at.exception
+    assert at.session_state["test_top5_manual_subject_playground"]["polygon_points"] == [
+        (120, 700),
+        (540, 700),
+        (960, 700),
+        (960, 950),
+        (960, 1200),
+        (540, 1200),
+        (120, 1200),
+        (120, 950),
+    ]

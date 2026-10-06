@@ -341,7 +341,7 @@ Feature contract:
 - Two modes: Negative Space and Behind Subject.
 - Same approved Manual Subject Cutout fonts and styles everywhere.
 - 1080 × 1920 output.
-- Editable polygon text area starting as a four-point rectangle.
+- Editable polygon text area starting as an eight-point rectangle with four edge midpoints.
 - Individual vertices can be dragged.
 - The whole polygon can be dragged rigidly inside the frame.
 - Clicking an edge adds a point.
@@ -359,8 +359,8 @@ Image flow:
 
 State/render behavior:
 - Polygon, headline, font, style and Text Size edits do not regenerate the rendered frame.
-- The editor runs inside a Streamlit fragment, so normal editing interactions do not refresh the full dashboard.
-- Text Size is feature state separate from the Streamlit widget key. The first render starts at 150px. The slider appears after the first render and can be changed on every later render without rewriting its own widget state.
+- The editor runs inside a Streamlit fragment, so polygon, headline and size edits refresh only this editor. The full dashboard reruns only when Render Now is pressed.
+- Text Size is feature state separate from the Streamlit widget key. The first render starts at 150px. After the first render, the slider uses 80–260px in 10px increments so each step is materially visible and can be changed on every later render without rewriting its own widget state.
 - Render Now is the explicit generation action. It stores the current headline, mode, polygon, font, style, text size and exact rendered frame, then triggers the full dashboard rerun.
 - After Render Now, the same polygon and controls remain available for another edit-and-render pass.
 - The production handoff consumes the exact rendered frame and its cutout configuration.

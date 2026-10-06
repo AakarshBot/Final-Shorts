@@ -37,13 +37,15 @@ if not st.get_option("global.appTest"):
     <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
     <g id="handles"></g>
   </svg>
-  <div class="help">Drag a point to reshape. Drag inside the polygon to move the whole area. Click an edge to add a point.</div>
+  <div class="help">Drag a point to reshape. Drag inside the highlighted area to move the whole polygon. Click an edge to add a point.</div>
 </div>
 """,
         css="""
 .text-cutout-editor{width:100%;height:100%;font-family:Inter,ui-sans-serif,sans-serif}
 .text-cutout-editor svg{display:block;width:100%;height:100%;border:1px solid #d4d4cc;border-radius:12px;background:#111;touch-action:none}
 .text-cutout-editor .handle{cursor:move}
+.text-cutout-editor #polygon{cursor:grab}
+.text-cutout-editor #polygon:active{cursor:grabbing}
 .text-cutout-editor .help{margin:6px 0;color:#52574f;font-size:12px;line-height:1.2;opacity:.78}
 """,
         js="""
@@ -78,24 +80,15 @@ export default function(component) {
                 ];
             },
             persist() {
-                setStateValue(
-                    "points",
-                    this.points.map((point) => [
-                        Math.round(point[0]),
-                        Math.round(point[1]),
-                    ])
-                );
+                setStateValue("points", this.points.map((point) => [
+                    Math.round(point[0]),
+                    Math.round(point[1]),
+                ]));
             },
             render() {
-                polygon.setAttribute(
-                    "points",
-                    this.points.map((point) => point.join(",")).join(" ")
-                );
+                polygon.setAttribute("points", this.points.map((point) => point.join(",")).join(" "));
                 while (this.handles.length < this.points.length) {
-                    const handle = document.createElementNS(
-                        "http://www.w3.org/2000/svg",
-                        "circle"
-                    );
+                    const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                     handle.setAttribute("class", "handle");
                     handle.setAttribute("r", "13");
                     handle.setAttribute("fill", "#fff");
@@ -112,12 +105,10 @@ export default function(component) {
                         editor.draggingPoint = index;
                         editor.suppressClick = true;
                         handle.setPointerCapture(event.pointerId);
+
                         const move = (moveEvent) => {
                             const next = editor.svgPoint(moveEvent);
-                            editor.points[index] = [
-                                Math.round(next[0]),
-                                Math.round(next[1]),
-                            ];
+                            editor.points[index] = [Math.round(next[0]), Math.round(next[1])];
                             editor.render();
                         };
                         const stop = () => {
@@ -142,33 +133,33 @@ export default function(component) {
 
         parentElement.__manualSubjectCutoutEditor = editor;
 
-
         polygon.addEventListener("pointerdown", (event) => {
             event.preventDefault();
             event.stopPropagation();
             editor.draggingPolygon = true;
-            editor.moved = false;
-            editor.suppressClick = false;
             editor.dragStart = editor.svgPoint(event);
             editor.originalPoints = editor.points.map((point) => [point[0], point[1]]);
+            editor.moved = false;
+            editor.suppressClick = false;
             svg.setPointerCapture(event.pointerId);
         });
 
         svg.addEventListener("pointermove", (event) => {
             if (!editor.draggingPolygon || !editor.dragStart || !editor.originalPoints) return;
             const current = editor.svgPoint(event);
-            const rawDx = current[0] - editor.dragStart[0];
-            const rawDy = current[1] - editor.dragStart[1];
-            const minDx = -Math.min(...editor.originalPoints.map((point) => point[0]));
-            const maxDx = 1080 - Math.max(...editor.originalPoints.map((point) => point[0]));
-            const minDy = -Math.min(...editor.originalPoints.map((point) => point[1]));
-            const maxDy = 1920 - Math.max(...editor.originalPoints.map((point) => point[1]));
-            const dx = editor.clamp(rawDx, minDx, maxDx);
-            const dy = editor.clamp(rawDy, minDy, maxDy);
-            if (Math.hypot(dx, dy) > 2) {
-                editor.moved = true;
-                editor.suppressClick = true;
-            }
+            const dx = editor.clamp(
+                current[0] - editor.dragStart[0],
+                -Math.min(...editor.originalPoints.map((point) => point[0])),
+                1080 - Math.max(...editor.originalPoints.map((point) => point[0])),
+            );
+            const dy = editor.clamp(
+                current[1] - editor.dragStart[1],
+                -Math.min(...editor.originalPoints.map((point) => point[1])),
+                1920 - Math.max(...editor.originalPoints.map((point) => point[1])),
+            );
+            if (Math.hypot(dx, dy) <= 2) return;
+            editor.moved = true;
+            editor.suppressClick = true;
             editor.points = editor.originalPoints.map((point) => [
                 Math.round(point[0] + dx),
                 Math.round(point[1] + dy),
@@ -177,7 +168,8 @@ export default function(component) {
         });
 
         const stopPolygon = () => {
-            if (editor.draggingPolygon && editor.moved) editor.persist();
+            if (!editor.draggingPolygon) return;
+            if (editor.moved) editor.persist();
             editor.draggingPolygon = false;
             editor.dragStart = null;
             editor.originalPoints = null;
@@ -204,17 +196,11 @@ export default function(component) {
                     ? editor.clamp(
                         ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2,
                         0,
-                        1
+                        1,
                     )
                     : 0;
-                const projected = [
-                    start[0] + t * dx,
-                    start[1] + t * dy,
-                ];
-                const distance = Math.hypot(
-                    point[0] - projected[0],
-                    point[1] - projected[1]
-                );
+                const projected = [start[0] + t * dx, start[1] + t * dy];
+                const distance = Math.hypot(point[0] - projected[0], point[1] - projected[1]);
                 if (!best || distance < best.distance) {
                     best = {index, distance, point: projected};
                 }
@@ -231,10 +217,7 @@ export default function(component) {
     }
 
     const editor = parentElement.__manualSubjectCutoutEditor;
-    editor.points = (data.points || []).map((point) => [
-        Number(point[0]),
-        Number(point[1]),
-    ]);
+    editor.points = (data.points || []).map((point) => [Number(point[0]), Number(point[1])]);
     editor.render();
 }
 """,
@@ -1238,6 +1221,7 @@ def _crop_visual_dialog(
 
 
 @st.fragment
+@st.fragment
 def _render_manual_subject_cutout(
     *,
     state: dict,
@@ -1247,11 +1231,7 @@ def _render_manual_subject_cutout(
     state_id: str,
     default_headline: str,
 ):
-    from renderer import (
-        MANUAL_SUBJECT_FONT_OPTIONS,
-        MANUAL_SUBJECT_STYLE_OPTIONS,
-        build_manual_subject_cutout_preview,
-    )
+    from renderer import MANUAL_SUBJECT_FONT_OPTIONS, MANUAL_SUBJECT_STYLE_OPTIONS, build_manual_subject_cutout_preview
 
     if not assets:
         st.info("No existing images are available for Manual Subject Cutout.")
@@ -1290,12 +1270,10 @@ def _render_manual_subject_cutout(
     selected_key = str(state.get("image_key") or "")
     if selected_key not in asset_map:
         state["image_key"] = None
-        selected_key = ""
 
     for start in range(0, len(assets), 3):
-        row = assets[start:start + 3]
-        cols = st.columns(len(row), gap="medium")
-        for col, asset in zip(cols, row):
+        cols = st.columns(min(3, len(assets) - start), gap="medium")
+        for col, asset in zip(cols, assets[start:start + 3]):
             with col:
                 asset_key = str(asset["asset_key"])
                 image = _asset_to_image(asset.get("bytes"))
@@ -1303,25 +1281,17 @@ def _render_manual_subject_cutout(
                     preview = image.copy()
                     preview.thumbnail((300, 300), Image.Resampling.LANCZOS)
                     st.image(preview, width="stretch")
-
                 st.markdown(
                     f'<div class="visual-source">{asset["source"]}</div>'
                     f'<div class="visual-detail">{asset["label"]}</div>',
                     unsafe_allow_html=True,
                 )
                 if asset_key in crop_store:
-                    st.markdown(
-                        '<div class="visual-crop-label">CROP APPLIED</div>',
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown('<div class="visual-crop-label">CROP APPLIED</div>', unsafe_allow_html=True)
 
                 crop_col, select_col = st.columns(2, gap="small")
                 with crop_col:
-                    if st.button(
-                        "Crop / reposition",
-                        width="stretch",
-                        key=f"{state_id}-crop-{asset_key}",
-                    ):
+                    if st.button("Crop / reposition", width="stretch", key=f"{state_id}-crop-{asset_key}"):
                         raw = asset.get("bytes")
                         if isinstance(raw, (bytes, bytearray)):
                             _crop_visual_dialog(
@@ -1334,22 +1304,24 @@ def _render_manual_subject_cutout(
                             st.warning("This visual is not crop-ready.")
 
                 with select_col:
-                    selected = asset_key == selected_key
+                    selected = asset_key == str(state.get("image_key") or "")
                     if st.button(
                         "Selected" if selected else "Select image",
                         type="primary" if selected else "secondary",
                         width="stretch",
                         key=f"{state_id}-select-{asset_key}",
-                    ) and selected_key != asset_key:
-                        state["image_key"] = asset_key
-                        state["polygon_points"] = None
-                        state["rendered_config"] = None
-                        state["rendered_preview"] = None
-                        state["font_size"] = 150
-                        state["source_key"] = None
-                        state["source_digest"] = None
-                        state["editor_image_digest"] = None
-                        state["editor_image_data"] = None
+                    ) and not selected:
+                        state.update(
+                            image_key=asset_key,
+                            polygon_points=None,
+                            rendered_config=None,
+                            rendered_preview=None,
+                            font_size=150,
+                            source_key=None,
+                            source_digest=None,
+                            editor_image_digest=None,
+                            editor_image_data=None,
+                        )
                         st.session_state.pop(size_key, None)
 
     selected = asset_map.get(str(state.get("image_key") or ""))
@@ -1363,18 +1335,17 @@ def _render_manual_subject_cutout(
 
     working_bytes = bytes(working_bytes)
     source_digest = hashlib.sha1(working_bytes).hexdigest()[:12]
-    if (
-        state.get("source_key") != selected["asset_key"]
-        or state.get("source_digest") != source_digest
-    ):
-        state["source_key"] = selected["asset_key"]
-        state["source_digest"] = source_digest
-        state["polygon_points"] = None
-        state["rendered_config"] = None
-        state["rendered_preview"] = None
-        state["font_size"] = 150
-        state["editor_image_digest"] = None
-        state["editor_image_data"] = None
+    if state.get("source_key") != selected["asset_key"] or state.get("source_digest") != source_digest:
+        state.update(
+            source_key=selected["asset_key"],
+            source_digest=source_digest,
+            polygon_points=None,
+            rendered_config=None,
+            rendered_preview=None,
+            font_size=150,
+            editor_image_digest=None,
+            editor_image_data=None,
+        )
         st.session_state.pop(size_key, None)
 
     if headline_key not in st.session_state:
@@ -1409,24 +1380,30 @@ def _render_manual_subject_cutout(
     ) or state["style"]
 
     selected_mode = "behind-subject" if state["mode"] == "Behind Subject" else "negative-space"
-
     default_polygon = (
-        (120, 700),
-        (960, 700),
-        (960, 1200),
-        (120, 1200),
+        (120, 700), (540, 700), (960, 700), (960, 950),
+        (960, 1200), (540, 1200), (120, 1200), (120, 950),
     )
     polygon_points = state.get("polygon_points") or default_polygon
     try:
         polygon_points = [
-            (
-                max(0, min(1080, int(point[0]))),
-                max(0, min(1920, int(point[1]))),
-            )
+            (max(0, min(1080, int(point[0]))), max(0, min(1920, int(point[1]))))
             for point in polygon_points
         ]
     except (TypeError, ValueError, IndexError):
         polygon_points = list(default_polygon)
+
+    if len(polygon_points) == 4:
+        polygon_points = [
+            polygon_points[0],
+            ((polygon_points[0][0] + polygon_points[1][0]) // 2, (polygon_points[0][1] + polygon_points[1][1]) // 2),
+            polygon_points[1],
+            ((polygon_points[1][0] + polygon_points[2][0]) // 2, (polygon_points[1][1] + polygon_points[2][1]) // 2),
+            polygon_points[2],
+            ((polygon_points[2][0] + polygon_points[3][0]) // 2, (polygon_points[2][1] + polygon_points[3][1]) // 2),
+            polygon_points[3],
+            ((polygon_points[3][0] + polygon_points[0][0]) // 2, (polygon_points[3][1] + polygon_points[0][1]) // 2),
+        ]
     if len(polygon_points) < 3:
         polygon_points = list(default_polygon)
 
@@ -1436,62 +1413,63 @@ def _render_manual_subject_cutout(
         return
 
     if state["editor_image_digest"] != source_digest:
+        preview_image = source_image.convert("RGB").resize((360, 640), Image.Resampling.LANCZOS)
         image_buffer = BytesIO()
-        source_image.convert("RGB").save(
-            image_buffer,
-            format="JPEG",
-            quality=88,
-            optimize=True,
-        )
+        preview_image.save(image_buffer, format="JPEG", quality=82, optimize=True)
         state["editor_image_digest"] = source_digest
-        state["editor_image_data"] = base64.b64encode(
-            image_buffer.getvalue()
-        ).decode("ascii")
+        state["editor_image_data"] = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+
+    component_key = f"{state_id}-polygon-{selected['asset_key']}-{source_digest}"
+
+    def sync_polygon_state():
+        result = st.session_state.get(component_key)
+        points = getattr(result, "points", None)
+        if not points:
+            return
+        try:
+            state["polygon_points"] = [
+                (max(0, min(1080, int(point[0]))), max(0, min(1920, int(point[1]))))
+                for point in points
+            ]
+        except (TypeError, ValueError, IndexError):
+            return
 
     editor = None
     if MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR is not None:
         editor = MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR(
-            data={
-                "image": state["editor_image_data"],
-                "points": polygon_points,
-            },
+            data={"image": state["editor_image_data"], "points": polygon_points},
             default={"points": polygon_points},
-            on_points_change=lambda: None,
-            key=f"{state_id}-polygon-{selected['asset_key']}-{source_digest}",
+            on_points_change=sync_polygon_state,
+            key=component_key,
             width=360,
             height=640,
         )
 
-    if editor is not None:
+    component_state = st.session_state.get(component_key)
+    current_points = getattr(component_state, "points", None)
+    if current_points is None and editor is not None:
         current_points = getattr(editor, "points", None)
-        if current_points is not None:
-            try:
-                polygon_points = [
-                    (
-                        max(0, min(1080, int(point[0]))),
-                        max(0, min(1920, int(point[1]))),
-                    )
-                    for point in current_points
-                ]
-            except (TypeError, ValueError, IndexError):
-                pass
-            if len(polygon_points) < 3:
-                polygon_points = list(default_polygon)
+    if current_points:
+        try:
+            polygon_points = [
+                (max(0, min(1080, int(point[0]))), max(0, min(1920, int(point[1]))))
+                for point in current_points
+            ]
+        except (TypeError, ValueError, IndexError):
+            pass
 
     state["polygon_points"] = polygon_points
 
     if state.get("rendered_config") is not None:
-        if size_key not in st.session_state:
-            st.session_state[size_key] = int(state["font_size"])
-        font_size = int(
-            st.slider(
-                "Text size",
-                min_value=72,
-                max_value=260,
-                step=2,
-                key=size_key,
-            )
-        )
+        st.session_state.setdefault(size_key, int(state["font_size"]))
+        font_size = int(st.slider(
+            "Text size",
+            min_value=80,
+            max_value=260,
+            step=10,
+            format="%d px",
+            key=size_key,
+        ))
         state["font_size"] = font_size
     else:
         font_size = int(state["font_size"])
@@ -1501,12 +1479,7 @@ def _render_manual_subject_cutout(
         "Drag points or the whole polygon; Render Now replaces the rendered frame."
     )
 
-    if st.button(
-        "Render Now",
-        type="primary",
-        width="stretch",
-        key=f"{state_id}-render",
-    ):
+    if st.button("Render Now", type="primary", width="stretch", key=f"{state_id}-render"):
         try:
             config = {
                 "headline": headline,
@@ -1518,7 +1491,7 @@ def _render_manual_subject_cutout(
                 "source_key": selected["asset_key"],
                 "source_digest": source_digest,
             }
-            preview = build_manual_subject_cutout_preview(
+            state["rendered_preview"] = build_manual_subject_cutout_preview(
                 working_bytes,
                 headline,
                 mode=selected_mode,
@@ -1529,7 +1502,6 @@ def _render_manual_subject_cutout(
             )
             state["font_size"] = font_size
             state["rendered_config"] = config
-            state["rendered_preview"] = preview
             st.rerun()
         except (ValueError, OSError, RuntimeError, ImportError) as exc:
             state["rendered_preview"] = None
@@ -1543,7 +1515,6 @@ def _render_manual_subject_cutout(
             unsafe_allow_html=True,
         )
         st.image(state["rendered_preview"], width=360)
-
 def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
     if live:
         specs = [
