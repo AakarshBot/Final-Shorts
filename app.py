@@ -1413,6 +1413,8 @@ def _render_manual_subject_cutout(
                 ]
             except (TypeError, ValueError, IndexError):
                 pass
+    else:
+        st.image(source_image, width=360)
     state["polygon_points"] = polygon_points
 
     if rendered_config:
