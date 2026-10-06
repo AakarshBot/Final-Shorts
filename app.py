@@ -1344,7 +1344,6 @@ def _render_manual_subject_cutout(
                             state["editor_image_digest"] = None
                             state["editor_image_data"] = None
                             st.session_state.pop(f"{state_id}-font-size", None)
-                            st.rerun(scope="fragment")
 
     selected = asset_map.get(str(state.get("image_key") or ""))
     if selected is None:
