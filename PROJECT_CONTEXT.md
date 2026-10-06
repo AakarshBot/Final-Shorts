@@ -349,6 +349,7 @@ State/render behavior:
 - The editor is one Streamlit fragment. Its widgets, line-break previews and polygon component rerun only the cutout editor; they must not refresh the full dashboard.
 - Text Size remains feature state separate from the Streamlit widget key. The first render starts at 150px. After the first render, the slider uses 80–260px in 10px increments and the selected value is the exact requested rendered font size on the next explicit Render Now. The renderer never silently shrinks the requested size; when the polygon cannot fit that size, it reports that the polygon must be enlarged or the size reduced.
 - Render Now is the explicit generation action. It stores the current headline, mode, polygon, font, style, exact Text Size, selected line-break combination when one has been chosen, and rendered frame. It must not call a full-app rerun; the fragment interaction itself updates the editor.
+- The rendered-frame handoff control is inside the same Manual Subject Cutout fragment. After Render Now, Cricket Test/Live immediately shows the Add this to slide selector and action, while Top-5 Test immediately shows the Add this to Slide action for the active slide. The old outside-fragment controls were removed.
 - After Render Now, the same polygon and controls remain available for another edit-and-render pass.
 - The production handoff consumes the rendered frame together with its cutout configuration, including the selected line-break combination when present.
 - The cutout frame itself has no logo, source label, permanent headline overlay, subtitles or other overlays.
@@ -360,6 +361,8 @@ Cleanup rule:
 - Do not add Top-5 Live support yet.
 
 Status: **Implementation complete in the shared Test/Live paths. Not yet user-approved. The next implementation step is the main Factory Renderer change.**
+
+Fragment audit: Manual Subject Cutout is the only @st.fragment in app.py. Its rendered-state-dependent handoff controls now live inside the fragment. The two @st.dialog crop editors are self-contained.
 
 ### Production-line development rule
 
