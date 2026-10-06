@@ -1189,6 +1189,293 @@ def _crop_visual_dialog(
             st.rerun()
 
 
+@st.fragment
+def _render_manual_subject_cutout(
+    *,
+    state: dict,
+    assets: list[dict],
+    crop_store: dict,
+    crop_store_name: str,
+    state_id: str,
+    default_headline: str,
+):
+    from renderer import (
+        MANUAL_SUBJECT_FONT_OPTIONS,
+        MANUAL_SUBJECT_STYLE_OPTIONS,
+        build_manual_subject_cutout_preview,
+    )
+
+    if not assets:
+        st.info("No existing images are available for Manual Subject Cutout.")
+        return
+
+    state.setdefault("image_key", None)
+    state.setdefault("mode", "Negative Space")
+    state.setdefault("font", "Barlow Condensed")
+    state.setdefault("style", "Crisp Outline")
+    state.setdefault("polygon_points", None)
+    state.setdefault("rendered_config", None)
+    state.setdefault("rendered_preview", None)
+
+    asset_map = {str(asset["asset_key"]): asset for asset in assets}
+    selected_key = str(state.get("image_key") or "")
+    if selected_key not in asset_map:
+        selected_key = ""
+        state["image_key"] = None
+
+    for start in range(0, len(assets), 3):
+        row = assets[start:start + 3]
+        cols = st.columns(len(row), gap="medium")
+        for col, asset in zip(cols, row):
+            with col:
+                asset_key = str(asset["asset_key"])
+                image = _asset_to_image(asset.get("bytes"))
+                if image is not None:
+                    preview = image.copy()
+                    preview.thumbnail((420, 420), Image.Resampling.LANCZOS)
+                    st.image(preview, width="stretch")
+                st.markdown(
+                    f'<div class="visual-source">{asset["source"]}</div>'
+                    f'<div class="visual-detail">{asset["label"]}</div>',
+                    unsafe_allow_html=True,
+                )
+                if asset_key in crop_store:
+                    st.markdown(
+                        '<div class="visual-crop-label">CROP APPLIED</div>',
+                        unsafe_allow_html=True,
+                    )
+                crop_col, select_col = st.columns(2, gap="small")
+                with crop_col:
+                    if st.button(
+                        "Crop / reposition",
+                        width="stretch",
+                        key=f"{state_id}-crop-{asset_key}",
+                    ):
+                        raw = asset.get("bytes")
+                        if isinstance(raw, (bytes, bytearray)):
+                            _crop_visual_dialog(
+                                asset_key,
+                                bytes(raw),
+                                str(asset["label"]),
+                                crop_store=crop_store_name,
+                            )
+                        else:
+                            st.warning("This visual is not crop-ready.")
+                with select_col:
+                    selected = asset_key == selected_key
+                    if st.button(
+                        "Selected" if selected else "Select image",
+                        type="primary" if selected else "secondary",
+                        width="stretch",
+                        key=f"{state_id}-select-{asset_key}",
+                    ):
+                        if selected_key != asset_key:
+                            state["image_key"] = asset_key
+                            state["polygon_points"] = None
+                            state["rendered_config"] = None
+                            state["rendered_preview"] = None
+                            st.session_state.pop(f"{state_id}-font-size", None)
+
+    selected = asset_map.get(str(state.get("image_key") or ""))
+    if selected is None:
+        return
+
+    working_bytes = crop_store.get(selected["asset_key"]) or selected.get("bytes")
+    if not isinstance(working_bytes, (bytes, bytearray)):
+        st.error("The selected image does not contain a usable image payload.")
+        return
+    working_bytes = bytes(working_bytes)
+    source_digest = hashlib.sha1(working_bytes).hexdigest()[:12]
+
+    if (
+        state.get("source_key") != selected["asset_key"]
+        or state.get("source_digest") != source_digest
+    ):
+        state["source_key"] = selected["asset_key"]
+        state["source_digest"] = source_digest
+        state["polygon_points"] = None
+        state["rendered_config"] = None
+        state["rendered_preview"] = None
+        st.session_state.pop(f"{state_id}-font-size", None)
+
+    headline_key = f"{state_id}-headline"
+    if not state.get("headline_initialized"):
+        st.session_state[headline_key] = str(default_headline or "").strip()
+        state["headline_initialized"] = True
+    headline = st.text_area(
+        "Manual Subject Cutout headline",
+        key=headline_key,
+        height=82,
+        label_visibility="collapsed",
+    ).strip()
+
+    mode = st.pills(
+        "Composition",
+        ["Negative Space", "Behind Subject"],
+        default=state["mode"],
+        key=f"{state_id}-mode",
+        label_visibility="collapsed",
+    ) or state["mode"]
+    state["mode"] = mode
+    selected_mode = "behind-subject" if mode == "Behind Subject" else "negative-space"
+
+    font = st.pills(
+        "Font",
+        list(MANUAL_SUBJECT_FONT_OPTIONS),
+        default=state["font"],
+        key=f"{state_id}-font",
+        label_visibility="collapsed",
+    ) or state["font"]
+    state["font"] = font
+
+    style = st.pills(
+        "Text style",
+        list(MANUAL_SUBJECT_STYLE_OPTIONS),
+        default=state["style"],
+        key=f"{state_id}-style",
+        label_visibility="collapsed",
+    ) or state["style"]
+    state["style"] = style
+
+    rendered_config = state.get("rendered_config")
+    if rendered_config and rendered_config.get("mode") != selected_mode:
+        state["rendered_config"] = None
+        state["rendered_preview"] = None
+        rendered_config = None
+        st.session_state.pop(f"{state_id}-font-size", None)
+
+    default_polygon = [
+        (120, 700),
+        (960, 700),
+        (960, 1200),
+        (120, 1200),
+    ]
+    polygon_points = state.get("polygon_points")
+    if not polygon_points and rendered_config:
+        polygon_points = rendered_config.get("text_polygon")
+    if not polygon_points:
+        polygon_points = default_polygon
+    try:
+        polygon_points = [
+            (
+                max(0, min(1080, int(point[0]))),
+                max(0, min(1920, int(point[1]))),
+            )
+            for point in polygon_points
+        ]
+    except (TypeError, ValueError, IndexError):
+        polygon_points = default_polygon
+    if len(polygon_points) < 3:
+        polygon_points = default_polygon
+
+    source_image = _asset_to_image(working_bytes)
+    if source_image is None:
+        st.error("The selected image could not be opened.")
+        return
+
+    image_buffer = BytesIO()
+    source_image.save(image_buffer, format="JPEG", quality=88, optimize=True)
+    image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+
+    editor = None
+    if MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR is not None:
+        editor = MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR(
+            data={"image": image_data, "points": polygon_points},
+            default={"points": polygon_points},
+            on_points_change=lambda: None,
+            key=f"{state_id}-polygon-{selected['asset_key']}-{source_digest}-{selected_mode}",
+            width=360,
+            height=640,
+        )
+
+    if editor is not None:
+        current_points = getattr(editor, "points", None)
+        if current_points:
+            try:
+                polygon_points = [
+                    (
+                        max(0, min(1080, int(point[0]))),
+                        max(0, min(1920, int(point[1]))),
+                    )
+                    for point in current_points
+                ]
+            except (TypeError, ValueError, IndexError):
+                pass
+    state["polygon_points"] = polygon_points
+
+    if rendered_config:
+        size_key = f"{state_id}-font-size"
+        if size_key not in st.session_state:
+            st.session_state[size_key] = int(rendered_config.get("font_size", 150))
+        font_size = st.slider(
+            "Text size",
+            min_value=72,
+            max_value=260,
+            step=2,
+            key=size_key,
+        )
+    else:
+        font_size = 150
+
+    st.caption(
+        "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
+        "Render Now is the only action that replaces the rendered preview."
+    )
+
+    if st.button(
+        "Render Now",
+        type="primary",
+        width="stretch",
+        key=f"{state_id}-render",
+    ):
+        try:
+            box_left = min(point[0] for point in polygon_points)
+            box_top = min(point[1] for point in polygon_points)
+            box_right = max(point[0] for point in polygon_points)
+            box_bottom = max(point[1] for point in polygon_points)
+            config = {
+                "headline": headline,
+                "mode": selected_mode,
+                "text_polygon": tuple(polygon_points),
+                "font_size": int(font_size),
+                "font": font,
+                "style": style,
+                "include_overlays": False,
+                "source_key": selected["asset_key"],
+                "source_digest": source_digest,
+            }
+            state["rendered_config"] = config
+            state["rendered_preview"] = build_manual_subject_cutout_preview(
+                working_bytes,
+                headline,
+                mode=selected_mode,
+                text_box=(
+                    box_left,
+                    box_top,
+                    box_right - box_left,
+                    box_bottom - box_top,
+                ),
+                font_size=int(font_size),
+                font=font,
+                style=style,
+                text_polygon=config["text_polygon"],
+                include_overlays=False,
+            )
+            st.rerun()
+        except (ValueError, OSError, RuntimeError, ImportError) as exc:
+            state["rendered_preview"] = None
+            st.error(str(exc))
+
+    if state.get("rendered_preview"):
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">RENDERED PREVIEW</div>'
+            '<div class="section-title">Exact Manual Subject Cutout frame</div></div>'
+            '<div class="section-count">1080 × 1920 · no overlays</div></div>',
+            unsafe_allow_html=True,
+        )
+        st.image(state["rendered_preview"], width=360)
+
+
 def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
     if live:
         specs = [
@@ -2011,16 +2298,7 @@ def _live_reset_downstream():
         "live_quote_card_quote": "",
         "live_quote_card_attribution": "",
         "live_quote_card_slide": 1,
-        "live_text_cutout_image_selection": None,
-        "live_text_cutout_headline": "",
-        "live_text_cutout_config": None,
-        "live_text_cutout_render": None,
-        "live_text_cutout_slide": 1,
-        "live_text_cutout_mode": "Negative Space",
-        "live_text_cutout_font": "Barlow Condensed",
-        "live_text_cutout_style": "Crisp Outline",
-        "live_text_cutout_font_size": 150,
-        "live_text_cutout_polygon_points": None,
+        "live_manual_subject_cutout": {},
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
         "live_visual_deleted": set(),
