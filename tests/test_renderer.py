@@ -966,7 +966,6 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
         "font_size": 140,
         "font": "Barlow Condensed",
         "style": "Heavy Drop",
-        "include_overlays": False,
     }
     script = {
         "approved_for_audio": True,
@@ -1029,7 +1028,6 @@ def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
             font_size=140,
             font="Barlow Condensed",
             style="Crisp Outline",
-            include_overlays=False,
         )
         image = Image.open(BytesIO(preview))
         assert image.size == (renderer.WIDTH, renderer.HEIGHT)
