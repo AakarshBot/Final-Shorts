@@ -30,9 +30,9 @@ YOUTUBE_TRENDS_EXPLORE_URL = "https://trends.google.com/trends/api/explore"
 YOUTUBE_TRENDS_RELATED_URL = "https://trends.google.com/trends/api/widgetdata/relatedsearches"
 YOUTUBE_AUTOCOMPLETE_URL = "https://suggestqueries.google.com/complete/search"
 YOUTUBE_TREND_PROFILES = {
-    "cricket_india_asia": ("cricket", "india cricket", "virat kohli"),
-    "cricket_global": ("cricket", "test cricket", "international cricket"),
-    "niche_sports": ("football", "tennis", "formula 1"),
+    "cricket_india_asia": ("cricket", "india cricket", "virat kohli", "india vs pakistan"),
+    "cricket_global": ("cricket", "test cricket", "international cricket", "ashes cricket"),
+    "niche_sports": ("football", "tennis", "formula 1", "badminton"),
 }
 
 CRICKET_QUERIES = {
@@ -590,11 +590,16 @@ def fetch_youtube_search_trends(
         return []
 
     grouped: dict[str, dict] = {}
-    for seed in YOUTUBE_TREND_PROFILES[profile]:
-        try:
-            rows = _youtube_trend_queries(seed, geo)
-        except (requests.RequestException, ValueError, TypeError, KeyError):
-            continue
+    with ThreadPoolExecutor(max_workers=len(YOUTUBE_TREND_PROFILES[profile])) as pool:
+        futures = {
+            pool.submit(_youtube_trend_queries, seed, geo): seed
+            for seed in YOUTUBE_TREND_PROFILES[profile]
+        }
+        for future in as_completed(futures):
+            try:
+                rows = future.result()
+            except (requests.RequestException, ValueError, TypeError, KeyError):
+                continue
         for row in rows:
             keyword = _clean(row.get("keyword"))
             key = keyword.casefold()
@@ -624,11 +629,12 @@ def fetch_youtube_search_trends(
         signal_value = max(item["rising"], item["top"])
         score = min(100.0, signal_value)
         if item["breakout"]:
-            score += 25.0
+            score += 20.0
         if item["autocomplete"]:
-            score += 10.0
-        if len(item["seeds"]) > 1:
             score += 8.0
+        if len(item["seeds"]) > 1:
+            score += 7.0
+        score = min(100.0, score)
         results.append({
             "keyword": item["keyword"],
             "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
@@ -645,6 +651,8 @@ def fetch_youtube_search_trends(
         key=lambda item: (item["score"], item["signal_value"], item["keyword"].casefold()),
         reverse=True,
     )
+    if not results:
+        raise RuntimeError("YouTube search trend services returned no usable signals. Retry the trend fetch.")
     return results[:limit]
 
 
