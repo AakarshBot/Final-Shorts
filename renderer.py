@@ -961,21 +961,14 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
 
         return None
 
-    start_size = max(
+    requested_size = max(
         MANUAL_SUBJECT_MIN_FONT_SIZE,
         min(MANUAL_SUBJECT_MAX_FONT_SIZE, int(font_size)),
     )
-    start_size -= start_size % 2
-
-    fit = None
-    for size in range(start_size, MANUAL_SUBJECT_MIN_FONT_SIZE - 1, -2):
-        fit = fit_layout(size)
-        if fit is not None:
-            break
-
+    fit = fit_layout(requested_size)
     if fit is None:
         raise ValueError(
-            "The selected text polygon is too small for this headline. Make the polygon larger."
+            f"Text size {requested_size}px does not fit the selected polygon. Make the polygon larger or choose a smaller size."
         )
 
     font, placements = fit
