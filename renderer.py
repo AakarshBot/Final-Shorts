@@ -883,7 +883,7 @@ def _manual_subject_cutout_layout_data(
         ]
         common_left = max(interval[0] for interval in widest)
         common_right = min(interval[1] for interval in widest)
-        usable_width = common_right - common_left
+        usable_width = common_right - common_left - 4
         if usable_width < line_width:
             return None
 
@@ -897,7 +897,6 @@ def _manual_subject_cutout_layout_data(
             for region in regions
         ):
             return None
-
         if right > common_right - 2:
             return None
         return int(round(left)), bbox, usable_width
@@ -930,10 +929,10 @@ def _manual_subject_cutout_layout_data(
             line_height * len(lines)
             + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
         )
-        if total_height > box_height:
+        if total_height > box_height - 4:
             continue
 
-        start_y = box_top + (box_height - total_height) / 2
+        start_y = box_top + 2
         placements = []
         fill_ratios = []
         word_index = 0

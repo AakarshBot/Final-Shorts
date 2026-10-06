@@ -66,11 +66,35 @@ def test_manual_subject_cutout_anchors_text_to_polygon_left_edge(monkeypatch):
 
     assert data["layouts"]
     for layout in data["layouts"]:
+        assert layout["placements"][0][1] == 702
+        last_line, last_top, left, bbox = layout["placements"][-1]
+        assert last_top + (bbox[3] - bbox[1]) <= 1198
         for _line, _line_top, left, bbox in layout["placements"]:
             line_width = bbox[2] - bbox[0]
             assert left == 82
             assert left + line_width <= 998
 
+
+
+def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: font_path.read_bytes(),
+    )
+
+    data = renderer._manual_subject_cutout_layout_data(
+        "India win",
+        ((80, 700), (1000, 700), (1000, 1200), (700, 1200)),
+        140,
+        "Barlow Condensed",
+        "Crisp Outline",
+    )
+
+    assert data["layouts"]
+    one_line = next(layout for layout in data["layouts"] if len(layout["lines"]) == 1)
+    assert one_line["placements"][0][2] == 392
 
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
