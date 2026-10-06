@@ -869,36 +869,22 @@ def _manual_subject_cutout_layout_data(
             stroke_width=stroke_width,
         )
         line_width = bbox[2] - bbox[0]
-        sample_y = [
-            line_top + (line_bottom - line_top) * fraction
-            for fraction in (0.08, 0.28, 0.5, 0.72, 0.92)
-        ]
-        regions = [polygon_intervals(y_value) for y_value in sample_y]
-        if any(not region for region in regions):
+        center_y = (line_top + line_bottom) / 2
+        regions = polygon_intervals(center_y)
+        if not regions:
             return None
 
-        widest = [
-            max(region, key=lambda interval: interval[1] - interval[0])
-            for region in regions
-        ]
-        common_left = max(interval[0] for interval in widest)
-        common_right = min(interval[1] for interval in widest)
-        usable_width = common_right - common_left
+        left_edge, right_edge = max(
+            regions,
+            key=lambda interval: interval[1] - interval[0],
+        )
+        usable_width = right_edge - left_edge - 4
         if usable_width < line_width:
             return None
 
-        left = common_left + 2
+        left = left_edge + 2
         right = left + line_width
-        if not all(
-            any(
-                interval_left <= left and right <= interval_right
-                for interval_left, interval_right in region
-            )
-            for region in regions
-        ):
-            return None
-
-        if right > common_right - 2:
+        if right > right_edge - 2:
             return None
         return int(round(left)), bbox, usable_width
 
