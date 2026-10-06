@@ -1119,7 +1119,7 @@ def test_top5_manual_subject_cutout_wraps_headline_inside_polygon():
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
         "India dominate the latest cricket result today",
         mode="negative-space",
-        text_polygon=((120, 700), (960, 700), (960, 880), (120, 880)),
+        text_polygon=((120, 700), (960, 700), (960, 1200), (120, 1200)),
         font_size=180,
     )
     assert Image.open(BytesIO(preview)).size == (renderer.WIDTH, renderer.HEIGHT)
