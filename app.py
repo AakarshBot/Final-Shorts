@@ -2400,6 +2400,7 @@ def _render_app_sidebar():
                 "deep_dive": "Deep-Dive",
                 "top_5": "Top-5",
                 "otd": "OTD",
+                "youtube_trends": "YT Trends",
             }.get(
                 st.session_state.test_production_line,
                 str(st.session_state.test_production_line).replace("_", " ").title(),
@@ -4274,8 +4275,14 @@ def render_live_dashboard():
                 "ON THIS DAY",
                 "A daily historical sports package built around the date. Design in progress.",
             ),
+            (
+                "live-line-youtube-trends",
+                "04 · YT TRENDS",
+                "YT Trends",
+                "Start from current YouTube search trends.",
+            ),
         ]
-        cols = st.columns(3, gap="small")
+        cols = st.columns(4, gap="small")
         for col, (key, eyebrow, title, copy) in zip(cols, choices):
             with col:
                 with st.container(key=key):
@@ -4287,20 +4294,33 @@ def render_live_dashboard():
                         "01 · DEEP-DIVE": "Choose Deep-Dive →",
                         "02 · TOP-5": "Open Top-5 →",
                         "03 · OTD": "Open OTD →",
+                        "04 · YT TRENDS": "Open YT Trends →",
                     }[eyebrow]
                     if st.button(button_label, type="primary", width="stretch", key=f"{key}-button"):
                         st.session_state.live_production_line = {
                             "01 · DEEP-DIVE": "deep_dive",
                             "02 · TOP-5": "top_5",
                             "03 · OTD": "otd",
+                            "04 · YT TRENDS": "youtube_trends",
                         }[eyebrow]
                         _live_reset_downstream()
-                        if eyebrow == "02 · TOP-5":
-                            st.session_state.live_stage = "01 · Top-5 Topics"
-                        st.session_state.live_desk = None
+                        st.session_state.live_desk = (
+                            "youtube_trends" if eyebrow == "04 · YT TRENDS" else None
+                        )
                         st.session_state.live_cricket_profile = None
                         st.session_state.live_topics_profile = None
                         st.session_state.live_topics = []
+                        if eyebrow == "04 · YT TRENDS":
+                            from topic_fetcher import fetch_youtube_search_trends
+                            st.session_state.live_youtube_trend_results = []
+                            st.session_state.live_youtube_trend_selected = None
+                            st.session_state.live_youtube_trend_keyword = ""
+                            st.session_state.live_youtube_trend_error = ""
+                            try:
+                                with st.spinner("Reading current YouTube search trends…"):
+                                    st.session_state.live_youtube_trend_results = fetch_youtube_search_trends(limit=20)
+                            except (RuntimeError, ValueError, OSError) as exc:
+                                st.session_state.live_youtube_trend_error = str(exc)
                         st.rerun()
         return
 
@@ -4431,6 +4451,9 @@ def render_live_dashboard():
     _render_pipeline_notice("live_pipeline_notice")
 
     if st.session_state.live_stage == "01 · Story":
+        if st.session_state.live_production_line == "youtube_trends":
+            render_youtube_trends_topic_fetcher(live=True)
+            return
         st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one headline to start production</div></div>', unsafe_allow_html=True)
         topics = st.session_state.live_topics
         cricket_profile = st.session_state.live_topics_profile in {"cricket_india_asia", "cricket_global"}
@@ -4591,22 +4614,36 @@ profiles = {
 
 
 
-def render_youtube_trends_topic_fetcher():
-    from topic_fetcher import fetch_youtube_trend_topics
+def render_youtube_trends_topic_fetcher(*, live=False):
+    from topic_fetcher import fetch_youtube_search_trends, fetch_youtube_trend_topics
 
-    if st.session_state.get("youtube_trend_error"):
-        st.error(st.session_state.youtube_trend_error)
-        if st.button("Retry YT trends", type="primary", width="stretch", key="youtube-trends-retry"):
-            from topic_fetcher import fetch_youtube_search_trends
-            st.session_state.youtube_trend_error = ""
+    results_key = "live_youtube_trend_results" if live else "youtube_trend_results"
+    selected_key = "live_youtube_trend_selected" if live else "youtube_trend_selected"
+    keyword_key = "live_youtube_trend_keyword" if live else "youtube_trend_keyword"
+    error_key = "live_youtube_trend_error" if live else "youtube_trend_error"
+    topics_key = "live_topics" if live else "topics"
+    selected_topic_key = "live_selected_topic" if live else "selected_topic"
+    open_tile_key = "live_topic_open_tile" if live else "topic_open_tile"
+    profile_key = "live_topics_profile" if live else "topic_desk_profile"
+    button_prefix = "live-youtube-trend-" if live else "youtube-trend-"
+
+    if st.session_state.get(error_key):
+        st.error(st.session_state[error_key])
+        if st.button(
+            "Retry YT trends",
+            type="primary",
+            width="stretch",
+            key=f"{button_prefix}retry",
+        ):
+            st.session_state[error_key] = ""
             try:
                 with st.spinner("Reading current YouTube search trends…"):
-                    st.session_state.youtube_trend_results = fetch_youtube_search_trends(limit=20)
+                    st.session_state[results_key] = fetch_youtube_search_trends(limit=20)
             except (RuntimeError, ValueError, OSError) as exc:
-                st.session_state.youtube_trend_error = str(exc)
+                st.session_state[error_key] = str(exc)
             st.rerun()
 
-    results = st.session_state.youtube_trend_results
+    results = st.session_state[results_key]
     if not results:
         st.info("No current YouTube search trends were returned.")
         return
@@ -4638,49 +4675,55 @@ def render_youtube_trends_topic_fetcher():
         with mid:
             st.caption(f'Signal score {item["score"]:.0f}')
         with right:
-            selected = st.session_state.youtube_trend_selected == index
+            selected = st.session_state[selected_key] == index
             if st.button(
                 "Selected" if selected else "Use",
                 type="primary" if selected else "secondary",
                 width="stretch",
-                key=f"youtube-trend-select-{index}",
+                key=f"{button_prefix}select-{index}",
             ):
                 keyword = item["keyword"]
-                with st.spinner(f'Searching today’s news for “{keyword}”…'):
-                    st.session_state.topics = fetch_youtube_trend_topics(
-                        keyword,
-                        item["profile"],
-                        limit=20,
-                    )
-                st.session_state.youtube_trend_selected = index
-                st.session_state.youtube_trend_keyword = keyword
-                st.session_state.topic_keyword = keyword
-                st.session_state.topic_desk_profile = item["profile"]
-                st.session_state.selected_topic = None
-                st.session_state.topic_open_tile = None
-                st.session_state.script_data = None
-                st.session_state.approved_script = None
-                st.session_state.audio_data = None
-                st.session_state.approved_audio = None
-                st.session_state.subtitle_data = None
-                st.session_state.approved_subtitles = None
-                st.session_state.visual_result = None
-                st.session_state.visual_loaded_story = None
-                st.session_state.visual_assignments = {}
-                st.session_state.approved_visuals = None
-                st.session_state.visuals_approved = False
-                st.session_state.rendered_video_path = None
+                st.session_state[selected_key] = index
+                st.session_state[keyword_key] = keyword
+                st.session_state[profile_key] = item["profile"]
+                if live:
+                    _live_reset_downstream()
+                else:
+                    st.session_state[selected_topic_key] = None
+                    st.session_state[open_tile_key] = None
+                    st.session_state.script_data = None
+                    st.session_state.approved_script = None
+                    st.session_state.audio_data = None
+                    st.session_state.approved_audio = None
+                    st.session_state.subtitle_data = None
+                    st.session_state.approved_subtitles = None
+                    st.session_state.visual_result = None
+                    st.session_state.visual_loaded_story = None
+                    st.session_state.visual_assignments = {}
+                    st.session_state.approved_visuals = None
+                    st.session_state.visuals_approved = False
+                    st.session_state.rendered_video_path = None
+                try:
+                    with st.spinner(f'Searching today’s news for “{keyword}”…'):
+                        st.session_state[topics_key] = fetch_youtube_trend_topics(
+                            keyword,
+                            item["profile"],
+                            limit=20,
+                        )
+                except (RuntimeError, ValueError, OSError) as exc:
+                    st.session_state[error_key] = str(exc)
+                    st.session_state[topics_key] = []
                 st.rerun()
 
-    topics = st.session_state.topics
+    topics = st.session_state[topics_key]
     if not topics:
-        if st.session_state.youtube_trend_selected is not None:
+        if st.session_state[selected_key] is not None:
             st.warning(
-                f'No news published today matched “{st.session_state.youtube_trend_keyword}”. Choose another trend.'
+                f'No news published today matched “{st.session_state[keyword_key]}”. Choose another trend.'
             )
         return
 
-    keyword = st.session_state.youtube_trend_keyword
+    keyword = st.session_state[keyword_key]
     st.divider()
     st.markdown(
         f'<div class="section-head"><div><div class="eyebrow">NEWS PUBLISHED TODAY</div>'
@@ -4690,53 +4733,63 @@ def render_youtube_trends_topic_fetcher():
     )
     st.caption("Only articles published today in the factory timezone are included.")
 
-    if st.button("Find 20 more from today", width="stretch", key="youtube-trends-more"):
+    if st.button(
+        "Find 20 more from today",
+        width="stretch",
+        key=f"{button_prefix}more",
+    ):
         with st.spinner(f'Finding more news published today for “{keyword}”…'):
-            existing = list(topics)
-            more_topics = fetch_youtube_trend_topics(
-                keyword,
-                st.session_state.topic_desk_profile,
-                more=True,
-                exclude_topics=existing,
-                limit=20,
-            )
-            st.session_state.topics = existing + more_topics
+            try:
+                existing = list(topics)
+                more_topics = fetch_youtube_trend_topics(
+                    keyword,
+                    st.session_state[profile_key],
+                    more=True,
+                    exclude_topics=existing,
+                    limit=20,
+                )
+                st.session_state[topics_key] = existing + more_topics
+            except (RuntimeError, ValueError, OSError) as exc:
+                st.session_state[error_key] = str(exc)
         st.rerun()
 
     selection = _render_topic_tiles(
         topics,
-        st.session_state.selected_topic,
-        columns=3,
-        open_state_key="topic_open_tile",
-        key_prefix="youtube-trend-",
+        st.session_state[selected_topic_key],
+        columns=2 if live else 3,
+        open_state_key=open_tile_key,
+        key_prefix=button_prefix,
     )
     if selection:
         index, member, members = selection
-        st.session_state.topics[index] = replace(
+        st.session_state[topics_key][index] = replace(
             member,
             group_key=topics[index].group_key,
             group_members=members,
         )
-        st.session_state.selected_topic = index
-        st.session_state.topic_open_tile = None
-        st.session_state.test_stage = "02 · Scriptwriter"
-        st.session_state.test_pipeline_notice = {
-            "confirmed": "Trend-driven story confirmed",
-            "next": "Moving to Script.",
-        }
-        st.session_state.script_data = None
-        st.session_state.approved_script = None
-        st.session_state.audio_data = None
-        st.session_state.approved_audio = None
-        st.session_state.subtitle_data = None
-        st.session_state.approved_subtitles = None
-        st.session_state.renderer_previews = None
-        st.session_state.rendered_video_path = None
-        st.session_state.upload_qc_approved = False
-        st.session_state.upload_result = None
-        st.session_state.upload_qc = None
+        st.session_state[selected_topic_key] = index
+        st.session_state[open_tile_key] = None
+        if live:
+            _live_start_story(index)
+            st.session_state.live_topic_keyword = keyword
+        else:
+            st.session_state.test_stage = "02 · Scriptwriter"
+            st.session_state.test_pipeline_notice = {
+                "confirmed": "Trend-driven story confirmed",
+                "next": "Moving to Script.",
+            }
+            st.session_state.script_data = None
+            st.session_state.approved_script = None
+            st.session_state.audio_data = None
+            st.session_state.approved_audio = None
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
+            st.session_state.renderer_previews = None
+            st.session_state.rendered_video_path = None
+            st.session_state.upload_qc_approved = False
+            st.session_state.upload_result = None
+            st.session_state.upload_qc = None
         st.rerun()
-
 
 def render_topic_fetcher():
     st.markdown(
