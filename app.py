@@ -24,6 +24,7 @@ VISUAL_OPTIONS = (
     "Option 5 · Stats Card",
     "Option 6 · Quote Card",
 )
+CRICKET_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS + ("Option 7 · Text Cutout",)
 LIVE_TEXT_CUTOUT_POLYGON_EDITOR = None
 if not st.get_option("global.appTest"):
     LIVE_TEXT_CUTOUT_POLYGON_EDITOR = st.components.v2.component(
