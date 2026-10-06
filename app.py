@@ -32,7 +32,7 @@ if not st.get_option("global.appTest"):
         name="manual_subject_cutout_polygon_editor",
         html="""
 <div class="text-cutout-editor">
-  <svg viewBox="0 0 1080 1920" aria-label="Text Cutout polygon editor">
+  <svg viewBox="0 0 1080 1920" aria-label="Manual Subject Cutout polygon editor">
     <image id="background" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
     <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
     <g id="handles"></g>
@@ -57,16 +57,16 @@ export default function(component) {
 
     image.setAttribute("href", "data:image/jpeg;base64," + data.image);
 
-    if (!parentElement.__manualSubjectCutout) {
+    if (!parentElement.__manualSubjectCutoutEditor) {
         const editor = {
             points: [],
             handles: [],
-            draggingPoint: false,
+            draggingPoint: null,
             draggingPolygon: false,
-            suppressClick: false,
             dragStart: null,
             originalPoints: null,
-            polygonMoved: false,
+            moved: false,
+            suppressClick: false,
             clamp(value, min, max) {
                 return Math.max(min, Math.min(max, value));
             },
@@ -104,47 +104,51 @@ export default function(component) {
                     handle.setAttribute("vector-effect", "non-scaling-stroke");
                     handles.appendChild(handle);
                     this.handles.push(handle);
-
-                    handle.addEventListener("pointerdown", (event) => {
-                        event.preventDefault();
-                        event.stopPropagation();
-                        this.draggingPoint = true;
-                        this.suppressClick = true;
-                        const index = Number(handle.dataset.index);
-                        handle.setPointerCapture(event.pointerId);
-                        const move = (moveEvent) => {
-                            const next = this.svgPoint(moveEvent);
-                            this.points[index] = [
-                                Math.round(next[0]),
-                                Math.round(next[1]),
-                            ];
-                            this.render();
-                        };
-                        const stop = () => {
-                            handle.removeEventListener("pointermove", move);
-                            this.draggingPoint = false;
-                            this.persist();
-                        };
-                        handle.addEventListener("pointermove", move);
-                        handle.addEventListener("pointerup", stop, {once: true});
-                        handle.addEventListener("pointercancel", stop, {once: true});
-                    });
                 }
-                this.points.forEach((point, index) => {
-                    const handle = this.handles[index];
+                this.handles.forEach((handle, index) => {
                     handle.dataset.index = String(index);
-                    handle.setAttribute("cx", point[0]);
-                    handle.setAttribute("cy", point[1]);
+                    handle.style.display = index < this.points.length ? "block" : "none";
+                    if (index >= this.points.length) return;
+                    handle.setAttribute("cx", this.points[index][0]);
+                    handle.setAttribute("cy", this.points[index][1]);
                 });
             },
         };
-        parentElement.__manualSubjectCutout = editor;
+
+        parentElement.__manualSubjectCutoutEditor = editor;
+
+        editor.handles.forEach((handle) => {
+            handle.addEventListener("pointerdown", (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                const index = Number(handle.dataset.index);
+                editor.draggingPoint = index;
+                editor.suppressClick = true;
+                handle.setPointerCapture(event.pointerId);
+                const move = (moveEvent) => {
+                    const next = editor.svgPoint(moveEvent);
+                    editor.points[index] = [
+                        Math.round(next[0]),
+                        Math.round(next[1]),
+                    ];
+                    editor.render();
+                };
+                const stop = () => {
+                    handle.removeEventListener("pointermove", move);
+                    editor.draggingPoint = null;
+                    editor.persist();
+                };
+                handle.addEventListener("pointermove", move);
+                handle.addEventListener("pointerup", stop, {once: true});
+                handle.addEventListener("pointercancel", stop, {once: true});
+            });
+        });
 
         polygon.addEventListener("pointerdown", (event) => {
             event.preventDefault();
             event.stopPropagation();
             editor.draggingPolygon = true;
-            editor.polygonMoved = false;
+            editor.moved = false;
             editor.suppressClick = false;
             editor.dragStart = editor.svgPoint(event);
             editor.originalPoints = editor.points.map((point) => [point[0], point[1]]);
@@ -153,9 +157,9 @@ export default function(component) {
 
         svg.addEventListener("pointermove", (event) => {
             if (!editor.draggingPolygon || !editor.dragStart || !editor.originalPoints) return;
-            const next = editor.svgPoint(event);
-            const rawDx = next[0] - editor.dragStart[0];
-            const rawDy = next[1] - editor.dragStart[1];
+            const current = editor.svgPoint(event);
+            const rawDx = current[0] - editor.dragStart[0];
+            const rawDy = current[1] - editor.dragStart[1];
             const minDx = -Math.min(...editor.originalPoints.map((point) => point[0]));
             const maxDx = 1080 - Math.max(...editor.originalPoints.map((point) => point[0]));
             const minDy = -Math.min(...editor.originalPoints.map((point) => point[1]));
@@ -163,7 +167,7 @@ export default function(component) {
             const dx = editor.clamp(rawDx, minDx, maxDx);
             const dy = editor.clamp(rawDy, minDy, maxDy);
             if (Math.hypot(dx, dy) > 2) {
-                editor.polygonMoved = true;
+                editor.moved = true;
                 editor.suppressClick = true;
             }
             editor.points = editor.originalPoints.map((point) => [
@@ -174,17 +178,17 @@ export default function(component) {
         });
 
         const stopPolygon = () => {
-            if (editor.draggingPolygon && editor.polygonMoved) editor.persist();
+            if (editor.draggingPolygon && editor.moved) editor.persist();
             editor.draggingPolygon = false;
             editor.dragStart = null;
             editor.originalPoints = null;
-            editor.polygonMoved = false;
+            editor.moved = false;
         };
         svg.addEventListener("pointerup", stopPolygon);
         svg.addEventListener("pointercancel", stopPolygon);
 
         svg.addEventListener("click", (event) => {
-            if (editor.suppressClick || editor.draggingPoint || editor.draggingPolygon) {
+            if (editor.suppressClick || editor.draggingPoint !== null || editor.draggingPolygon) {
                 editor.suppressClick = false;
                 return;
             }
@@ -216,6 +220,7 @@ export default function(component) {
                     best = {index, distance, point: projected};
                 }
             });
+
             if (!best || best.distance > 32) return;
             editor.points.splice(best.index + 1, 0, [
                 Math.round(best.point[0]),
@@ -226,7 +231,7 @@ export default function(component) {
         });
     }
 
-    const editor = parentElement.__manualSubjectCutout;
+    const editor = parentElement.__manualSubjectCutoutEditor;
     editor.points = (data.points || []).map((point) => [
         Number(point[0]),
         Number(point[1]),
@@ -1257,15 +1262,22 @@ def _render_manual_subject_cutout(
     state.setdefault("mode", "Negative Space")
     state.setdefault("font", "Barlow Condensed")
     state.setdefault("style", "Crisp Outline")
+    state.setdefault("headline_source", "")
+    state.setdefault("headline_initialized", False)
     state.setdefault("polygon_points", None)
+    state.setdefault("font_size", 150)
     state.setdefault("rendered_config", None)
     state.setdefault("rendered_preview", None)
+    state.setdefault("editor_image_digest", None)
+    state.setdefault("editor_image_data", None)
+
     default_headline = str(default_headline or "").strip()
-    if state.get("headline_source") != default_headline:
+    if state["headline_source"] != default_headline:
         state["headline_source"] = default_headline
         state["headline_initialized"] = False
         state["rendered_config"] = None
         state["rendered_preview"] = None
+        state["font_size"] = 150
         st.session_state.pop(f"{state_id}-headline", None)
         st.session_state.pop(f"{state_id}-font-size", None)
 
@@ -1284,8 +1296,9 @@ def _render_manual_subject_cutout(
                 image = _asset_to_image(asset.get("bytes"))
                 if image is not None:
                     preview = image.copy()
-                    preview.thumbnail((420, 420), Image.Resampling.LANCZOS)
+                    preview.thumbnail((300, 300), Image.Resampling.LANCZOS)
                     st.image(preview, width="stretch")
+
                 st.markdown(
                     f'<div class="visual-source">{asset["source"]}</div>'
                     f'<div class="visual-detail">{asset["label"]}</div>',
@@ -1296,6 +1309,7 @@ def _render_manual_subject_cutout(
                         '<div class="visual-crop-label">CROP APPLIED</div>',
                         unsafe_allow_html=True,
                     )
+
                 crop_col, select_col = st.columns(2, gap="small")
                 with crop_col:
                     if st.button(
@@ -1313,6 +1327,7 @@ def _render_manual_subject_cutout(
                             )
                         else:
                             st.warning("This visual is not crop-ready.")
+
                 with select_col:
                     selected = asset_key == selected_key
                     if st.button(
@@ -1326,6 +1341,9 @@ def _render_manual_subject_cutout(
                             state["polygon_points"] = None
                             state["rendered_config"] = None
                             state["rendered_preview"] = None
+                            state["font_size"] = 150
+                            state["editor_image_digest"] = None
+                            state["editor_image_data"] = None
                             st.session_state.pop(f"{state_id}-font-size", None)
                             st.rerun(scope="fragment")
 
@@ -1337,23 +1355,24 @@ def _render_manual_subject_cutout(
     if not isinstance(working_bytes, (bytes, bytearray)):
         st.error("The selected image does not contain a usable image payload.")
         return
+
     working_bytes = bytes(working_bytes)
     source_digest = hashlib.sha1(working_bytes).hexdigest()[:12]
 
-    if (
-        state.get("source_key") != selected["asset_key"]
-        or state.get("source_digest") != source_digest
-    ):
+    if state.get("source_key") != selected["asset_key"] or state.get("source_digest") != source_digest:
         state["source_key"] = selected["asset_key"]
         state["source_digest"] = source_digest
         state["polygon_points"] = None
         state["rendered_config"] = None
         state["rendered_preview"] = None
+        state["font_size"] = 150
+        state["editor_image_digest"] = None
+        state["editor_image_data"] = None
         st.session_state.pop(f"{state_id}-font-size", None)
 
     headline_key = f"{state_id}-headline"
-    if not state.get("headline_initialized"):
-        st.session_state[headline_key] = str(default_headline or "").strip()
+    if not state["headline_initialized"]:
+        st.session_state[headline_key] = default_headline
         state["headline_initialized"] = True
     headline = st.text_area(
         "Manual Subject Cutout headline",
@@ -1390,24 +1409,13 @@ def _render_manual_subject_cutout(
     ) or state["style"]
     state["style"] = style
 
-    rendered_config = state.get("rendered_config")
-    if rendered_config and rendered_config.get("mode") != selected_mode:
-        state["rendered_config"] = None
-        state["rendered_preview"] = None
-        rendered_config = None
-        st.session_state.pop(f"{state_id}-font-size", None)
-
     default_polygon = [
         (120, 700),
         (960, 700),
         (960, 1200),
         (120, 1200),
     ]
-    polygon_points = state.get("polygon_points")
-    if not polygon_points and rendered_config:
-        polygon_points = rendered_config.get("text_polygon")
-    if not polygon_points:
-        polygon_points = default_polygon
+    polygon_points = state.get("polygon_points") or default_polygon
     try:
         polygon_points = [
             (
@@ -1426,17 +1434,29 @@ def _render_manual_subject_cutout(
         st.error("The selected image could not be opened.")
         return
 
-    image_buffer = BytesIO()
-    source_image.save(image_buffer, format="JPEG", quality=88, optimize=True)
-    image_data = base64.b64encode(image_buffer.getvalue()).decode("ascii")
+    if state["editor_image_digest"] != source_digest:
+        image_buffer = BytesIO()
+        source_image.convert("RGB").save(
+            image_buffer,
+            format="JPEG",
+            quality=88,
+            optimize=True,
+        )
+        state["editor_image_digest"] = source_digest
+        state["editor_image_data"] = base64.b64encode(
+            image_buffer.getvalue()
+        ).decode("ascii")
 
     editor = None
     if MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR is not None:
         editor = MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR(
-            data={"image": image_data, "points": polygon_points},
+            data={
+                "image": state["editor_image_data"],
+                "points": polygon_points,
+            },
             default={"points": polygon_points},
             on_points_change=lambda: None,
-            key=f"{state_id}-polygon-{selected['asset_key']}-{source_digest}-{selected_mode}",
+            key=f"{state_id}-polygon-{selected['asset_key']}-{source_digest}",
             width=360,
             height=640,
         )
@@ -1454,27 +1474,28 @@ def _render_manual_subject_cutout(
                 ]
             except (TypeError, ValueError, IndexError):
                 pass
-    else:
-        st.image(source_image, width=360)
+
     state["polygon_points"] = polygon_points
 
-    if rendered_config:
+    if state.get("rendered_config"):
         size_key = f"{state_id}-font-size"
         if size_key not in st.session_state:
-            st.session_state[size_key] = int(rendered_config.get("font_size", 150))
+            st.session_state[size_key] = int(state["font_size"])
         font_size = st.slider(
             "Text size",
             min_value=72,
             max_value=260,
             step=2,
+            value=int(state["font_size"]),
             key=size_key,
         )
+        state["font_size"] = int(font_size)
     else:
         font_size = 150
 
     st.caption(
         "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
-        "Render Now is the only action that replaces the rendered preview."
+        "Edit the polygon freely; Render Now replaces the rendered frame."
     )
 
     if st.button(
@@ -1484,10 +1505,6 @@ def _render_manual_subject_cutout(
         key=f"{state_id}-render",
     ):
         try:
-            box_left = min(point[0] for point in polygon_points)
-            box_top = min(point[1] for point in polygon_points)
-            box_right = max(point[0] for point in polygon_points)
-            box_bottom = max(point[1] for point in polygon_points)
             config = {
                 "headline": headline,
                 "mode": selected_mode,
@@ -1495,26 +1512,19 @@ def _render_manual_subject_cutout(
                 "font_size": int(font_size),
                 "font": font,
                 "style": style,
-                "include_overlays": False,
                 "source_key": selected["asset_key"],
                 "source_digest": source_digest,
             }
+            state["font_size"] = int(font_size)
             state["rendered_config"] = config
             state["rendered_preview"] = build_manual_subject_cutout_preview(
                 working_bytes,
                 headline,
                 mode=selected_mode,
-                text_box=(
-                    box_left,
-                    box_top,
-                    box_right - box_left,
-                    box_bottom - box_top,
-                ),
                 font_size=int(font_size),
                 font=font,
                 style=style,
                 text_polygon=config["text_polygon"],
-                include_overlays=False,
             )
             st.rerun()
         except (ValueError, OSError, RuntimeError, ImportError) as exc:
@@ -1529,7 +1539,6 @@ def _render_manual_subject_cutout(
             unsafe_allow_html=True,
         )
         st.image(state["rendered_preview"], width=360)
-
 
 def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
     if live:
@@ -6962,8 +6971,6 @@ elif st.session_state.app_mode == "test":
                                         font_size=int(card_data.get("font_size") or 150),
                                         font=str(card_data.get("font") or "Barlow Condensed"),
                                         style=str(card_data.get("style") or "Crisp Outline"),
-                                        include_overlays=bool(card_data.get("include_overlays", True)),
-                                        source_label=source,
                                     )
                             except (ValueError, OSError, RuntimeError, ImportError) as exc:
                                 st.error(str(exc))
