@@ -205,7 +205,6 @@ def test_live_text_cutout_prefers_the_existing_9x16_crop():
     }
     cropped = _image_bytes((200, 210, 220), size=(1080, 1920))
     identity = "|".join([
-        "live-auto",
         str(asset.get("source_page_url") or asset.get("url") or ""),
         str(asset.get("article_title") or asset.get("model") or ""),
         "0",

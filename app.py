@@ -10,7 +10,6 @@ from functools import lru_cache
 
 from dotenv import load_dotenv
 import streamlit as st
-from streamlit.runtime import exists as streamlit_runtime_exists
 
 load_dotenv(Path(__file__).resolve().with_name(".env"), override=False)
 
@@ -25,143 +24,143 @@ VISUAL_OPTIONS = (
     "Option 5 · Stats Card",
     "Option 6 · Quote Card",
 )
-CRICKET_LIVLIVE_TEXT_CUTOUT_POLYGON_EDITOR = None
-if streamlit_runtime_exists():
+LIVE_TEXT_CUTOUT_POLYGON_EDITOR = None
+if not st.get_option("global.appTest"):
     LIVE_TEXT_CUTOUT_POLYGON_EDITOR = st.components.v2.component(
-        name="live_text_cutout_polygon_editor",
-        html="<div class=\"text-cutout-editor\"><svg viewBox=\"0 0 1080 1920\" aria-label=\"Text Cutout polygon editor\"><image id=\"background\" x=\"0\" y=\"0\" width=\"1080\" height=\"1920\" preserveAspectRatio=\"none\"></image><polygon id=\"polygon\" fill=\"rgba(47,98,85,.16)\" stroke=\"#2f6255\" stroke-width=\"5\" vector-effect=\"non-scaling-stroke\"></polygon><g id=\"handles\"></g></svg><div class=\"help\">Drag a point to reshape. Drag inside the polygon to move it. Click an edge to add a point.</div><button id=\"render\" type=\"button\">Render Now</button></div>",
-        css=".text-cutout-editor{width:100%;height:100%;font-family:Inter,ui-sans-serif,sans-serif}.text-cutout-editor svg{display:block;width:100%;height:640px;border:1px solid #d4d4cc;border-radius:12px;background:#111;touch-action:none}.text-cutout-editor .handle{cursor:move}.text-cutout-editor .help{margin:6px 0;color:var(--st-text-color);font-size:12px;line-height:1.2;opacity:.7}.text-cutout-editor #render{width:100%;height:40px;border:1px solid var(--st-primary-color);border-radius:10px;background:var(--st-primary-color);color:#fff;font:700 14px Inter,ui-sans-serif,sans-serif;cursor:pointer}",
-        js="""
-export default function(component) {
-    const { data, setTriggerValue, parentElement } = component;
-    const svg = parentElement.querySelector("svg");
-    const image = parentElement.querySelector("#background");
-    const polygon = parentElement.querySelector("#polygon");
-    const handles = parentElement.querySelector("#handles");
-    const renderButton = parentElement.querySelector("#render");
-    if (!svg || !image || !polygon || !handles || !renderButton) return;
-
-    image.setAttribute("href", "data:image/jpeg;base64," + data.image);
-    let points = (data.points || []).map((point) => [Number(point[0]), Number(point[1])]);
-    let handleEls = [];
-    let draggingPoint = false;
-    let draggingPolygon = false;
-    let suppressClick = false;
-    let dragStart = null;
-    let originalPoints = null;
-
-    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-
-    const svgPoint = (event) => {
-        const rect = svg.getBoundingClientRect();
-        return [
-            clamp((event.clientX - rect.left) / rect.width * 1080, 0, 1080),
-            clamp((event.clientY - rect.top) / rect.height * 1920, 0, 1920),
-        ];
-    };
-
-    const render = () => {
-        polygon.setAttribute("points", points.map((point) => point.join(",")).join(" "));
-        while (handleEls.length < points.length) {
-            const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            handle.setAttribute("class", "handle");
-            handle.setAttribute("r", "13");
-            handle.setAttribute("fill", "#ffffff");
-            handle.setAttribute("stroke", "#2f6255");
-            handle.setAttribute("stroke-width", "4");
-            handle.setAttribute("vector-effect", "non-scaling-stroke");
-            handles.appendChild(handle);
-            handle.addEventListener("pointerdown", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                draggingPoint = true;
-                suppressClick = true;
-                const index = Number(handle.dataset.index);
-                handle.setPointerCapture(event.pointerId);
-                const move = (moveEvent) => {
-                    const next = svgPoint(moveEvent);
-                    points[index] = [Math.round(next[0]), Math.round(next[1])];
-                    render();
-                };
-                const up = () => {
-                    handle.removeEventListener("pointermove", move);
-                    draggingPoint = false;
-                };
-                handle.addEventListener("pointermove", move);
-                handle.addEventListener("pointerup", up, {once:true});
+            name="live_text_cutout_polygon_editor",
+            html="<div class=\"text-cutout-editor\"><svg viewBox=\"0 0 1080 1920\" aria-label=\"Text Cutout polygon editor\"><image id=\"background\" x=\"0\" y=\"0\" width=\"1080\" height=\"1920\" preserveAspectRatio=\"none\"></image><polygon id=\"polygon\" fill=\"rgba(47,98,85,.16)\" stroke=\"#2f6255\" stroke-width=\"5\" vector-effect=\"non-scaling-stroke\"></polygon><g id=\"handles\"></g></svg><div class=\"help\">Drag a point to reshape. Drag inside the polygon to move it. Click an edge to add a point.</div><button id=\"render\" type=\"button\">Render Now</button></div>",
+            css=".text-cutout-editor{width:100%;height:100%;font-family:Inter,ui-sans-serif,sans-serif}.text-cutout-editor svg{display:block;width:100%;height:640px;border:1px solid #d4d4cc;border-radius:12px;background:#111;touch-action:none}.text-cutout-editor .handle{cursor:move}.text-cutout-editor .help{margin:6px 0;color:var(--st-text-color);font-size:12px;line-height:1.2;opacity:.7}.text-cutout-editor #render{width:100%;height:40px;border:1px solid var(--st-primary-color);border-radius:10px;background:var(--st-primary-color);color:#fff;font:700 14px Inter,ui-sans-serif,sans-serif;cursor:pointer}",
+            js="""
+    export default function(component) {
+        const { data, setTriggerValue, parentElement } = component;
+        const svg = parentElement.querySelector("svg");
+        const image = parentElement.querySelector("#background");
+        const polygon = parentElement.querySelector("#polygon");
+        const handles = parentElement.querySelector("#handles");
+        const renderButton = parentElement.querySelector("#render");
+        if (!svg || !image || !polygon || !handles || !renderButton) return;
+    
+        image.setAttribute("href", "data:image/jpeg;base64," + data.image);
+        let points = (data.points || []).map((point) => [Number(point[0]), Number(point[1])]);
+        let handleEls = [];
+        let draggingPoint = false;
+        let draggingPolygon = false;
+        let suppressClick = false;
+        let dragStart = null;
+        let originalPoints = null;
+    
+        const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
+    
+        const svgPoint = (event) => {
+            const rect = svg.getBoundingClientRect();
+            return [
+                clamp((event.clientX - rect.left) / rect.width * 1080, 0, 1080),
+                clamp((event.clientY - rect.top) / rect.height * 1920, 0, 1920),
+            ];
+        };
+    
+        const render = () => {
+            polygon.setAttribute("points", points.map((point) => point.join(",")).join(" "));
+            while (handleEls.length < points.length) {
+                const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
+                handle.setAttribute("class", "handle");
+                handle.setAttribute("r", "13");
+                handle.setAttribute("fill", "#ffffff");
+                handle.setAttribute("stroke", "#2f6255");
+                handle.setAttribute("stroke-width", "4");
+                handle.setAttribute("vector-effect", "non-scaling-stroke");
+                handles.appendChild(handle);
+                handle.addEventListener("pointerdown", (event) => {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    draggingPoint = true;
+                    suppressClick = true;
+                    const index = Number(handle.dataset.index);
+                    handle.setPointerCapture(event.pointerId);
+                    const move = (moveEvent) => {
+                        const next = svgPoint(moveEvent);
+                        points[index] = [Math.round(next[0]), Math.round(next[1])];
+                        render();
+                    };
+                    const up = () => {
+                        handle.removeEventListener("pointermove", move);
+                        draggingPoint = false;
+                    };
+                    handle.addEventListener("pointermove", move);
+                    handle.addEventListener("pointerup", up, {once:true});
+                });
+                handleEls.push(handle);
+            }
+            points.forEach((point, index) => {
+                const handle = handleEls[index];
+                handle.dataset.index = String(index);
+                handle.setAttribute("cx", point[0]);
+                handle.setAttribute("cy", point[1]);
             });
-            handleEls.push(handle);
-        }
-        points.forEach((point, index) => {
-            const handle = handleEls[index];
-            handle.dataset.index = String(index);
-            handle.setAttribute("cx", point[0]);
-            handle.setAttribute("cy", point[1]);
-        });
-    };
-
-    polygon.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        draggingPolygon = true;
-        suppressClick = false;
-        dragStart = svgPoint(event);
-        originalPoints = points.map((point) => [point[0], point[1]]);
-        svg.setPointerCapture(event.pointerId);
-    });
-
-    svg.addEventListener("pointermove", (event) => {
-        if (!draggingPolygon || !dragStart || !originalPoints) return;
-        const next = svgPoint(event);
-        const dx = next[0] - dragStart[0];
-        const dy = next[1] - dragStart[1];
-        if (Math.hypot(dx, dy) > 2) suppressClick = true;
-        points = originalPoints.map((point) => [
-            Math.round(clamp(point[0] + dx, 0, 1080)),
-            Math.round(clamp(point[1] + dy, 0, 1920)),
-        ]);
-        render();
-    });
-
-    svg.addEventListener("pointerup", () => {
-        draggingPolygon = false;
-        dragStart = null;
-        originalPoints = null;
-    });
-
-    svg.addEventListener("click", (event) => {
-        if (suppressClick || draggingPoint || draggingPolygon) {
+        };
+    
+        polygon.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            draggingPolygon = true;
             suppressClick = false;
-            return;
-        }
-        if (event.target.classList && event.target.classList.contains("handle")) return;
-        const point = svgPoint(event);
-        let best = null;
-        points.forEach((start, index) => {
-            const end = points[(index + 1) % points.length];
-            const dx = end[0] - start[0];
-            const dy = end[1] - start[1];
-            const length2 = dx * dx + dy * dy;
-            const t = length2 ? clamp(((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2, 0, 1) : 0;
-            const projected = [start[0] + t * dx, start[1] + t * dy];
-            const distance = Math.hypot(point[0] - projected[0], point[1] - projected[1]);
-            if (!best || distance < best.distance) best = {index, distance, point: projected};
+            dragStart = svgPoint(event);
+            originalPoints = points.map((point) => [point[0], point[1]]);
+            svg.setPointerCapture(event.pointerId);
         });
-        if (!best || best.distance > 32) return;
-        points.splice(best.index + 1, 0, [Math.round(best.point[0]), Math.round(best.point[1])]);
+    
+        svg.addEventListener("pointermove", (event) => {
+            if (!draggingPolygon || !dragStart || !originalPoints) return;
+            const next = svgPoint(event);
+            const dx = next[0] - dragStart[0];
+            const dy = next[1] - dragStart[1];
+            if (Math.hypot(dx, dy) > 2) suppressClick = true;
+            points = originalPoints.map((point) => [
+                Math.round(clamp(point[0] + dx, 0, 1080)),
+                Math.round(clamp(point[1] + dy, 0, 1920)),
+            ]);
+            render();
+        });
+    
+        svg.addEventListener("pointerup", () => {
+            draggingPolygon = false;
+            dragStart = null;
+            originalPoints = null;
+        });
+    
+        svg.addEventListener("click", (event) => {
+            if (suppressClick || draggingPoint || draggingPolygon) {
+                suppressClick = false;
+                return;
+            }
+            if (event.target.classList && event.target.classList.contains("handle")) return;
+            const point = svgPoint(event);
+            let best = null;
+            points.forEach((start, index) => {
+                const end = points[(index + 1) % points.length];
+                const dx = end[0] - start[0];
+                const dy = end[1] - start[1];
+                const length2 = dx * dx + dy * dy;
+                const t = length2 ? clamp(((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2, 0, 1) : 0;
+                const projected = [start[0] + t * dx, start[1] + t * dy];
+                const distance = Math.hypot(point[0] - projected[0], point[1] - projected[1]);
+                if (!best || distance < best.distance) best = {index, distance, point: projected};
+            });
+            if (!best || best.distance > 32) return;
+            points.splice(best.index + 1, 0, [Math.round(best.point[0]), Math.round(best.point[1])]);
+            render();
+        });
+    
+        renderButton.onclick = () => {
+            setTriggerValue("render_now", points.map((point) => [Math.round(point[0]), Math.round(point[1])]));
+        };
+    
         render();
-    });
-
-    renderButton.onclick = () => {
-        setTriggerValue("render_now", points.map((point) => [Math.round(point[0]), Math.round(point[1])]));
-    };
-
-    render();
-}
-""",
+    }
+    """,
+        )
+           render();\n        send();\n    };\n    render();\n}\n",
     )
-       render();\n        send();\n    };\n    render();\n}\n",
-)
 
 TOP5_VISUAL_OPTIONS = (
     "Option 1 · Automatic Scraper",

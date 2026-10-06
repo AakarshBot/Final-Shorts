@@ -533,7 +533,7 @@ Status: **Approved / cleaned.**
 - Python compile check passed.
 - The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
 - Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
-- Live Cricket Option 7 · Text Cutout regression coverage includes multiple-image switching, alternate mode/font/style/headline state, per-image crop-store reuse, polygon-editor presence, polygon preview rendering, and the Live visual-option surface. AppTest bypasses the browser-only inline editor registration while exercising the same Live Text Cutout Python path.
+- Live Cricket Option 7 · Text Cutout regression coverage includes multiple-image switching, alternate mode/font/style/headline state, per-image crop-store reuse, polygon-editor presence, polygon preview rendering, and the Live visual-option surface. AppTest bypasses the browser-only inline editor registration through Streamlit's global.appTest flag while exercising the same Live Text Cutout Python path.
 - Top-5 Option 7 must not be treated as approved or Live-ready until its own Test work passes the full suite and is manually verified in Test. This does not apply to Live Cricket Option 7 · Text Cutout, which is a separate Live visual choice.
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
