@@ -215,18 +215,25 @@ Contract:
 Status: **Approved.**
 
 ## Renderer — Function 06
-Renderer v2 is the current active implementation on `main`.
+Renderer v2 is the single shared Test/Live renderer on main.
 
-- One shared renderer is used by Test and Live; there is no separate Test/Live encoder implementation.
-- Rendering is direct Python/Pillow frame composition into FFmpeg. MoviePy is not used.
-- Final output is 1080 × 1920 progressive H.264 High Profile, 4:2:0, two B-frames, closed GOP, GOP of half the frame rate, constant frame rate, BT.709, Fast Start and quality-controlled CRF 18 encoding, aligned with YouTube's current published upload guidance.
-- Final audio is AAC-LC, stereo, 48 kHz at 192 kbps with final loudness normalization targeting approximately -14 LUFS / -1.5 dBTP.
-- The renderer contains no detector-evasion, metadata-fingerprinting, pixel-perturbation, or other mechanism intended to bypass YouTube systems.
-- Ordinary photographic scenes use deterministic, subtle asset/story-derived push and pan motion instead of one fixed factory animation sequence.
-- Stats Cards, Quote Cards, Top-5 editorial cards and Manual Subject Cutout remain static/composition-led where motion would reduce readability.
-- Channel logo is optional and disabled by default. Source credit remains independently available.
-- Existing headline, subtitle, Top-5, Quote Card, Stats Card and Manual Subject Cutout contracts remain direct renderer features with no wrapper layer.
-- Renderer v2 is merged into `main` and is the shared Test/Live renderer.
+- One direct renderer implementation is used by Test and Live; there is no separate encoder path.
+- Frames are composed with Python/Pillow and encoded with FFmpeg. MoviePy is not used.
+- Final output is 1080 × 1920 progressive H.264 High Profile, 4:2:0, two B-frames, closed GOP, GOP of half the frame rate, constant frame rate, BT.709, Fast Start and CRF 18.
+- Final audio is AAC-LC, stereo, 48 kHz at 192 kbps. Approved audio scenes are concatenated and loudness-normalized inside the same FFmpeg complex audio filtergraph to approximately -14 LUFS / -1.5 dBTP; -af is not applied to the already-filtered audio output.
+- Normal photographic visuals use deterministic story/asset-seeded push and pan motion. Stats Cards, Quote Cards, Top-5 editorial cards and Manual Subject Cutout remain static where motion would hurt readability.
+- The optional channel logo is controlled by logo_enabled. Source credit is controlled by source_enabled in production rendering.
+- Top-5 and Quote static production frames honor both overlay flags. Manual Subject Cutout remains intentionally overlay-free.
+- build_top5_card_preview() honors its logo_enabled argument and continues to include its source label in the standalone preview.
+- Existing headline, subtitle, Top-5, Quote Card, Stats Card and Manual Subject Cutout behavior remains direct renderer functionality with no wrappers or duplicate implementations.
+- The shared Manual Subject Cutout uses the polygon as the complete text box: the text block starts 2px inside the top boundary, each line starts 2px inside the available left boundary, lines remain inside the available right boundary, and the final line remains inside the bottom boundary. Text is never horizontally or vertically re-centered.
+- Manual Subject Cutout supports Negative Space and Behind Subject modes, nine fonts and nine text styles, 1080 × 1920 output, and the existing crop/reposition flow.
+- Manual Subject Cutout renders no logo, source label, permanent headline or subtitles itself.
+- The renderer requires the approved Scriptwriter, Audio and Visuals handoffs, plus valid subtitles for non-Top-5 production.
+- Manual Subject Cutout, Top-5 editorial cards and Quote Cards suppress the normal headline/subtitle drawing path by handing the renderer a completed static frame.
+- The renderer contains no detector-evasion, metadata-fingerprinting, pixel-perturbation or similar mechanism intended to bypass platform systems.
+
+Status: Active / shared Test + Live renderer. Audio filter conflict and static-card overlay flag issues are fixed in PR #89; branch is awaiting full CI validation.
 ## YouTube Upload — Function 07
 
 Authentication:

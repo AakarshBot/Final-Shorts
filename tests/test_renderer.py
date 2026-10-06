@@ -86,7 +86,7 @@ def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
 
     data = renderer._manual_subject_cutout_layout_data(
         "India win",
-        ((80, 700), (1000, 700), (1000, 1200), (700, 1200)),
+        ((80, 700), (1000, 700), (1000, 1600), (300, 1600), (80, 1200)),
         140,
         "Barlow Condensed",
         "Crisp Outline",
@@ -94,7 +94,7 @@ def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
 
     assert data["layouts"]
     one_line = next(layout for layout in data["layouts"] if len(layout["lines"]) == 1)
-    assert one_line["placements"][0][2] == 392
+    assert one_line["placements"][0][2] == 82
 
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
@@ -1375,6 +1375,130 @@ def test_top5_card_preview_renders_the_shared_editorial_treatment():
 
     image = Image.open(BytesIO(preview))
     assert image.size == (renderer.WIDTH, renderer.HEIGHT)
+
+
+
+def test_mux_audio_loudnorm_is_inside_complex_filtergraph(monkeypatch, tmp_path):
+    silent_video = tmp_path / "silent.mp4"
+    silent_video.write_bytes(b"video")
+    audio = tmp_path / "scene.mp3"
+    audio.write_bytes(b"audio")
+    output = tmp_path / "output.mp4"
+    seen = {}
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        return Result()
+
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+
+    result = renderer._mux_audio(
+        silent_video,
+        [{"scene": 1, "path": str(audio)}],
+        output,
+    )
+
+    assert result == output
+    command = seen["command"]
+    filter_index = command.index("-filter_complex")
+    filter_value = command[filter_index + 1]
+    assert "concat=n=1:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]" in filter_value
+    assert "-af" not in command
+
+
+def test_top5_card_preview_honors_logo_enabled(monkeypatch):
+    calls = []
+    monkeypatch.setattr(renderer, "_paste_logo", lambda *_args: calls.append("logo"))
+
+    image = Image.new("RGB", (1080, 1920), "white")
+    renderer.build_top5_card_preview(
+        image,
+        "Top five result changes",
+        "",
+        logo_enabled=False,
+    )
+    assert calls == []
+
+    renderer.build_top5_card_preview(
+        image,
+        "Top five result changes",
+        "",
+        logo_enabled=True,
+    )
+    assert calls == ["logo"]
+
+
+def test_production_top5_card_honors_logo_and_source_flags(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+    visual = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
+    calls = []
+
+    monkeypatch.setattr(renderer, "_draw_top5_editorial_card", lambda base, card: base)
+    monkeypatch.setattr(renderer, "_paste_logo", lambda *_args: calls.append("logo"))
+    monkeypatch.setattr(renderer, "_paste_source", lambda *_args: calls.append("source"))
+    monkeypatch.setattr(renderer, "write_preview_video", lambda frames, path: (next(iter(frames)), path.write_bytes(b"silent"), path)[-1])
+    monkeypatch.setattr(renderer, "_mux_audio", lambda silent, scenes, output: (output.write_bytes(b"final") or output))
+
+    script = {
+        "schema": "final-shorts.top5-script.v1",
+        "approved_for_audio": True,
+        "slides": [{"slide_number": 1, "headline": "Top five result"}],
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
+    }
+
+    renderer.render_production_video(
+        script,
+        audio,
+        None,
+        [{"bytes": visual.getvalue(), "top5_card": {"headline": "Top five result"}}],
+        tmp_path / "top5.mp4",
+        logo_enabled=True,
+        source_enabled=False,
+    )
+    assert calls == ["logo"]
+
+
+def test_production_quote_card_honors_logo_and_source_flags(monkeypatch, tmp_path):
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+    visual = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
+    calls = []
+
+    monkeypatch.setattr(renderer, "_draw_quote_card", lambda base, card: base)
+    monkeypatch.setattr(renderer, "_paste_logo", lambda *_args: calls.append("logo"))
+    monkeypatch.setattr(renderer, "_paste_source", lambda *_args: calls.append("source"))
+    monkeypatch.setattr(renderer, "write_preview_video", lambda frames, path: (next(iter(frames)), path.write_bytes(b"silent"), path)[-1])
+    monkeypatch.setattr(renderer, "_mux_audio", lambda silent, scenes, output: (output.write_bytes(b"final") or output))
+
+    script = {
+        "approved_for_audio": True,
+        "script": [{"voiceover": "A spoken line."}],
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
+    }
+
+    renderer.render_production_video(
+        script,
+        audio,
+        TEST_SUBTITLE_DATA,
+        [{"bytes": visual.getvalue(), "quote_card": {"quote": "A concise quoted line.", "attribution": "Speaker Name"}}],
+        tmp_path / "quote.mp4",
+        logo_enabled=False,
+        source_enabled=False,
+    )
+    assert calls == []
 
 
 def test_final_renderer_quality_contract():
