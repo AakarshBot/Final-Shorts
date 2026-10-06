@@ -5121,7 +5121,7 @@ def render_visuals():
                     selected["asset_key"]
                 ) or selected["bytes"]
                 st.session_state.visual_assignments[slide] = {
-                    "asset_key": f"manual-subject-{hashlib.sha1(json.dumps(config, sort_keys=True).encode("utf-8")).hexdigest()[:12]}",
+                    "asset_key": f"manual-subject-{hashlib.sha1(json.dumps(config, sort_keys=True).encode('utf-8')).hexdigest()[:12]}",
                     "result_key": "manual-subject",
                     "source": selected["source"],
                     "label": "Manual Subject Cutout",
