@@ -346,7 +346,12 @@ def test_production_renderer_preserves_manual_subject_cutout(monkeypatch, tmp_pa
     manual = {
         "headline": "India dominate the latest result",
         "mode": "behind-subject",
-        "text_box": (120, 680, 840, 500),
+        "text_polygon": (
+            (120, 680),
+            (960, 680),
+            (960, 1180),
+            (120, 1180),
+        ),
         "font_size": 140,
     }
     visuals = [{
