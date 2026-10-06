@@ -887,9 +887,8 @@ def _manual_subject_cutout_layout_data(
         if usable_width < line_width:
             return None
 
-        center = (common_left + common_right) / 2
-        left = center - line_width / 2
-        right = center + line_width / 2
+        left = common_left + 2
+        right = left + line_width
         if not all(
             any(
                 interval_left <= left and right <= interval_right
@@ -899,6 +898,8 @@ def _manual_subject_cutout_layout_data(
         ):
             return None
 
+        if right > common_right - 2:
+            return None
         return int(round(left)), bbox, usable_width
 
     words = clean_headline.split()
