@@ -171,7 +171,7 @@ The standard Cricket/Deep-Dive Visuals desk contains four retrieval options:
 3. Manual real-image search.
 4. Manual AI image generation.
 
-Top-5 has eight visual options in Test:
+Top-5 has nine visual options in Test:
 1. Automatic Scraper.
 2. Manual Scraper.
 3. Manual Fetcher.
@@ -180,6 +180,7 @@ Top-5 has eight visual options in Test:
 6. Quote Card.
 7. Subject Cutout.
 8. Body Card — **WIP**.
+9. Manual Subject Cutout.
 
 The established Cricket/Deep-Dive visual retrieval options remain unchanged. Top-5 Option 3 is the manual real-image fetcher: it accepts a manual query and returns the real-image provider pool only. It does not render a text card. Top-5 Option 8 is the future Body Card text-based visual and remains dashboard WIP with no active renderer.
 
@@ -312,7 +313,7 @@ Important:
 - The future text-based body visual is reserved as Top-5 Option 8 · Body Card and remains WIP.
 - No wrappers, compatibility layers, new dependencies or duplicate Subject Cutout pipelines are part of this implementation.
 
-Status: **Top-5 Option 3 Manual Fetcher is active in Test. Option 7 Subject Cutout is active in Test/WIP. Option 8 Body Card is WIP. Live Cricket Option 7 · Text Cutout is active in Live.**
+Status: **Top-5 Option 3 Manual Fetcher is active in Test. Option 7 Subject Cutout is experimental. Option 8 Body Card is WIP. Option 9 Manual Subject Cutout is active in Test. Cricket Option 7 · Text Cutout is active in Test and Live. Top-5 Live remains WIP.**
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -535,8 +536,8 @@ Status: **Approved / cleaned.**
 - Python compile check passed.
 - The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
 - Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
-- Live Cricket Option 7 · Text Cutout regression coverage includes multiple-image switching, alternate mode/font/style/headline state, per-image crop-store reuse, polygon-editor presence, polygon preview rendering, whole-polygon persistence, second-run text-size handoff, and the Live visual-option surface. Top-5 Option 7 coverage includes its renderer layout/mask behaviour and a standalone Visuals UI smoke path. AppTest bypasses the browser-only inline editor registration through Streamlit's global.appTest flag while exercising the same Live Text Cutout Python path.
-- Top-5 Option 7 must not be treated as approved or Live-ready until its own Test work passes the full suite and is manually verified in Test. This does not apply to Live Cricket Option 7 · Text Cutout, which is a separate Live visual choice.
+- Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, Top-5 Option 9 standalone and per-slide Test paths, Cricket Test Option 7, and Cricket Live Option 7. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
+- Top-5 Option 7 remains experimental and is not part of this consolidation. Top-5 Option 9 and Cricket Option 7 must stay on the same shared implementation; Top-5 Live is deferred until Top-5 Test is approved.
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
 
