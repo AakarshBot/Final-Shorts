@@ -364,7 +364,7 @@ Status: **Implementation complete in the shared Test/Live paths. Not yet user-ap
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
-- The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
+- The four production-line choices are **Deep-Dive**, **Top-5**, **OTD**, and **YouTube Search Trends**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
 - **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The renderer v2 change is now merged into main.**.
 - **OTD** is **WIP**.
