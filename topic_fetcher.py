@@ -705,8 +705,7 @@ def fetch_youtube_search_trends(
         key=lambda item: (item["evidence"], item["keyword"].casefold()),
         reverse=True,
     )
-    now_local = datetime.now(LOCAL_TIMEZONE)
-    cutoff = now_local - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     validated = []
     candidates_to_check = candidates[:limit]
 
@@ -730,7 +729,7 @@ def fetch_youtube_search_trends(
             prepared = [
                 row
                 for row in prepared
-                if cutoff <= row.published_at.astimezone(LOCAL_TIMEZONE) <= now_local
+                if row.published_at >= cutoff
             ]
             stories = _select(prepared, 3, set(), profile=item["profile"])
             if not stories:
@@ -779,8 +778,7 @@ def fetch_youtube_trend_topics(
     if not clean_keyword or limit <= 0:
         return []
 
-    now_local = datetime.now(LOCAL_TIMEZONE)
-    cutoff = now_local - timedelta(hours=24)
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     queries = [
         f"{clean_keyword} when:1d",
         f"{clean_keyword} (latest OR news OR update OR reaction OR statement) when:1d",
@@ -812,7 +810,7 @@ def fetch_youtube_trend_topics(
     prepared = [
         row
         for row in prepared
-        if cutoff <= row.published_at.astimezone(LOCAL_TIMEZONE) <= now_local
+        if row.published_at >= cutoff
     ]
     chosen = _select(
         prepared,
