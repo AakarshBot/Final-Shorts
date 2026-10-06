@@ -383,7 +383,7 @@ Status: **Implementation complete in the shared Test/Live paths. Not yet user-ap
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
 - **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The next line-specific work is now the Test-only YouTube Search Trends source; its Live promotion is deferred until approval.**.
 - **OTD** is **WIP**.
-- **YouTube Search Trends** is **Test-only / WIP**. It is a sports-focused Topic Fetcher source that starts from current YouTube-specific search signals, lets the user choose one keyword, then searches current news for that keyword. The selected Cricket or Niche Sports lane becomes the existing downstream profile.
+- **YouTube Search Trends** is **Test-only / WIP**. It is a sports-focused Topic Fetcher source. Selecting **YT Trends** immediately fetches one mixed pool of the top 20 current YouTube search-trend signals; the UI does not segregate the trends by sport, country or market. Selecting one trend then searches the existing news source for articles published on the current calendar day in Asia/Kolkata, and the resulting headline is handed to the existing downstream Scriptwriter path. Any downstream Cricket/Niche classification is internal to the selected trend and is not a dashboard choice.
 - All four production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
 - Build new production lines in **Test** first; Top-5 remains in Test/WIP until its current visual work is accepted. OTD remains Test-first.
@@ -495,13 +495,14 @@ Status: **Approved / cleaned / entity tiles implemented / keyword tile implement
 Status: **Test implementation complete / not yet user-approved. Live is untouched.**
 
 - This is a Test-only Topic Fetcher source; it does not create a separate downstream pipeline.
-- It uses Google Trends with the YouTube property (gprop=youtube) and a current one-day window to retrieve top and rising related YouTube search queries from a small sports-seed set.
-- It also checks YouTube autocomplete for the seed phrase as a second YouTube-native query signal.
-- The Test board shows ten ranked search signals, not fabricated exact search-volume numbers. YouTube does not expose a public global top-searches-right-now API.
-- The user chooses a single search phrase from the ten signals.
-- The selected phrase then uses the existing Google News story-fetching, freshness, relevance, clustering and tile-selection logic for the chosen Cricket or Niche Sports lane.
-- India and Worldwide are available as trend/news markets in Test.
-- After a headline is selected, topic_desk_profile is set to the chosen existing lane so Scriptwriter, Audio, Visuals, Subtitles, Renderer and Upload use the established treatment and handoffs unchanged.
+- Selecting the **YT Trends** dashboard option immediately fetches one unsegregated pool of the top 20 current YouTube search-trend signals.
+- The trend collector uses Google Trends with the YouTube property (gprop=youtube) for top/rising related queries around a small hidden sports-seed set and checks YouTube autocomplete for query wording.
+- The UI does not show Cricket/Niche/India/Global trend categories.
+- The trend board uses normalized evidence ranking rather than claiming exact public YouTube search-volume counts.
+- The user chooses one trend keyword.
+- The selected keyword is searched through the existing Google News path with an explicit current-day date filter and a final publication-date check in Asia/Kolkata. Only articles published today are handed forward.
+- The resulting Topic keeps the normal title, description, source, published_at and real news URL fields.
+- The selected trend carries its downstream Cricket/Niche profile internally so the existing Scriptwriter, Audio, Visuals, Subtitles, Renderer and Upload stages continue through their existing contracts without a second pipeline.
 - No Live UI, Live state or Live topic-fetch path is added.
 - No new Python dependency is introduced.
 
