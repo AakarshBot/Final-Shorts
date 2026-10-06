@@ -4674,6 +4674,10 @@ def render_youtube_trends_topic_fetcher():
 
     topics = st.session_state.topics
     if not topics:
+        if st.session_state.youtube_trend_selected is not None:
+            st.warning(
+                f'No news published today matched “{st.session_state.youtube_trend_keyword}”. Choose another trend.'
+            )
         return
 
     keyword = st.session_state.youtube_trend_keyword
