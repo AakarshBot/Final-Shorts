@@ -44,7 +44,7 @@ The factory's seven functional stages are **Approved** for the established Deep-
 03. Audio — **Approved**
 04. Visuals — **Approved**
 05. Subtitles — **Approved**
-06. Renderer — **Approved**
+06. Renderer — **Under active v2 rewrite/test**
 07. YouTube Upload — **Approved**
 
 The Dashboard UI/UX remains **WIP**.
@@ -52,7 +52,7 @@ The Dashboard UI/UX remains **WIP**.
 Production lines:
 1. **Top 5 cricket stories of the day** — **Test-only / WIP**
 2. **On This Day** — **Test-first / WIP**
-3. **YouTube Search Trends** — **Test-only / WIP**
+3. **YouTube Search Trends** — **Test-only / Approved; Live promotion deferred**
 
 Top-5 is currently Test-only / WIP. **Option 7 · Subject Cutout is experimental and must remain untouched. Option 9 · Manual Subject Cutout is the canonical manual subject cutout feature in Top-5 Test.** Cricket has the same canonical feature as **Option 7 · Text Cutout** in both Test and Live. Top-5 Live remains WIP and is not being added yet.
 
@@ -215,33 +215,18 @@ Contract:
 Status: **Approved.**
 
 ## Renderer — Function 06
+Renderer v2 is the current active implementation on branch `renderer-v2`, pending Test approval before promotion to `main`.
 
-Top-5 uses a static 9:16 full-bleed editorial-card treatment in the shared renderer.
-
-Normal Top-5 cards:
-- Use the direct static editorial typography path.
-- No subject detection.
-- No image-busyness/negative-space search.
-- No broad scrim, transparent/faded type, universal gradient, permanent border, decorative dots/lines or headline motion.
-- Logo remains top-right; source label remains bottom-right.
-- English headlines use Oswald.
-
-Option 3 · Manual Fetcher is active in Top-5 Test. It performs manual-query real-image retrieval only and hands the returned image pool to the existing image-selection/crop flow.
-
-Option 8 · Body Card is **WIP**. It is reserved for the text-based Top-5 body visual and has no active renderer yet.
-
-Option 7 · Subject Cutout:
-- Runs local BiRefNet only when explicitly selected.
-- Uses CPU float32 inference with the existing dependency stack.
-- Suppresses all body copy.
-- Uses the actual foreground mask to keep players/subjects above headline pixels.
-- Centered compositions cross the foreground field; side compositions use the opposite-side negative space with two-word-per-line stacks; remaining compositions use the larger top/bottom negative space.
-- Multiple subjects are treated as one foreground field for the crossing headline, while genuine gaps in the mask remain visible.
-- The renderer never silently turns Subject Cutout into Option 3.
-- The same `build_top5_card_preview` / `_draw_top5_editorial_card` contract is used by Test and the eventual Live promotion.
-
-The obsolete Top-5 image-busyness search, multi-stage subject scoring, SciPy connected-component path, body word-cap/rejection helper and FP16 CUDA inference path have been deleted.
-
+- One shared renderer is used by Test and Live; there is no separate Test/Live encoder implementation.
+- Rendering is direct Python/Pillow frame composition into FFmpeg. MoviePy is not used.
+- Final output is 1080 × 1920 progressive H.264 High Profile, 4:2:0, two B-frames, closed GOP, GOP of half the frame rate, constant frame rate, BT.709, Fast Start and quality-controlled CRF 18 encoding, aligned with YouTube's current published upload guidance.
+- Final audio is AAC-LC, stereo, 48 kHz at 192 kbps with final loudness normalization targeting approximately -14 LUFS / -1.5 dBTP.
+- The renderer contains no detector-evasion, metadata-fingerprinting, pixel-perturbation, or other mechanism intended to bypass YouTube systems.
+- Ordinary photographic scenes use deterministic, subtle asset/story-derived push and pan motion instead of one fixed factory animation sequence.
+- Stats Cards, Quote Cards, Top-5 editorial cards and Manual Subject Cutout remain static/composition-led where motion would reduce readability.
+- Channel logo is optional and disabled by default. Source credit remains independently available.
+- Existing headline, subtitle, Top-5, Quote Card, Stats Card and Manual Subject Cutout contracts remain direct renderer features with no wrapper layer.
+- Renderer v2 must be validated in Test before promotion to Live.
 ## YouTube Upload — Function 07
 
 Authentication:
@@ -374,16 +359,16 @@ Cleanup rule:
 - Do not modify Top-5 Option 7 · Subject Cutout.
 - Do not add Top-5 Live support yet.
 
-Status: **Test-only implementation complete. Not yet user-approved. Live remains untouched; promotion is deferred until user approval.**
+Status: **Implementation complete in the shared Test/Live paths. Not yet user-approved. The next implementation step is the main Factory Renderer change.**
 
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The next line-specific work is now the Test-only YouTube Search Trends source; its Live promotion is deferred until approval.**.
+- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The renderer v2 change is now merged into main.**.
 - **OTD** is **WIP**.
-- **YouTube Search Trends** is **Test-only / WIP**. It is a sports-focused Topic Fetcher source. Selecting **YT Trends** immediately fetches one mixed pool of the top 20 current YouTube search-trend signals; the UI does not segregate the trends by sport, country or market. Selecting one trend then searches the existing news source for articles published on the current calendar day in Asia/Kolkata, and the resulting headline is handed to the existing downstream Scriptwriter path. Any downstream Cricket/Niche classification is internal to the selected trend and is not a dashboard choice.
+- **YouTube Search Trends** is **Test-only / Approved; Live promotion deferred**. It is a sports-focused Topic Fetcher source. Selecting **YT Trends** immediately fetches one mixed pool of the top 20 current YouTube search-trend signals; the UI does not segregate the trends by sport, country or market. Selecting one trend then searches the existing news source for articles published on the current calendar day in Asia/Kolkata, and the resulting headline is handed to the existing downstream Scriptwriter path. Any downstream Cricket/Niche classification is internal to the selected trend and is not a dashboard choice.
 - All four production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
 - Build new production lines in **Test** first; Top-5 remains in Test/WIP until its current visual work is accepted. OTD remains Test-first.
@@ -492,7 +477,7 @@ Status: **Approved / cleaned / entity tiles implemented / keyword tile implement
 
 ### Function 01B — YouTube Search Trends
 
-Status: **Test implementation complete / not yet user-approved. Live is untouched.**
+Status: **Test implementation approved / merged to main. Live remains untouched.**
 
 - This is a Test-only Topic Fetcher source; it does not create a separate downstream pipeline.
 - Selecting the **YT Trends** dashboard option immediately fetches one unsegregated pool of the top 20 current YouTube search-trend signals.
