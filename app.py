@@ -57,150 +57,181 @@ export default function(component) {
 
     image.setAttribute("href", "data:image/jpeg;base64," + data.image);
 
-    let points = (data.points || []).map((point) => [Number(point[0]), Number(point[1])]);
-    let handleEls = [];
-    let draggingPoint = false;
-    let draggingPolygon = false;
-    let suppressClick = false;
-    let dragStart = null;
-    let originalPoints = null;
-    let polygonMoved = false;
+    if (!parentElement.__manualSubjectCutout) {
+        const editor = {
+            points: [],
+            handles: [],
+            draggingPoint: false,
+            draggingPolygon: false,
+            suppressClick: false,
+            dragStart: null,
+            originalPoints: null,
+            polygonMoved: false,
+            clamp(value, min, max) {
+                return Math.max(min, Math.min(max, value));
+            },
+            svgPoint(event) {
+                const rect = svg.getBoundingClientRect();
+                return [
+                    this.clamp((event.clientX - rect.left) / rect.width * 1080, 0, 1080),
+                    this.clamp((event.clientY - rect.top) / rect.height * 1920, 0, 1920),
+                ];
+            },
+            persist() {
+                setStateValue(
+                    "points",
+                    this.points.map((point) => [
+                        Math.round(point[0]),
+                        Math.round(point[1]),
+                    ])
+                );
+            },
+            render() {
+                polygon.setAttribute(
+                    "points",
+                    this.points.map((point) => point.join(",")).join(" ")
+                );
+                while (this.handles.length < this.points.length) {
+                    const handle = document.createElementNS(
+                        "http://www.w3.org/2000/svg",
+                        "circle"
+                    );
+                    handle.setAttribute("class", "handle");
+                    handle.setAttribute("r", "13");
+                    handle.setAttribute("fill", "#fff");
+                    handle.setAttribute("stroke", "#2f6255");
+                    handle.setAttribute("stroke-width", "4");
+                    handle.setAttribute("vector-effect", "non-scaling-stroke");
+                    handles.appendChild(handle);
+                    this.handles.push(handle);
 
-    const clamp = (value, min, max) => Math.max(min, Math.min(max, value));
-    const svgPoint = (event) => {
-        const rect = svg.getBoundingClientRect();
-        return [
-            clamp((event.clientX - rect.left) / rect.width * 1080, 0, 1080),
-            clamp((event.clientY - rect.top) / rect.height * 1920, 0, 1920),
-        ];
-    };
-    const persist = () => {
-        setStateValue("points", points.map((point) => [
-            Math.round(point[0]),
-            Math.round(point[1]),
-        ]));
-    };
-    const render = () => {
-        polygon.setAttribute(
-            "points",
-            points.map((point) => point.join(",")).join(" ")
-        );
-        while (handleEls.length < points.length) {
-            const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-            handle.setAttribute("class", "handle");
-            handle.setAttribute("r", "13");
-            handle.setAttribute("fill", "#fff");
-            handle.setAttribute("stroke", "#2f6255");
-            handle.setAttribute("stroke-width", "4");
-            handle.setAttribute("vector-effect", "non-scaling-stroke");
-            handles.appendChild(handle);
-            handle.addEventListener("pointerdown", (event) => {
-                event.preventDefault();
-                event.stopPropagation();
-                draggingPoint = true;
-                suppressClick = true;
-                const index = Number(handle.dataset.index);
-                handle.setPointerCapture(event.pointerId);
-                const move = (moveEvent) => {
-                    const next = svgPoint(moveEvent);
-                    points[index] = [Math.round(next[0]), Math.round(next[1])];
-                    render();
-                };
-                const up = () => {
-                    handle.removeEventListener("pointermove", move);
-                    draggingPoint = false;
-                    persist();
-                };
-                handle.addEventListener("pointermove", move);
-                handle.addEventListener("pointerup", up, {once:true});
-            });
-            handleEls.push(handle);
-        }
-        points.forEach((point, index) => {
-            const handle = handleEls[index];
-            handle.dataset.index = String(index);
-            handle.setAttribute("cx", point[0]);
-            handle.setAttribute("cy", point[1]);
+                    handle.addEventListener("pointerdown", (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        this.draggingPoint = true;
+                        this.suppressClick = true;
+                        const index = Number(handle.dataset.index);
+                        handle.setPointerCapture(event.pointerId);
+                        const move = (moveEvent) => {
+                            const next = this.svgPoint(moveEvent);
+                            this.points[index] = [
+                                Math.round(next[0]),
+                                Math.round(next[1]),
+                            ];
+                            this.render();
+                        };
+                        const stop = () => {
+                            handle.removeEventListener("pointermove", move);
+                            this.draggingPoint = false;
+                            this.persist();
+                        };
+                        handle.addEventListener("pointermove", move);
+                        handle.addEventListener("pointerup", stop, {once: true});
+                        handle.addEventListener("pointercancel", stop, {once: true});
+                    });
+                }
+                this.points.forEach((point, index) => {
+                    const handle = this.handles[index];
+                    handle.dataset.index = String(index);
+                    handle.setAttribute("cx", point[0]);
+                    handle.setAttribute("cy", point[1]);
+                });
+            },
+        };
+        parentElement.__manualSubjectCutout = editor;
+
+        polygon.addEventListener("pointerdown", (event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            editor.draggingPolygon = true;
+            editor.polygonMoved = false;
+            editor.suppressClick = false;
+            editor.dragStart = editor.svgPoint(event);
+            editor.originalPoints = editor.points.map((point) => [point[0], point[1]]);
+            svg.setPointerCapture(event.pointerId);
         });
-    };
 
-    polygon.addEventListener("pointerdown", (event) => {
-        event.preventDefault();
-        event.stopPropagation();
-        draggingPolygon = true;
-        polygonMoved = false;
-        suppressClick = false;
-        dragStart = svgPoint(event);
-        originalPoints = points.map((point) => [point[0], point[1]]);
-        svg.setPointerCapture(event.pointerId);
-    });
-
-    svg.addEventListener("pointermove", (event) => {
-        if (!draggingPolygon || !dragStart || !originalPoints) return;
-        const next = svgPoint(event);
-        const rawDx = next[0] - dragStart[0];
-        const rawDy = next[1] - dragStart[1];
-        const minDx = -Math.min(...originalPoints.map((point) => point[0]));
-        const maxDx = 1080 - Math.max(...originalPoints.map((point) => point[0]));
-        const minDy = -Math.min(...originalPoints.map((point) => point[1]));
-        const maxDy = 1920 - Math.max(...originalPoints.map((point) => point[1]));
-        const dx = clamp(rawDx, minDx, maxDx);
-        const dy = clamp(rawDy, minDy, maxDy);
-        if (Math.hypot(dx, dy) > 2) {
-            polygonMoved = true;
-            suppressClick = true;
-        }
-        points = originalPoints.map((point) => [
-            Math.round(point[0] + dx),
-            Math.round(point[1] + dy),
-        ]);
-        render();
-    });
-
-    const stopPolygon = () => {
-        if (draggingPolygon && polygonMoved) persist();
-        draggingPolygon = false;
-        dragStart = null;
-        originalPoints = null;
-        polygonMoved = false;
-    };
-
-    svg.addEventListener("pointerup", stopPolygon);
-    svg.addEventListener("pointercancel", stopPolygon);
-
-    svg.addEventListener("click", (event) => {
-        if (suppressClick || draggingPoint || draggingPolygon) {
-            suppressClick = false;
-            return;
-        }
-        if (event.target.classList && event.target.classList.contains("handle")) return;
-
-        const point = svgPoint(event);
-        let best = null;
-        points.forEach((start, index) => {
-            const end = points[(index + 1) % points.length];
-            const dx = end[0] - start[0];
-            const dy = end[1] - start[1];
-            const length2 = dx * dx + dy * dy;
-            const t = length2
-                ? clamp(((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2, 0, 1)
-                : 0;
-            const projected = [start[0] + t * dx, start[1] + t * dy];
-            const distance = Math.hypot(point[0] - projected[0], point[1] - projected[1]);
-            if (!best || distance < best.distance) {
-                best = {index, distance, point: projected};
+        svg.addEventListener("pointermove", (event) => {
+            if (!editor.draggingPolygon || !editor.dragStart || !editor.originalPoints) return;
+            const next = editor.svgPoint(event);
+            const rawDx = next[0] - editor.dragStart[0];
+            const rawDy = next[1] - editor.dragStart[1];
+            const minDx = -Math.min(...editor.originalPoints.map((point) => point[0]));
+            const maxDx = 1080 - Math.max(...editor.originalPoints.map((point) => point[0]));
+            const minDy = -Math.min(...editor.originalPoints.map((point) => point[1]));
+            const maxDy = 1920 - Math.max(...editor.originalPoints.map((point) => point[1]));
+            const dx = editor.clamp(rawDx, minDx, maxDx);
+            const dy = editor.clamp(rawDy, minDy, maxDy);
+            if (Math.hypot(dx, dy) > 2) {
+                editor.polygonMoved = true;
+                editor.suppressClick = true;
             }
+            editor.points = editor.originalPoints.map((point) => [
+                Math.round(point[0] + dx),
+                Math.round(point[1] + dy),
+            ]);
+            editor.render();
         });
-        if (!best || best.distance > 32) return;
-        points.splice(best.index + 1, 0, [
-            Math.round(best.point[0]),
-            Math.round(best.point[1]),
-        ]);
-        render();
-        persist();
-    });
 
-    render();
+        const stopPolygon = () => {
+            if (editor.draggingPolygon && editor.polygonMoved) editor.persist();
+            editor.draggingPolygon = false;
+            editor.dragStart = null;
+            editor.originalPoints = null;
+            editor.polygonMoved = false;
+        };
+        svg.addEventListener("pointerup", stopPolygon);
+        svg.addEventListener("pointercancel", stopPolygon);
+
+        svg.addEventListener("click", (event) => {
+            if (editor.suppressClick || editor.draggingPoint || editor.draggingPolygon) {
+                editor.suppressClick = false;
+                return;
+            }
+            if (event.target.classList && event.target.classList.contains("handle")) return;
+
+            const point = editor.svgPoint(event);
+            let best = null;
+            editor.points.forEach((start, index) => {
+                const end = editor.points[(index + 1) % editor.points.length];
+                const dx = end[0] - start[0];
+                const dy = end[1] - start[1];
+                const length2 = dx * dx + dy * dy;
+                const t = length2
+                    ? editor.clamp(
+                        ((point[0] - start[0]) * dx + (point[1] - start[1]) * dy) / length2,
+                        0,
+                        1
+                    )
+                    : 0;
+                const projected = [
+                    start[0] + t * dx,
+                    start[1] + t * dy,
+                ];
+                const distance = Math.hypot(
+                    point[0] - projected[0],
+                    point[1] - projected[1]
+                );
+                if (!best || distance < best.distance) {
+                    best = {index, distance, point: projected};
+                }
+            });
+            if (!best || best.distance > 32) return;
+            editor.points.splice(best.index + 1, 0, [
+                Math.round(best.point[0]),
+                Math.round(best.point[1]),
+            ]);
+            editor.render();
+            editor.persist();
+        });
+    }
+
+    const editor = parentElement.__manualSubjectCutout;
+    editor.points = (data.points || []).map((point) => [
+        Number(point[0]),
+        Number(point[1]),
+    ]);
+    editor.render();
 }
 """,
     )
