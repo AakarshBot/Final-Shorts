@@ -43,7 +43,7 @@ def valid_result(
         "comment": "What stood out most about Alcaraz's Tokyo win?",
         "quote": "We fought for every point.",
         "quote_attribution": "Carlos Alcaraz",
-        "quote_slide": 4,
+        "quote_slide": min(4, scene_count),
         "script": scenes,
     }
 
