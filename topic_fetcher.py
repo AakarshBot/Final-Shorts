@@ -600,7 +600,7 @@ def fetch_youtube_search_trends(
                 rows = future.result()
             except (requests.RequestException, ValueError, TypeError, KeyError):
                 continue
-        for row in rows:
+            for row in rows:
             keyword = _clean(row.get("keyword"))
             key = keyword.casefold()
             if not keyword or _utility(keyword):
