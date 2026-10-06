@@ -1220,6 +1220,14 @@ def _render_manual_subject_cutout(
     state.setdefault("polygon_points", None)
     state.setdefault("rendered_config", None)
     state.setdefault("rendered_preview", None)
+    default_headline = str(default_headline or "").strip()
+    if state.get("headline_source") != default_headline:
+        state["headline_source"] = default_headline
+        state["headline_initialized"] = False
+        state["rendered_config"] = None
+        state["rendered_preview"] = None
+        st.session_state.pop(f"{state_id}-headline", None)
+        st.session_state.pop(f"{state_id}-font-size", None)
 
     asset_map = {str(asset["asset_key"]): asset for asset in assets}
     selected_key = str(state.get("image_key") or "")
