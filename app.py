@@ -1077,8 +1077,6 @@ if "live_top5_visual_handoff" not in st.session_state:
     st.session_state.live_top5_visual_handoff = None
 if "live_top5_visual_done" not in st.session_state:
     st.session_state.live_top5_visual_done = {}
-if "live_top5_visual_queues" not in st.session_state:
-    st.session_state.live_top5_visual_queues = {}
 if "live_top5_visual_futures" not in st.session_state:
     st.session_state.live_top5_visual_futures = {}
 if "live_top5_visual_active_slide" not in st.session_state:
@@ -2366,7 +2364,6 @@ def _live_reset_downstream():
         "live_top5_ai_image_results": {},
         "live_top5_visual_handoff": None,
         "live_top5_visual_done": {},
-        "live_top5_visual_queues": {},
         "live_top5_visual_futures": {},
         "live_top5_visual_active_slide": 1,
     }.items():
@@ -3613,7 +3610,6 @@ def render_live_top5():
             st.session_state.live_top5_ai_image_results = {}
             st.session_state.live_top5_visual_handoff = None
             st.session_state.live_top5_visual_done = {number: False for number in range(1, 6)}
-            st.session_state.live_top5_visual_queues = {}
             st.session_state.live_top5_visual_futures = {}
             st.session_state.live_top5_visual_active_slide = 1
             st.session_state.live_visual_assignments = {}
