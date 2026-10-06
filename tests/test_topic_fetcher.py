@@ -435,7 +435,7 @@ def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch
 
 
 def test_fetch_youtube_search_trends_returns_one_unsegregated_pool(monkeypatch):
-    def fake_queries(seed, geo):
+    def fake_queries(seed):
         return [{
             "keyword": "India cricket today",
             "signal": "Rising",
@@ -446,14 +446,15 @@ def test_fetch_youtube_search_trends_returns_one_unsegregated_pool(monkeypatch):
         }]
 
     monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
-    result = topic_fetcher.fetch_youtube_search_trends(None, 20)
+    result = topic_fetcher.fetch_youtube_search_trends(20)
     assert result
     assert result[0]["keyword"] == "India cricket today"
     assert result[0]["profile"] in {"cricket_india_asia", "cricket_global", "niche_sports"}
     assert result[0]["hashtag"] == "#Indiacrickettoday"
+    assert result[0]["profile"] == "cricket_india_asia"
 
 
-def test_fetch_youtube_trend_topics_uses_only_today_and_selected_market(monkeypatch):
+def test_fetch_youtube_trend_topics_uses_only_today_and_global_news(monkeypatch):
     today = topic_fetcher._today_local_date()
     current = make_topic(
         "Virat Kohli returns to India cricket",
@@ -475,9 +476,12 @@ def test_fetch_youtube_trend_topics_uses_only_today_and_selected_market(monkeypa
 
     monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
     result = topic_fetcher.fetch_youtube_trend_topics(
-        "Virat Kohli", "cricket_india_asia", None, limit=20
+        "Virat Kohli", "cricket_india_asia", limit=20
     )
-    assert result == [current]
+    assert len(result) == 1
+    assert result[0].title == current.title
+    assert result[0].url == current.url
+    assert result[0].published_at == current.published_at
     assert captured
     assert all(geo is None for _, geo in captured)
     assert all(f"after:{today.isoformat()}" in query for query, _ in captured)
