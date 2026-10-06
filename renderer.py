@@ -1849,7 +1849,10 @@ def _mux_audio(
         inputs.extend(["-i", str(audio_path)])
         filter_inputs.append(f"[{index}:a]")
 
-    filter_complex = "".join(filter_inputs) + f"concat=n={len(audio_scenes)}:v=0:a=1[a]"
+    filter_complex = (
+        "".join(filter_inputs)
+        + f"concat=n={len(audio_scenes)}:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+    )
 
     process = subprocess.run(
         [
@@ -1858,7 +1861,6 @@ def _mux_audio(
             "-filter_complex", filter_complex,
             "-map", "0:v:0", "-map", "[a]",
             "-c:v", "copy",
-            "-af", "loudnorm=I=-14:TP=-1.5:LRA=11",
             "-c:a", "aac", "-b:a", "192k", "-ar", "48000", "-ac", "2",
             "-movflags", "+faststart", "-shortest", str(output_path),
         ],
