@@ -465,7 +465,7 @@ def _fetch_google(
         code = str(geo).upper()
         params.update({"hl": "en-US", "gl": code, "ceid": f"{code}:en"})
     else:
-        params.update({"hl": "en", "ceid": "US:en"})
+        params.update({"hl": "en"})
     response = requests.get(
         GOOGLE_NEWS_URL,
         params=params,
@@ -624,7 +624,7 @@ def fetch_youtube_search_trends(
                         "breakout": False,
                         "autocomplete": False,
                         "seeds": set(),
-                        "profile": profile,
+                        "profiles": set(),
                     },
                 )
                 rank = max(1, int(row.get("rank") or 1))
@@ -639,6 +639,7 @@ def fetch_youtube_search_trends(
                     item["breakout"] = True
                 item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
                 item["seeds"].add(seed.casefold())
+                item["profiles"].add(profile)
 
     results = []
     for item in grouped.values():
@@ -647,6 +648,13 @@ def fetch_youtube_search_trends(
             score += 0.2
         if len(item["seeds"]) > 1:
             score += 0.4 * (len(item["seeds"]) - 1)
+        profile = (
+            "cricket_india_asia"
+            if "cricket_india_asia" in item["profiles"]
+            else "cricket_global"
+            if "cricket_global" in item["profiles"]
+            else "niche_sports"
+        )
         results.append({
             "keyword": item["keyword"],
             "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
@@ -654,7 +662,7 @@ def fetch_youtube_search_trends(
             "breakout": item["breakout"],
             "youtube_autocomplete": item["autocomplete"],
             "seed_count": len(item["seeds"]),
-            "profile": item["profile"],
+            "profile": profile,
             "score": score,
         })
 
