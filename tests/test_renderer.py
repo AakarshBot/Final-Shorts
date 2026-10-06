@@ -1027,7 +1027,6 @@ def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India dominate the latest result",
             mode=mode,
-            text_polygon=((80, 660), (1000, 660), (1000, 1180), (80, 1180)),
             text_polygon=polygon,
             font_size=140,
             font="Barlow Condensed",
