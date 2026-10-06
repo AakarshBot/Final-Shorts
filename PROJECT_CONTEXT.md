@@ -555,7 +555,7 @@ Universal narration contract:
 - Four slides are preferred when they are the cleanest complete story.
 - Slide 1 contains fewer than 14 words.
 - Total narration is at least 18 seconds and strictly under 30 seconds.
-- The writer targets a 45–74 word narration envelope as the generation proxy for the 18–<30 second window.
+- The writer targets a 50–74 word narration envelope as the generation proxy for the 18–<30 second window.
 - The minimum duration must come from useful story information, context, evidence or consequence, never padding.
 - Every slide must add genuinely new information.
 
