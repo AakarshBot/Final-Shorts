@@ -1285,7 +1285,6 @@ def build_quote_card_preview(
         "attribution": attribution,
     })
     if logo_enabled:
-        if logo_enabled:
         _paste_logo(frame)
     _paste_top5_source(frame, source_label)
     buffer = BytesIO()
