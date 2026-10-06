@@ -374,7 +374,7 @@ Cleanup rule:
 - Do not modify Top-5 Option 7 · Subject Cutout.
 - Do not add Top-5 Live support yet.
 
-Status: **Implementation complete in the shared Test/Live paths. Not yet user-approved. The YouTube Search Trends Test line is now the next Test-only addition; its Live promotion is deferred until user approval.**
+Status: **Test-only implementation complete. Not yet user-approved. Live remains untouched; promotion is deferred until user approval.**
 
 ### Production-line development rule
 
