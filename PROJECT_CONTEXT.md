@@ -52,6 +52,7 @@ The Dashboard UI/UX remains **WIP**.
 Production lines:
 1. **Top 5 cricket stories of the day** — **Test-only / WIP**
 2. **On This Day** — **Test-first / WIP**
+3. **YouTube Search Trends** — **Test-only / WIP**
 
 Top-5 is currently Test-only / WIP. **Option 7 · Subject Cutout is experimental and must remain untouched. Option 9 · Manual Subject Cutout is the canonical manual subject cutout feature in Top-5 Test.** Cricket has the same canonical feature as **Option 7 · Text Cutout** in both Test and Live. Top-5 Live remains WIP and is not being added yet.
 
@@ -382,7 +383,8 @@ Status: **Implementation complete in the shared Test/Live paths. Not yet user-ap
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
 - **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The next implementation step after this completed cutout work is the main Factory Renderer change.**.
 - **OTD** is **WIP**.
-- All three production lines use the same seven-stage factory framework.
+- **YouTube Search Trends** is **Test-only / WIP**. It is a sports-focused Topic Fetcher source that starts from current YouTube-specific search signals, lets the user choose one keyword, then searches current news for that keyword. The selected Cricket or Niche Sports lane becomes the existing downstream profile.
+- All four production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.
 - Build new production lines in **Test** first; Top-5 remains in Test/WIP until its current visual work is accepted. OTD remains Test-first.
 - Do not create a separate stage pipeline, parallel model, duplicate metadata system or duplicate runtime architecture for a new line.
@@ -486,6 +488,22 @@ Cleanup baseline:
 
 Status: **Approved / cleaned / entity tiles implemented / keyword tile implemented.**
 
+
+
+### Function 01B — YouTube Search Trends
+
+Status: **Test implementation complete / not yet user-approved. Live is untouched.**
+
+- This is a Test-only Topic Fetcher source; it does not create a separate downstream pipeline.
+- It uses Google Trends with the YouTube property (gprop=youtube) and a current one-day window to retrieve top and rising related YouTube search queries from a small sports-seed set.
+- It also checks YouTube autocomplete for the seed phrase as a second YouTube-native query signal.
+- The Test board shows ten ranked search signals, not fabricated exact search-volume numbers. YouTube does not expose a public global top-searches-right-now API.
+- The user chooses a single search phrase from the ten signals.
+- The selected phrase then uses the existing Google News story-fetching, freshness, relevance, clustering and tile-selection logic for the chosen Cricket or Niche Sports lane.
+- India and Worldwide are available as trend/news markets in Test.
+- After a headline is selected, topic_desk_profile is set to the chosen existing lane so Scriptwriter, Audio, Visuals, Subtitles, Renderer and Upload use the established treatment and handoffs unchanged.
+- No Live UI, Live state or Live topic-fetch path is added.
+- No new Python dependency is introduced.
 
 ### Cricket Pipeline Checkpoint — 6/10
 
