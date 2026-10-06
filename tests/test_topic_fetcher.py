@@ -1,4 +1,5 @@
 from dataclasses import replace
+import pytest
 import json
 from datetime import datetime, timedelta, timezone
 
@@ -505,7 +506,7 @@ def test_youtube_trends_reject_generic_queries_and_validate_real_story_signals(m
     assert result[0]["news_count"] == 1
 
 
-def test_youtube_trends_normalize_ordinals_and_keep_current_news(monkeypatch):
+def test_youtube_trends_reject_sports_only_queries(monkeypatch):
     def fake_queries(seed):
         if seed == "cricket":
             return [{
@@ -519,21 +520,10 @@ def test_youtube_trends_normalize_ordinals_and_keep_current_news(monkeypatch):
         return []
 
     monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
-    captured = []
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", lambda *args, **kwargs: [])
+    with pytest.raises(RuntimeError, match="story-worthy signals"):
+        topic_fetcher.fetch_youtube_search_trends(20)
 
-    def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
-        captured.append(query)
-        return [
-            make_topic(
-                "T20 cricket tournament confirms new schedule",
-                description="Cricket tournament update",
-            )
-        ]
-
-    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
-    result = topic_fetcher.fetch_youtube_search_trends(20)
-    assert result[0]["keyword"] == "t20"
-    assert "t20 cricket" in captured[0]
 
 
 def test_fetch_youtube_trend_topics_uses_only_today_and_global_news(monkeypatch):
