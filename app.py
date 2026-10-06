@@ -4332,6 +4332,10 @@ def render_live_dashboard():
                         st.rerun()
         return
 
+    if st.session_state.live_production_line == "youtube_trends":
+        render_youtube_trends_topic_fetcher(live=True)
+        return
+
     if st.session_state.live_production_line == "top_5":
         return render_live_top5()
 
