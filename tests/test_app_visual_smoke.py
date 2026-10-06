@@ -425,11 +425,6 @@ def test_live_cricket_text_cutout_second_run_preserves_text_size():
 
 
 def test_manual_subject_cutout_migrates_four_point_polygon_to_eight_points():
-    asset = {
-        "bytes": _image_bytes(),
-        "source": "source-a",
-        "article_title": "Image A",
-    }
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "top_5"
@@ -438,14 +433,18 @@ def test_manual_subject_cutout_migrates_four_point_polygon_to_eight_points():
     at.session_state["test_top5_visual_playground_image"] = Image.new("RGB", (1080, 1920), (40, 40, 40))
     at.session_state["test_top5_visual_playground_source"] = "Test image"
     at.session_state["test_top5_visual_playground_headline"] = "India win again"
-    at.session_state["test_top5_manual_subject_playground"] = {
-        "polygon_points": [
-            (120, 700),
-            (960, 700),
-            (960, 1200),
-            (120, 1200),
-        ],
-    }
+    at.run()
+
+    assert not at.exception, at.exception
+    next(button for button in at.button if button.label == "Select image").click().run()
+    assert not at.exception, at.exception
+
+    at.session_state["test_top5_manual_subject_playground"]["polygon_points"] = [
+        (120, 700),
+        (960, 700),
+        (960, 1200),
+        (120, 1200),
+    ]
     at.run()
 
     assert not at.exception, at.exception
