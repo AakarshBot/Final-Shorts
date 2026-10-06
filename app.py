@@ -1221,7 +1221,6 @@ def _crop_visual_dialog(
 
 
 @st.fragment
-@st.fragment
 def _render_manual_subject_cutout(
     *,
     state: dict,
@@ -1502,7 +1501,6 @@ def _render_manual_subject_cutout(
             )
             state["font_size"] = font_size
             state["rendered_config"] = config
-            st.rerun()
         except (ValueError, OSError, RuntimeError, ImportError) as exc:
             state["rendered_preview"] = None
             st.error(str(exc))
@@ -3169,46 +3167,33 @@ def _render_live_visuals(slide_count: int):
 
 def _render_live_script():
     script = st.session_state.get("live_script_data")
-    if not isinstance(script, dict) and not st.session_state.get("live_script_error"):
-        with st.spinner("Writing the Short…"):
-            try:
-                script = _live_generate_script()
-                st.rerun()
-            except Exception as exc:
-                st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
-                st.rerun()
-
-    if st.session_state.get("live_script_error"):
-        if isinstance(script, dict):
-            st.error(
-                "Script approval failed: "
-                + st.session_state.live_script_error
-            )
-            st.caption("Correct the highlighted edit and approve the script again.")
-        else:
-            st.error(
-                "Scriptwriter failed: "
-                + st.session_state.live_script_error
-            )
-            if st.button(
-                "Retry Scriptwriter",
-                type="primary",
-                width="stretch",
-                key="live-retry-script",
-            ):
-                try:
-                    with st.spinner("Rewriting the full story…"):
-                        _live_generate_script()
-                    st.session_state.live_stage = "02 · Script"
-                    st.session_state.live_script_error = ""
-                except Exception as exc:
-                    st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
-                st.rerun()
-            return
 
     if not isinstance(script, dict):
-        st.info("Preparing the Scriptwriter stage…")
+        if st.button(
+            "Retry Scriptwriter" if st.session_state.get("live_script_error") else "Generate Script",
+            type="primary",
+            width="stretch",
+            key="live-generate-script",
+        ):
+            st.session_state.live_script_error = ""
+            try:
+                with st.spinner("Writing the Short…"):
+                    _live_generate_script()
+            except Exception as exc:
+                st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+            st.rerun()
+        if st.session_state.get("live_script_error"):
+            st.error("Scriptwriter failed: " + st.session_state.live_script_error)
+        else:
+            st.info("Press Generate Script to start the Scriptwriter.")
         return
+
+    if st.session_state.get("live_script_error"):
+        st.error(
+            "Script approval failed: "
+            + st.session_state.live_script_error
+        )
+        st.caption("Correct the highlighted edit and approve the script again.")
 
     story = st.session_state.live_topics[st.session_state.live_selected_topic]
     story_id = _live_story_key(story)
@@ -3645,12 +3630,9 @@ def render_live_top5():
             from visual_fetcher import crawl_visuals
             executor = ThreadPoolExecutor(max_workers=5)
             for number, story in enumerate(stories, 1):
-                queue = Queue()
-                st.session_state.live_top5_visual_queues[number] = queue
                 st.session_state.live_top5_visual_futures[number] = executor.submit(
                     crawl_visuals,
                     dict(story),
-                    lambda assets, queue=queue: queue.put(list(assets or [])),
                 )
             st.session_state.live_top5_visual_executor = executor
             st.session_state.live_stage = "02 · Scriptwriter"
@@ -3668,18 +3650,26 @@ def render_live_top5():
             return
         result = st.session_state.live_top5_script_data
         if not isinstance(result, dict):
-            with st.spinner("Researching the five stories and writing the six-slide package…"):
+            if st.button(
+                "Generate Top-5 Script",
+                type="primary",
+                width="stretch",
+                key="live-top5-generate-script",
+            ):
                 try:
-                    result = generate_top5_script(stories)
+                    with st.spinner("Researching the five stories and writing the six-slide package…"):
+                        result = generate_top5_script(stories)
                     st.session_state.live_top5_script_data = result
                     for slide in result.get("slides") or []:
                         number = int(slide.get("slide_number") or 0)
                         st.session_state[f"live-top5-script-headline-{number}"] = str(slide.get("headline") or "")
                         st.session_state[f"live-top5-script-body-{number}"] = str(slide.get("body") or "")
-                    st.rerun()
                 except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
                     return
+                st.rerun()
+            st.info("Press Generate Top-5 Script to start the Scriptwriter.")
+            return
         slides = list(result.get("slides") or [])
         if len(slides) != 6:
             st.error("Top-5 Scriptwriter must return exactly six slides.")
@@ -3750,14 +3740,22 @@ def render_live_top5():
             return
         audio = st.session_state.live_top5_audio_data
         if not isinstance(audio, dict):
-            with st.spinner("Generating the six spoken Top-5 lines…"):
+            if st.button(
+                "Generate Top-5 Audio",
+                type="primary",
+                width="stretch",
+                key="live-top5-generate-audio",
+            ):
                 try:
-                    audio = generate_top5_audio(handoff, output_dir="output/live/top5_audio")
+                    with st.spinner("Generating the six spoken Top-5 lines…"):
+                        audio = generate_top5_audio(handoff, output_dir="output/live/top5_audio")
                     st.session_state.live_top5_audio_data = audio
-                    st.rerun()
                 except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
                     return
+                st.rerun()
+            st.info("Press Generate Top-5 Audio to start voice generation.")
+            return
         for scene in audio.get("scenes") or []:
             with st.container(key=f"live-top5-audio-scene-{scene['scene']}"):
                 st.markdown(
@@ -3786,8 +3784,6 @@ def render_live_top5():
         return
 
     if stage == "04 · Visuals":
-        from queue import Empty
-
         script = st.session_state.live_top5_script_handoff
         if not isinstance(script, dict) or len(script.get("slides") or []) != 6:
             st.info("Approve the Top-5 Scriptwriter result first.")
@@ -3797,39 +3793,28 @@ def render_live_top5():
         slides = list(script.get("slides") or [])
         stories = list(script.get("stories") or [])
 
-        for number, queue in st.session_state.live_top5_visual_queues.items():
-            result = st.session_state.live_top5_visual_results.setdefault(
-                number,
-                {"source": "automatic", "assets": [], "success_threshold": 10},
-            )
-            while True:
-                try:
-                    chunk = queue.get_nowait()
-                except Empty:
-                    break
-                seen = {
-                    str(asset.get("hash") or asset.get("source_image_url") or asset.get("source_page_url") or "").casefold()
-                    for asset in result.get("assets") or []
-                }
-                for asset in chunk:
-                    identity = str(asset.get("hash") or asset.get("source_image_url") or asset.get("source_page_url") or "").casefold()
-                    if identity and identity in seen:
+        scraper_waiting = [
+            future for number, future in st.session_state.live_top5_visual_futures.items()
+            if future is not None and not st.session_state.live_top5_visual_done.get(number)
+        ]
+        if scraper_waiting:
+            with st.spinner("Finishing automatic image scraping…"):
+                for number, future in st.session_state.live_top5_visual_futures.items():
+                    if future is None or st.session_state.live_top5_visual_done.get(number):
                         continue
-                    result.setdefault("assets", []).append(asset)
-                    if identity:
-                        seen.add(identity)
-
-            future = st.session_state.live_top5_visual_futures.get(number)
-            if future is not None and future.done() and not st.session_state.live_top5_visual_done.get(number):
-                try:
-                    st.session_state.live_top5_visual_results[number] = future.result()
-                except Exception as exc:
-                    st.session_state.live_top5_visual_results[number] = {
-                        "source": "automatic",
-                        "assets": [],
-                        "error": f"{type(exc).__name__}: {exc}",
-                    }
-                st.session_state.live_top5_visual_done[number] = True
+                    try:
+                        st.session_state.live_top5_visual_results[number] = future.result()
+                    except Exception as exc:
+                        st.session_state.live_top5_visual_results[number] = {
+                            "source": "automatic",
+                            "assets": [],
+                            "error": f"{type(exc).__name__}: {exc}",
+                        }
+                    st.session_state.live_top5_visual_done[number] = True
+                executor = st.session_state.get("live_top5_visual_executor")
+                if executor is not None:
+                    executor.shutdown(wait=True)
+                    st.session_state.live_top5_visual_executor = None
 
         st.markdown(
             '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
@@ -4059,9 +4044,6 @@ def render_live_top5():
         else:
             st.info("Attach one visual treatment to each of the six slides before approving Visuals.")
 
-        if any(not done for done in st.session_state.live_top5_visual_done.values()):
-            time.sleep(0.4)
-            st.rerun()
         return
 
     if stage == "06 · Renderer":
@@ -4428,29 +4410,29 @@ def render_live_dashboard():
         if not isinstance(st.session_state.live_approved_audio, dict) or not isinstance(st.session_state.live_subtitle_data, dict):
             if st.session_state.live_handoff_error:
                 st.error(st.session_state.live_handoff_error)
-            else:
-                with st.spinner("Generating Audio and Subtitles…"):
-                    try:
+            if st.button(
+                "Retry Audio / Subtitles" if st.session_state.live_handoff_error else "Generate Audio + Subtitles",
+                type="primary",
+                width="stretch",
+                key="live-generate-handoffs-stage",
+            ):
+                st.session_state.live_handoff_error = ""
+                st.session_state.live_approved_audio = None
+                st.session_state.live_subtitle_data = None
+                try:
+                    with st.spinner("Generating Audio and Subtitles…"):
                         _live_generate_audio_and_subtitles()
-                        st.session_state.live_stage = "04 · Visuals + Render"
-                        st.session_state.live_pipeline_notice = {
-                            "confirmed": "Audio + Subtitles ready",
-                            "next": "Moving to Visuals + Render.",
-                        }
-                        st.rerun()
-                    except (RuntimeError, ValueError, OSError) as exc:
-                        st.session_state.live_handoff_error = str(exc)
-                        st.rerun()
-            if st.session_state.live_handoff_error:
-                if st.button("Retry Audio / Subtitles", type="primary", key="live-retry-handoffs-stage"):
-                    st.session_state.live_handoff_error = ""
-                    st.session_state.live_approved_audio = None
-                    st.session_state.live_subtitle_data = None
-                    st.rerun()
+                    st.session_state.live_stage = "04 · Visuals + Render"
+                    st.session_state.live_pipeline_notice = {
+                        "confirmed": "Audio + Subtitles ready",
+                        "next": "Moving to Visuals + Render.",
+                    }
+                except (RuntimeError, ValueError, OSError) as exc:
+                    st.session_state.live_handoff_error = str(exc)
+                st.rerun()
             return
         st.success("Audio and subtitles are approved. Moving to Visuals.")
-        st.session_state.live_stage = "04 · Visuals + Render"
-        st.rerun()
+        return
 
     if st.session_state.live_stage == "04 · Visuals + Render":
         script = st.session_state.live_approved_script
@@ -4465,7 +4447,6 @@ def render_live_dashboard():
             with st.spinner("Scraping the selected story and related publisher pages…"):
                 try:
                     _live_scrape_automatic_visuals()
-                    st.rerun()
                 except Exception as exc:
                     st.session_state.live_visual_result = {
                         "error": f"{type(exc).__name__}: {exc}"
