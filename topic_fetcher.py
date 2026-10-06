@@ -611,6 +611,7 @@ def fetch_youtube_search_trends(
                 {
                     "keyword": keyword,
                     "evidence": 0.0,
+                    "rising": False,
                     "breakout": False,
                     "autocomplete": False,
                     "seeds": set(),
@@ -624,6 +625,8 @@ def fetch_youtube_search_trends(
                 item["evidence"],
                 item["evidence"] + weight / rank,
             )
+            if row.get("signal") == "Rising":
+                item["rising"] = True
             if row.get("breakout"):
                 item["breakout"] = True
 
@@ -639,8 +642,7 @@ def fetch_youtube_search_trends(
         results.append({
             "keyword": item["keyword"],
             "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
-            "signal": "Rising" if item["rising"] > 0 or item["breakout"] else "Top",
-            "signal_value": None,
+            "signal": "Rising" if item["rising"] or item["breakout"] else "Top",
             "breakout": item["breakout"],
             "youtube_autocomplete": item["autocomplete"],
             "seed_count": len(item["seeds"]),
