@@ -70,10 +70,10 @@ TOP5_EDITORIAL_SHADOW_OFFSET = (0, 5)
 TOP5_SUBJECT_HEADLINE_MAX_SIZE = 220
 TOP5_SUBJECT_HEADLINE_MIN_SIZE = 92
 TOP5_SUBJECT_REMOVAL_MODEL = "ZhengPeng7/BiRefNet"
-TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE = 72
-TOP5_MANUAL_SUBJECT_MAX_FONT_SIZE = 260
-TOP5_MANUAL_SUBJECT_DEFAULT_FONT_SIZE = 150
-TOP5_MANUAL_SUBJECT_FONT_OPTIONS = {
+MANUAL_SUBJECT_MIN_FONT_SIZE = 72
+MANUAL_SUBJECT_MAX_FONT_SIZE = 260
+MANUAL_SUBJECT_DEFAULT_FONT_SIZE = 150
+MANUAL_SUBJECT_FONT_OPTIONS = {
     "Barlow Condensed": {"file": "BarlowCondensed-Black.ttf"},
     "Anton": {"file": "Anton-Regular.ttf"},
     "Oswald": {"file": "Oswald-Bold.ttf"},
@@ -84,7 +84,7 @@ TOP5_MANUAL_SUBJECT_FONT_OPTIONS = {
     "Kanit": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/kanit/Kanit-Black.ttf"},
     "Fjalla One": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/fjallaone/FjallaOne-Regular.ttf"},
 }
-TOP5_MANUAL_SUBJECT_STYLE_OPTIONS = (
+MANUAL_SUBJECT_STYLE_OPTIONS = (
     "Crisp Outline",
     "Soft Halo",
     "Long Fade",
@@ -754,8 +754,8 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
 
 
 @lru_cache(maxsize=16)
-def _top5_manual_subject_font_bytes(font_name: str) -> bytes:
-    source = TOP5_MANUAL_SUBJECT_FONT_OPTIONS.get(font_name)
+def _manual_subject_font_bytes(font_name: str) -> bytes:
+    source = MANUAL_SUBJECT_FONT_OPTIONS.get(font_name)
     if not source:
         raise ValueError("Manual Subject Cutout has an invalid font.")
     if source.get("file"):
@@ -771,7 +771,7 @@ def _top5_manual_subject_font_bytes(font_name: str) -> bytes:
         raise RuntimeError(f"Manual Subject Cutout could not load the {font_name} font.") from exc
 
 
-def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
+def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
     headline = " ".join(str(config.get("headline") or "").split()).upper()
     if not headline:
         raise ValueError("Manual Subject Cutout requires a headline.")
@@ -811,15 +811,15 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
             raise ValueError("Manual Subject Cutout has invalid layout values.") from exc
 
     try:
-        font_size = int(config.get("font_size") or TOP5_MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
+        font_size = int(config.get("font_size") or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
     except (TypeError, ValueError) as exc:
         raise ValueError("Manual Subject Cutout has invalid layout values.") from exc
 
     if box_width <= 0 or box_height <= 0:
         raise ValueError("Manual Subject Cutout text area must have positive dimensions.")
     font_size = max(
-        TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE,
-        min(TOP5_MANUAL_SUBJECT_MAX_FONT_SIZE, font_size),
+        MANUAL_SUBJECT_MIN_FONT_SIZE,
+        min(MANUAL_SUBJECT_MAX_FONT_SIZE, font_size),
     )
 
     mode = str(config.get("mode") or "negative-space").strip().casefold()
@@ -827,16 +827,16 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
         raise ValueError("Manual Subject Cutout has an invalid composition mode.")
 
     font_name = str(config.get("font") or "Barlow Condensed").strip()
-    if font_name not in TOP5_MANUAL_SUBJECT_FONT_OPTIONS:
+    if font_name not in MANUAL_SUBJECT_FONT_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid font.")
 
     style = str(config.get("style") or "Crisp Outline").strip()
-    if style not in TOP5_MANUAL_SUBJECT_STYLE_OPTIONS:
+    if style not in MANUAL_SUBJECT_STYLE_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid text style.")
 
     x = max(0, min(WIDTH - box_width, box_left))
     y = max(0, min(HEIGHT - box_height, box_top))
-    font_data = _top5_manual_subject_font_bytes(font_name)
+    font_data = _manual_subject_font_bytes(font_name)
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
     stroke_width = {
@@ -907,7 +907,7 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
                 lines.append(" ".join(current))
         else:
             lines = headline.split()
-            for _ in range(4):
+            for _ in range(8):
                 total_height = (
                     line_height * len(lines)
                     + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
@@ -984,7 +984,9 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
         return font, lines, line_height, total_height, widest
 
     fit = None
-    for size in range(font_size, TOP5_MANUAL_SUBJECT_MIN_FONT_SIZE - 1, -1):
+    start_size = min(MANUAL_SUBJECT_MAX_FONT_SIZE, max(MANUAL_SUBJECT_MIN_FONT_SIZE, int(font_size)))
+    start_size -= start_size % 2
+    for size in range(start_size, MANUAL_SUBJECT_MIN_FONT_SIZE - 1, -2):
         candidate = fit_font_and_lines(size)
         if candidate is not None:
             fit = candidate
@@ -1133,12 +1135,12 @@ def _draw_top5_manual_subject_cutout(base: Image.Image, config: dict) -> Image.I
     return canvas
 
 
-def build_top5_manual_subject_cutout_preview(
+def build_manual_subject_cutout_preview(
     source_image: bytes | bytearray | Image.Image,
     headline: str,
     *,
     mode: str,
-    text_box: tuple[int, int, int, int],
+    text_box: tuple[int, int, int, int] | None = None,
     font_size: int,
     font: str = "Barlow Condensed",
     style: str = "Crisp Outline",
@@ -1146,12 +1148,12 @@ def build_top5_manual_subject_cutout_preview(
     source_label: str | None = None,
     include_overlays: bool = True,
 ) -> bytes:
-    frame = _draw_top5_manual_subject_cutout(
+    frame = _draw_manual_subject_cutout(
         source_image,
         {
             "headline": headline,
             "mode": mode,
-            "text_box": tuple(text_box),
+            "text_box": tuple(text_box) if text_box is not None else None,
             "text_polygon": tuple(text_polygon) if text_polygon is not None else None,
             "font_size": int(font_size),
             "font": font,
@@ -1827,7 +1829,7 @@ def render_production_video(
         image = _fit_visual_to_frame(visual.get("bytes")).convert("RGBA")
         static_frame = None
         if isinstance(manual_subject_cutout, dict):
-            static_frame = _draw_top5_manual_subject_cutout(image, manual_subject_cutout)
+            static_frame = _draw_manual_subject_cutout(image, manual_subject_cutout)
             if bool(manual_subject_cutout.get("include_overlays", True)):
                 _paste_logo(static_frame)
                 _paste_source(
