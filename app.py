@@ -1621,7 +1621,7 @@ def _render_manual_subject_cutout(
 
     st.caption(
         "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
-        "Polygon is the full text field; each line starts 2px inside its left edge, with line breaks used to keep the requested size inside the field. "
+        "Polygon is the full text field; each line starts 2px inside its left edge at that line's vertical midpoint, with line breaks used to keep the requested size inside the field. "
         "Render Now replaces the rendered frame."
     )
 
