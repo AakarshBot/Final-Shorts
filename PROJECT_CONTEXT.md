@@ -346,7 +346,7 @@ Feature contract:
 - The whole polygon can be dragged rigidly inside the frame.
 - Clicking an edge adds a point.
 - No X/Y position sliders.
-- Text auto-fits the polygon line by line, including irregular/sloped regions, with no cutoff.
+- The polygon is the complete text field. For the requested font size, the renderer finds every valid word line-break combination that fits the polygon and previews them all. The user can choose any valid combination for the slide. Larger text stays at the requested size and uses additional line breaks to fill the field from edge to edge as the polygon permits; smaller text may use fewer lines and sit naturally centered inside the polygon. Each line remains centered inside its usable polygon span, including irregular/sloped regions, with no cutoff.
 - Negative Space never runs BiRefNet.
 - Behind Subject uses the existing BiRefNet model and restores detected foreground subjects, including multiple subjects and genuine gaps.
 
@@ -359,11 +359,12 @@ Image flow:
 
 State/render behavior:
 - Polygon, headline, font, style and Text Size edits do not regenerate the rendered frame.
-- The editor is one Streamlit fragment. Its widgets and the polygon component rerun only the cutout editor; they must not refresh the full dashboard.
-- Text Size remains feature state separate from the Streamlit widget key. The first render starts at 150px. After the first render, the slider uses 80–260px in 10px increments and the selected value is the requested rendered font size on the next explicit Render Now. The renderer must never silently shrink the requested size; when the polygon cannot fit that size, it reports that the polygon must be enlarged or the size reduced.
-- Render Now is the explicit generation action. It stores the current headline, mode, polygon, font, style, text size and rendered frame. It must not call a full-app rerun; the fragment interaction itself updates the editor.
+- “Preview all valid line-break options” is an explicit editor action. It previews every line-break combination that fits the current headline, polygon, font, style and exact requested Text Size without silently shrinking the type. The user can select any valid layout; the selection is editor state only until Render Now.
+- The editor is one Streamlit fragment. Its widgets, line-break previews and polygon component rerun only the cutout editor; they must not refresh the full dashboard.
+- Text Size remains feature state separate from the Streamlit widget key. The first render starts at 150px. After the first render, the slider uses 80–260px in 10px increments and the selected value is the exact requested rendered font size on the next explicit Render Now. The renderer never silently shrinks the requested size; when the polygon cannot fit that size, it reports that the polygon must be enlarged or the size reduced.
+- Render Now is the explicit generation action. It stores the current headline, mode, polygon, font, style, exact Text Size, selected line-break combination when one has been chosen, and rendered frame. It must not call a full-app rerun; the fragment interaction itself updates the editor.
 - After Render Now, the same polygon and controls remain available for another edit-and-render pass.
-- The production handoff consumes the rendered frame together with its cutout configuration.
+- The production handoff consumes the rendered frame together with its cutout configuration, including the selected line-break combination when present.
 - The cutout frame itself has no logo, source label, permanent headline overlay, subtitles or other overlays.
 
 Cleanup rule:
@@ -372,14 +373,14 @@ Cleanup rule:
 - Do not modify Top-5 Option 7 · Subject Cutout.
 - Do not add Top-5 Live support yet.
 
-Status: **Canonical shared implementation in Test for Top-5 Option 9 and Cricket Option 7, and in Live for Cricket Option 7.**
+Status: **Implementation complete in the shared Test/Live paths. Not yet user-approved. The next implementation step is the main Factory Renderer change.**
 
 ### Production-line development rule
 
 - The **production-line menu is the first menu in Test**.
 - The three production-line choices are **Deep-Dive**, **Top-5**, and **OTD**.
 - **Deep-Dive** carries the current approved Cricket and Niche Sports framework.
-- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout is the shared manual-cutout implementation under Test. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP.**.
+- **Top-5 production framework is WIP in Test; Option 3 Manual Fetcher is active, Option 7 Subject Cutout is experimental, Option 8 Body Card is WIP, and Option 9 Manual Subject Cutout implementation is complete but not yet user-approved. Cricket Option 7 · Text Cutout uses that same implementation in Test and Live. Top-5 Live remains WIP. The next implementation step after this completed cutout work is the main Factory Renderer change.**.
 - **OTD** is **WIP**.
 - All three production lines use the same seven-stage factory framework.
 - The seven existing factory stages remain the stages for every production line; only the stage behaviour, inputs, outputs and presentation may differ by line.

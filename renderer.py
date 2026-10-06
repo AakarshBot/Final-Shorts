@@ -771,12 +771,18 @@ def _manual_subject_font_bytes(font_name: str) -> bytes:
         raise RuntimeError(f"Manual Subject Cutout could not load the {font_name} font.") from exc
 
 
-def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
-    headline = " ".join(str(config.get("headline") or "").split()).upper()
-    if not headline:
+
+def _manual_subject_cutout_layout_data(
+    headline: str,
+    polygon,
+    font_size: int,
+    font_name: str,
+    style: str,
+):
+    clean_headline = " ".join(str(headline or "").split()).upper()
+    if not clean_headline:
         raise ValueError("Manual Subject Cutout requires a headline.")
 
-    polygon = config.get("text_polygon")
     if not isinstance(polygon, (list, tuple)) or len(polygon) < 3:
         raise ValueError("Manual Subject Cutout requires a polygon text area.")
 
@@ -801,27 +807,23 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         raise ValueError("Manual Subject Cutout text area must have positive dimensions.")
 
     try:
-        font_size = int(config.get("font_size") or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
+        requested_size = int(font_size or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
     except (TypeError, ValueError) as exc:
         raise ValueError("Manual Subject Cutout has invalid font size.") from exc
-    font_size = max(
+    requested_size = max(
         MANUAL_SUBJECT_MIN_FONT_SIZE,
-        min(MANUAL_SUBJECT_MAX_FONT_SIZE, font_size),
+        min(MANUAL_SUBJECT_MAX_FONT_SIZE, requested_size),
     )
 
-    mode = str(config.get("mode") or "negative-space").strip().casefold()
-    if mode not in {"negative-space", "behind-subject"}:
-        raise ValueError("Manual Subject Cutout has an invalid composition mode.")
-
-    font_name = str(config.get("font") or "Barlow Condensed").strip()
-    if font_name not in MANUAL_SUBJECT_FONT_OPTIONS:
+    mode = str(font_name or "").strip()
+    if mode not in MANUAL_SUBJECT_FONT_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid font.")
 
-    style = str(config.get("style") or "Crisp Outline").strip()
-    if style not in MANUAL_SUBJECT_STYLE_OPTIONS:
+    clean_style = str(style or "").strip()
+    if clean_style not in MANUAL_SUBJECT_STYLE_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid text style.")
 
-    font_data = _manual_subject_font_bytes(font_name)
+    font_data = _manual_subject_font_bytes(mode)
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     stroke_width = {
         "Crisp Outline": 4,
@@ -833,7 +835,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         "Split Shadow": 3,
         "3D Extrusion": 3,
         "Chromatic Echo": 3,
-    }[style]
+    }[clean_style]
 
     def polygon_intervals(y_value: float) -> list[tuple[float, float]]:
         y_value = max(0.0, min(HEIGHT - 0.001, y_value))
@@ -880,110 +882,127 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         ]
         common_left = max(interval[0] for interval in widest)
         common_right = min(interval[1] for interval in widest)
-        if common_right - common_left < line_width:
+        usable_width = common_right - common_left
+        if usable_width < line_width:
             return None
 
         center = (common_left + common_right) / 2
         left = center - line_width / 2
         right = center + line_width / 2
-        if all(
+        if not all(
             any(
                 interval_left <= left and right <= interval_right
                 for interval_left, interval_right in region
             )
             for region in regions
         ):
-            return int(round(left)), bbox
-        return None
+            return None
 
-    words = headline.split()
+        return int(round(left)), bbox, usable_width
 
-    def fit_layout(size: int):
-        font = ImageFont.truetype(BytesIO(font_data), size)
-        line_box = probe.textbbox(
-            (0, 0),
-            "Ag",
-            font=font,
-            stroke_width=stroke_width,
-        )
-        line_height = max(1, line_box[3] - line_box[1])
-
-        for line_count in range(1, len(words) + 1):
-            total_height = (
-                line_height * line_count
-                + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, line_count - 1)
-            )
-            if total_height > box_height:
-                continue
-
-            start_y = box_top + (box_height - total_height) / 2
-            specs = [
-                (
-                    start_y + index * (
-                        line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
-                    ),
-                    start_y + index * (
-                        line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
-                    ) + line_height,
-                )
-                for index in range(line_count)
-            ]
-
-            @lru_cache(maxsize=None)
-            def place(line_index: int, word_index: int):
-                if line_index == line_count:
-                    return () if word_index == len(words) else None
-
-                remaining_lines = line_count - line_index - 1
-                max_end = len(words) - remaining_lines
-                line_top, line_bottom = specs[line_index]
-
-                for end in range(max_end, word_index, -1):
-                    if end - word_index <= 0:
-                        continue
-                    if len(words) - end < remaining_lines:
-                        continue
-                    line = " ".join(words[word_index:end])
-                    position = line_position(line, font, line_top, line_bottom)
-                    if position is None:
-                        continue
-                    rest = place(line_index + 1, end)
-                    if rest is not None:
-                        return (
-                            (line, line_top, position[0], position[1]),
-                            *rest,
-                        )
-                return None
-
-            placements = place(0, 0)
-            if placements is not None:
-                return font, list(placements)
-
-        return None
-
-    requested_size = max(
-        MANUAL_SUBJECT_MIN_FONT_SIZE,
-        min(MANUAL_SUBJECT_MAX_FONT_SIZE, int(font_size)),
+    words = clean_headline.split()
+    layouts = []
+    font = ImageFont.truetype(BytesIO(font_data), requested_size)
+    line_box = probe.textbbox(
+        (0, 0),
+        "Ag",
+        font=font,
+        stroke_width=stroke_width,
     )
-    fit = fit_layout(requested_size)
-    if fit is None:
-        raise ValueError(
-            f"Text size {requested_size}px does not fit the selected polygon. Make the polygon larger or choose a smaller size."
-        )
+    line_height = max(1, line_box[3] - line_box[1])
 
-    font, placements = fit
+    for mask in range(1 << max(0, len(words) - 1)):
+        breaks = [
+            index + 1
+            for index in range(len(words) - 1)
+            if mask & (1 << index)
+        ]
+        breaks.append(len(words))
+        lines = []
+        start = 0
+        for end in breaks:
+            lines.append(" ".join(words[start:end]))
+            start = end
+
+        total_height = (
+            line_height * len(lines)
+            + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
+        )
+        if total_height > box_height:
+            continue
+
+        start_y = box_top + (box_height - total_height) / 2
+        placements = []
+        fill_ratios = []
+        word_index = 0
+        valid = True
+        for line_index, end in enumerate(breaks):
+            line = " ".join(words[word_index:end])
+            line_top = start_y + line_index * (
+                line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+            )
+            line_bottom = line_top + line_height
+            position = line_position(line, font, line_top, line_bottom)
+            if position is None:
+                valid = False
+                break
+            cursor_x, bbox, usable_width = position
+            placements.append((line, line_top, cursor_x, bbox))
+            fill_ratios.append(
+                (bbox[2] - bbox[0]) / max(1.0, usable_width)
+            )
+            word_index = end
+
+        if valid:
+            layouts.append({
+                "line_breaks": tuple(breaks),
+                "lines": tuple(lines),
+                "placements": tuple(placements),
+                "fill_ratio": sum(fill_ratios) / len(fill_ratios),
+            })
+
+    layouts.sort(
+        key=lambda item: (
+            item["fill_ratio"],
+            -len(item["lines"]),
+            item["line_breaks"],
+        ),
+        reverse=True,
+    )
+    return {
+        "headline": clean_headline,
+        "points": points,
+        "box_height": box_height,
+        "font_size": requested_size,
+        "font_name": mode,
+        "style": clean_style,
+        "font_data": font_data,
+        "font": font,
+        "stroke_width": stroke_width,
+        "layouts": layouts,
+    }
+
+
+def _draw_manual_subject_cutout_frame(
+    base: Image.Image,
+    data: dict,
+    placements,
+    *,
+    mode: str,
+    subject_mask: Image.Image | None = None,
+) -> Image.Image:
     canvas = _top5_full_frame_image(base).convert("RGBA")
 
-    subject_mask = None
     if mode == "behind-subject":
-        source = BytesIO()
-        canvas.convert("RGB").save(source, format="PNG", optimize=False)
-        subject_mask = _top5_subject_mask(source.getvalue())
         if subject_mask is None:
-            raise ValueError("Manual Subject Cutout could not produce a usable subject mask.")
-        subject_mask = subject_mask.convert("L").point(
-            lambda value: 255 if value >= 96 else value
-        )
+            source = BytesIO()
+            canvas.convert("RGB").save(source, format="PNG", optimize=False)
+            subject_mask = _top5_subject_mask(source.getvalue())
+            if subject_mask is None:
+                raise ValueError("Manual Subject Cutout could not produce a usable subject mask.")
+            subject_mask = subject_mask.convert("L").point(
+                lambda value: 255 if value >= 96 else value
+            )
         backdrop = Image.blend(
             canvas,
             Image.new("RGBA", canvas.size, DARK + (255,)),
@@ -997,9 +1016,9 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         text_draw.text(
             (cursor_x - bbox[0], line_top - bbox[1]),
             line,
-            font=font,
+            font=data["font"],
             fill=255,
-            stroke_width=stroke_width,
+            stroke_width=data["stroke_width"],
             stroke_fill=255,
         )
 
@@ -1016,6 +1035,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         layer.putalpha(layer_mask)
         canvas.alpha_composite(layer, dest=(offset_x, offset_y))
 
+    style = data["style"]
     if style == "Soft Halo":
         shifted_layer(0, 0, 80, 24)
         shifted_layer(0, 4, 175, 16)
@@ -1054,7 +1074,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             draw.text(
                 position,
                 line,
-                font=font,
+                font=data["font"],
                 fill=WHITE + (255,),
                 stroke_width=9,
                 stroke_fill=DARK + (255,),
@@ -1062,7 +1082,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             draw.text(
                 position,
                 line,
-                font=font,
+                font=data["font"],
                 fill=WHITE + (255,),
                 stroke_width=2,
                 stroke_fill=DARK + (245,),
@@ -1071,9 +1091,9 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             draw.text(
                 position,
                 line,
-                font=font,
+                font=data["font"],
                 fill=WHITE + (255,),
-                stroke_width=stroke_width,
+                stroke_width=data["stroke_width"],
                 stroke_fill=DARK + (245,),
             )
 
@@ -1087,6 +1107,59 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
     return canvas
 
 
+def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
+    mode = str(config.get("mode") or "negative-space").strip().casefold()
+    if mode not in {"negative-space", "behind-subject"}:
+        raise ValueError("Manual Subject Cutout has an invalid composition mode.")
+
+    data = _manual_subject_cutout_layout_data(
+        config.get("headline"),
+        config.get("text_polygon"),
+        config.get("font_size"),
+        str(config.get("font") or "Barlow Condensed").strip(),
+        str(config.get("style") or "Crisp Outline").strip(),
+    )
+    layouts = data["layouts"]
+    if not layouts:
+        raise ValueError(
+            f"Text size {data['font_size']}px does not fit the selected polygon. Make the polygon larger or choose a smaller size."
+        )
+
+    selected_breaks = config.get("line_breaks")
+    if selected_breaks is not None:
+        try:
+            selected_breaks = tuple(int(value) for value in selected_breaks)
+        except (TypeError, ValueError):
+            raise ValueError("Manual Subject Cutout has invalid line breaks.")
+        layout = next(
+            (item for item in layouts if item["line_breaks"] == selected_breaks),
+            None,
+        )
+        if layout is None:
+            raise ValueError("The selected line-break layout does not fit the current polygon or text size.")
+    else:
+        layout = layouts[0]
+
+    subject_mask = None
+    if mode == "behind-subject":
+        source = BytesIO()
+        _top5_full_frame_image(base).convert("RGB").save(source, format="PNG", optimize=False)
+        subject_mask = _top5_subject_mask(source.getvalue())
+        if subject_mask is None:
+            raise ValueError("Manual Subject Cutout could not produce a usable subject mask.")
+        subject_mask = subject_mask.convert("L").point(
+            lambda value: 255 if value >= 96 else value
+        )
+
+    return _draw_manual_subject_cutout_frame(
+        base,
+        data,
+        layout["placements"],
+        mode=mode,
+        subject_mask=subject_mask,
+    )
+
+
 def build_manual_subject_cutout_preview(
     source_image: bytes | bytearray | Image.Image,
     headline: str,
@@ -1096,6 +1169,7 @@ def build_manual_subject_cutout_preview(
     font: str = "Barlow Condensed",
     style: str = "Crisp Outline",
     text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
+    line_breaks: tuple[int, ...] | list[int] | None = None,
 ) -> bytes:
     frame = _draw_manual_subject_cutout(
         source_image,
@@ -1106,11 +1180,79 @@ def build_manual_subject_cutout_preview(
             "font_size": int(font_size),
             "font": font,
             "style": style,
+            "line_breaks": line_breaks,
         },
     )
     buffer = BytesIO()
     frame.convert("RGB").save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
+
+
+def build_manual_subject_cutout_layout_previews(
+    source_image: bytes | bytearray | Image.Image,
+    headline: str,
+    *,
+    mode: str,
+    font_size: int,
+    font: str = "Barlow Condensed",
+    style: str = "Crisp Outline",
+    text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
+) -> list[dict]:
+    selected_mode = str(mode or "negative-space").strip().casefold()
+    if selected_mode not in {"negative-space", "behind-subject"}:
+        raise ValueError("Manual Subject Cutout has an invalid composition mode.")
+
+    data = _manual_subject_cutout_layout_data(
+        headline,
+        text_polygon,
+        font_size,
+        font,
+        style,
+    )
+    if not data["layouts"]:
+        raise ValueError(
+            f"Text size {data['font_size']}px does not fit the selected polygon. Make the polygon larger or choose a smaller size."
+        )
+
+    subject_mask = None
+    if selected_mode == "behind-subject":
+        base = _top5_full_frame_image(
+            source_image if isinstance(source_image, Image.Image) else Image.open(BytesIO(bytes(source_image)))
+        ).convert("RGBA")
+        source = BytesIO()
+        base.convert("RGB").save(source, format="PNG", optimize=False)
+        subject_mask = _top5_subject_mask(source.getvalue())
+        if subject_mask is None:
+            raise ValueError("Manual Subject Cutout could not produce a usable subject mask.")
+        subject_mask = subject_mask.convert("L").point(
+            lambda value: 255 if value >= 96 else value
+        )
+
+    base_image = (
+        source_image.convert("RGB")
+        if isinstance(source_image, Image.Image)
+        else Image.open(BytesIO(bytes(source_image))).convert("RGB")
+    )
+
+    previews = []
+    for index, layout in enumerate(data["layouts"], 1):
+        frame = _draw_manual_subject_cutout_frame(
+            base_image,
+            data,
+            layout["placements"],
+            mode=selected_mode,
+            subject_mask=subject_mask,
+        ).resize((360, 640), Image.Resampling.LANCZOS)
+        buffer = BytesIO()
+        frame.convert("RGB").save(buffer, format="JPEG", quality=84, optimize=True)
+        previews.append({
+            "index": index,
+            "line_breaks": layout["line_breaks"],
+            "lines": layout["lines"],
+            "preview": buffer.getvalue(),
+        })
+    return previews
+
 
 def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
     quote = " ".join(str(card.get("quote") or "").split())

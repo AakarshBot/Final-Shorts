@@ -999,6 +999,100 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
     expected = Image.open(BytesIO(rendered.getvalue())).convert("RGB")
     assert ImageChops.difference(rendered_frames[0], expected).getbbox() is None
 
+def test_manual_subject_cutout_previews_all_valid_line_breaks(monkeypatch):
+    local_font = (
+        renderer.Path(__file__).resolve().parents[1]
+        / "fonts"
+        / "BarlowCondensed-Black.ttf"
+    ).read_bytes()
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: local_font,
+    )
+
+    options = renderer.build_manual_subject_cutout_layout_previews(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India win today",
+        mode="negative-space",
+        text_polygon=((60, 700), (1020, 700), (1020, 1400), (60, 1400)),
+        font_size=140,
+    )
+
+    assert len(options) == 4
+    assert {tuple(option["line_breaks"]) for option in options} == {
+        (3,),
+        (1, 3),
+        (2, 3),
+        (1, 2, 3),
+    }
+    assert all(
+        Image.open(BytesIO(option["preview"])).size == (360, 640)
+        for option in options
+    )
+
+
+def test_manual_subject_cutout_uses_selected_line_breaks(monkeypatch):
+    local_font = (
+        renderer.Path(__file__).resolve().parents[1]
+        / "fonts"
+        / "BarlowCondensed-Black.ttf"
+    ).read_bytes()
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: local_font,
+    )
+
+    common = {
+        "mode": "negative-space",
+        "text_polygon": ((60, 700), (1020, 700), (1020, 1400), (60, 1400)),
+        "font_size": 140,
+        "font": "Barlow Condensed",
+        "style": "Crisp Outline",
+    }
+    one_line = renderer.build_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India win today",
+        line_breaks=(3,),
+        **common,
+    )
+    three_lines = renderer.build_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India win today",
+        line_breaks=(1, 2, 3),
+        **common,
+    )
+
+    assert ImageChops.difference(
+        Image.open(BytesIO(one_line)).convert("RGB"),
+        Image.open(BytesIO(three_lines)).convert("RGB"),
+    ).getbbox() is not None
+
+
+def test_manual_subject_cutout_rejects_invalid_line_breaks(monkeypatch):
+    local_font = (
+        renderer.Path(__file__).resolve().parents[1]
+        / "fonts"
+        / "BarlowCondensed-Black.ttf"
+    ).read_bytes()
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: local_font,
+    )
+
+    with pytest.raises(ValueError, match="line-break layout"):
+        renderer.build_manual_subject_cutout_preview(
+            Image.new("RGB", (1080, 1920), (40, 40, 40)),
+            "India win today",
+            mode="negative-space",
+            text_polygon=((60, 700), (1020, 700), (1020, 1400), (60, 1400)),
+            font_size=140,
+            line_breaks=(1, 1, 3),
+        )
+
+
 def test_top5_manual_subject_cutout_accepts_polygon_text_region(monkeypatch):
     local_font = (
         renderer.Path(__file__).resolve().parents[1]
