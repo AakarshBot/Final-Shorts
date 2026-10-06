@@ -1007,6 +1007,14 @@ if "live_stage" not in st.session_state:
     st.session_state.live_stage = "01 · Story"
 if "live_topics_profile" not in st.session_state:
     st.session_state.live_topics_profile = None
+if "live_youtube_trend_results" not in st.session_state:
+    st.session_state.live_youtube_trend_results = []
+if "live_youtube_trend_selected" not in st.session_state:
+    st.session_state.live_youtube_trend_selected = None
+if "live_youtube_trend_keyword" not in st.session_state:
+    st.session_state.live_youtube_trend_keyword = ""
+if "live_youtube_trend_error" not in st.session_state:
+    st.session_state.live_youtube_trend_error = ""
 if "live_script_data" not in st.session_state:
     st.session_state.live_script_data = None
 if "live_approved_script" not in st.session_state:
