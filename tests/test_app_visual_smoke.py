@@ -215,6 +215,80 @@ def test_cricket_test_exposes_shared_text_cutout():
     )
 
 
+def test_yt_trends_test_exposes_shared_text_cutout_option_7():
+    asset = {
+        "bytes": _image_bytes(),
+        "source": "source-a",
+        "article_title": "Image A",
+    }
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "youtube_trends"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["visual_test_mode"] = "Option 7 · Text Cutout"
+    at.session_state["visual_result"] = {"assets": [asset]}
+    at.session_state["script_data"] = {
+        "headline": "India win again",
+        "script": [{"voiceover": "One."}] * 4,
+    }
+    at.run()
+
+    assert not at.exception, at.exception
+    assert "Option 7 · Text Cutout" in [button.label for button in at.button]
+    select = next(button for button in at.button if button.label == "Select image")
+    select.click().run()
+    assert not at.exception, at.exception
+    render = next(button for button in at.button if button.label == "Render Now")
+    render.click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["manual_subject_cutout"]["rendered_config"]["text_polygon"]
+
+
+def test_yt_trends_live_exposes_shared_text_cutout_option_7():
+    asset = {
+        "bytes": _image_bytes(),
+        "source": "source-a",
+        "article_title": "Image A",
+    }
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "youtube_trends"
+    at.session_state["live_desk"] = "youtube_trends"
+    at.session_state["live_topics_profile"] = "youtube_trends"
+    at.session_state["live_topics"] = [Topic(
+        title="Test story",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/test-story",
+    )]
+    at.session_state["live_selected_topic"] = 0
+    at.session_state["live_stage"] = "04 · Visuals + Render"
+    at.session_state["live_approved_script"] = {
+        "headline": "India win again",
+        "script": [
+            {"voiceover": "One."},
+            {"voiceover": "Two."},
+            {"voiceover": "Three."},
+            {"voiceover": "Four."},
+        ],
+    }
+    at.session_state["live_approved_audio"] = {}
+    at.session_state["live_subtitle_data"] = {}
+    at.session_state["live_visual_option"] = "Option 7 · Text Cutout"
+    at.session_state["live_visual_result"] = {"assets": [asset]}
+    at.run()
+
+    assert not at.exception, at.exception
+    assert "Option 7 · Text Cutout" in [button.label for button in at.button]
+    select = next(button for button in at.button if button.label == "Select image")
+    select.click().run()
+    assert not at.exception, at.exception
+    render = next(button for button in at.button if button.label == "Render Now")
+    render.click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["text_polygon"]
+
+
 def test_top5_option9_uses_shared_editor():
     asset = {
         "bytes": _image_bytes(),
