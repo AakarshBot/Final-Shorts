@@ -468,6 +468,7 @@ def test_search_discovery_uses_no_region(monkeypatch):
         "ddgs",
         type("FakeModule", (), {"DDGS": FakeDDGS}),
     )
+    monkeypatch.setattr(visual_fetcher, "_google_news_rss", lambda query: [])
 
     visual_fetcher._news_search("Carlos Alcaraz Tokyo Open")
 
