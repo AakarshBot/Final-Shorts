@@ -3831,7 +3831,7 @@ def render_live_top5():
 
         st.markdown(
             '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
-            '<div class="section-title">Build and review all six slides</div></div>'
+            '<div class="section-title">Build and review all six slides</div></div>',
             unsafe_allow_html=True,
         )
 
