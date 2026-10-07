@@ -52,7 +52,7 @@ The Dashboard UI/UX remains **WIP**.
 Production lines:
 1. **Top 5 cricket stories of the day** — **Test-only / WIP**
 2. **On This Day** — **Test-first / WIP**
-3. **YouTube Search Trends** — **Test + Live / rebuilt and awaiting validation**
+3. **YouTube Search Trends** — **Test + Live / search-opportunity rebuild in validation**
 
 Top-5 is currently Test-only / WIP. **Option 7 · Subject Cutout is experimental and must remain untouched. Option 9 · Manual Subject Cutout is the canonical manual subject cutout feature in Top-5 Test.** Cricket has the same canonical feature as **Option 7 · Text Cutout** in both Test and Live. **YT Trends now exposes that same Option 7 · Text Cutout implementation in Test and Live.** Top-5 Live remains WIP and is not being added yet.
 
@@ -487,28 +487,29 @@ Status: **Approved / cleaned / entity tiles implemented / keyword tile implement
 
 ### Function 01B — YouTube Search Trends
 
-Status: **Test + Live rebuilt / universal Scriptwriter handoff implemented / awaiting Test validation.**
+Status: **Test + Live / search-opportunity rebuild in validation.**
 
 - YT Trends remains a shared Topic Fetcher source, not a separate downstream production architecture.
-- The collector uses Google Trends with the YouTube property and YouTube autocomplete with the existing hidden sports seed set. The primary sports seeds use India (geo=IN, en-IN) so the board is Indian-audience dominant; the international-cricket seed remains global, and India-sourced signals receive a ranking preference rather than excluding global stories.
-- The trend board is one unsegregated pool; it does not expose sport, country or market categories.
-- Raw YouTube queries are discovery signals only. Generic search-intent terms are removed while useful specific sport/event context is retained.
+- The collector uses Google Trends with the YouTube property and YouTube autocomplete with the existing sports seed set. Primary sports seeds use India (geo=IN, en-IN) for Indian-audience weighting; the international-cricket seed remains global.
+- The trend board remains one unsegregated pool; it does not expose sport, country or market categories.
+- Each result keeps two distinct values: the **exact YouTube search query** that generated the signal and the cleaned **story subject** used to find current news.
+- Generic query-intent terms are removed only from the cleaned story subject. The original search query is preserved as the search-intent target.
 - Sports-only queries are rejected; ordinal forms such as t20th are normalized before filtering.
-- Each surviving trend is queried directly against the existing news source with the original trend query plus its cleaned story keyword and a when:1d window.
-- Final validation is an exact rolling 24 hours in Asia/Kolkata.
-- Only trends with at least one relevant current article enter the board.
+- Google Trends `Top` / `Rising` signals and YouTube autocomplete are treated as discovery evidence, not absolute search-volume counts.
+- If the first requested batch does not produce enough news-backed opportunities, the fetcher validates additional candidates up to the larger of twice the requested limit or 40 candidates. Lower-priority YouTube autocomplete suggestions can also backfill the candidate pool.
+- Validation remains an exact rolling 24 hours in Asia/Kolkata. Only candidates with at least one relevant current article enter the board.
 - Each trend caches its validated Topic articles. Selecting a trend uses those cached Topics directly; it does not perform a second keyword-only search.
-- “Find up to 20 more” uses the same retrieval path and can append up to 20 additional Topics while excluding already returned events.
-- The initial board validates only the requested number of candidates.
-- The displayed headline is the representative current news story. The raw YouTube trend remains visible only as discovery evidence.
-- The selected Topic retains its normal title, description, source, published_at and real URL. The raw trend query is never handed to Scriptwriter as the story.
-- **Scriptwriter handoff:** every YT Trends story uses the new Universal Niche Sports + YT Trends Scriptwriter, even when the selected story is about cricket. The protected Cricket Scriptwriter is never used for YT Trends.
+- “Find up to 20 more” uses the same retrieval path and can append additional current Topics while excluding already returned events.
+- The board is explicitly ranked. It displays the rank, search target, signal type, news count and an **Opportunity** score. The score is a relative board-ranking number, not search-volume data.
+- Selecting a trend preserves the exact search query separately from the selected real news Topic.
+- **Scriptwriter handoff:** every YT Trends story uses the Universal Niche Sports + YT Trends Scriptwriter, including cricket stories. The protected Cricket Scriptwriter is never used for YT Trends.
+- The Universal Scriptwriter receives the preserved search query as packaging context. It uses that query to shape the SEO/Search title and story-specific description naturally, without a new hard validator or keyword stuffing.
+- The generated universal script retains the `search_query` field for downstream handoff/audit.
 - The YT Trends Visuals stage uses the shared single-story visual implementation and exposes **Option 7 · Text Cutout** in both Test and Live.
 - After selection, Live moves into the existing single-story Script stage and then uses the existing Audio + Subtitles → Visuals + Render → Upload flow.
 - Test uses the same Universal Scriptwriter handoff for YT Trends and then its existing downstream Test stages.
 - No second YT Trends Scriptwriter, metadata stage, renderer path or upload path is introduced.
 - No new Python dependency is introduced.
-
 ### Cricket Pipeline Checkpoint — 6/10
 
 Current overall cricket-line checkpoint: **6/10**.
@@ -591,7 +592,8 @@ Publish metadata and downstream handoff:
 YT Trends handoff:
 - Selecting a YT Trends headline enters the normal Live Script stage.
 - YT Trends does not return to its Topic Fetcher after selection.
-- The selected real news Topic, not the raw trend query, is handed to the universal Scriptwriter.
+- The selected real news Topic and the preserved raw YouTube search query are handed separately to the universal Scriptwriter.
+- The search query is packaging context; the real news Topic remains the factual source.
 - The rest of the Live pipeline remains the existing single-story flow.
 
 No new Python dependency is introduced. The universal writer is self-contained and no longer imports implementation helpers from the protected Cricket writer.
