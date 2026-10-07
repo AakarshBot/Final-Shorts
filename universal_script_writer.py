@@ -460,6 +460,8 @@ PUBLISH METADATA
   2. Consequence / Why It Matters — foreground the concrete impact or significance.
   3. Curiosity — create an information gap from a confirmed fact without misleading the viewer.
 - Every title must be clearly about the selected story and materially different in angle.
+- When a primary YouTube search query is supplied, make the SEO / Search title a natural, accurate match for that query and use its important terms naturally in the description.
+- Never force a search phrase that would make the title inaccurate or misleading.
 - Do not use generic titles such as "latest update", "breaking news", "big update" or "sports update".
 - seo_description: concise and story-specific.
 - hashtags: 3–5 relevant story-specific hashtags.
@@ -610,8 +612,16 @@ def validate_universal_script(
     return True, ""
 
 
-def _finish_result(result: dict, story, source: str, model: str, language_key: str) -> dict:
+def _finish_result(
+    result: dict,
+    story,
+    source: str,
+    model: str,
+    language_key: str,
+    search_query: str | None = None,
+) -> dict:
     result.setdefault("story_angle", "")
+    result["search_query"] = str(search_query or "").strip()
     result["provider_used"] = model
     result["delivery_profile"] = "UNIVERSAL SPORTS"
     result["language_used"] = language_key
@@ -639,6 +649,7 @@ RULES
 - evidence_basis must name the concrete evidence in the research that makes the angle viable.
 - Do not recommend an angle that would require unsupported facts.
 - The strongest angle does not have to be the obvious event/result angle.
+- If a primary YouTube search query is supplied, use it as search-intent context when choosing angles, but never sacrifice factual accuracy or the selected story's real development just to match query wording.
 - Return only JSON matching the supplied schema.
 """
 
@@ -673,7 +684,11 @@ def _angle_text(angle) -> str:
         return _clean(f"{title}: {description}" if description else title)
     return _clean(angle)
 
-def suggest_universal_story_angles(story, language: str = "english") -> dict:
+def suggest_universal_story_angles(
+    story,
+    language: str = "english",
+    search_query: str | None = None,
+) -> dict:
     source = _research_story(story)
     if not source:
         source = _source_text(story)
@@ -686,6 +701,12 @@ def suggest_universal_story_angles(story, language: str = "english") -> dict:
         + "\nLANGUAGE:\n"
         + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
     )
+    if str(search_query or "").strip():
+        instruction += (
+            "\n\nPRIMARY YOUTUBE SEARCH QUERY:\n"
+            + str(search_query).strip()
+            + "\nUse this as search-intent context, not as a factual source."
+        )
     errors = []
 
     for model in MODELS:
@@ -704,6 +725,7 @@ def suggest_universal_story_angles(story, language: str = "english") -> dict:
                     "angles": result["angles"],
                     "source_evidence": source,
                     "source_title": _story_value(story, "title"),
+                    "search_query": str(search_query or "").strip(),
                     "language_used": language_key,
                     "provider_used": model,
                 }
@@ -720,6 +742,7 @@ def write_universal_script(
     language: str = "english",
     angle=None,
     research_source: str | None = None,
+    search_query: str | None = None,
 ) -> dict:
     source = research_source or _research_story(story)
     if not source:
@@ -734,6 +757,12 @@ def write_universal_script(
         + "\nLANGUAGE:\n"
         + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
     )
+    if str(search_query or "").strip():
+        instruction += (
+            "\n\nPRIMARY YOUTUBE SEARCH QUERY:\n"
+            + str(search_query).strip()
+            + "\nThis is the search-intent target for packaging. Keep the story factual and do not distort the editorial angle to force the phrase."
+        )
     if angle_text:
         instruction += (
             "\n\nSELECTED EDITORIAL ANGLE (AUTHORITATIVE):\n"
@@ -764,7 +793,14 @@ def write_universal_script(
                 result["story_angle"] = angle_text
             valid, reason = validate_universal_script(result)
             if valid:
-                return _finish_result(result, story, source, model, language_key)
+                return _finish_result(
+                    result,
+                    story,
+                    source,
+                    model,
+                    language_key,
+                    search_query=search_query,
+                )
             errors.append(reason)
         except Exception as exc:
             errors.append(f"{type(exc).__name__}: {exc}")
