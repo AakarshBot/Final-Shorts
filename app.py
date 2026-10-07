@@ -5084,9 +5084,6 @@ def render_scriptwriter():
                     st.session_state.upload_description=str(approved.get("seo_description") or "")
                     st.session_state.upload_hashtags=" ".join(approved.get("hashtags") or [])
                     st.session_state.upload_comment=str(approved.get("comment") or "")
-                        approved.get("quote_attribution") or ""
-                    )
-                    quote_slide = int(approved.get("quote_slide") or 1)
                     slide_count = len(approved.get("script") or [])
                 except ValueError as exc:
                     st.error(str(exc))
