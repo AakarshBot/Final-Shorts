@@ -547,7 +547,8 @@ def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(m
     )
 
     assert seen
-    assert seen[0][0][6] is None
+    assert seen[0][0][5] is None
+    assert seen[0][1].get("top5_card") is None
 
 
 
