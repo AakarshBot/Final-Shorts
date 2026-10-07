@@ -567,3 +567,30 @@ def test_card_studio_shows_image_pool_crop_controls_and_default_fields():
     assert values["Hero value"] == "1,203"
     assert values["Unit"] == "RUNS"
     assert any(field.label == "Metric 1 label" and field.value == "Matches" for field in at.text_input)
+
+
+
+def test_standard_single_story_scriptwriter_uses_angle_picker():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "02 · Scriptwriter"
+    at.session_state["topic_desk_profile"] = "cricket_india_asia"
+    at.session_state["topics"] = [Topic(
+        title="Virat Kohli post-match reaction",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/story",
+    )]
+    at.session_state["selected_topic"] = 0
+    at.session_state["test_universal_angles"] = [
+        {"title": "What He Said", "description": "Focus on the post-match comments.", "evidence_basis": "Direct quote"},
+        {"title": "What Changed", "description": "Focus on the match development.", "evidence_basis": "Match report"},
+        {"title": "Why It Matters", "description": "Focus on the wider consequence.", "evidence_basis": "Current context"},
+    ]
+    at.session_state["test_universal_angle_story_key"] = "0:https://example.com/story:Virat Kohli post-match reaction"
+    at.run()
+
+    assert not at.exception, at.exception
+    assert any(field.label == "Custom angle" for field in at.text_area)
+    assert any(button.label == "Choose" for button in at.button)

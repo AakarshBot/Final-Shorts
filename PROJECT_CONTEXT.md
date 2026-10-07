@@ -37,10 +37,10 @@ Test is a modular laboratory; Live is the approved production line.
 
 ## Project status
 
-The factory's seven functional stages are **Approved** for the established Deep-Dive / Cricket / Niche Sports line:
+The factory's seven functional stages remain approved at the component level, but the **Scriptwriter editorial layer is currently WIP/Test-first**.
 
 01. Topic Fetcher — **Approved**
-02. Scriptwriter — **Approved**
+02. Scriptwriter — **Editorial rebuild / WIP Test**
 03. Audio — **Approved**
 04. Visuals — **Approved**
 05. Subtitles — **Approved**
@@ -105,43 +105,30 @@ Status: **Approved.**
 
 ## Scriptwriter — Function 02
 
-Cricket writer:
-- Rewritten from scratch as a single direct function.
-- Research first uses the selected article and searches for up to two related current reports when available, so the LLM receives enough factual material to compress the story.
-- One model call generates the complete four-slide package.
-- If the generated package breaks a hard generation rule, the invalid draft is never shown in Manual QC; one hidden rewrite is made with the exact failure.
-- The first call uses Groq `openai/gpt-oss-120b`.
-- The hidden rewrite/fallback uses Groq `openai/gpt-oss-20b`.
-- The writer makes at most two model calls for one generation attempt.
-- The LLM is explicitly instructed before generation that Slide 1 must contain 13 words or fewer and the full narration must be 32 seconds or less at roughly 150 words per minute.
-- A script at 32 seconds or less is accepted for the downstream Audio speed correction; a script estimated above 32 seconds is hidden and rewritten before Manual QC.
-- The main subject name is a required structured field and must appear in spoken narration; a player must not be described only by age, role or pronoun when the exact name is available.
+Standard single-story Scriptwriter is now one shared direct editorial system for **Cricket, Niche Sports and YouTube Search Trends**.
 
-Narration:
-- Sports only.
-- Regular Shorts only; no Top-5 or Deep-Dive architecture.
-- One persona: HYPE COMMENTATOR.
-- Exactly 4 scenes.
-- Compress all material factual information from the research packet into the four scenes, removing only repetition, boilerplate and low-value wording.
-- No invented facts, quotes, motives, numbers, predictions, filler, CTA or viewer-directed retention bait.
-- Every scene carries `primary_entity`, `visual_intent`, `specific_search_prompt`, and `sport_or_topic_category`.
+Editorial contract:
+- Research is gathered before writing. The selected story and related current reports form one evidence packet.
+- The writer does not follow the source article's paragraph order and does not try to preserve a fixed percentage of article facts.
+- The writer synthesizes the evidence around the selected editorial angle and keeps only the facts needed to make that angle clear, credible and useful.
+- A selected angle is authoritative. In Test, the Scriptwriter first presents three research-backed angles plus a Custom Angle; the user chooses the actual lens before narration is generated.
+- The writer then chooses a story-dependent narrative structure automatically. Reaction, controversy, performance, result, consequence, explanation, timeline, milestone/stat, statement and other evidence-backed structures are allowed. The structure is editorial, not cosmetic.
+- Every spoken slide has a narrative_role and a story-specific visual_intent.
+- visual_intent is guidance for the human Visuals gate. It does not select an image automatically and does not bypass Manual QC.
+- Every slide also carries primary_entity, specific_search_prompt, and sport_or_topic_category.
+- Standard single-story packages use 3–5 spoken slides, with four preferred when natural. Slide 1 remains a generation requirement of fewer than 14 words. The complete narration targets the existing Shorts duration without adding padding.
+- No generic filler, viewer-directed retention bait, invented claims, invented quotes or unsupported consequences.
+- Metadata remains story-specific: three materially different title candidates, concise description, relevant hashtags and one concrete discussion comment.
+- Quotes remain visual treatments for existing story beats and are copied faithfully from the research when used.
+- Human Scriptwriter QC still edits and approves the final narration once. The approved handoff carries the selected angle, narrative structure and per-slide visual intent downstream.
 
-Generated publish metadata:
-- `headline`: exactly 3 or 4 words.
-- `titles`: exactly 3 title candidates.
-- `seo_description`: concise story-specific description.
-- `hashtags`: 3–5 relevant hashtags.
-- `comment`: one concise discussion-oriented public-upload comment.
+Test / Live:
+- The same shared Scriptwriter implementation and handoff are used in Test and Live.
+- Test remains the proving ground for the editorial rewrite. Do not merge the current editorial-layer branch into main until the user approves the Test result.
+- Once approved, promotion to Live is a direct merge of the tested component rather than a second Live implementation.
 
-Human Scriptwriter QC:
-- Manual QC receives only a script that has passed the writer's hidden generation/rewrite checks.
-- The heading remains editable with the narration.
-- Narration scenes remain independently editable.
-- Approval stores the complete package in the approved Scriptwriter handoff.
-- There is no manual AI rewrite button; regeneration belongs inside the Scriptwriter function before QC.
-- Titles, description, hashtags and comment are preserved for the later Upload QC stage.
+Status: **Editorial rewrite implemented on the Test-first branch; pending manual validation and approval.**
 
-Status: **Approved after simplification/regression fix.**
 
 ## Audio — Function 03
 
@@ -269,6 +256,16 @@ Private upload:
 The uploader detects the actual privacy status returned by YouTube and reports comment success/failure without introducing another approval gate.
 
 Status: **Approved.**
+
+## Editorial Diversity Audit
+
+A small, non-blocking audit records metadata from successful public uploads in output/editorial_history.json and evaluates the most recent 20 packages for repeated:
+- narrative structures;
+- slide-role sequences;
+- visual treatment sequences;
+- Card Studio treatments.
+
+The audit is diagnostic only. It never blocks Script QC, Visual QC, Renderer or publishing. It exists to expose genuine portfolio repetition so the human editor can change the next story treatment when the channel is becoming interchangeable.
 
 ## Dashboard state
 
@@ -510,76 +507,44 @@ Checkpoint rule:
 - Use **Cricket line = 6/10** as the starting quality baseline for future Cricket pipeline improvements.
 - Do not reopen already-approved Cricket components without a concrete regression or a clearly scoped improvement.
 
-### Function 02 — Scriptwriters
+### Function 02 — Scriptwriter
 
-#### Cricket Scriptwriter — protected / read-only
+Cricket, Niche Sports and YouTube Search Trends now use one shared direct Universal Scriptwriter. The separate Cricket writer has been removed.
 
-The existing Cricket Scriptwriter remains untouched by the Niche/YT Trends rewrite.
+Editorial flow:
+1. Read the selected story and build the research packet from the selected article plus up to two related current reports when available.
+2. Generate three genuinely different, evidence-backed editorial angles before narration generation.
+3. In Test and Live, the user selects one angle or writes a Custom Angle. The chosen angle is authoritative.
+4. Generate the complete Short around that angle.
+5. Choose one story-dependent narrative structure automatically from the evidence rather than forcing every story through one fixed sequence.
+6. Hand the approved narration and per-slide editorial metadata to Audio and the existing manual Visuals gate.
 
-- Normal Cricket production continues to use the existing Cricket writer exactly as it does today.
-- Its prompt, schema, validation, research flow, metadata package, quote handling, manual-edit handoff and downstream behavior are outside this change.
-- Do not modify this writer as part of Universal Niche Sports or YT Trends work.
+Editorial contract:
+- The writer synthesizes evidence across sources instead of following article paragraph order or preserving a fixed percentage of article facts.
+- Keep the facts that make the selected angle clear, credible and useful; add supported context, consequence, reaction or significance when it materially improves understanding.
+- Never invent facts, quotes, motives, predictions, statistics, consequences or visual moments.
+- Standard single-story packages use 3–5 spoken slides, with four preferred when natural.
+- Slide 1 remains a generation rule of fewer than 14 words.
+- Narration remains within the existing Shorts duration target and is not padded.
+- Every slide must add a distinct factual beat and carries narrative_role, primary_entity, visual_intent, specific_search_prompt and sport_or_topic_category.
+- visual_intent is guidance for the human Visuals gate. It never selects, approves or replaces the actual visual choice.
+- No generic intro, filler, viewer-directed retention bait or fake suspense.
+- Exact named subjects are resolved from the research and named naturally in narration.
+- Metadata remains story-specific with three materially different title candidates, description, hashtags and discussion comment.
+- Quotes remain faithful optional treatments attached to an existing narration slide.
 
-Status: **Protected / unchanged.**
+Story-dependent structure:
+- Allowed structures include reaction-led, controversy-led, performance-led, result-led, consequence-led, explanation-led, timeline-led, milestone/stat-led, statement-led and other evidence-backed forms.
+- The structure is an editorial choice, not a cosmetic variation.
+- The writer must not default every story to Hook → Development → Context → Consequence when the evidence supports a better sequence.
 
-#### Universal Niche Sports + YouTube Search Trends Scriptwriter
+Test / Live:
+- The same writer and handoff contract are used in Test and Live.
+- Test remains the proving ground. The current editorial-layer branch must not be merged to main until the user manually approves generated results.
+- After approval, Test → Live promotion is a direct merge of the tested implementation.
+- Top-5 remains a separate six-slide production system and is not forced into the standard single-story angle workflow.
 
-The old Niche Sports writer was deleted and replaced from scratch with one direct universal sports writer.
-
-Scope:
-- Normal Niche Sports production uses this writer.
-- YouTube Search Trends uses this writer regardless of whether the selected story happens to be cricket.
-- The normal Cricket production line never uses this writer.
-- Top-5 never uses this writer.
-
-Core flow:
-1. Read the selected article and build a full research packet with the primary article plus up to two related reports when available.
-2. Generate the complete package with `openai/gpt-oss-120b`.
-3. Validate the generated package locally before Manual QC.
-4. If the first draft fails, make exactly one hidden complete rewrite with `openai/gpt-oss-20b` using the exact failure.
-5. Never expose an invalid generated draft to Manual QC.
-
-Universal narration contract:
-- 3–5 spoken slides are allowed.
-- Two-slide scripts are forbidden.
-- Four slides are preferred when they are the cleanest complete story.
-- For Universal Niche Sports and YouTube Search Trends, Generate Script first produces exactly three research-backed story angles. The user selects one of those angles or writes a Custom Angle before the actual script is generated. The selected angle is authoritative and remains attached to the script as story_angle; the writer must build the Short around that lens instead of reverting to the most obvious event/result summary.
-- Slide 1 contains fewer than 14 words.
-- Total narration is at least 18 seconds and strictly under 30 seconds.
-- The writer targets a 50–74 word narration envelope as the generation proxy for the 18–<30 second window.
-- The minimum duration must come from useful story information, context, evidence or consequence, never padding.
-- Every slide must add genuinely new information.
-
-Editorial behavior:
-- The writer reads the full research packet and creates its own editorial version rather than mechanically paraphrasing the source.
-- The actual sport/topic is identified from the evidence; there is no cricket-default framing.
-- Exact named subjects are resolved from descriptors. When a story/headline says a "legend", "champion", "star", "defending champion", "world number one" or similar label, the writer identifies the actual person/team from the research and names them naturally in narration.
-- The main subject is a required field and must appear in spoken narration.
-- Editorial value comes from selecting the strongest development, explaining concrete significance and closing with the latest confirmed status, without inventing opinion or facts.
-- No generic intros, viewer-directed retention bait or disposable filler. Phrases such as "wait till the end", "stay tuned", "don't scroll", "you won't believe this", "here is the latest" and similar bait are explicitly prohibited and locally rejected.
-- The writer must respect each sport's actual event structure and terminology.
-
-Publish metadata and downstream handoff:
-- `headline`: exactly 3–4 words.
-- `titles`: exactly 3 candidates using the existing SEO/Search, Consequence/Why It Matters and Curiosity angles.
-- `seo_description`: concise story-specific description.
-- `hashtags`: 3–5 relevant hashtags.
-- `comment`: concise story-specific discussion question.
-- `quote`, `quote_attribution`, `quote_slide`: faithful optional quote treatment attached to an existing narration slide.
-- Every scene retains `primary_entity`, `visual_intent`, `specific_search_prompt` and `sport_or_topic_category` for the existing Visuals handoff.
-- The existing Audio, Visuals, Renderer and Upload functions consume the same Scriptwriter handoff shape; no new downstream dependency or stage is introduced.
-- Quote-slide handoff now follows the actual generated scene count, including a possible fifth slide.
-
-YT Trends handoff:
-- Selecting a YT Trends headline enters the normal Live Script stage.
-- YT Trends does not return to its Topic Fetcher after selection.
-- The selected real news Topic and the preserved raw YouTube search query are handed separately to the universal Scriptwriter.
-- The search query is packaging context; the real news Topic remains the factual source.
-- The rest of the Live pipeline remains the existing single-story flow.
-
-No new Python dependency is introduced. The universal writer is self-contained and no longer imports implementation helpers from the protected Cricket writer.
-
-Status: **Rewritten from scratch / ready for Test validation.**
+Status: **Editorial rewrite implemented / pending Test validation and manual approval.**
 
 ### Cricket + Top-5 runtime audit checkpoint
 - Dashboard execution is prompt-driven: no story, script, audio, subtitle, render or upload function may start merely because Streamlit reran.

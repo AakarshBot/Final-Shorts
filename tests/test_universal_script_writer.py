@@ -42,6 +42,7 @@ def valid_result(scene_count=4):
 
     return {
         "subject_name": "Carlos Alcaraz",
+        "narrative_structure": "result-led",
         "headline": "Alcaraz Wins Tokyo",
         "titles": [
             "Carlos Alcaraz Wins Tokyo Title",
@@ -207,9 +208,33 @@ def test_prompt_contains_universal_hard_rules():
     assert "at least 18 seconds" in prompt
     assert "strictly under 30 seconds" in prompt
     assert "Read the entire research packet" in prompt
-    assert "legend" in prompt
-    assert "wait till the end" in prompt
     assert "Do not mechanically summarize the article" in prompt
+    assert "article-order" in prompt
+    assert "story-dependent" in prompt
+
+
+
+
+def test_schema_requires_story_specific_narrative_structure():
+    assert "narrative_structure" in writer.SCHEMA["properties"]
+    assert "narrative_structure" in writer.SCHEMA["required"]
+
+
+def test_validator_requires_narrative_structure():
+    result = valid_result()
+    result["narrative_structure"] = ""
+    valid, reason = writer.validate_universal_script(result)
+    assert not valid
+    assert "narrative structure" in reason.casefold()
+
+
+def test_writer_preserves_selected_angle_and_structure(monkeypatch):
+    monkeypatch.setattr(writer, "_research_story", lambda story: "FULL STORY")
+    monkeypatch.setattr(writer, "_request", lambda *args, **kwargs: valid_result())
+    angle = "What Alcaraz Said: Focus on his post-match comments."
+    result = writer.write_universal_script({"title": "Carlos Alcaraz wins Tokyo"}, angle=angle)
+    assert result["story_angle"] == angle
+    assert result["narrative_structure"] == "result-led"
 
 
 def test_validator_accepts_three_four_and_five_slides():
