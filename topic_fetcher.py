@@ -54,6 +54,7 @@ YOUTUBE_TREND_INDIAN_SEEDS = {
     "sports news",
 }
 YOUTUBE_TREND_INDIA_SCORE_MULTIPLIER = 1.35
+YOUTUBE_TREND_MAX_CANDIDATES = 40
 YOUTUBE_TREND_NOISE_TERMS = {
     "aaj", "tak", "live", "today", "news", "latest", "update", "updates",
     "match", "matches", "watch", "watching", "stream", "streaming", "telecast",
@@ -615,11 +616,30 @@ def _youtube_trend_queries(keyword: str) -> list[dict]:
             })
 
     try:
-        suggestions = set(_youtube_autocomplete(keyword))
+        suggestions = _youtube_autocomplete(keyword)
     except (requests.RequestException, ValueError, TypeError):
-        suggestions = set()
+        suggestions = []
+
+    existing_keywords = {str(row.get("keyword") or "").casefold() for row in rows}
     for row in rows:
         row["autocomplete"] = row["keyword"] in suggestions
+
+    for suggestion in suggestions:
+        clean_suggestion = _clean(suggestion)
+        key = clean_suggestion.casefold()
+        if not clean_suggestion or key in existing_keywords or key == clean_keyword.casefold():
+            continue
+        rows.append({
+            "keyword": clean_suggestion,
+            "signal": "Suggested",
+            "value": 0.0,
+            "rank": len(rows) + 1,
+            "breakout": False,
+            "seed": clean_keyword,
+            "geo": geo,
+            "autocomplete": True,
+        })
+        existing_keywords.add(key)
     return rows
 
 
@@ -655,6 +675,7 @@ def fetch_youtube_search_trends(
                         "rising": False,
                         "breakout": False,
                         "autocomplete": False,
+                        "suggested": False,
                         "seeds": set(),
                         "profiles": set(),
                         "indian_signal": False,
@@ -670,6 +691,8 @@ def fetch_youtube_search_trends(
                     item["rising"] = True
                 if row.get("breakout"):
                     item["breakout"] = True
+                if row.get("signal") == "Suggested":
+                    item["suggested"] = True
                 item["autocomplete"] = item["autocomplete"] or bool(row.get("autocomplete"))
                 item["seeds"].add(seed.casefold())
                 item["profiles"].add(profile)
@@ -720,55 +743,77 @@ def fetch_youtube_search_trends(
         raise RuntimeError("YouTube search trends did not produce any story-worthy signals.")
 
     candidates.sort(
-        key=lambda item: (item["evidence"], item["keyword"].casefold()),
+        key=lambda item: (
+            item["evidence"],
+            item["autocomplete"],
+            len(item["seeds"]),
+            item["keyword"].casefold(),
+        ),
         reverse=True,
     )
     cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
     validated = []
-    candidates_to_check = candidates[:limit]
+    candidate_pool = candidates[:min(len(candidates), max(limit * 2, YOUTUBE_TREND_MAX_CANDIDATES))]
+    batch_size = max(1, min(limit, len(candidate_pool)))
 
-    with ThreadPoolExecutor(max_workers=min(MAX_GOOGLE_WORKERS, len(candidates_to_check))) as pool:
-        futures = {}
-        for item in candidates_to_check:
-            query = (
-                f'({item["trend_query"]}) OR ({item["keyword"]}) '
-                f'when:1d'
-            )
-            futures[pool.submit(_fetch_google, query, TIMEOUT, geo=None)] = item
+    for start in range(0, len(candidate_pool), batch_size):
+        batch = candidate_pool[start:start + batch_size]
+        with ThreadPoolExecutor(max_workers=min(MAX_GOOGLE_WORKERS, len(batch))) as pool:
+            futures = {}
+            for item in batch:
+                query = (
+                    f'({item["trend_query"]}) OR ({item["keyword"]}) '
+                    f'when:1d'
+                )
+                futures[pool.submit(_fetch_google, query, TIMEOUT, geo=None)] = item
 
-        for future in as_completed(futures):
-            item = futures[future]
-            try:
-                rows = future.result()
-            except (requests.RequestException, ET.ParseError, ValueError):
-                continue
+            for future in as_completed(futures):
+                item = futures[future]
+                try:
+                    rows = future.result()
+                except (requests.RequestException, ET.ParseError, ValueError):
+                    continue
 
-            prepared = _prepare(rows, set(), profile=item["profile"])
-            prepared = [
-                row
-                for row in prepared
-                if row.published_at >= cutoff
-            ]
-            stories = _select(prepared, 3, set(), profile=item["profile"])
-            if not stories:
-                continue
+                prepared = _prepare(rows, set(), profile=item["profile"])
+                prepared = [
+                    row
+                    for row in prepared
+                    if row.published_at >= cutoff
+                ]
+                stories = _select(prepared, 3, set(), profile=item["profile"])
+                if not stories:
+                    continue
 
-            region_multiplier = YOUTUBE_TREND_INDIA_SCORE_MULTIPLIER if item["indian_signal"] else 1.0
-            score = item["evidence"] * region_multiplier + min(1.5, 0.5 * len(stories))
-            validated.append({
-                "keyword": item["keyword"],
-                "trend_query": item["trend_query"],
-                "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
-                "signal": "Rising" if item["rising"] or item["breakout"] else "Top",
-                "breakout": item["breakout"],
-                "youtube_autocomplete": item["autocomplete"],
-                "seed_count": len(item["seeds"]),
-                "profile": item["profile"],
-                "news_count": len(stories),
-                "top_news_title": stories[0].title,
-                "topics": stories,
-                "score": score,
-            })
+                region_multiplier = YOUTUBE_TREND_INDIA_SCORE_MULTIPLIER if item["indian_signal"] else 1.0
+                search_bonus = 0.2 if item["autocomplete"] else 0.0
+                seed_bonus = min(0.4, 0.2 * max(0, len(item["seeds"]) - 1))
+                score = (
+                    (item["evidence"] + search_bonus + seed_bonus)
+                    * region_multiplier
+                    + min(1.5, 0.5 * len(stories))
+                )
+                validated.append({
+                    "keyword": item["keyword"],
+                    "trend_query": item["trend_query"],
+                    "hashtag": "#" + re.sub(r"[^A-Za-z0-9]+", "", item["keyword"]),
+                    "signal": (
+                        "Breakout" if item["breakout"]
+                        else "Rising" if item["rising"]
+                        else "Suggested" if item["suggested"]
+                        else "Top"
+                    ),
+                    "breakout": item["breakout"],
+                    "youtube_autocomplete": item["autocomplete"],
+                    "seed_count": len(item["seeds"]),
+                    "profile": item["profile"],
+                    "news_count": len(stories),
+                    "top_news_title": stories[0].title,
+                    "topics": stories,
+                    "score": score,
+                })
+
+        if len(validated) >= limit:
+            break
 
     if not validated:
         raise RuntimeError("YouTube search trends returned no news-backed story signals in the last 24 hours. Retry the trend fetch.")
