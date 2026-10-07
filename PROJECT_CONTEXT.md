@@ -289,10 +289,9 @@ Important:
 - Card Studio reuses the existing visual pool or the standalone Top-5 test image. It does not perform its own image retrieval.
 - The renderer treats a completed Card Studio frame as a static visual input and does not add normal headline/subtitle animation on top of it. Normal production logo/source overlays remain controlled by the existing renderer flags.
 - Top-5 Live remains retrieval-only and exposes Options 1–4. Card Studio is not exposed there until a Test card type is approved.
-- The old standalone Stats Card, Quote Card and Body Card implementations are deleted; no compatibility aliases or duplicate factories remain.
+- The superseded standalone card implementations are deleted; no compatibility aliases or duplicate factories remain.
 - Top-5 Test remains WIP and is not being promoted to Live by this change.
 
-### Production Line 03 — On This Day
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -582,8 +581,8 @@ Status: **Rewritten from scratch / ready for Test validation.**
 - Python compile check passed.
 - The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
 - Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
-- Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, exact left-edge anchoring, Top-5 Option 9 standalone and per-slide Test paths, Cricket Test Option 7, Cricket Live Option 7, and YT Trends Test/Live Option 7. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
-- Top-5 Option 7 remains experimental and is not part of this consolidation. Top-5 Test Card Studio and Cricket Card Studio must stay on the same shared Text Subject Cutout implementation; Top-5 Live remains deferred until Top-5 Test is approved.
+- Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, exact left-edge anchoring, Top-5 Test Card Studio standalone and per-slide Test paths, Cricket Test + Live Card Studio, and YT Trends Test/Live Card Studio. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
+- Text Subject Cutout must remain a single shared implementation across Card Studio surfaces. Top-5 Live remains deferred until Top-5 Test is approved.
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
 
