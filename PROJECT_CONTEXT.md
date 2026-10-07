@@ -277,23 +277,22 @@ Important:
 
 ### Top-5 current implementation checkpoint
 
-- Top-5 Visuals Test remains independently runnable with exactly eight dashboard choices.
+- Top-5 Visuals Test remains independently runnable with exactly five dashboard choices.
+- Top-5 Option 1 is **Automatic Scraper**.
+- Top-5 Option 2 is **Manual Scraper**.
 - Top-5 Option 3 is **Manual Fetcher**: manual query → real-image provider results → existing image pool. It does not render card typography.
-- Top-5 Option 8 is **Body Card · WIP** and performs no rendering.
-- Cricket's Option 3 / Real Image Search implementation is untouched and remains part of the approved Cricket visual pipeline.
-- Top-5 Option 7 has been rewritten from scratch to keep the implementation direct and small.
-- Option 7 uses the existing local `ZhengPeng7/BiRefNet` model through the already-installed PyTorch/torchvision/Transformers stack.
-- The current supported runtime is CPU-only. Model and input tensors remain float32; no CUDA branch or FP16 conversion is used.
-- The model is loaded once per process and the foreground mask is cached per selected image.
-- Option 7 analyzes the actual selected/cropped image. Normal Top-5 cards do not run segmentation.
-- The Subject Cutout renderer makes one direct composition choice from the foreground bbox and available space: cross-subject, vertical-left, vertical-right, top-negative-space or bottom-negative-space.
-- Cross-subject text is deliberately wider than the foreground field and therefore starts outside the first subject, disappears behind foreground, and reappears beyond the last subject.
-- Side layouts use at most two words per line and are always positioned inside the safe frame.
-- Foreground restoration is done directly with the returned mask after text rendering. This is what creates the real text-behind-subject effect and preserves text through genuine gaps.
-- Subject Cutout does not render body copy and ignores upstream body data.
-- The previous Top-5 Option 3 adaptive quiet-region/text-card implementation is deleted. Option 3 is now only the manual image fetcher.
-- No wrappers, compatibility layers, new dependencies or duplicate Subject Cutout pipelines are part of this implementation.
+- Top-5 Option 4 is **AI Generation**.
+- Top-5 Option 5 is **Card Studio**, the single card entry point.
+- Card Studio Test exposes five card types: **Text Subject Cutout** (approved), **Stat Highlight** (WIP), **Quote / Reaction** (WIP), **Head-to-Head** (WIP), and **Key Fact / Milestone** (WIP).
+- Text Subject Cutout is implemented by the existing shared Manual Subject Cutout editor/renderer. Cricket Test + Live, YT Trends Test + Live, and Top-5 Test use that same implementation; it is not reimplemented inside Card Studio.
+- The other four Card Studio types are static 1080 × 1920 Pillow frames, manually entered and manually QC'd in Test. They are not Live-approved.
+- Card Studio reuses the existing visual pool or the standalone Top-5 test image. It does not perform its own image retrieval.
+- The renderer treats a completed Card Studio frame as a static visual input and does not add normal headline/subtitle animation on top of it. Normal production logo/source overlays remain controlled by the existing renderer flags.
+- Top-5 Live remains retrieval-only and exposes Options 1–4. Card Studio is not exposed there until a Test card type is approved.
+- The old standalone Stats Card, Quote Card and Body Card implementations are deleted; no compatibility aliases or duplicate factories remain.
+- Top-5 Test remains WIP and is not being promoted to Live by this change.
 
+### Production Line 03 — On This Day
 ### Production Line 03 — On This Day
 
 Purpose:
@@ -572,7 +571,7 @@ Status: **Rewritten from scratch / ready for Test validation.**
 - Dashboard execution is prompt-driven: no story, script, audio, subtitle, render or upload function may start merely because Streamlit reran.
 - The only intentional automatic production action is the approved automatic visual scraper after its upstream manual approval; it runs once for that handoff and must not use polling reruns.
 - Test and Live manual controls are state-driven. A widget interaction may redraw its owning fragment, but must not refresh the full dashboard unless an explicit stage/action transition requires it.
-- Manual Subject Cutout uses exactly one shared fragment and one shared renderer across Top-5 Test Option 9, Cricket Test Option 7, Cricket Live Option 7, and YT Trends Test/Live Option 7.
+- Text Subject Cutout uses exactly one shared fragment and one shared renderer across Top-5 Test Card Studio, Cricket Test + Live Card Studio, and YT Trends Test + Live Card Studio.
 - The cutout Text Size control must feed the actual Render Now frame; regression coverage compares rendered pixels across different size settings rather than checking only stored configuration.
 - Top-5 Live automatic visual fetching remains concurrent, but completion is collected when the Visuals stage is entered instead of using `sleep` + `st.rerun()` polling.
 - Startup remains free of project-wide file-watcher overhead; `.streamlit/config.toml` keeps `fileWatcherType = "none"` and `runOnSave = false`.
@@ -584,7 +583,7 @@ Status: **Rewritten from scratch / ready for Test validation.**
 - The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
 - Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
 - Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, exact left-edge anchoring, Top-5 Option 9 standalone and per-slide Test paths, Cricket Test Option 7, Cricket Live Option 7, and YT Trends Test/Live Option 7. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
-- Top-5 Option 7 remains experimental and is not part of this consolidation. Top-5 Option 9 and Cricket Option 7 must stay on the same shared implementation; Top-5 Live is deferred until Top-5 Test is approved.
+- Top-5 Option 7 remains experimental and is not part of this consolidation. Top-5 Test Card Studio and Cricket Card Studio must stay on the same shared Text Subject Cutout implementation; Top-5 Live remains deferred until Top-5 Test is approved.
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
 
