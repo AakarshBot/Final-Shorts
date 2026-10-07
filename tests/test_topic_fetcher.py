@@ -432,6 +432,51 @@ def test_youtube_trend_queries_use_youtube_property_and_autocomplete(monkeypatch
     assert any(row["breakout"] for row in rows)
 
 
+def test_youtube_trend_queries_adds_autocomplete_suggestions(monkeypatch):
+    class Response:
+        def __init__(self, text="", payload=None):
+            self.text = text
+            self._payload = payload
+
+        def json(self):
+            return self._payload
+
+    explore = {
+        "widgets": [{
+            "id": "RELATED_QUERIES_0",
+            "request": {"restriction": {"complexKeywordsRestriction": {"keyword": [{"value": "tennis"}]}}},
+            "token": "token",
+        }]
+    }
+    related = {
+        "default": {
+            "rankedList": [
+                {"rankedKeyword": [{"query": "Carlos Alcaraz Tokyo", "value": 100}]},
+            ]
+        }
+    }
+
+    def fake_get(url, **kwargs):
+        if "explore" in url:
+            return Response(text=")]}'," + json.dumps(explore))
+        if "relatedsearches" in url:
+            return Response(text=")]}'," + json.dumps(related))
+        return Response(payload=["", []])
+
+    monkeypatch.setattr(topic_fetcher.requests, "get", fake_get)
+    monkeypatch.setattr(
+        topic_fetcher,
+        "_youtube_autocomplete",
+        lambda _keyword: ["Carlos Alcaraz speech after Tokyo Open", "tennis"],
+    )
+
+    rows = topic_fetcher._youtube_trend_queries("tennis")
+
+    assert rows[-1]["keyword"] == "Carlos Alcaraz speech after Tokyo Open"
+    assert rows[-1]["signal"] == "Suggested"
+    assert rows[-1]["autocomplete"] is True
+
+
 def test_youtube_trend_queries_use_indian_geo_for_primary_seeds(monkeypatch):
     calls = []
 
@@ -607,6 +652,46 @@ def test_fetch_youtube_search_trends_checks_only_requested_number_of_candidates(
 
     assert len(result) == 5
     assert len(calls) == 5
+
+
+def test_fetch_youtube_search_trends_checks_fallback_candidates_when_initial_batch_is_short(monkeypatch):
+    def fake_queries(seed):
+        if seed == "tennis":
+            return [
+                {
+                    "keyword": f"Carlos Alcaraz story {index}",
+                    "signal": "Rising",
+                    "rank": index,
+                    "breakout": False,
+                    "seed": seed,
+                    "autocomplete": True,
+                }
+                for index in range(1, 11)
+            ]
+        return []
+
+    monkeypatch.setattr(topic_fetcher, "_youtube_trend_queries", fake_queries)
+    calls = []
+
+    def fake_google(query, timeout=topic_fetcher.TIMEOUT, *, geo="IN"):
+        calls.append(query)
+        if len(calls) <= 5:
+            return []
+        return [
+            make_topic(
+                f"Tennis fallback story {len(calls)}",
+                hours=0,
+                source="ATP",
+                description="Tennis news",
+                url=f"https://example.com/fallback-{len(calls)}",
+            )
+        ]
+
+    monkeypatch.setattr(topic_fetcher, "_fetch_google", fake_google)
+    result = topic_fetcher.fetch_youtube_search_trends(5)
+
+    assert len(result) == 5
+    assert len(calls) == 10
 
 
 def test_youtube_trends_use_broad_trend_query_for_news_matching(monkeypatch):

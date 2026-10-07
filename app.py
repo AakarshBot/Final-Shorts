@@ -923,6 +923,8 @@ if "youtube_trend_selected" not in st.session_state:
     st.session_state.youtube_trend_selected = None
 if "youtube_trend_keyword" not in st.session_state:
     st.session_state.youtube_trend_keyword = ""
+if "youtube_trend_search_query" not in st.session_state:
+    st.session_state.youtube_trend_search_query = ""
 if "youtube_trend_error" not in st.session_state:
     st.session_state.youtube_trend_error = ""
 if "selected_topic" not in st.session_state:
@@ -1025,6 +1027,8 @@ if "live_youtube_trend_selected" not in st.session_state:
     st.session_state.live_youtube_trend_selected = None
 if "live_youtube_trend_keyword" not in st.session_state:
     st.session_state.live_youtube_trend_keyword = ""
+if "live_youtube_trend_search_query" not in st.session_state:
+    st.session_state.live_youtube_trend_search_query = ""
 if "live_youtube_trend_error" not in st.session_state:
     st.session_state.live_youtube_trend_error = ""
 if "live_universal_angles" not in st.session_state:
@@ -2617,6 +2621,7 @@ def _script_for_topic(
     universal: bool = False,
     angle=None,
     research_source=None,
+    search_query=None,
 ) -> dict:
     from universal_script_writer import write_universal_script
     from script_writer import write_script
@@ -2627,6 +2632,7 @@ def _script_for_topic(
             language=language,
             angle=angle,
             research_source=research_source,
+            search_query=search_query,
         )
     return write_script(
         _story_payload(topic),
@@ -2844,6 +2850,11 @@ def _live_generate_script(
         universal=st.session_state.get("live_production_line") == "youtube_trends",
         angle=angle,
         research_source=research_source,
+        search_query=(
+            st.session_state.get("live_youtube_trend_search_query")
+            if st.session_state.get("live_production_line") == "youtube_trends"
+            else None
+        ),
     )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
@@ -3517,6 +3528,7 @@ def _render_live_script():
                         result = suggest_universal_story_angles(
                             _story_payload(story),
                             language=st.session_state.get("live_script_language", "english"),
+                            search_query=st.session_state.get("live_youtube_trend_search_query"),
                         )
                     st.session_state.live_universal_angles = result["angles"]
                     st.session_state.live_universal_angle_source = result["source_evidence"]
@@ -4892,6 +4904,7 @@ def render_youtube_trends_topic_fetcher(*, live=False):
     results_key = "live_youtube_trend_results" if live else "youtube_trend_results"
     selected_key = "live_youtube_trend_selected" if live else "youtube_trend_selected"
     keyword_key = "live_youtube_trend_keyword" if live else "youtube_trend_keyword"
+    search_query_key = "live_youtube_trend_search_query" if live else "youtube_trend_search_query"
     error_key = "live_youtube_trend_error" if live else "youtube_trend_error"
     topics_key = "live_topics" if live else "topics"
     selected_topic_key = "live_selected_topic" if live else "selected_topic"
@@ -4908,6 +4921,7 @@ def render_youtube_trends_topic_fetcher(*, live=False):
             key=f"{button_prefix}retry",
         ):
             st.session_state[error_key] = ""
+            st.session_state[search_query_key] = ""
             try:
                 with st.spinner("Reading current YouTube search trends…"):
                     st.session_state[results_key] = fetch_youtube_search_trends(limit=20)
@@ -4939,19 +4953,19 @@ def render_youtube_trends_topic_fetcher(*, live=False):
             st.markdown(
                 f'<div class="topic-title">{item["top_news_title"]}</div>'
                 f'<div class="topic-meta">{item["signal"]}'
-                f'{" · BREAKOUT" if item["breakout"] else ""}'
                 f'{" · autocomplete" if item["youtube_autocomplete"] else ""}</div>',
                 unsafe_allow_html=True,
             )
+            st.caption(f'Search target: “{item["trend_query"]}”')
             st.caption(
                 f'Story subject: {item["keyword"]} · '
-                f'Trend: {item["trend_query"]} · '
                 f'{item["news_count"]} current '
                 f'{"story" if item["news_count"] == 1 else "stories"}'
             )
             st.caption(item["hashtag"])
         with mid:
-            st.caption(f'Story signal {item["score"]:.0f}')
+            st.caption(f'Rank #{index + 1}')
+            st.caption(f'Opportunity {item["score"]:.0f}')
         with right:
             selected = st.session_state[selected_key] == index
             if st.button(
@@ -4963,6 +4977,7 @@ def render_youtube_trends_topic_fetcher(*, live=False):
                 keyword = item["keyword"]
                 st.session_state[selected_key] = index
                 st.session_state[keyword_key] = keyword
+                st.session_state[search_query_key] = item["trend_query"]
                 st.session_state[profile_key] = item["profile"]
                 if live:
                     _live_reset_downstream()
@@ -5304,6 +5319,11 @@ def render_scriptwriter():
         st.session_state.get("test_production_line") == "youtube_trends"
         or st.session_state.get("topic_desk_profile") == "niche_sports"
     )
+    search_query = (
+        st.session_state.get("youtube_trend_search_query")
+        if st.session_state.get("test_production_line") == "youtube_trends"
+        else None
+    )
 
     top_left, top_right=st.columns([1,.72],gap="medium")
     with top_left:
@@ -5340,6 +5360,7 @@ def render_scriptwriter():
                         angle_result = suggest_universal_story_angles(
                             _story_payload(topic),
                             language=language.casefold(),
+                            search_query=search_query,
                         )
                     st.session_state.test_universal_angles = angle_result["angles"]
                     st.session_state.test_universal_angle_source = angle_result["source_evidence"]
@@ -5371,6 +5392,7 @@ def render_scriptwriter():
                         universal=True,
                         angle=selected_angle,
                         research_source=st.session_state.test_universal_angle_source,
+                        search_query=search_query,
                     )
             except Exception as exc:
                 st.error(f"Scriptwriter failed: {type(exc).__name__}: {exc}")
