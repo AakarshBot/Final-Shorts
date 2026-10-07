@@ -1737,7 +1737,13 @@ def _render_card_studio(
     current_image=None,
     current_source: str = "Test image",
 ):
-    from card_studio import CardStudioError, LIVE_CARD_TYPES, TEST_CARD_TYPES, render_card
+    from card_studio import (
+        CardStudioError,
+        LIVE_CARD_TYPES,
+        TEST_CARD_TYPES,
+        card_data_for_type,
+        render_card,
+    )
 
     card_types = LIVE_CARD_TYPES if live else TEST_CARD_TYPES
     state_id = (
@@ -1843,125 +1849,334 @@ def _render_card_studio(
         )
         return
 
-    selected_source = current_source
-    selected_key = f"{state_id}-current"
+    defaults = card_data_for_type(card_type)
 
     if top5 and active_slide is None:
         image = _asset_to_image(current_image)
         if image is None:
             st.error("The current image could not be opened.")
             return
-        buffer = BytesIO()
-        image.save(buffer, format="JPEG", quality=94, optimize=True)
-        selected_bytes = buffer.getvalue()
-        st.image(image, width=300)
-        st.caption(selected_source)
+        raw = BytesIO()
+        image.save(raw, format="JPEG", quality=94, optimize=True)
+        asset_key = f"top5-card-studio-{hashlib.sha1(raw.getvalue()).hexdigest()[:12]}"
+        crop_store_name = "test_top5_card_studio_crops"
+        crop_store = st.session_state.setdefault(crop_store_name, {})
+        assets = [{
+            "asset_key": asset_key,
+            "bytes": raw.getvalue(),
+            "source": current_source,
+            "label": "Current test image",
+        }]
     elif top5:
         result = st.session_state.test_top5_visual_results.get(active_slide) or {}
-        assets = list(result.get("assets") or [])
-        if not assets:
+        raw_assets = list(result.get("assets") or [])
+        if not raw_assets:
             st.info("Run one of Options 1–4 for this slide first. Card Studio reuses that image pool.")
             return
-        choices = []
-        for index, asset in enumerate(assets):
-            asset_key = _visual_asset_key(f"card-studio-{active_slide}", index, asset)
-            source = str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source")
-            label = str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual")
-            choices.append((asset_key, asset, source, label))
-        image_index = st.selectbox(
-            "Card image",
-            list(range(len(choices))),
-            key=f"{state_id}-image",
-            format_func=lambda i: choices[i][3][:80],
-        )
-        selected_key, asset, selected_source, selected_label = choices[image_index]
-        selected_bytes = bytes(asset.get("bytes") or b"")
-        cropped = st.session_state.test_top5_visual_crops.get(selected_key)
-        if cropped:
-            selected_bytes = bytes(cropped)
-        preview = _top5_fit_preview(selected_bytes)
-        if preview is not None:
-            st.image(preview, width=300)
-        st.caption(f"{selected_source} · {selected_label}")
+        crop_store_name = "test_top5_visual_crops"
+        crop_store = st.session_state.setdefault(crop_store_name, {})
+        assets = [
+            {
+                "asset_key": _visual_asset_key(f"card-studio-{active_slide}", index, asset),
+                "bytes": asset.get("bytes"),
+                "source": str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source"),
+                "label": str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual"),
+            }
+            for index, asset in enumerate(raw_assets)
+        ]
     else:
         entries = _visual_pool_entries(live)
         if not entries:
             st.info("Run one of the existing visual sources first. Card Studio reuses that image pool.")
             return
-        image_index = st.selectbox(
-            "Card image",
-            list(range(len(entries))),
-            key=f"{state_id}-image",
-            format_func=lambda i: (
-                entries[i][2].get("article_title")
-                or entries[i][2].get("title")
-                or entries[i][4]
-            )[:80],
-        )
-        selected_key, _, asset, selected_bytes, selected_source = entries[image_index]
-        selected_label = str(asset.get("article_title") or asset.get("title") or "Selected visual")
-        preview = _top5_fit_preview(selected_bytes)
-        if preview is not None:
-            st.image(preview, width=300)
-        st.caption(f"{selected_source} · {selected_label}")
-
-    data = {}
-    if card_type == "Stat Highlight":
-        data["eyebrow"] = st.text_input("Eyebrow", value="STAT", key=f"{state_id}-eyebrow")
-        data["headline"] = st.text_input("Headline", key=f"{state_id}-headline")
-        data["value"] = st.text_input("Hero value", key=f"{state_id}-value")
-        data["unit"] = st.text_input("Unit", key=f"{state_id}-unit")
-        data["metrics"] = [
+        crop_store_name = "live_visual_crops" if live else "visual_crops"
+        crop_store = st.session_state.setdefault(crop_store_name, {})
+        assets = [
             {
-                "label": st.text_input(f"Metric {index + 1} label", key=f"{state_id}-metric-{index}-label"),
-                "value": st.text_input(f"Metric {index + 1} value", key=f"{state_id}-metric-{index}-value"),
+                "asset_key": asset_key,
+                "bytes": image_bytes,
+                "source": source_name,
+                "label": str(asset.get("article_title") or asset.get("title") or asset.get("model") or source_name),
             }
-            for index in range(3)
+            for asset_key, _index, asset, image_bytes, source_name in entries
         ]
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">IMAGE POOL</div>'
+        '<div class="section-title">Choose the Card Studio image</div></div>'
+        f'<div class="section-count">{len(assets)} images · crop before selection</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    primary_key = f"{state_id}-image-1"
+    secondary_key = f"{state_id}-image-2"
+    selected_primary = str(st.session_state.get(primary_key) or "")
+    selected_secondary = str(st.session_state.get(secondary_key) or "")
+
+    image_mode = "One image"
+    split_direction = "Vertical"
+    if card_type == "Head-to-Head":
+        mode_key = f"{state_id}-image-mode"
+        split_key = f"{state_id}-split-direction"
+        st.session_state.setdefault(mode_key, defaults.get("image_mode", "One image"))
+        st.session_state.setdefault(split_key, defaults.get("split_direction", "Vertical"))
+        image_mode = st.radio(
+            "Image mode",
+            ["One image", "Two images"],
+            horizontal=True,
+            key=mode_key,
+        )
+        if image_mode == "Two images":
+            split_direction = st.radio(
+                "Split direction",
+                ["Vertical", "Horizontal"],
+                horizontal=True,
+                key=split_key,
+            )
+
+    for start in range(0, len(assets), 3):
+        cols = st.columns(min(3, len(assets) - start), gap="medium")
+        for col, asset in zip(cols, assets[start:start + 3]):
+            with col:
+                key = asset["asset_key"]
+                cropped = crop_store.get(key)
+                preview_bytes = cropped if cropped else asset.get("bytes")
+                preview = _fit_visual_preview(preview_bytes)
+                if preview is not None:
+                    st.image(preview, width="stretch")
+                st.markdown(
+                    f'<div class="visual-source">{asset["source"]}</div>'
+                    f'<div class="visual-detail">{asset["label"]}</div>',
+                    unsafe_allow_html=True,
+                )
+                if cropped:
+                    st.markdown(
+                        '<div class="visual-crop-label">CROP APPLIED · USE CROPPED FRAME</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                crop_col, action_col = st.columns(2, gap="small")
+                with crop_col:
+                    if st.button(
+                        "Crop / reposition",
+                        width="stretch",
+                        key=f"{state_id}-crop-{key}",
+                    ):
+                        raw = asset.get("bytes")
+                        if isinstance(raw, (bytes, bytearray)):
+                            _crop_visual_dialog(
+                                key,
+                                bytes(raw),
+                                str(asset["label"]),
+                                crop_store=crop_store_name,
+                            )
+                        else:
+                            st.warning("This visual is not crop-ready.")
+
+                with action_col:
+                    if image_mode == "Two images" and card_type == "Head-to-Head":
+                        if st.button(
+                            "Use as Image 1",
+                            width="stretch",
+                            type="primary" if selected_primary == key else "secondary",
+                            key=f"{state_id}-use-1-{key}",
+                        ):
+                            st.session_state[primary_key] = key
+                        if st.button(
+                            "Use as Image 2",
+                            width="stretch",
+                            type="primary" if selected_secondary == key else "secondary",
+                            key=f"{state_id}-use-2-{key}",
+                        ):
+                            st.session_state[secondary_key] = key
+                    else:
+                        if st.button(
+                            "Selected" if selected_primary == key else "Select image",
+                            width="stretch",
+                            type="primary" if selected_primary == key else "secondary",
+                            key=f"{state_id}-use-{key}",
+                        ):
+                            st.session_state[primary_key] = key
+                            selected_primary = key
+
+    assets_by_key = {str(asset["asset_key"]): asset for asset in assets}
+    if selected_primary not in assets_by_key:
+        selected_primary = ""
+        st.session_state[primary_key] = ""
+    if selected_secondary not in assets_by_key:
+        selected_secondary = ""
+        st.session_state[secondary_key] = ""
+
+    selected_primary_asset = assets_by_key.get(selected_primary)
+    selected_secondary_asset = assets_by_key.get(selected_secondary)
+
+    if card_type == "Head-to-Head" and image_mode == "Two images":
+        if not selected_primary_asset or not selected_secondary_asset:
+            st.info("Select an image for both sides before entering the card content.")
+            return
+
+    if not selected_primary_asset:
+        st.info("Select an image before entering the card content.")
+        return
+
+    st.caption(
+        (
+            f'Image 1: {selected_primary_asset["label"]} · Image 2: {selected_secondary_asset["label"]}'
+            if card_type == "Head-to-Head" and image_mode == "Two images"
+            else f'Image: {selected_primary_asset["label"]}'
+        )
+    )
+
+    def value_key(field):
+        return f"{state_id}-{card_type.lower().replace(' ', '-').replace('/', '-').replace('&', 'and')}-{field}"
+
+    if card_type == "Stat Highlight":
+        eyebrow_key = value_key("eyebrow")
+        headline_key = value_key("headline")
+        hero_value_key = value_key("value")
+        unit_key = value_key("unit")
+        for key, default in (
+            (eyebrow_key, defaults["eyebrow"]),
+            (headline_key, defaults["headline"]),
+            (hero_value_key, defaults["value"]),
+            (unit_key, defaults["unit"]),
+        ):
+            st.session_state.setdefault(key, default)
+        data = {
+            "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
+            "headline": st.text_input("Headline", key=headline_key),
+            "value": st.text_input("Hero value", key=hero_value_key),
+            "unit": st.text_input("Unit", key=unit_key),
+            "metrics": [],
+        }
+        for index, metric in enumerate(defaults["metrics"], 1):
+            label_key = value_key(f"metric-{index}-label")
+            metric_value_key = value_key(f"metric-{index}-value")
+            st.session_state.setdefault(label_key, metric["label"])
+            st.session_state.setdefault(metric_value_key, metric["value"])
+            cols = st.columns(2)
+            with cols[0]:
+                label = st.text_input(f"Metric {index} label", key=label_key)
+            with cols[1]:
+                value = st.text_input(f"Metric {index} value", key=metric_value_key)
+            data["metrics"].append({"label": label, "value": value})
     elif card_type == "Quote / Reaction":
-        data["eyebrow"] = st.text_input("Eyebrow", value="REACTION", key=f"{state_id}-eyebrow")
-        data["quote"] = st.text_area("Quote", height=110, key=f"{state_id}-quote")
-        data["attribution"] = st.text_input("Attribution", key=f"{state_id}-attribution")
-        data["context"] = st.text_input("Context", key=f"{state_id}-context")
+        eyebrow_key = value_key("eyebrow")
+        quote_key = value_key("quote")
+        attribution_key = value_key("attribution")
+        context_key = value_key("context")
+        for key, default in (
+            (eyebrow_key, defaults["eyebrow"]),
+            (quote_key, defaults["quote"]),
+            (attribution_key, defaults["attribution"]),
+            (context_key, defaults["context"]),
+        ):
+            st.session_state.setdefault(key, default)
+        data = {
+            "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
+            "quote": st.text_area("Quote", height=120, key=quote_key),
+            "attribution": st.text_input("Attribution", key=attribution_key),
+            "context": st.text_input("Context", key=context_key),
+        }
     elif card_type == "Head-to-Head":
-        data["eyebrow"] = st.text_input("Eyebrow", value="COMPARISON", key=f"{state_id}-eyebrow")
-        data["headline"] = st.text_input("Headline", key=f"{state_id}-headline")
-        left_col, right_col = st.columns(2)
-        with left_col:
-            left_name = st.text_input("Left name", key=f"{state_id}-left-name")
-        with right_col:
-            right_name = st.text_input("Right name", key=f"{state_id}-right-name")
-        metrics, left_values, right_values = [], {}, {}
-        for index in range(3):
+        eyebrow_key = value_key("eyebrow")
+        headline_key = value_key("headline")
+        left_name_key = value_key("left-name")
+        right_name_key = value_key("right-name")
+        for key, default in (
+            (eyebrow_key, defaults["eyebrow"]),
+            (headline_key, defaults["headline"]),
+            (left_name_key, defaults["left"]["name"]),
+            (right_name_key, defaults["right"]["name"]),
+        ):
+            st.session_state.setdefault(key, default)
+        data = {
+            "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
+            "headline": st.text_input("Headline", key=headline_key),
+            "left": {"name": st.text_input("Left name", key=left_name_key), "values": {}},
+            "right": {"name": st.text_input("Right name", key=right_name_key), "values": {}},
+            "metrics": [],
+            "image_mode": image_mode,
+            "split_direction": split_direction,
+        }
+        for index, metric in enumerate(defaults["metrics"], 1):
+            label_key = value_key(f"metric-{index}-label")
+            left_key = value_key(f"metric-{index}-left")
+            right_key = value_key(f"metric-{index}-right")
+            st.session_state.setdefault(label_key, metric)
+            st.session_state.setdefault(left_key, defaults["left"]["values"].get(metric, ""))
+            st.session_state.setdefault(right_key, defaults["right"]["values"].get(metric, ""))
             cols = st.columns(3)
             with cols[0]:
-                label = st.text_input(f"Metric {index + 1}", key=f"{state_id}-compare-label-{index}")
+                label = st.text_input(f"Metric {index}", key=label_key)
             with cols[1]:
-                left_value = st.text_input(f"Left {index + 1}", key=f"{state_id}-compare-left-{index}")
+                left_value = st.text_input(f"Left {index}", key=left_key)
             with cols[2]:
-                right_value = st.text_input(f"Right {index + 1}", key=f"{state_id}-compare-right-{index}")
+                right_value = st.text_input(f"Right {index}", key=right_key)
             if label.strip():
-                metrics.append(label.strip())
-                left_values[label.strip()] = left_value.strip()
-                right_values[label.strip()] = right_value.strip()
-        data["left"] = {"name": left_name, "values": left_values}
-        data["right"] = {"name": right_name, "values": right_values}
-        data["metrics"] = metrics
+                data["metrics"].append(label.strip())
+                data["left"]["values"][label.strip()] = left_value.strip()
+                data["right"]["values"][label.strip()] = right_value.strip()
     else:
-        data["eyebrow"] = st.text_input("Eyebrow", value="MILESTONE", key=f"{state_id}-eyebrow")
-        data["value"] = st.text_input("Value", key=f"{state_id}-value")
-        data["label"] = st.text_input("Label", key=f"{state_id}-label")
-        data["context"] = st.text_area("Context", height=90, key=f"{state_id}-context")
+        eyebrow_key = value_key("eyebrow")
+        hero_value_key = value_key("value")
+        label_key = value_key("label")
+        context_key = value_key("context")
+        for key, default in (
+            (eyebrow_key, defaults["eyebrow"]),
+            (hero_value_key, defaults["value"]),
+            (label_key, defaults["label"]),
+            (context_key, defaults["context"]),
+        ):
+            st.session_state.setdefault(key, default)
+        data = {
+            "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
+            "value": st.text_input("Value", key=hero_value_key),
+            "label": st.text_input("Label", key=label_key),
+            "context": st.text_area("Context", height=90, key=context_key),
+        }
 
     result_key = f"{state_id}-result"
     if st.button("Render card", type="primary", width="stretch", key=f"{state_id}-render"):
         try:
+            from renderer import _top5_subject_mask
+
+            first_bytes = bytes(
+                crop_store.get(selected_primary_asset["asset_key"])
+                or selected_primary_asset.get("bytes")
+                or b""
+            )
+            if not first_bytes:
+                raise CardStudioError("The selected image has no usable image bytes.")
+
+            if card_type == "Head-to-Head" and image_mode == "Two images":
+                second_bytes = bytes(
+                    crop_store.get(selected_secondary_asset["asset_key"])
+                    or selected_secondary_asset.get("bytes")
+                    or b""
+                )
+                if not second_bytes:
+                    raise CardStudioError("The second selected image has no usable image bytes.")
+                source = (first_bytes, second_bytes)
+                subject_mask = (
+                    _top5_subject_mask(first_bytes),
+                    _top5_subject_mask(second_bytes),
+                )
+            else:
+                source = first_bytes
+                subject_mask = _top5_subject_mask(first_bytes)
+
             st.session_state[result_key] = {
-                "bytes": render_card(card_type, selected_bytes, data),
+                "bytes": render_card(
+                    card_type,
+                    source,
+                    data,
+                    subject_mask=subject_mask,
+                ),
                 "type": card_type,
                 "data": data,
-                "source": selected_source,
-                "source_key": selected_key,
+                "source": selected_primary_asset["source"],
+                "source_key": selected_primary_asset["asset_key"],
             }
         except (CardStudioError, OSError, RuntimeError) as exc:
             st.session_state[result_key] = {"error": str(exc)}
@@ -1993,12 +2208,17 @@ def _render_card_studio(
         width="stretch",
         key=f"{state_id}-use",
     ):
+        first_bytes = bytes(
+            crop_store.get(selected_primary_asset["asset_key"])
+            or selected_primary_asset.get("bytes")
+            or b""
+        )
         assignment = {
-            "asset_key": f"card-studio-{slide}-{selected_key}",
+            "asset_key": f"card-studio-{slide}-{selected_primary_asset['asset_key']}",
             "result_key": "card-studio",
             "source": result.get("source") or "Card Studio",
             "label": f"Card Studio · {result.get('type') or 'Card'}",
-            "bytes": selected_bytes,
+            "bytes": first_bytes,
             "preview_bytes": bytes(result["bytes"]),
             "card_studio": {
                 "type": result.get("type"),

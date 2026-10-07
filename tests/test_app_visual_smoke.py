@@ -536,3 +536,34 @@ def test_manual_subject_cutout_migrates_four_point_polygon_to_eight_points():
         (120, 1200),
         (120, 950),
     ]
+
+
+def test_card_studio_shows_image_pool_crop_controls_and_default_fields():
+    assets = [
+        {"bytes": _image_bytes((40, 50, 60)), "source": "source-a", "article_title": "Image A"},
+        {"bytes": _image_bytes((70, 80, 90)), "source": "source-b", "article_title": "Image B"},
+        {"bytes": _image_bytes((100, 110, 120)), "source": "source-c", "article_title": "Image C"},
+    ]
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["visual_test_mode"] = "Option 5 · Card Studio"
+    at.session_state["test-standalone-card-studio-type"] = "Stat Highlight"
+    at.session_state["visual_result"] = {"assets": assets}
+    at.session_state["script_data"] = {
+        "headline": "India win again",
+        "script": [{"voiceover": "One."}] * 4,
+    }
+    at.run()
+
+    assert not at.exception, at.exception
+    assert [button.label for button in at.button].count("Crop / reposition") == 3
+    next(button for button in at.button if button.label == "Select image").click().run()
+    assert not at.exception, at.exception
+    values = {field.label: field.value for field in at.text_input}
+    assert values["Eyebrow"] == "CAREER STAT"
+    assert values["Headline"] == "A huge scoring run"
+    assert values["Hero value"] == "1,203"
+    assert values["Unit"] == "RUNS"
+    assert any(field.label == "Metric 1 label" and field.value == "Matches" for field in at.text_input)
