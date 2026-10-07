@@ -30,6 +30,33 @@ MAX_IMAGE_BYTES = 8_000_000
 SEARCH_RESULTS = 15
 SEARCH_TIMEOUT = 8
 PAGE_TIMEOUT_MS = 10_000
+SEARCH_REGION = "wt-wt"
+GLOBAL_PUBLISHER_HOSTS = frozenset({
+    "apnews.com",
+    "atptour.com",
+    "bbc.com",
+    "bbc.co.uk",
+    "cbssports.com",
+    "cnn.com",
+    "espn.com",
+    "eurosport.com",
+    "fifa.com",
+    "formula1.com",
+    "foxsports.com",
+    "guardian.com",
+    "icc-cricket.com",
+    "mlb.com",
+    "nba.com",
+    "nbcsports.com",
+    "nfl.com",
+    "olympics.com",
+    "reuters.com",
+    "skysports.com",
+    "theguardian.com",
+    "uefa.com",
+    "wtatennis.com",
+    "yahoo.com",
+})
 MAX_AGE_HOURS = 72
 QUERY_COUNT = 3
 
@@ -328,6 +355,15 @@ def _related_article_score(query, article_title, story_title, entity=""):
     )
 
 
+def _global_publisher(url):
+    host = (
+        urlparse(str(url or "")).netloc.casefold().split(":")[0].removeprefix("www.")
+    )
+    return host in GLOBAL_PUBLISHER_HOSTS or any(
+        host.endswith("." + domain) for domain in GLOBAL_PUBLISHER_HOSTS
+    )
+
+
 def _ddgs_news(query, timelimit="d"):
     try:
         from ddgs import DDGS
@@ -339,7 +375,7 @@ def _ddgs_news(query, timelimit="d"):
         try:
             results = search.news(
                 query=query,
-                region="us-en",
+                region=SEARCH_REGION,
                 safesearch="moderate",
                 timelimit=timelimit,
                 max_results=SEARCH_RESULTS,
@@ -356,7 +392,7 @@ def _google_news_rss(query):
     url = (
         "https://news.google.com/rss/search?q="
         + quote_plus(query)
-        + "&hl=en-IN&gl=IN&ceid=IN:en"
+        + "&hl=en"
     )
     try:
         response = requests.get(url, timeout=SEARCH_TIMEOUT, headers=HEADERS)
@@ -389,7 +425,7 @@ def _news_search(query, historical=False):
             search = DDGS(timeout=SEARCH_TIMEOUT)
             results = search.text(
                 query=query,
-                region="us-en",
+                region=SEARCH_REGION,
                 safesearch="moderate",
                 max_results=SEARCH_RESULTS,
                 backend="auto",
@@ -508,6 +544,7 @@ def _collect_related_pages(queries, original_url, story_title="", entity="", his
                 "published_at": published.isoformat() if published else "",
                 "match": match,
                 "age": age,
+                "global_source": _global_publisher(url),
                 "_host": urlparse(url).netloc.casefold().removeprefix("www."),
             })
             seen_urls.add(key)
@@ -515,6 +552,7 @@ def _collect_related_pages(queries, original_url, story_title="", entity="", his
     if historical:
         ranked.sort(
             key=lambda item: (
+                not bool(item.get("global_source")),
                 -float(item.get("match") or 0),
                 float(item.get("age") or 999999),
             )
@@ -522,6 +560,7 @@ def _collect_related_pages(queries, original_url, story_title="", entity="", his
     else:
         ranked.sort(
             key=lambda item: (
+                not bool(item.get("global_source")),
                 1 if item.get("age") is None else 0,
                 float(item.get("age") or 0),
                 -float(item.get("match") or 0),
@@ -574,7 +613,7 @@ def _collect_profile_pages(entity):
             try:
                 results = search.text(
                     query=query,
-                    region="us-en",
+                    region=SEARCH_REGION,
                     safesearch="moderate",
                     max_results=8,
                     backend=backend,

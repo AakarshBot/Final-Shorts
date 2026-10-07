@@ -185,7 +185,11 @@ Top-5 has nine visual options in Test:
 
 The established Cricket/Deep-Dive visual retrieval options remain unchanged. YT Trends uses the same single-story visual framework and now exposes **Option 7 · Text Cutout** alongside Options 1–6 in Test and Live. Top-5 Option 3 is the manual real-image fetcher: it accepts a manual query and returns the real-image provider pool only. It does not render a text card. Top-5 Option 8 is the future Body Card text-based visual and remains dashboard WIP with no active renderer.
 
-Top-5 Test Visuals remains independently runnable. The six-slide production Visual QC uses the approved Top-5 Scriptwriter handoff, while the standalone Test playground can exercise visual functions without upstream approvals.
+**Global publisher discovery:** The Automatic Scraper and Manual Scraper now search publisher results without a regional search lock. DuckDuckGo text/news discovery uses the no-region `wt-wt` setting, and the Google News RSS lane no longer requests the India-specific `gl=IN`, `ceid=IN:en` feed.
+
+Relevant results from established international publishers are ranked ahead of other matching publisher pages, including Reuters, AP, BBC, ESPN, Sky Sports, The Guardian, Eurosport and major international sports governing bodies. This is a priority, not a whitelist: relevant Indian, regional and other local publishers remain eligible and can still fill the pool. The original selected article remains the first automatic page.
+
+Both Automatic and Manual Scraper therefore use the same global-aware publisher discovery path without a second scraping architecture or new dependency. Manual Real-Image Search remains a separate provider pool and is already not region-locked.
 
 Crop / Reposition remains the existing shared crop path. Cropped bytes are the exact bytes passed to Top-5 preview, selection and Subject Cutout analysis.
 
