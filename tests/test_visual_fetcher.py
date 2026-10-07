@@ -446,3 +446,95 @@ def test_static_parser_handles_responsive_image_markup():
     assert "https://example.com/a.jpg" in urls
     assert "https://example.com/b.jpg" in urls
     assert "https://example.com/c.jpg" in urls
+
+
+def test_search_discovery_uses_no_region(monkeypatch):
+    calls = []
+
+    class FakeDDGS:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        def news(self, **kwargs):
+            calls.append(("news", kwargs["region"]))
+            return []
+
+        def text(self, **kwargs):
+            calls.append(("text", kwargs["region"]))
+            return []
+
+    monkeypatch.setitem(
+        __import__("sys").modules,
+        "ddgs",
+        type("FakeModule", (), {"DDGS": FakeDDGS}),
+    )
+
+    visual_fetcher._news_search("Carlos Alcaraz Tokyo Open")
+
+    assert calls
+    assert all(region == "wt-wt" for _, region in calls)
+
+
+def test_google_news_is_not_india_locked(monkeypatch):
+    captured = {}
+
+    class Response:
+        content = b"<rss></rss>"
+
+        def raise_for_status(self):
+            return None
+
+    def fake_get(url, **kwargs):
+        captured["url"] = url
+        return Response()
+
+    monkeypatch.setattr(visual_fetcher.requests, "get", fake_get)
+
+    visual_fetcher._google_news_rss("Carlos Alcaraz Tokyo Open")
+
+    assert "gl=IN" not in captured["url"]
+    assert "ceid=IN:en" not in captured["url"]
+    assert "hl=en" in captured["url"]
+
+
+def test_global_publishers_are_prioritized_without_excluding_other_sources(monkeypatch):
+    now = datetime.now(timezone.utc).isoformat()
+
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_news_search",
+        lambda query, historical=False: [
+            {
+                "title": "Carlos Alcaraz wins Tokyo Open after dramatic final",
+                "url": "https://example.com/local",
+                "published_at": now,
+                "query": query,
+            },
+            {
+                "title": "Carlos Alcaraz wins Tokyo Open after dramatic final",
+                "url": "https://www.reuters.com/world/sports/example",
+                "published_at": now,
+                "query": query,
+            },
+        ],
+    )
+
+    pages = visual_fetcher._collect_related_pages(
+        ["Carlos Alcaraz Tokyo Open"],
+        "",
+        "Carlos Alcaraz wins Tokyo Open after dramatic final",
+        "Carlos Alcaraz",
+    )
+
+    assert [page["url"] for page in pages] == [
+        "https://www.reuters.com/world/sports/example",
+        "https://example.com/local",
+    ]
+    assert pages[0]["global_source"] is True
+    assert pages[1]["global_source"] is False
+
+
+def test_global_publisher_subdomains_are_recognized():
+    assert visual_fetcher._global_publisher("https://www.bbc.co.uk/sport/tennis/example")
+    assert visual_fetcher._global_publisher("https://sports.espn.com/tennis/example")
+    assert not visual_fetcher._global_publisher("https://example.com/sports/example")
