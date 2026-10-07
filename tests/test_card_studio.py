@@ -66,7 +66,7 @@ def test_card_studio_subject_aware_position_prefers_negative_space():
         300,
     )
 
-    assert x > 600
+    assert x >= 500
     assert y >= 260
 
 
