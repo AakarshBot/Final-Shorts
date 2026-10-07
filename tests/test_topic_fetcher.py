@@ -659,7 +659,7 @@ def test_fetch_youtube_search_trends_checks_fallback_candidates_when_initial_bat
         if seed == "tennis":
             return [
                 {
-                    "keyword": f"Tennis story {index}",
+                    "keyword": f"Carlos Alcaraz story {index}",
                     "signal": "Rising",
                     "rank": index,
                     "breakout": False,
