@@ -204,6 +204,7 @@ Subject Cutout receives the selected/cropped image, builds one foreground mask, 
 The original image is composited back through the foreground mask after the headline is drawn, so the detected foreground remains visibly above the text while real gaps in the mask keep the headline visible.
 
 Top-5 Option 7 has no body copy. It uses the approved headline only. Normal Top-5 cards never run subject segmentation.
+
 ## Subtitles — Function 05
 
 Contract:
