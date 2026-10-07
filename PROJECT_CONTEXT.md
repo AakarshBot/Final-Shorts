@@ -184,7 +184,19 @@ Card Studio is one manual-QC entry point. It does not search for images itself; 
 
 Only Text Subject Cutout is approved for Live. New card types stay Test-only until the user approves their actual 1080 × 1920 output. No automatic approval gate is added.
 
-The existing Manual Subject Cutout editor is the implementation behind Text Subject Cutout. It keeps selected asset state separate from selected line-break layout state, so previewing line-break layouts cannot replace the asset used by Render Now. The existing crop/reposition path, polygon behavior, Text Size control, manual QC flow and production handoff remain unchanged.
+The approved Text Subject Cutout / Manual Subject Cutout editor is a separate existing implementation. Its polygon editor, crop/reposition flow, negative-space and behind-subject modes, Text Size control, line-break preview, renderer behavior and handoff are not rewritten as part of Card Studio improvements.
+
+Card Studio WIP behavior:
+- Every WIP card type opens with concrete default test content in every editable field, so the card can be rendered immediately for visual evaluation.
+- The image picker shows the full available image pool as actual image previews, not title-only choices.
+- Every displayed image has the existing **Crop / reposition** control. Cropping is applied before the image is selected for the Card Studio composition, and the cropped bytes are reused for the card render.
+- WIP cards use the factory's existing subject-aware foreground mask only to choose better negative-space placement for text. There is no text-behind-subject restoration, subject cutout, or hidden-text treatment in these WIP cards.
+- The subject-aware placement is intentionally basic: it scores a small set of safe text positions and prefers the one with less detected foreground coverage while keeping the original card hierarchy.
+- Quote / Reaction has been rewritten as a stronger sports-editorial quote treatment using the factory's condensed typography, accent rule and image-first composition. It is still WIP and requires manual approval.
+- Head-to-Head supports both **One image** and **Two images**. Two-image mode lets the user manually choose which pool image is Image 1 and Image 2, then choose **Vertical** or **Horizontal** split. Each side keeps its own name and corresponding metric values.
+- Single-image Head-to-Head keeps the editorial split-stat treatment but now participates in the same basic subject-aware headline placement.
+- Card Studio continues to create static 1080 × 1920 frames; the production Renderer does not animate normal headline/subtitle layers over a completed Card Studio frame.
+- No new package or external graphics framework is introduced. The existing Pillow + renderer stack remains the implementation.
 
 **Global publisher discovery:** The Automatic Scraper and Manual Scraper search publisher results without a regional search lock. DuckDuckGo text/news discovery uses the no-region `wt-wt` setting, and the Google News RSS lane no longer requests the India-specific `gl=IN`, `ceid=IN:en` feed.
 
@@ -485,11 +497,14 @@ Current overall cricket-line checkpoint: **6/10**.
 This is the baseline for future Cricket pipeline changes. The established Cricket functionality remains usable. New card work now lives under Card Studio so Test can prove each visual type before any Live promotion.
 
 Card Studio checkpoint:
-- Text Subject Cutout is the only approved card type and remains unchanged.
-- Stat Highlight and Quote / Reaction are no longer standalone factory options; they are Test-only Card Studio types.
-- Head-to-Head and Key Fact / Milestone are additional Test-only Card Studio candidates.
-- All new card types use manual content/data entry, the existing image pools, and the existing 1080 × 1920 visual handoff.
-- No new card type is Live-approved until its rendered frame passes Manual QC.
+- Text Subject Cutout is the only approved card type and its existing Subject Cutout implementation is untouched.
+- Stat Highlight, Quote / Reaction, Head-to-Head and Key Fact / Milestone remain Test-only WIP Card Studio types.
+- All WIP card fields open with usable default test values.
+- WIP Card Studio shows the full image pool with real image previews and the existing crop/reposition control before image selection.
+- WIP cards use the existing subject-aware foreground mask only for simple negative-space text placement. They do not hide text behind subjects.
+- Head-to-Head supports one-image and two-image modes. Two-image mode has manual Image 1/Image 2 assignment plus manual Vertical/Horizontal split selection.
+- Quote / Reaction is an editorial redesign and remains unapproved until the user manually reviews its output.
+- No WIP card type is promoted to Live until the user approves the actual rendered frame.
 
 Checkpoint rule:
 - Use **Cricket line = 6/10** as the starting quality baseline for future Cricket pipeline improvements.
@@ -570,7 +585,7 @@ Status: **Rewritten from scratch / ready for Test validation.**
 - Dashboard execution is prompt-driven: no story, script, audio, subtitle, render or upload function may start merely because Streamlit reran.
 - The only intentional automatic production action is the approved automatic visual scraper after its upstream manual approval; it runs once for that handoff and must not use polling reruns.
 - Test and Live manual controls are state-driven. A widget interaction may redraw its owning fragment, but must not refresh the full dashboard unless an explicit stage/action transition requires it.
-- Text Subject Cutout uses exactly one shared fragment and one shared renderer across Top-5 Test Card Studio, Cricket Test + Live Card Studio, and YT Trends Test + Live Card Studio.
+- Text Subject Cutout uses exactly one shared fragment and one shared renderer across Top-5 Test Card Studio, Cricket Test + Live Card Studio, and YT Trends Test + Live Card Studio. That existing implementation is protected during Card Studio WIP redesigns.
 - The cutout Text Size control must feed the actual Render Now frame; regression coverage compares rendered pixels across different size settings rather than checking only stored configuration.
 - Top-5 Live automatic visual fetching remains concurrent, but completion is collected when the Visuals stage is entered instead of using `sleep` + `st.rerun()` polling.
 - Startup remains free of project-wide file-watcher overhead; `.streamlit/config.toml` keeps `fileWatcherType = "none"` and `runOnSave = false`.
