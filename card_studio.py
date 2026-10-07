@@ -1,32 +1,28 @@
-"""Standalone card layouts for Final-Shorts visual QC.
+"""Manual Card Studio layouts for Final-Shorts.
 
-This module renders 1080x1920 sports/news cards with Pillow only.
-All card content is manually supplied and remains subject to visual QC.
+Card Studio produces static 1080x1920 editorial frames for manual QC.
 """
 
 from __future__ import annotations
 
 from io import BytesIO
 from pathlib import Path
-import textwrap
 
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 
 
 WIDTH = 1080
 HEIGHT = 1920
 
-SAFE_LEFT = 72
-SAFE_TOP = 300
+SAFE_LEFT = 88
+SAFE_TOP = 220
 SAFE_RIGHT = 864
-SAFE_BOTTOM = 1240
+SAFE_BOTTOM = 1460
 
 ACCENT = (255, 205, 66)
 WHITE = (248, 249, 251)
-MUTED = (193, 198, 204)
-PANEL = (7, 10, 14, 224)
-PANEL_SOFT = (7, 10, 14, 198)
-BLACK = (0, 0, 0)
+MUTED = (199, 204, 210)
+DARK = (0, 0, 0)
 
 CARD_TYPES = (
     "Text Subject Cutout",
@@ -41,7 +37,7 @@ LIVE_CARD_TYPES = ("Text Subject Cutout",)
 
 
 class CardStudioError(ValueError):
-    """Raised when a card cannot be rendered cleanly."""
+    """Raised when a Card Studio frame cannot be rendered cleanly."""
 
 
 def _open_image(source: bytes | bytearray | Image.Image) -> Image.Image:
@@ -58,22 +54,21 @@ def _open_image(source: bytes | bytearray | Image.Image) -> Image.Image:
 
 def _cover(source: bytes | bytearray | Image.Image) -> Image.Image:
     image = _open_image(source)
-    ratio = WIDTH / HEIGHT
-    current = image.width / image.height
-    if current > ratio:
-        crop_width = max(1, int(image.height * ratio))
+    target_ratio = WIDTH / HEIGHT
+    ratio = image.width / image.height
+    if ratio > target_ratio:
+        crop_width = max(1, int(image.height * target_ratio))
         left = (image.width - crop_width) // 2
         image = image.crop((left, 0, left + crop_width, image.height))
-    elif current < ratio:
-        crop_height = max(1, int(image.width / ratio))
+    elif ratio < target_ratio:
+        crop_height = max(1, int(image.width / target_ratio))
         top = (image.height - crop_height) // 2
         image = image.crop((0, top, image.width, top + crop_height))
     return image.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
 
 
 def _font_file(name: str) -> Path:
-    root = Path(__file__).resolve().parent / "fonts"
-    return root / name
+    return Path(__file__).resolve().parent / "fonts" / name
 
 
 def _font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
@@ -92,12 +87,17 @@ def _font(size: int, bold: bool = True) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
-def _text_width(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> int:
+def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
     box = draw.textbbox((0, 0), text, font=font)
-    return box[2] - box[0]
+    return box[2] - box[0], box[3] - box[1]
 
 
-def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_width: int) -> list[str]:
+def _wrap(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    font: ImageFont.ImageFont,
+    max_width: int,
+) -> list[str]:
     words = " ".join(str(text or "").split()).split()
     if not words:
         return []
@@ -105,7 +105,7 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w
     current = words[0]
     for word in words[1:]:
         candidate = f"{current} {word}"
-        if _text_width(draw, candidate, font) <= max_width:
+        if _measure(draw, candidate, font)[0] <= max_width:
             current = candidate
         else:
             lines.append(current)
@@ -114,7 +114,7 @@ def _wrap(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont, max_w
     return lines
 
 
-def _fit_lines(
+def _fit(
     draw: ImageDraw.ImageDraw,
     text: str,
     max_width: int,
@@ -126,29 +126,9 @@ def _fit_lines(
     for size in range(start_size, min_size - 1, -4):
         font = _font(size, bold=bold)
         lines = _wrap(draw, text, font, max_width)
-        if len(lines) <= max_lines and lines and all(
-            _text_width(draw, line, font) <= max_width for line in lines
-        ):
+        if lines and len(lines) <= max_lines:
             return font, lines
     raise CardStudioError("The card text is too long for this layout. Shorten the copy.")
-
-
-def _line_height(draw: ImageDraw.ImageDraw, font: ImageFont.ImageFont, gap: int) -> int:
-    box = draw.textbbox((0, 0), "Ag", font=font)
-    return box[3] - box[1] + gap
-
-
-def _draw_text(
-    canvas: Image.Image,
-    xy: tuple[int, int],
-    text: str,
-    font: ImageFont.ImageFont,
-    fill: tuple[int, int, int] = WHITE,
-    anchor: str | None = None,
-    stroke: int = 0,
-) -> None:
-    draw = ImageDraw.Draw(canvas)
-    draw.text(xy, text, font=font, fill=fill, anchor=anchor, stroke_width=stroke, stroke_fill=BLACK)
 
 
 def _draw_lines(
@@ -161,96 +141,140 @@ def _draw_lines(
     fill: tuple[int, int, int] = WHITE,
 ) -> int:
     draw = ImageDraw.Draw(canvas)
-    step = _line_height(draw, font, gap)
+    _, height = _measure(draw, "Ag", font)
     for line in lines:
+        draw.text(
+            (x + 3, y + 5),
+            line,
+            font=font,
+            fill=DARK,
+            stroke_width=2,
+            stroke_fill=DARK,
+        )
         draw.text((x, y), line, font=font, fill=fill)
-        y += step
+        y += height + gap
     return y
 
 
 def _background(source: bytes | bytearray | Image.Image) -> Image.Image:
     base = _cover(source).convert("RGBA")
-    veil = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(veil)
-    draw.rectangle((0, 0, WIDTH, HEIGHT), fill=(0, 0, 0, 74))
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    draw.rectangle((0, 0, WIDTH, HEIGHT), fill=(0, 0, 0, 58))
+
+    for top in range(HEIGHT):
+        if top < 760:
+            alpha = 0
+        elif top >= 1510:
+            alpha = 205
+        else:
+            alpha = int((top - 760) / 750 * 205)
+        draw.line((0, top, WIDTH, top), fill=(0, 0, 0, alpha))
+
     draw.rectangle(
-        (SAFE_LEFT - 28, SAFE_TOP - 30, SAFE_RIGHT + 20, SAFE_BOTTOM + 34),
-        fill=PANEL,
+        (SAFE_LEFT - 22, SAFE_TOP - 22, SAFE_RIGHT + 24, SAFE_BOTTOM + 14),
+        fill=(0, 0, 0, 34),
     )
-    base = Image.alpha_composite(base, veil)
-    return base
+    draw.rectangle(
+        (SAFE_LEFT - 22, SAFE_TOP - 22, SAFE_LEFT - 14, SAFE_BOTTOM + 14),
+        fill=ACCENT,
+    )
+    return Image.alpha_composite(base, overlay)
 
 
-def _frame_header(canvas: Image.Image, eyebrow: str) -> int:
+def _kicker(canvas: Image.Image, text: str) -> int:
     draw = ImageDraw.Draw(canvas)
-    x = SAFE_LEFT
-    y = SAFE_TOP
-    draw.rectangle((x, y + 4, x + 70, y + 12), fill=ACCENT)
+    clean = " ".join(str(text or "").split()).upper() or "STORY"
     draw.text(
-        (x + 92, y - 2),
-        " ".join(str(eyebrow or "").split()).upper(),
+        (SAFE_LEFT, SAFE_TOP - 2),
+        clean,
         font=_font(34),
         fill=MUTED,
     )
-    return y + 72
+    return SAFE_TOP + 62
+
+
+def _draw_metric_row(
+    canvas: Image.Image,
+    y: int,
+    label: str,
+    value: str,
+    value_size: int = 58,
+) -> None:
+    draw = ImageDraw.Draw(canvas)
+    draw.line(
+        (SAFE_LEFT, y, SAFE_RIGHT, y),
+        fill=(255, 255, 255, 55),
+        width=2,
+    )
+    draw.text(
+        (SAFE_LEFT + 6, y + 20),
+        " ".join(label.split()).upper(),
+        font=_font(29, False),
+        fill=MUTED,
+    )
+    draw.text(
+        (SAFE_RIGHT - 8, y + 13),
+        " ".join(value.split()),
+        font=_font(value_size),
+        fill=WHITE,
+        anchor="ra",
+        stroke_width=1,
+        stroke_fill=DARK,
+    )
 
 
 def _render_stat_highlight(source, data: dict) -> Image.Image:
     canvas = _background(source)
     draw = ImageDraw.Draw(canvas)
-    y = _frame_header(canvas, data.get("eyebrow") or "STAT")
-    headline = str(data.get("headline") or "").strip()
-    value = str(data.get("value") or "").strip()
-    unit = str(data.get("unit") or "").strip()
+    y = _kicker(canvas, data.get("eyebrow") or "STAT")
+
+    headline = " ".join(str(data.get("headline") or "").split())
+    value = " ".join(str(data.get("value") or "").split())
+    unit = " ".join(str(data.get("unit") or "").split())
+    metrics = data.get("metrics") or []
+
     if not headline or not value:
         raise CardStudioError("Stat Highlight needs a headline and a hero value.")
-
-    headline_font, headline_lines = _fit_lines(
-        draw, headline, SAFE_RIGHT - SAFE_LEFT, 2, 104, 64
-    )
-    y = _draw_lines(canvas, headline_lines, SAFE_LEFT, y, headline_font, 8, WHITE) + 26
-
-    value_font = _font(236)
-    draw.text((SAFE_LEFT, y), value, font=value_font, fill=WHITE)
-    box = draw.textbbox((SAFE_LEFT, y), value, font=value_font)
-    value_bottom = box[3]
-    if unit:
-        draw.text(
-            (box[2] + 18, value_bottom - 64),
-            unit.upper(),
-            font=_font(50),
-            fill=ACCENT,
-        )
-    y = value_bottom + 50
-
-    metrics = data.get("metrics") or []
     if len(metrics) > 3:
         raise CardStudioError("Stat Highlight supports at most three supporting metrics.")
+
+    headline_font, headline_lines = _fit(draw, headline, SAFE_RIGHT - SAFE_LEFT - 8, 2, 92, 60)
+    y = _draw_lines(canvas, headline_lines, SAFE_LEFT, y, headline_font, 7) + 54
+
+    value_font = _font(286)
+    value_w, value_h = _measure(draw, value, value_font)
+    if value_w > SAFE_RIGHT - SAFE_LEFT:
+        value_font, _ = _fit(draw, value, SAFE_RIGHT - SAFE_LEFT, 1, 240, 120)
+        value_w, value_h = _measure(draw, value, value_font)
+
+    draw.text(
+        (SAFE_LEFT, y),
+        value,
+        font=value_font,
+        fill=WHITE,
+        stroke_width=2,
+        stroke_fill=DARK,
+    )
+    if unit:
+        unit_y = y + max(12, value_h - 62)
+        draw.text(
+            (SAFE_LEFT + value_w + 18, unit_y),
+            unit.upper(),
+            font=_font(46),
+            fill=ACCENT,
+        )
+    y += value_h + 72
+
     if metrics:
-        width = SAFE_RIGHT - SAFE_LEFT
-        row_h = 128
         for metric in metrics:
             label = " ".join(str(metric.get("label") or "").split())
             metric_value = " ".join(str(metric.get("value") or "").split())
             if not label or not metric_value:
                 raise CardStudioError("Every supporting metric needs a label and value.")
-            draw.rounded_rectangle(
-                (SAFE_LEFT, y, SAFE_RIGHT, y + row_h - 12),
-                radius=16,
-                fill=PANEL_SOFT,
-            )
-            draw.text((SAFE_LEFT + 24, y + 20), label.upper(), font=_font(31, False), fill=MUTED)
-            metric_font, metric_lines = _fit_lines(
-                draw, metric_value, width - 300, 1, 62, 42
-            )
-            draw.text(
-                (SAFE_RIGHT - 24, y + 19),
-                metric_lines[0],
-                font=metric_font,
-                fill=WHITE,
-                anchor="ra",
-            )
-            y += row_h
+            _draw_metric_row(canvas, y, label, metric_value)
+            y += 112
 
     return canvas
 
@@ -258,112 +282,126 @@ def _render_stat_highlight(source, data: dict) -> Image.Image:
 def _render_quote_reaction(source, data: dict) -> Image.Image:
     canvas = _background(source)
     draw = ImageDraw.Draw(canvas)
-    y = _frame_header(canvas, data.get("eyebrow") or "REACTION")
+    y = _kicker(canvas, data.get("eyebrow") or "REACTION")
+
     quote = " ".join(str(data.get("quote") or "").split())
     attribution = " ".join(str(data.get("attribution") or "").split())
     context = " ".join(str(data.get("context") or "").split())
+
     if not quote or not attribution:
         raise CardStudioError("Quote / Reaction needs a quote and attribution.")
 
-    draw.text((SAFE_LEFT, y), "“", font=_font(128), fill=ACCENT)
-    y += 66
-    quote_font, quote_lines = _fit_lines(
-        draw, quote, SAFE_RIGHT - SAFE_LEFT, 7, 92, 56
+    quote_font, quote_lines = _fit(draw, quote, SAFE_RIGHT - SAFE_LEFT - 4, 6, 82, 50)
+    draw.text((SAFE_LEFT - 3, y - 12), "“", font=_font(120), fill=ACCENT)
+    y = _draw_lines(canvas, quote_lines, SAFE_LEFT, y + 70, quote_font, 12) + 42
+
+    attribution_font, attribution_lines = _fit(
+        draw,
+        attribution,
+        SAFE_RIGHT - SAFE_LEFT,
+        2,
+        50,
+        34,
+        bold=False,
     )
-    y = _draw_lines(canvas, quote_lines, SAFE_LEFT, y, quote_font, 13, WHITE) + 28
-    draw.rectangle((SAFE_LEFT, y, SAFE_LEFT + 110, y + 6), fill=ACCENT)
-    y += 28
-    attribution_font, attribution_lines = _fit_lines(
-        draw, attribution, SAFE_RIGHT - SAFE_LEFT, 2, 48, 34, bold=False
-    )
-    y = _draw_lines(canvas, attribution_lines, SAFE_LEFT, y, attribution_font, 8, WHITE)
+    y = _draw_lines(canvas, attribution_lines, SAFE_LEFT, y, attribution_font, 8)
     if context:
-        y += 22
-        context_font, context_lines = _fit_lines(
-            draw, context, SAFE_RIGHT - SAFE_LEFT, 3, 38, 30, bold=False
+        context_font, context_lines = _fit(
+            draw,
+            context,
+            SAFE_RIGHT - SAFE_LEFT,
+            3,
+            38,
+            30,
+            bold=False,
         )
-        _draw_lines(canvas, context_lines, SAFE_LEFT, y, context_font, 8, MUTED)
+        _draw_lines(canvas, context_lines, SAFE_LEFT, y + 20, context_font, 8, MUTED)
+
     return canvas
 
 
 def _render_head_to_head(source, data: dict) -> Image.Image:
     canvas = _background(source)
     draw = ImageDraw.Draw(canvas)
-    y = _frame_header(canvas, data.get("eyebrow") or "COMPARISON")
+    y = _kicker(canvas, data.get("eyebrow") or "HEAD TO HEAD")
+
     headline = " ".join(str(data.get("headline") or "").split())
     left = data.get("left") or {}
     right = data.get("right") or {}
     metrics = list(data.get("metrics") or [])
+
     if not headline or not left.get("name") or not right.get("name"):
         raise CardStudioError("Head-to-Head needs a headline and both names.")
     if not 1 <= len(metrics) <= 3:
         raise CardStudioError("Head-to-Head needs one to three comparison metrics.")
 
-    headline_font, headline_lines = _fit_lines(
-        draw, headline, SAFE_RIGHT - SAFE_LEFT, 2, 94, 58
-    )
-    y = _draw_lines(canvas, headline_lines, SAFE_LEFT, y, headline_font, 8, WHITE) + 34
+    headline_font, headline_lines = _fit(draw, headline, SAFE_RIGHT - SAFE_LEFT, 2, 82, 54)
+    y = _draw_lines(canvas, headline_lines, SAFE_LEFT, y, headline_font, 7) + 42
 
     split_x = (SAFE_LEFT + SAFE_RIGHT) // 2
-    draw.line((split_x, y, split_x, SAFE_BOTTOM), fill=(255, 255, 255, 48), width=2)
+    draw.line((split_x, y, split_x, SAFE_BOTTOM), fill=(255, 255, 255, 70), width=2)
 
-    for base_x, side, anchor in (
-        (SAFE_LEFT, left, "la"),
-        (split_x + 28, right, "la"),
-    ):
-        name_font, name_lines = _fit_lines(
-            draw, str(side["name"]), split_x - SAFE_LEFT - 48, 2, 62, 42
+    for x, side in ((SAFE_LEFT, left), (split_x + 28, right)):
+        name_font, name_lines = _fit(
+            draw,
+            str(side["name"]),
+            split_x - SAFE_LEFT - 48,
+            2,
+            54,
+            38,
         )
-        draw.multiline_text(
-            (base_x, y),
-            "\n".join(name_lines),
-            font=name_font,
-            fill=WHITE,
-            spacing=4,
-        )
+        _draw_lines(canvas, name_lines, x, y, name_font, 5)
 
-    y += 150
-    row_h = 130
+    y += 138
+    left_values = left.get("values") or {}
+    right_values = right.get("values") or {}
     for label in metrics:
         metric_label = " ".join(str(label).split())
-        lval = " ".join(str((left.get("values") or {}).get(metric_label, "")).split())
-        rval = " ".join(str((right.get("values") or {}).get(metric_label, "")).split())
+        lval = " ".join(str(left_values.get(metric_label) or "").split())
+        rval = " ".join(str(right_values.get(metric_label) or "").split())
         if not lval or not rval:
             raise CardStudioError(f"Both sides need a value for {metric_label}.")
         draw.text((SAFE_LEFT, y), metric_label.upper(), font=_font(27, False), fill=MUTED)
-        lfont, _ = _fit_lines(draw, lval, split_x - SAFE_LEFT - 48, 1, 62, 42)
-        rfont, _ = _fit_lines(draw, rval, SAFE_RIGHT - split_x - 52, 1, 62, 42)
-        draw.text((SAFE_LEFT, y + 36), lval, font=lfont, fill=WHITE)
-        draw.text((split_x + 28, y + 36), rval, font=rfont, fill=WHITE)
-        y += row_h
+        lfont, _ = _fit(draw, lval, split_x - SAFE_LEFT - 48, 1, 60, 40)
+        rfont, _ = _fit(draw, rval, SAFE_RIGHT - split_x - 48, 1, 60, 40)
+        draw.text((SAFE_LEFT, y + 38), lval, font=lfont, fill=WHITE)
+        draw.text((split_x + 28, y + 38), rval, font=rfont, fill=WHITE)
+        draw.line((SAFE_LEFT, y + 108, SAFE_RIGHT, y + 108), fill=(255, 255, 255, 42), width=2)
+        y += 132
+
     return canvas
 
 
 def _render_fact_milestone(source, data: dict) -> Image.Image:
     canvas = _background(source)
     draw = ImageDraw.Draw(canvas)
-    y = _frame_header(canvas, data.get("eyebrow") or "MILESTONE")
+    y = _kicker(canvas, data.get("eyebrow") or "MILESTONE")
+
     value = " ".join(str(data.get("value") or "").split())
     label = " ".join(str(data.get("label") or "").split())
     context = " ".join(str(data.get("context") or "").split())
+
     if not value or not label:
         raise CardStudioError("Key Fact / Milestone needs a value and label.")
 
-    value_font, value_lines = _fit_lines(
-        draw, value, SAFE_RIGHT - SAFE_LEFT, 2, 220, 112
-    )
-    y = _draw_lines(canvas, value_lines, SAFE_LEFT, y, value_font, 6, ACCENT) + 18
+    value_font, value_lines = _fit(draw, value, SAFE_RIGHT - SAFE_LEFT, 2, 210, 104)
+    y = _draw_lines(canvas, value_lines, SAFE_LEFT, y + 24, value_font, 5) + 30
 
-    label_font, label_lines = _fit_lines(
-        draw, label, SAFE_RIGHT - SAFE_LEFT, 2, 74, 46
-    )
-    y = _draw_lines(canvas, label_lines, SAFE_LEFT, y, label_font, 8, WHITE) + 28
+    label_font, label_lines = _fit(draw, label, SAFE_RIGHT - SAFE_LEFT, 3, 68, 42)
+    y = _draw_lines(canvas, label_lines, SAFE_LEFT, y, label_font, 7) + 26
 
     if context:
-        context_font, context_lines = _fit_lines(
-            draw, context, SAFE_RIGHT - SAFE_LEFT, 4, 42, 30, bold=False
+        context_font, context_lines = _fit(
+            draw,
+            context,
+            SAFE_RIGHT - SAFE_LEFT,
+            5,
+            40,
+            30,
+            bold=False,
         )
-        _draw_lines(canvas, context_lines, SAFE_LEFT, y, context_font, 9, MUTED)
+        _draw_lines(canvas, context_lines, SAFE_LEFT, y, context_font, 8, MUTED)
+
     return canvas
 
 
@@ -380,12 +418,7 @@ def _render(card_type: str, source, data: dict) -> Image.Image:
     raise CardStudioError(f"Unknown card type: {normalized or 'None'}")
 
 
-def render_card(
-    card_type: str,
-    source: bytes | bytearray | Image.Image,
-    data: dict,
-) -> bytes:
-    """Render one non-subject-cutout card to a PNG byte string."""
+def render_card(card_type: str, source, data: dict) -> bytes:
     if card_type == "Text Subject Cutout":
         raise CardStudioError("Text Subject Cutout uses the approved shared subject-cutout editor.")
     frame = _render(card_type, source, data).convert("RGB")
@@ -395,13 +428,24 @@ def render_card(
 
 
 def card_data_for_type(card_type: str) -> dict:
-    """Return an empty data schema used by the Streamlit Card Studio editor."""
     if card_type == "Stat Highlight":
-        return {"eyebrow": "STAT", "headline": "", "value": "", "unit": "", "metrics": [{"label": "", "value": ""}]}
+        return {
+            "eyebrow": "STAT",
+            "headline": "",
+            "value": "",
+            "unit": "",
+            "metrics": [],
+        }
     if card_type == "Quote / Reaction":
         return {"eyebrow": "REACTION", "quote": "", "attribution": "", "context": ""}
     if card_type == "Head-to-Head":
-        return {"eyebrow": "COMPARISON", "headline": "", "left": {"name": "", "values": {}}, "right": {"name": "", "values": {}}, "metrics": [""]}
+        return {
+            "eyebrow": "HEAD TO HEAD",
+            "headline": "",
+            "left": {"name": "", "values": {}},
+            "right": {"name": "", "values": {}},
+            "metrics": [],
+        }
     if card_type == "Key Fact / Milestone":
         return {"eyebrow": "MILESTONE", "value": "", "label": "", "context": ""}
     return {}
