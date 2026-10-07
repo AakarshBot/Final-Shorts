@@ -1741,6 +1741,7 @@ def _render_card_studio(
         CardStudioError,
         LIVE_CARD_TYPES,
         TEST_CARD_TYPES,
+        card_composition_options,
         card_data_for_type,
         render_card,
     )
@@ -2027,6 +2028,16 @@ def _render_card_studio(
         )
     )
 
+    composition_key = f"{state_id}-composition"
+    composition_options = card_composition_options(card_type)
+    st.session_state.setdefault(composition_key, defaults.get("composition", "Auto"))
+    composition = st.selectbox(
+        "Editorial composition",
+        list(composition_options),
+        key=composition_key,
+        help="Auto chooses a composition from the actual card content. Test can override it; there is no random variation.",
+    )
+
     def value_key(field):
         return f"{state_id}-{card_type.lower().replace(' ', '-').replace('/', '-').replace('&', 'and')}-{field}"
 
@@ -2043,6 +2054,7 @@ def _render_card_studio(
         ):
             st.session_state.setdefault(key, default)
         data = {
+            "composition": composition,
             "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
             "headline": st.text_input("Headline", key=headline_key),
             "value": st.text_input("Hero value", key=hero_value_key),
@@ -2060,6 +2072,7 @@ def _render_card_studio(
             with cols[1]:
                 value = st.text_input(f"Metric {index} value", key=metric_value_key)
             data["metrics"].append({"label": label, "value": value})
+
     elif card_type == "Quote / Reaction":
         eyebrow_key = value_key("eyebrow")
         quote_key = value_key("quote")
@@ -2073,11 +2086,13 @@ def _render_card_studio(
         ):
             st.session_state.setdefault(key, default)
         data = {
+            "composition": composition,
             "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
             "quote": st.text_area("Quote", height=120, key=quote_key),
             "attribution": st.text_input("Attribution", key=attribution_key),
             "context": st.text_input("Context", key=context_key),
         }
+
     elif card_type == "Head-to-Head":
         eyebrow_key = value_key("eyebrow")
         headline_key = value_key("headline")
@@ -2091,6 +2106,7 @@ def _render_card_studio(
         ):
             st.session_state.setdefault(key, default)
         data = {
+            "composition": composition,
             "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
             "headline": st.text_input("Headline", key=headline_key),
             "left": {"name": st.text_input("Left name", key=left_name_key), "values": {}},
@@ -2117,6 +2133,7 @@ def _render_card_studio(
                 data["metrics"].append(label.strip())
                 data["left"]["values"][label.strip()] = left_value.strip()
                 data["right"]["values"][label.strip()] = right_value.strip()
+
     else:
         eyebrow_key = value_key("eyebrow")
         hero_value_key = value_key("value")
@@ -2130,6 +2147,7 @@ def _render_card_studio(
         ):
             st.session_state.setdefault(key, default)
         data = {
+            "composition": composition,
             "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
             "value": st.text_input("Value", key=hero_value_key),
             "label": st.text_input("Label", key=label_key),
@@ -2190,7 +2208,7 @@ def _render_card_studio(
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">CARD STUDIO</div>'
         '<div class="section-title">Rendered card · manual QC</div></div>'
-        '<div class="section-count">1080 × 1920 · exact frame</div></div>',
+        '<div class="section-count">1080 × 1920 · exact frame · editorial composition</div></div>',
         unsafe_allow_html=True,
     )
     st.image(result["bytes"], width=420)
@@ -2238,6 +2256,7 @@ def _render_card_studio(
                 st.session_state.visuals_approved = False
                 st.session_state.approved_visuals = None
         st.rerun()
+
 
 
 def _top5_fit_preview(value, width=300, height=533):
