@@ -564,6 +564,29 @@ def _side_split_mask(
     return cropped.resize((split if side == 0 else WIDTH - split, HEIGHT), Image.Resampling.BILINEAR)
 
 
+def _side_split_mask(
+    mask: Image.Image | None,
+    direction: str,
+    side: int,
+) -> Image.Image | None:
+    if not isinstance(mask, Image.Image):
+        return None
+    source = mask.convert("L")
+    if direction == "Horizontal":
+        split = HEIGHT // 2
+        if side == 0:
+            cropped = source.crop((0, 0, WIDTH, split))
+            return cropped.resize((WIDTH, split), Image.Resampling.BILINEAR)
+        cropped = source.crop((0, split, WIDTH, HEIGHT))
+        return cropped.resize((WIDTH, HEIGHT - split), Image.Resampling.BILINEAR)
+    split = WIDTH // 2
+    if side == 0:
+        cropped = source.crop((0, 0, split, HEIGHT))
+        return cropped.resize((split, HEIGHT), Image.Resampling.BILINEAR)
+    cropped = source.crop((split, 0, WIDTH, HEIGHT))
+    return cropped.resize((WIDTH - split, HEIGHT), Image.Resampling.BILINEAR)
+
+
 def _render_two_image_head_to_head(
     source_pair,
     data: dict,
