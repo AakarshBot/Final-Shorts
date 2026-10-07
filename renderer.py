@@ -1255,43 +1255,6 @@ def build_manual_subject_cutout_layout_previews(
     return previews
 
 
-def _draw_quote_card(base: Image.Image, card: dict) -> Image.Image:
-    quote = " ".join(str(card.get("quote") or "").split())
-    attribution = " ".join(str(card.get("attribution") or "").split())
-    if not quote:
-        raise ValueError("Quote Card requires quote text.")
-    if not attribution:
-        raise ValueError("Quote Card requires an attribution.")
-    return _draw_top5_editorial_card(
-        base,
-        {
-            "headline": quote,
-            "body": f"— {attribution}",
-            "language": str(card.get("language") or "english"),
-            "max_headline_lines": 10,
-        },
-    )
-
-
-def build_quote_card_preview(
-    source_image: bytes | bytearray | Image.Image,
-    quote: str,
-    attribution: str,
-    source_label: str | None = None,
-    logo_enabled: bool = False,
-) -> bytes:
-    frame = _draw_quote_card(_top5_full_frame_image(source_image), {
-        "quote": quote,
-        "attribution": attribution,
-    })
-    if logo_enabled:
-        _paste_logo(frame)
-    _paste_top5_source(frame, source_label)
-    buffer = BytesIO()
-    frame.convert("RGB").save(buffer, format="PNG", optimize=True)
-    return buffer.getvalue()
-
-
 def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
     label = str(source_label or "Commons").strip() or "Commons"
     draw = ImageDraw.Draw(base)
@@ -1704,7 +1667,6 @@ def render_frame(
     subtitle_y: int | None = None,
     top5_card: dict | None = None,
     validate_handoff: bool = True,
-    quote_card: dict | None = None,
     logo_enabled: bool = False,
     source_enabled: bool = True,
 ) -> Image.Image:
@@ -1725,8 +1687,6 @@ def render_frame(
 
     if top5_card is not None:
         _draw_top5_editorial_card(frame, top5_card)
-    elif quote_card is not None:
-        _draw_quote_card(frame, quote_card)
     else:
         if headline_enabled and t < HEADLINE_SECONDS:
             _draw_headline(
@@ -1919,22 +1879,16 @@ def render_production_video(
     for index, visual in enumerate(visuals, 1):
         if not isinstance(visual, dict):
             raise ValueError(f"Visual {index} is malformed.")
-        result_key = str(visual.get("result_key") or "").strip().casefold()
-        layout = visual.get("card_layout") if isinstance(visual.get("card_layout"), dict) else {}
         top5_card = visual.get("top5_card")
         if top5_card is not None and not isinstance(top5_card, dict):
             raise ValueError(f"Visual {index} has malformed Top-5 card data.")
         manual_subject_cutout = visual.get("manual_subject_cutout")
         if manual_subject_cutout is not None and not isinstance(manual_subject_cutout, dict):
             raise ValueError(f"Visual {index} has malformed Manual Subject Cutout data.")
-        quote_card = visual.get("quote_card")
-        if quote_card is not None:
-            if not isinstance(quote_card, dict):
-                raise ValueError(f"Visual {index} has malformed Quote Card data.")
-            if not str(quote_card.get("quote") or "").strip() or not str(
-                quote_card.get("attribution") or ""
-            ).strip():
-                raise ValueError(f"Visual {index} has incomplete Quote Card data.")
+        card_studio = visual.get("card_studio")
+        if card_studio is not None and not isinstance(card_studio, dict):
+            raise ValueError(f"Visual {index} has malformed Card Studio data.")
+
         image = _fit_visual_to_frame(visual.get("bytes")).convert("RGBA")
         static_frame = None
         if isinstance(manual_subject_cutout, dict):
@@ -1954,30 +1908,32 @@ def render_production_video(
                     str(visual.get("source") or source_label or "Commons").strip() or "Commons",
                 )
             static_frame = static_frame.convert("RGB")
-        elif isinstance(quote_card, dict):
-            static_frame = _draw_quote_card(image, quote_card)
+        elif isinstance(card_studio, dict):
+            preview_bytes = visual.get("preview_bytes")
+            if not isinstance(preview_bytes, (bytes, bytearray)):
+                raise ValueError(f"Visual {index} Card Studio data is missing its rendered preview.")
+            try:
+                with Image.open(BytesIO(bytes(preview_bytes))) as preview_image:
+                    static_frame = preview_image.convert("RGB").copy()
+            except (OSError, ValueError) as exc:
+                raise ValueError(f"Visual {index} Card Studio preview is not a valid image.") from exc
+            if static_frame.size != (WIDTH, HEIGHT):
+                static_frame = static_frame.resize((WIDTH, HEIGHT), Image.Resampling.LANCZOS)
             if logo_enabled:
                 _paste_logo(static_frame)
             if source_enabled:
-                quote_source_label = str(
-                    quote_card.get("source_label")
-                    or visual.get("source")
-                    or source_label
-                    or "Commons"
-                ).strip() or "Commons"
-                _paste_source(static_frame, quote_source_label)
-            static_frame = static_frame.convert("RGB")
+                _paste_source(
+                    static_frame,
+                    str(visual.get("source") or source_label or "Commons").strip() or "Commons",
+                )
 
         prepared_visuals.append({
             "image": image,
             "static_frame": static_frame,
-            "is_stats_card": result_key == "stats-card",
             "is_top5_card": isinstance(top5_card, dict),
             "top5_card": top5_card,
             "manual_subject_cutout": manual_subject_cutout,
-            "is_quote_card": isinstance(quote_card, dict),
-            "quote_card": quote_card,
-            "image_height": int(layout.get("image_height") or 0),
+            "card_studio": card_studio,
         })
 
     durations = []
@@ -2009,22 +1965,15 @@ def render_production_video(
             visual = prepared_visuals[scene_index]
             scene_time = max(0.0, t - elapsed)
             scene_duration = durations[scene_index]
-            subtitle_y = None
-
-            if visual["is_stats_card"]:
-                image_height = visual["image_height"] or 860
-                subtitle_y = max(64, image_height - 96)
-
             if visual.get("static_frame") is not None:
                 yield visual["static_frame"]
                 continue
 
             base_image = visual["image"]
             if not (
-                visual["is_stats_card"]
-                or visual.get("is_top5_card")
-                or visual.get("is_quote_card")
+                visual.get("is_top5_card")
                 or visual.get("manual_subject_cutout")
+                or visual.get("card_studio")
             ):
                 visual_seed = "|".join(
                     str(visual.get(key) or "")
@@ -2049,10 +1998,8 @@ def render_production_video(
                 headline_text or HEADLINE_TEXT,
                 headline_enabled,
                 source_label,
-                subtitle_y,
-                None,
-                False,
-                None,
+                top5_card=None,
+                validate_handoff=False,
                 logo_enabled=logo_enabled,
                 source_enabled=source_enabled,
             )
