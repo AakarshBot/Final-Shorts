@@ -37,10 +37,10 @@ Test is a modular laboratory; Live is the approved production line.
 
 ## Project status
 
-The factory's seven functional stages are **Approved** for the established Deep-Dive / Cricket / Niche Sports line:
+The factory's seven functional stages remain approved at the component level, but the **Scriptwriter editorial layer is currently WIP/Test-first**.
 
 01. Topic Fetcher — **Approved**
-02. Scriptwriter — **Approved**
+02. Scriptwriter — **Editorial rebuild / WIP Test**
 03. Audio — **Approved**
 04. Visuals — **Approved**
 05. Subtitles — **Approved**
@@ -105,43 +105,30 @@ Status: **Approved.**
 
 ## Scriptwriter — Function 02
 
-Cricket writer:
-- Rewritten from scratch as a single direct function.
-- Research first uses the selected article and searches for up to two related current reports when available, so the LLM receives enough factual material to compress the story.
-- One model call generates the complete four-slide package.
-- If the generated package breaks a hard generation rule, the invalid draft is never shown in Manual QC; one hidden rewrite is made with the exact failure.
-- The first call uses Groq `openai/gpt-oss-120b`.
-- The hidden rewrite/fallback uses Groq `openai/gpt-oss-20b`.
-- The writer makes at most two model calls for one generation attempt.
-- The LLM is explicitly instructed before generation that Slide 1 must contain 13 words or fewer and the full narration must be 32 seconds or less at roughly 150 words per minute.
-- A script at 32 seconds or less is accepted for the downstream Audio speed correction; a script estimated above 32 seconds is hidden and rewritten before Manual QC.
-- The main subject name is a required structured field and must appear in spoken narration; a player must not be described only by age, role or pronoun when the exact name is available.
+Standard single-story Scriptwriter is now one shared direct editorial system for **Cricket, Niche Sports and YouTube Search Trends**.
 
-Narration:
-- Sports only.
-- Regular Shorts only; no Top-5 or Deep-Dive architecture.
-- One persona: HYPE COMMENTATOR.
-- Exactly 4 scenes.
-- Compress all material factual information from the research packet into the four scenes, removing only repetition, boilerplate and low-value wording.
-- No invented facts, quotes, motives, numbers, predictions, filler, CTA or viewer-directed retention bait.
-- Every scene carries `primary_entity`, `visual_intent`, `specific_search_prompt`, and `sport_or_topic_category`.
+Editorial contract:
+- Research is gathered before writing. The selected story and related current reports form one evidence packet.
+- The writer does not follow the source article's paragraph order and does not try to preserve a fixed percentage of article facts.
+- The writer synthesizes the evidence around the selected editorial angle and keeps only the facts needed to make that angle clear, credible and useful.
+- A selected angle is authoritative. In Test, the Scriptwriter first presents three research-backed angles plus a Custom Angle; the user chooses the actual lens before narration is generated.
+- The writer then chooses a story-dependent narrative structure automatically. Reaction, controversy, performance, result, consequence, explanation, timeline, milestone/stat, statement and other evidence-backed structures are allowed. The structure is editorial, not cosmetic.
+- Every spoken slide has a narrative_role and a story-specific visual_intent.
+- visual_intent is guidance for the human Visuals gate. It does not select an image automatically and does not bypass Manual QC.
+- Every slide also carries primary_entity, specific_search_prompt, and sport_or_topic_category.
+- Standard single-story packages use 3–5 spoken slides, with four preferred when natural. Slide 1 remains a generation requirement of fewer than 14 words. The complete narration targets the existing Shorts duration without adding padding.
+- No generic filler, viewer-directed retention bait, invented claims, invented quotes or unsupported consequences.
+- Metadata remains story-specific: three materially different title candidates, concise description, relevant hashtags and one concrete discussion comment.
+- Quotes remain visual treatments for existing story beats and are copied faithfully from the research when used.
+- Human Scriptwriter QC still edits and approves the final narration once. The approved handoff carries the selected angle, narrative structure and per-slide visual intent downstream.
 
-Generated publish metadata:
-- `headline`: exactly 3 or 4 words.
-- `titles`: exactly 3 title candidates.
-- `seo_description`: concise story-specific description.
-- `hashtags`: 3–5 relevant hashtags.
-- `comment`: one concise discussion-oriented public-upload comment.
+Test / Live:
+- The same shared Scriptwriter implementation and handoff are used in Test and Live.
+- Test remains the proving ground for the editorial rewrite. Do not merge the current editorial-layer branch into main until the user approves the Test result.
+- Once approved, promotion to Live is a direct merge of the tested component rather than a second Live implementation.
 
-Human Scriptwriter QC:
-- Manual QC receives only a script that has passed the writer's hidden generation/rewrite checks.
-- The heading remains editable with the narration.
-- Narration scenes remain independently editable.
-- Approval stores the complete package in the approved Scriptwriter handoff.
-- There is no manual AI rewrite button; regeneration belongs inside the Scriptwriter function before QC.
-- Titles, description, hashtags and comment are preserved for the later Upload QC stage.
+Status: **Editorial rewrite implemented on the Test-first branch; pending manual validation and approval.**
 
-Status: **Approved after simplification/regression fix.**
 
 ## Audio — Function 03
 
@@ -269,6 +256,16 @@ Private upload:
 The uploader detects the actual privacy status returned by YouTube and reports comment success/failure without introducing another approval gate.
 
 Status: **Approved.**
+
+## Editorial Diversity Audit
+
+A small, non-blocking audit records metadata from successful public uploads in output/editorial_history.json and evaluates the most recent 20 packages for repeated:
+- narrative structures;
+- slide-role sequences;
+- visual treatment sequences;
+- Card Studio treatments.
+
+The audit is diagnostic only. It never blocks Script QC, Visual QC, Renderer or publishing. It exists to expose genuine portfolio repetition so the human editor can change the next story treatment when the channel is becoming interchangeable.
 
 ## Dashboard state
 

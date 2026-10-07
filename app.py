@@ -2496,25 +2496,18 @@ def _script_for_topic(
     profile: str,
     language: str,
     *,
-    universal: bool = False,
     angle=None,
     research_source=None,
     search_query=None,
 ) -> dict:
     from universal_script_writer import write_universal_script
-    from script_writer import write_script
 
-    if universal or profile == "niche_sports":
-        return write_universal_script(
-            _story_payload(topic),
-            language=language,
-            angle=angle,
-            research_source=research_source,
-            search_query=search_query,
-        )
-    return write_script(
+    return write_universal_script(
         _story_payload(topic),
         language=language,
+        angle=angle,
+        research_source=research_source,
+        search_query=search_query,
     )
 
 
@@ -2725,7 +2718,6 @@ def _live_generate_script(
         topic,
         st.session_state.get("live_topics_profile") or "",
         st.session_state.get("live_script_language", "english"),
-        universal=st.session_state.get("live_production_line") == "youtube_trends",
         angle=angle,
         research_source=research_source,
         search_query=(
@@ -3036,6 +3028,13 @@ def _render_visual_board(slide_count: int, live: bool = False):
                             unsafe_allow_html=True,
                         )
                         st.text(voiceover)
+                    visual_intent = str(scene.get("visual_intent") or "").strip()
+                    if visual_intent:
+                        st.markdown(
+                            '<div class="mini-label" style="margin-top:.45rem;">VISUAL INTENT</div>',
+                            unsafe_allow_html=True,
+                        )
+                        st.text(visual_intent)
                     if body:
                         st.markdown(
                             '<div class="mini-label" style="margin-top:.45rem;">VISUAL BODY</div>',
@@ -3315,10 +3314,7 @@ def _render_live_script():
     script = st.session_state.get("live_script_data")
     story = st.session_state.live_topics[st.session_state.live_selected_topic]
     story_id = _live_story_key(story)
-    universal_story = (
-        st.session_state.get("live_production_line") == "youtube_trends"
-        or st.session_state.get("live_topics_profile") == "niche_sports"
-    )
+    universal_story = st.session_state.get("live_production_line") in {"deep_dive", "youtube_trends"}
 
     if not isinstance(script, dict):
         if not universal_story:
@@ -3404,6 +3400,7 @@ def _render_live_script():
 
     story = st.session_state.live_topics[st.session_state.live_selected_topic]
     story_id = _live_story_key(story)
+    _render_editorial_diversity_audit()
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">SCRIPT QC</div>'
         '<div class="section-title">Edit once, approve once</div></div>'
@@ -3415,6 +3412,8 @@ def _render_live_script():
     )
     if universal_story and str(script.get("story_angle") or "").strip():
         st.caption("Selected story angle: " + str(script.get("story_angle") or "").strip())
+        if str(script.get("narrative_structure") or "").strip():
+            st.caption("Narrative structure: " + str(script.get("narrative_structure") or "").strip())
         if st.button(
             "Change angle and regenerate",
             width="stretch",
@@ -3470,24 +3469,12 @@ def _render_live_script():
         key="live-approve-script",
     ):
         try:
-            if (
-                st.session_state.get("live_production_line") == "youtube_trends"
-                or st.session_state.get("live_topics_profile") == "niche_sports"
-            ):
-                from universal_script_writer import apply_universal_script_edits
-                approved = apply_universal_script_edits(
-                    script,
-                    edited_voiceovers,
-                    headline=edited_headline if st.session_state.live_headline_enabled else "",
-                )
-            else:
-                from script_writer import apply_script_edits
-                approved = apply_script_edits(
-                    script,
-                    edited_voiceovers,
-                    headline=edited_headline if st.session_state.live_headline_enabled else "",
-                    validate=True,
-                )
+            from universal_script_writer import apply_universal_script_edits
+            approved = apply_universal_script_edits(
+                script,
+                edited_voiceovers,
+                headline=edited_headline if st.session_state.live_headline_enabled else "",
+            )
             approved["headline_enabled"] = bool(st.session_state.live_headline_enabled)
         except ValueError as exc:
             st.session_state.live_script_error = str(exc)
@@ -3669,6 +3656,17 @@ def _render_live_upload():
                 qc.get("comment", ""),
                 privacy,
             )
+            if privacy == "public" and st.session_state.live_upload_result.get("privacy_status") == "public" and not is_top5:
+                try:
+                    from editorial_audit import record_publication
+                    record_publication(
+                        st.session_state.live_approved_script,
+                        st.session_state.live_visual_assignments,
+                        title=qc.get("title", ""),
+                        line=st.session_state.get("live_production_line") or "",
+                    )
+                except (OSError, TypeError, ValueError):
+                    pass
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
         return
@@ -5092,9 +5090,22 @@ def render_topic_fetcher():
                     if topic.url:
                         st.link_button("Source ↗", topic.url, width="stretch")
 
-def render_scriptwriter():
-    from script_writer import apply_script_edits
+def _render_editorial_diversity_audit():
+    from editorial_audit import audit_recent
 
+    audit = audit_recent(20)
+    count = int(audit.get("count") or 0)
+    if count == 0:
+        return
+    with st.expander(f"Editorial diversity · last {count} public uploads", expanded=False):
+        st.caption("Diagnostic only. It never blocks Script QC or publishing.")
+        for warning in audit.get("warnings") or []:
+            st.warning(warning)
+        if not audit.get("warnings"):
+            st.success("No strong repetition pattern detected in the current sample.")
+
+
+def render_scriptwriter():
     if not st.session_state.topics:
         st.info("Run the Topic Fetcher first.")
         return
@@ -5104,6 +5115,7 @@ def render_scriptwriter():
         return
     topic=st.session_state.topics[selected_index]
     story_key = _live_story_key(topic)
+    _render_editorial_diversity_audit()
     headline_toggle_key = f"test-headline-enabled-{story_key}"
     headline_text_key = f"test-script-headline-{story_key}"
 
@@ -5113,10 +5125,7 @@ def render_scriptwriter():
         f'<div class="canvas-copy">{topic.title}</div></div></div>',
         unsafe_allow_html=True,
     )
-    universal_story = (
-        st.session_state.get("test_production_line") == "youtube_trends"
-        or st.session_state.get("topic_desk_profile") == "niche_sports"
-    )
+    universal_story = st.session_state.get("test_production_line") in {"deep_dive", "youtube_trends"}
     search_query = (
         st.session_state.get("youtube_trend_search_query")
         if st.session_state.get("test_production_line") == "youtube_trends"
@@ -5148,6 +5157,7 @@ def render_scriptwriter():
                         topic,
                         st.session_state.get("topic_desk_profile") or "",
                         language.casefold(),
+                        search_query=search_query,
                     )
     elif not st.session_state.get("test_universal_angles"):
         with top_right:
@@ -5214,6 +5224,8 @@ def render_scriptwriter():
 
     if universal_story and str(script.get("story_angle") or "").strip():
         st.caption("Selected story angle: " + str(script.get("story_angle") or "").strip())
+        if str(script.get("narrative_structure") or "").strip():
+            st.caption("Narrative structure: " + str(script.get("narrative_structure") or "").strip())
         if st.button(
             "Change angle and regenerate",
             width="stretch",
@@ -5263,22 +5275,12 @@ def render_scriptwriter():
                 edited_voiceovers.append(st.text_area("Narration",value=scene.get("voiceover",""),height=105,key=f"script-slide-{story_key}-{index}",label_visibility="collapsed"))
             if st.button("Approve script",type="primary",width="stretch"):
                 try:
-                    if (
-                        st.session_state.get("test_production_line") == "youtube_trends"
-                        or st.session_state.get("topic_desk_profile") == "niche_sports"
-                    ):
-                        from universal_script_writer import apply_universal_script_edits
-                        approved = apply_universal_script_edits(
-                            script,
-                            edited_voiceovers,
-                            headline=edited_headline if headline_enabled else "",
-                        )
-                    else:
-                        approved = apply_script_edits(
-                            script,
-                            edited_voiceovers,
-                            headline=edited_headline if headline_enabled else "",
-                        )
+                    from universal_script_writer import apply_universal_script_edits
+                    approved = apply_universal_script_edits(
+                        script,
+                        edited_voiceovers,
+                        headline=edited_headline if headline_enabled else "",
+                    )
                     approved["headline_enabled"] = bool(headline_enabled)
                     st.session_state.approved_script=approved
                     st.session_state.visuals_approved = False
@@ -5315,6 +5317,8 @@ def render_scriptwriter():
         st.markdown('<div class="inspector-line"><span>Language</span><span class="inspector-value">'+str(script.get("language_used") or language)+'</span></div>',unsafe_allow_html=True)
         st.markdown('<div class="inspector-line"><span>Scenes</span><span class="inspector-value">'+str(len(script.get("script") or []))+'</span></div>',unsafe_allow_html=True)
         st.markdown('<div class="inspector-line"><span>Word count</span><span class="inspector-value">'+str(script.get("word_count") or "")+'</span></div>',unsafe_allow_html=True)
+        st.markdown('<div class="inspector-line"><span>Angle</span><span class="inspector-value">'+str(script.get("story_angle") or "Auto")+'</span></div>',unsafe_allow_html=True)
+        st.markdown('<div class="inspector-line"><span>Structure</span><span class="inspector-value">'+str(script.get("narrative_structure") or "")+'</span></div>',unsafe_allow_html=True)
         if st.session_state.approved_script:
             st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
@@ -5953,6 +5957,17 @@ def render_top5_upload_qc():
                 qc.get("comment", ""),
                 privacy,
             )
+            if privacy == "public" and st.session_state.test_top5_upload_result.get("privacy_status") == "public":
+                try:
+                    from editorial_audit import record_publication
+                    record_publication(
+                        st.session_state.test_top5_script_handoff,
+                        st.session_state.test_top5_visual_assignments,
+                        title=qc.get("title", ""),
+                        line="top_5",
+                    )
+                except (OSError, TypeError, ValueError):
+                    pass
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
         return
@@ -6124,6 +6139,17 @@ def render_upload_qc():
                 qc.get("comment", ""),
                 privacy,
             )
+            if privacy == "public" and st.session_state.upload_result.get("privacy_status") == "public":
+                try:
+                    from editorial_audit import record_publication
+                    record_publication(
+                        st.session_state.approved_script,
+                        st.session_state.visual_assignments,
+                        title=qc.get("title", ""),
+                        line=st.session_state.get("topic_desk_profile") or "deep_dive",
+                    )
+                except (OSError, TypeError, ValueError):
+                    pass
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
     else:

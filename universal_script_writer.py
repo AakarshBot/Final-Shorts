@@ -54,6 +54,7 @@ SCHEMA = {
             "items": {"type": "string"},
         },
         "comment": {"type": "string"},
+        "narrative_structure": {"type": "string"},
         "quote": {"type": "string"},
         "quote_attribution": {"type": "string"},
         "quote_slide": {"type": "integer", "minimum": 0, "maximum": MAX_SCENES},
@@ -90,6 +91,7 @@ SCHEMA = {
         "seo_description",
         "hashtags",
         "comment",
+        "narrative_structure",
         "quote",
         "quote_attribution",
         "quote_slide",
@@ -383,7 +385,9 @@ EDITORIAL ANGLE
 - The selected angle may be custom-written by the user; follow it exactly within the facts supported by the research.
 - Never invent evidence just to satisfy an angle.
 - Treat the selected article as the primary source. Use related reports to confirm facts, fill factual gaps, add current context, or clarify the latest status.
-- Build your own version of the story. Do not mechanically summarize the article and do not copy complete source sentences.
+- Build your own version of the story. Do not mechanically summarize the article, follow the article's paragraph order, or copy complete source sentences.
+- Synthesize evidence across the selected article and related reports. Do not try to preserve a fixed percentage of article facts.
+- Keep the facts that make the selected angle understandable, credible and useful; add supported context, consequence or reaction when it materially helps.
 - Use only facts supported by the research packet.
 - Never invent names, scores, rankings, records, quotes, dates, injuries, penalties, motives, schedules, statistics or consequences.
 - Preserve allegations, predictions, expectations and reported claims as such.
@@ -443,14 +447,11 @@ The narration must never contain viewer-directed bait or disposable filler such 
 Do not ask the viewer a generic question merely to force curiosity.
 Curiosity must come from a real information gap created by the facts.
 
-STORY FLOW
-Use the structure that best fits the evidence, while normally following:
-1. HOOK — the strongest specific fact or development.
-2. DEVELOPMENT — a new fact that materially advances the story.
-3. CONTEXT / SIGNIFICANCE — the minimum context needed to understand why the event matters.
-4. CONSEQUENCE / STATUS — the latest confirmed outcome, effect or next development.
-For five slides, split context or consequence only when each extra slide carries a separate useful fact.
-For three slides, combine context and consequence when that produces a cleaner story.
+NARRATIVE STRUCTURE
+Choose a story-dependent structure that fits the selected angle and evidence. Examples include reaction-led, controversy-led, performance-led, result-led, consequence-led, explanation-led, timeline-led, milestone/stat-led, statement-led, or another evidence-backed structure.
+This is an editorial decision, not a cosmetic label.
+Do not force every story into the same Hook → Development → Context → Consequence sequence.
+Every slide must advance the chosen structure with a distinct factual beat.
 Never repeat the headline as narration. Never repeat the same fact across slides.
 
 PUBLISH METADATA
@@ -481,6 +482,7 @@ Every slide must include:
 - specific_search_prompt
 - sport_or_topic_category
 Make each visual handoff match the fact narrated on that slide.
+visual_intent is guidance for the human Visuals gate; it does not select or approve the actual visual.
 Prefer identifiable people, teams, venues, cars, events, trophies, equipment or other concrete subjects.
 Search prompts must be specific and usable by the Visual Fetcher.
 Never use vague prompts such as "dramatic sports moment".
@@ -523,6 +525,10 @@ def validate_universal_script(
     subject = _clean(result.get("subject_name"))
     if not subject:
         return False, "The Scriptwriter must identify the main subject."
+
+    narrative_structure = _clean(result.get("narrative_structure"))
+    if not narrative_structure:
+        return False, "The Scriptwriter must identify the narrative structure."
 
     first_words = _words(
         scenes[0].get("voiceover")
@@ -621,6 +627,7 @@ def _finish_result(
     search_query: str | None = None,
 ) -> dict:
     result.setdefault("story_angle", "")
+    result["narrative_structure"] = _clean(result.get("narrative_structure"))
     result["search_query"] = str(search_query or "").strip()
     result["provider_used"] = model
     result["delivery_profile"] = "UNIVERSAL SPORTS"
