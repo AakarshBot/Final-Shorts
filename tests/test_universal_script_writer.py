@@ -63,6 +63,37 @@ def test_angle_schema_requires_exactly_three_options():
     assert writer.ANGLE_SCHEMA["properties"]["angles"]["maxItems"] == 3
 
 
+def test_suggest_universal_story_angles_preserves_search_query(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        writer,
+        "_research_story",
+        lambda story: "FULL STORY",
+    )
+
+    def fake_request(model, prompt, source, **kwargs):
+        calls.append((prompt, source, kwargs))
+        return {
+            "angles": [
+                {"title": "What He Said", "description": "Focus on the statement.", "evidence_basis": "Direct quote in research."},
+                {"title": "How He Won", "description": "Focus on the final.", "evidence_basis": "Final report in research."},
+                {"title": "Why It Matters", "description": "Focus on significance.", "evidence_basis": "Season context in research."},
+            ]
+        }
+
+    monkeypatch.setattr(writer, "_request", fake_request)
+    result = writer.suggest_universal_story_angles(
+        {"title": "Carlos Alcaraz wins Tokyo"},
+        language="english",
+        search_query="Carlos Alcaraz speech after Tokyo Open",
+    )
+
+    assert "PRIMARY YOUTUBE SEARCH QUERY" in calls[0][0]
+    assert "Carlos Alcaraz speech after Tokyo Open" in calls[0][0]
+    assert result["search_query"] == "Carlos Alcaraz speech after Tokyo Open"
+
+
 def test_suggest_universal_story_angles_reads_research_once(monkeypatch):
     calls = []
 
@@ -109,6 +140,30 @@ def test_suggest_universal_story_angles_reads_research_once(monkeypatch):
         "Why Tokyo Matters",
     ]
     assert result["source_evidence"] == "FULL STORY WITH POST-MATCH QUOTE"
+
+
+def test_writer_honors_search_query_for_packaging(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(
+        writer,
+        "_research_story",
+        lambda story: "FULL STORY",
+    )
+
+    def fake_request(model, prompt, source):
+        calls.append(prompt)
+        return valid_result()
+
+    monkeypatch.setattr(writer, "_request", fake_request)
+    result = writer.write_universal_script(
+        {"title": "Carlos Alcaraz wins Tokyo"},
+        search_query="Carlos Alcaraz speech after Tokyo Open",
+    )
+
+    assert "PRIMARY YOUTUBE SEARCH QUERY" in calls[0]
+    assert "Carlos Alcaraz speech after Tokyo Open" in calls[0]
+    assert result["search_query"] == "Carlos Alcaraz speech after Tokyo Open"
 
 
 def test_writer_honors_selected_editorial_angle(monkeypatch):
