@@ -559,6 +559,8 @@ def test_card_studio_shows_image_pool_crop_controls_and_default_fields():
 
     assert not at.exception, at.exception
     assert [button.label for button in at.button].count("Crop / reposition") == 3
+    next(button for button in at.button if button.label == "Select image").click().run()
+    assert not at.exception, at.exception
     values = {field.label: field.value for field in at.text_input}
     assert values["Eyebrow"] == "CAREER STAT"
     assert values["Headline"] == "A huge scoring run"
