@@ -6714,7 +6714,7 @@ elif st.session_state.app_mode == "test":
                 unsafe_allow_html=True,
             )
 
-            st.markdown('<div class="mini-label">9 VISUAL OPTIONS</div>', unsafe_allow_html=True)
+            st.markdown('<div class="mini-label">5 VISUAL OPTIONS</div>', unsafe_allow_html=True)
             visual_option = _render_visual_option_grid(
                 TOP5_VISUAL_OPTIONS,
                 session_key="test_top5_visual_playground_option",
