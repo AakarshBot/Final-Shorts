@@ -21,12 +21,12 @@ VISUAL_OPTIONS = (
     "Option 2 · Manual Scraper",
     "Option 3 · Real Image Search",
     "Option 4 · AI Generation",
-    "Option 5 · Stats Card",
-    "Option 6 · Quote Card",
+    "Option 5 · Card Studio",
 )
-CRICKET_TEST_VISUAL_OPTIONS = VISUAL_OPTIONS + ("Option 7 · Text Cutout",)
-CRICKET_LIVE_VISUAL_OPTIONS = CRICKET_TEST_VISUAL_OPTIONS
-YT_TRENDS_VISUAL_OPTIONS = CRICKET_TEST_VISUAL_OPTIONS
+CRICKET_TEST_VISUAL_OPTIONS = VISUAL_OPTIONS
+CRICKET_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS
+YT_TRENDS_VISUAL_OPTIONS = VISUAL_OPTIONS
+TOP5_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS[:4]
 MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR = None
 if not st.get_option("global.appTest"):
     MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR = st.components.v2.component(
@@ -228,11 +228,7 @@ TOP5_VISUAL_OPTIONS = (
     "Option 2 · Manual Scraper",
     "Option 3 · Manual Fetcher",
     "Option 4 · AI Generation",
-    "Option 5 · Stats Card",
-    "Option 6 · Quote Card",
-    "Option 7 · Subject Cutout",
-    "Option 8 · Body Card · WIP",
-    "Option 9 · Manual Subject Cutout",
+    "Option 5 · Card Studio",
 )
 
 STAGES = [
@@ -879,8 +875,6 @@ if "test_top5_visual_assignments" not in st.session_state:
     st.session_state.test_top5_visual_assignments = {}
 if "test_top5_visual_handoff" not in st.session_state:
     st.session_state.test_top5_visual_handoff = None
-if "test_top5_visual_card_results" not in st.session_state:
-    st.session_state.test_top5_visual_card_results = {}
 if "test_top5_manual_subject_cutouts" not in st.session_state:
     st.session_state.test_top5_manual_subject_cutouts = {}
 if "manual_subject_cutout" not in st.session_state:
@@ -982,27 +976,6 @@ if "real_image_result" not in st.session_state:
     st.session_state.real_image_result = None
 if "ai_image_result" not in st.session_state:
     st.session_state.ai_image_result = None
-if "stats_card_result" not in st.session_state:
-    st.session_state.stats_card_result = None
-if "stats_card_image_selection" not in st.session_state:
-    st.session_state.stats_card_image_selection = None
-if "stats_card_image_crop" not in st.session_state:
-    st.session_state.stats_card_image_crop = None
-if "stats_card_approved" not in st.session_state:
-    st.session_state.stats_card_approved = False
-if "quote_card_image_selection" not in st.session_state:
-    st.session_state.quote_card_image_selection = None
-if "quote_card_image_crop" not in st.session_state:
-    st.session_state.quote_card_image_crop = None
-if "quote_card_preview" not in st.session_state:
-    st.session_state.quote_card_preview = None
-if "quote_card_quote" not in st.session_state:
-    st.session_state.quote_card_quote = ""
-if "quote_card_attribution" not in st.session_state:
-    st.session_state.quote_card_attribution = ""
-if "quote_card_slide" not in st.session_state:
-    st.session_state.quote_card_slide = 1
-
 if "live_production_line" not in st.session_state:
     st.session_state.live_production_line = None
 if "live_desk" not in st.session_state:
@@ -1064,26 +1037,6 @@ if "live_real_image_result" not in st.session_state:
     st.session_state.live_real_image_result = None
 if "live_ai_image_result" not in st.session_state:
     st.session_state.live_ai_image_result = None
-if "live_stats_card_result" not in st.session_state:
-    st.session_state.live_stats_card_result = None
-if "live_stats_card_image_selection" not in st.session_state:
-    st.session_state.live_stats_card_image_selection = None
-if "live_stats_card_image_crop" not in st.session_state:
-    st.session_state.live_stats_card_image_crop = None
-if "live_stats_card_approved" not in st.session_state:
-    st.session_state.live_stats_card_approved = False
-if "live_quote_card_image_selection" not in st.session_state:
-    st.session_state.live_quote_card_image_selection = None
-if "live_quote_card_image_crop" not in st.session_state:
-    st.session_state.live_quote_card_image_crop = None
-if "live_quote_card_preview" not in st.session_state:
-    st.session_state.live_quote_card_preview = None
-if "live_quote_card_quote" not in st.session_state:
-    st.session_state.live_quote_card_quote = ""
-if "live_quote_card_attribution" not in st.session_state:
-    st.session_state.live_quote_card_attribution = ""
-if "live_quote_card_slide" not in st.session_state:
-    st.session_state.live_quote_card_slide = 1
 if "live_manual_subject_cutout" not in st.session_state:
     st.session_state.live_manual_subject_cutout = {}
 if "live_visual_option" not in st.session_state:
@@ -1734,11 +1687,10 @@ def _render_manual_subject_cutout(
                     }
                     st.session_state.test_top5_visual_handoff = None
                     st.session_state.test_top5_rendered_video_path = None
-                    st.session_state.test_top5_visual_card_results.pop(active_slide, None)
                     st.rerun()
 
 
-def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
+def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
     if live:
         specs = [
             ("live_visual_result", "auto", "Automatic Scraper"),
@@ -1770,587 +1722,303 @@ def _stats_card_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, st
             if asset_key in deleted:
                 continue
             raw = crop_store.get(asset_key) or asset.get("bytes")
-            if not isinstance(raw, (bytes, bytearray)):
+            if not isinstance(raw, (bytes, bytearray)) or _asset_to_image(raw) is None:
                 continue
-            if _asset_to_image(raw) is None:
-                continue
-            entries.append(
-                (
-                    asset_key,
-                    index,
-                    asset,
-                    bytes(raw),
-                    source_name,
-                )
-            )
+            entries.append((asset_key, index, asset, bytes(raw), source_name))
     return entries
 
 
-@st.dialog("Crop image for Stats Card", width="large")
-def _stats_card_crop_dialog(image_bytes: bytes, live: bool):
-    from PIL import Image, ImageFilter, ImageOps
-    from stats_card import IMAGE_HEIGHT, WIDTH
+def _render_card_studio(
+    *,
+    live: bool = False,
+    slide_count: int = 0,
+    top5: bool = False,
+    active_slide: int | None = None,
+    current_image=None,
+    current_source: str = "Test image",
+):
+    from card_studio import CardStudioError, LIVE_CARD_TYPES, TEST_CARD_TYPES, render_card
 
-    image = _asset_to_image(image_bytes)
-    if image is None:
-        st.error("This visual could not be opened for cropping.")
-        return
-
-    st.markdown('<div class="crop-dialog-kicker">STATS CARD CROP</div>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="crop-dialog-title">Set the image framing for the card</div>',
-        unsafe_allow_html=True,
+    card_types = LIVE_CARD_TYPES if live else TEST_CARD_TYPES
+    state_id = (
+        f"{'live' if live else 'test'}-"
+        f"{'top5-' if top5 else ''}"
+        f"{active_slide or 'standalone'}-card-studio"
     )
-    st.caption(
-        f"Crop to the card image area. The frame keeps the exact {WIDTH} × {IMAGE_HEIGHT}px ratio. "
-        "Drag the frame to reposition it or resize the corners."
-    )
+    card_type = st.pills(
+        "Card type",
+        list(card_types),
+        default=st.session_state.get(f"{state_id}-type", card_types[0]),
+        key=f"{state_id}-type",
+    ) or card_types[0]
 
-    from streamlit_cropper import st_cropper
-
-    target_ratio = WIDTH / IMAGE_HEIGHT
-    crop_aspect_ratio = (WIDTH, IMAGE_HEIGHT)
-    canvas_width = max(image.width, int(round(image.height * target_ratio)))
-    canvas_height = max(image.height, int(round(canvas_width / target_ratio)))
-    background = ImageOps.fit(
-        image.convert("RGB"),
-        (canvas_width, canvas_height),
-        method=Image.Resampling.LANCZOS,
-    ).filter(ImageFilter.GaussianBlur(radius=max(18, canvas_width // 55)))
-    canvas = background.copy()
-    offset_x = (canvas_width - image.width) // 2
-    offset_y = (canvas_height - image.height) // 2
-    canvas.paste(image.convert("RGB"), (offset_x, offset_y))
-
-    cropper_key = "live-stats-card-cropper" if live else "test-stats-card-cropper"
-    cropped = st_cropper(
-        canvas,
-        realtime_update=True,
-        aspect_ratio=crop_aspect_ratio,
-        return_type="image",
-        key=cropper_key,
-        stroke_width=2,
-        box_color="#4F46E5",
-    )
-
-    left, right = st.columns([1.2, .8], gap="large")
-    with left:
-        st.markdown('<div class="crop-dialog-kicker">PREVIEW</div>', unsafe_allow_html=True)
-        st.image(cropped, width="stretch")
-    with right:
-        st.markdown('<div class="crop-dialog-kicker">SOURCE IMAGE</div>', unsafe_allow_html=True)
-        st.caption(f"{image.width} × {image.height}px")
-        st.markdown(
-            '<div class="crop-dialog-kicker" style="margin-top:1rem;">CARD IMAGE</div>',
-            unsafe_allow_html=True,
-        )
-        st.caption(f"{WIDTH} × {IMAGE_HEIGHT}px")
-        st.caption("This crop affects the Stats Card only; the normal visual crop is unchanged.")
-        if st.button(
-            "Apply crop for card",
-            type="primary",
-            width="stretch",
-            key=f"{cropper_key}-apply",
-        ):
+    if card_type == "Text Subject Cutout":
+        if top5 and active_slide is None:
+            image = _asset_to_image(current_image)
+            if image is None:
+                st.error("The current image could not be opened.")
+                return
             buffer = BytesIO()
-            cropped.convert("RGB").resize(
-                (WIDTH, IMAGE_HEIGHT),
-                Image.Resampling.LANCZOS,
-            ).save(buffer, format="JPEG", quality=94, optimize=True)
-            crop_key = "live_stats_card_image_crop" if live else "stats_card_image_crop"
-            result_key = "live_stats_card_result" if live else "stats_card_result"
-            approved_key = "live_stats_card_approved" if live else "stats_card_approved"
-            st.session_state[crop_key] = buffer.getvalue()
-            st.session_state[result_key] = None
-            st.session_state[approved_key] = False
-            st.rerun()
+            image.save(buffer, format="JPEG", quality=94, optimize=True)
+            _render_manual_subject_cutout(
+                state=st.session_state.test_top5_manual_subject_playground,
+                assets=[{
+                    "asset_key": f"top5-card-studio-{hashlib.sha1(buffer.getvalue()).hexdigest()[:12]}",
+                    "bytes": buffer.getvalue(),
+                    "source": current_source,
+                    "label": "Current test image",
+                }],
+                crop_store={},
+                crop_store_name="card-studio-top5",
+                state_id=state_id,
+                default_headline=st.session_state.get("test_top5_visual_playground_headline", ""),
+            )
+            return
 
+        if top5 and active_slide is not None:
+            result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+            image_assets = list(result.get("assets") or [])
+            if not image_assets:
+                st.info("Run one of Options 1–4 for this slide first. Card Studio reuses that image pool.")
+                return
+            manual_assets = [
+                {
+                    "asset_key": _visual_asset_key(f"card-studio-{active_slide}", index, asset),
+                    "bytes": asset.get("bytes"),
+                    "source": str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source"),
+                    "label": str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual"),
+                }
+                for index, asset in enumerate(image_assets)
+            ]
+            slides = (st.session_state.get("test_top5_script_handoff") or {}).get("slides") or [{}]
+            headline = str(slides[active_slide - 1].get("headline") or "") if active_slide <= len(slides) else ""
+            _render_manual_subject_cutout(
+                state=st.session_state.test_top5_manual_subject_cutouts.setdefault(active_slide, {}),
+                assets=manual_assets,
+                crop_store=st.session_state.test_top5_visual_crops,
+                crop_store_name="test_top5_visual_crops",
+                state_id=state_id,
+                default_headline=headline,
+                handoff="top5",
+                active_slide=active_slide,
+            )
+            return
 
-def _render_stats_card(live: bool = False, slide_count: int = 0):
-    from stats_card import StatsCardError, build_stats_card, build_test_stats_card, build_stats_card_preview
-
-    state_key = "live_stats_card_result" if live else "stats_card_result"
-    selection_key = "live_stats_card_image_selection" if live else "stats_card_image_selection"
-    crop_key = "live_stats_card_image_crop" if live else "stats_card_image_crop"
-    approved_key = "live_stats_card_approved" if live else "stats_card_approved"
-    build_key = "live-stats-card-build" if live else "test-stats-card-build"
-
-    st.subheader("Stats Card")
-    st.caption(
-        "Choose the image from the existing Manual QC pool, crop it for this card, "
-        "then build and approve the completed card."
-    )
-
-    entries = _stats_card_pool_entries(live)
-    if not entries:
-        st.info(
-            "Run one of the existing visual options first. "
-            "Stats Card uses that existing image pool and does not run another image search."
+        entries = _visual_pool_entries(live)
+        if not entries:
+            st.info("Run one of the existing visual sources first. Card Studio reuses that image pool.")
+            return
+        script = (
+            st.session_state.get("live_approved_script")
+            if live
+            else st.session_state.get("approved_script") or st.session_state.get("script_data")
+        ) or {}
+        _render_manual_subject_cutout(
+            state=st.session_state.live_manual_subject_cutout if live else st.session_state.manual_subject_cutout,
+            assets=[
+                {
+                    "asset_key": asset_key,
+                    "bytes": image_bytes,
+                    "source": source_name,
+                    "label": str(asset.get("article_title") or asset.get("model") or source_name),
+                }
+                for asset_key, _index, asset, image_bytes, source_name in entries
+            ],
+            crop_store=(
+                st.session_state.get("live_visual_crops") or {}
+                if live
+                else st.session_state.get("visual_crops") or {}
+            ),
+            crop_store_name="live_visual_crops" if live else "visual_crops",
+            state_id=state_id,
+            default_headline=str(script.get("headline") or ""),
+            handoff="cricket",
+            slide_count=slide_count,
+            assignment_store=(
+                st.session_state.live_visual_assignments
+                if live
+                else st.session_state.visual_assignments
+            ),
+            approval_state="live_visuals_approved" if live else "visuals_approved",
         )
         return
 
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">IMAGE POOL</div>'
-        '<div class="section-title">Choose the player image</div></div>'
-        '<div class="section-count">existing visuals only</div></div>',
-        unsafe_allow_html=True,
-    )
+    selected_source = current_source
+    selected_key = f"{state_id}-current"
 
-    current_selection = st.session_state.get(selection_key)
-    for start_index in range(0, len(entries), 3):
-        row = entries[start_index:start_index + 3]
-        cols = st.columns(len(row), gap="medium")
-        for col, (asset_key, index, asset, image_bytes, source_name) in zip(cols, row):
-            with col:
-                source = str(
-                    asset.get("publisher")
-                    or asset.get("source")
-                    or asset.get("model")
-                    or source_name
-                )
-                label = str(
-                    asset.get("article_title")
-                    or asset.get("model")
-                    or source_name
-                )
-                with st.container(key=f"{build_key}-image-{asset_key}"):
-                    preview = _asset_to_image(image_bytes)
-                    if preview is not None:
-                        preview.thumbnail((420, 420), Image.Resampling.LANCZOS)
-                        st.image(preview, width="stretch")
-                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
-                    if label:
-                        st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
-                    selected = (
-                        isinstance(current_selection, dict)
-                        and current_selection.get("asset_key") == asset_key
-                    )
-                    if st.button(
-                        "Selected" if selected else "Select image",
-                        type="primary" if selected else "secondary",
-                        width="stretch",
-                        key=f"{build_key}-select-{asset_key}",
-                    ):
-                        st.session_state[selection_key] = {
-                            "asset_key": asset_key,
-                            "source": source,
-                            "label": label,
-                            "bytes": image_bytes,
-                        }
-                        st.session_state[crop_key] = None
-                        st.session_state[state_key] = None
-                        st.session_state[approved_key] = False
-                        st.rerun()
-
-    selected = st.session_state.get(selection_key)
-    if not isinstance(selected, dict):
-        return
-
-    source_bytes = st.session_state.get(crop_key) or selected.get("bytes")
-    if not isinstance(source_bytes, (bytes, bytearray)):
-        st.error("The selected image is missing.")
-        return
-
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">CARD IMAGE</div>'
-        '<div class="section-title">Crop the selected image for this card</div></div>'
-        '<div class="section-count">1080 × 860 image area</div></div>',
-        unsafe_allow_html=True,
-    )
-    crop_cols = st.columns([1, .42], gap="small")
-    with crop_cols[0]:
-        st.image(source_bytes, width=360)
-    with crop_cols[1]:
-        if st.button(
-            "Crop for card",
-            type="primary",
-            width="stretch",
-            key=f"{build_key}-crop",
-        ):
-            _stats_card_crop_dialog(bytes(source_bytes), live)
-        if st.session_state.get(crop_key):
-            st.markdown(
-                '<span class="visual-crop-label">CARD CROP APPLIED</span>',
-                unsafe_allow_html=True,
-            )
-            if st.button(
-                "Reset card crop",
-                width="stretch",
-                key=f"{build_key}-reset-crop",
-            ):
-                st.session_state[crop_key] = None
-                st.session_state[state_key] = None
-                st.session_state[approved_key] = False
-                st.rerun()
-
-    result = st.session_state.get(state_key)
-    if isinstance(result, dict) and result:
-        if result.get("error"):
-            st.error(result["error"])
-            if not live and st.button(
-                "Research a different query",
-                width="stretch",
-                key=f"{build_key}-requery-error",
-            ):
-                st.session_state[state_key] = None
-                st.session_state[approved_key] = False
-                st.rerun()
+    if top5 and active_slide is None:
+        image = _asset_to_image(current_image)
+        if image is None:
+            st.error("The current image could not be opened.")
             return
-        st.markdown(
-            '<div class="section-head"><div><div class="eyebrow">MANUAL QC</div>'
-            '<div class="section-title">Review the completed Stats Card</div></div>'
-            '<div class="section-count">approve this exact card</div></div>',
-            unsafe_allow_html=True,
-        )
-        st.image(result["bytes"], width=360)
-        st.caption(
-            f'{result.get("label") or "Stats Card"} · '
-            f'{result.get("source") or "Cricket data"}'
-        )
-        stats = result.get("stats") or {}
-        if result.get("query"):
-            st.code(result["query"])
-        if stats.get("last_date"):
-            st.caption(f"Data through {stats['last_date']}")
-        elif stats.get("latest_date"):
-            st.caption(f"Latest meeting: {stats['latest_date']}")
-        if not live and result.get("plan"):
-            plan = result["plan"]
-            st.caption(
-                "AI interpretation: "
-                + str(plan.get("scope") or "").replace("_", " ")
-                + " · "
-                + str(plan.get("format") or "").upper()
-            )
-        if not live and st.button(
-            "Research a different query",
-            width="stretch",
-            key=f"{build_key}-requery",
-        ):
-            st.session_state[state_key] = None
-            st.session_state[approved_key] = False
-            st.rerun()
-
-        if not st.session_state.get(approved_key):
-            if st.button(
-                "Approve Stats Card",
-                type="primary",
-                width="stretch",
-                key=f"{build_key}-approve",
-            ):
-                st.session_state[approved_key] = True
-                st.rerun()
-        else:
-            st.success("Stats Card approved.")
-
-        if not st.session_state.get(approved_key):
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG", quality=94, optimize=True)
+        selected_bytes = buffer.getvalue()
+        st.image(image, width=300)
+        st.caption(selected_source)
+    elif top5:
+        result = st.session_state.test_top5_visual_results.get(active_slide) or {}
+        assets = list(result.get("assets") or [])
+        if not assets:
+            st.info("Run one of Options 1–4 for this slide first. Card Studio reuses that image pool.")
             return
-        if slide_count <= 0:
-            return
-
-        if live:
-            st.download_button(
-                "Save Stats Card PNG",
-                data=result["bytes"],
-                file_name="stats-card.png",
-                mime="image/png",
-                width="stretch",
-                key=f"{build_key}-download",
-            )
-
-        slide = st.selectbox(
-            "Use Stats Card for slide",
-            list(range(1, slide_count + 1)),
-            key=f"{build_key}-slide",
+        choices = []
+        for index, asset in enumerate(assets):
+            asset_key = _visual_asset_key(f"card-studio-{active_slide}", index, asset)
+            source = str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source")
+            label = str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual")
+            choices.append((asset_key, asset, source, label))
+        image_index = st.selectbox(
+            "Card image",
+            list(range(len(choices))),
+            key=f"{state_id}-image",
+            format_func=lambda i: choices[i][3][:80],
         )
-        if st.button(
-            "Use Stats Card for this slide",
-            type="primary",
-            width="stretch",
-            key=f"{build_key}-attach",
-        ):
-            card_key = hashlib.sha1(
-                (str(result.get("path") or "") + str(result.get("query") or "")).encode("utf-8")
-            ).hexdigest()[:12]
-            assignment = {
-                "asset_key": f"stats-card-{card_key}",
-                "result_key": "stats-card",
-                "card_layout": dict(result.get("layout") or {}),
-                "source": f"Stats Card · {result.get('source') or 'TigZig / Cricsheet'}",
-                "label": str(result.get("label") or "Stats Card"),
-                "bytes": bytes(result["bytes"]),
+        selected_key, asset, selected_source, selected_label = choices[image_index]
+        selected_bytes = bytes(asset.get("bytes") or b"")
+        cropped = st.session_state.test_top5_visual_crops.get(selected_key)
+        if cropped:
+            selected_bytes = bytes(cropped)
+        preview = _top5_fit_preview(selected_bytes)
+        if preview is not None:
+            st.image(preview, width=300)
+        st.caption(f"{selected_source} · {selected_label}")
+    else:
+        entries = _visual_pool_entries(live)
+        if not entries:
+            st.info("Run one of the existing visual sources first. Card Studio reuses that image pool.")
+            return
+        image_index = st.selectbox(
+            "Card image",
+            list(range(len(entries))),
+            key=f"{state_id}-image",
+            format_func=lambda i: (
+                entries[i][2].get("article_title")
+                or entries[i][2].get("title")
+                or entries[i][4]
+            )[:80],
+        )
+        selected_key, _, asset, selected_bytes, selected_source = entries[image_index]
+        selected_label = str(asset.get("article_title") or asset.get("title") or "Selected visual")
+        preview = _top5_fit_preview(selected_bytes)
+        if preview is not None:
+            st.image(preview, width=300)
+        st.caption(f"{selected_source} · {selected_label}")
+
+    data = {}
+    if card_type == "Stat Highlight":
+        data["eyebrow"] = st.text_input("Eyebrow", value="STAT", key=f"{state_id}-eyebrow")
+        data["headline"] = st.text_input("Headline", key=f"{state_id}-headline")
+        data["value"] = st.text_input("Hero value", key=f"{state_id}-value")
+        data["unit"] = st.text_input("Unit", key=f"{state_id}-unit")
+        data["metrics"] = [
+            {
+                "label": st.text_input(f"Metric {index + 1} label", key=f"{state_id}-metric-{index}-label"),
+                "value": st.text_input(f"Metric {index + 1} value", key=f"{state_id}-metric-{index}-value"),
             }
-            assignments_key = "live_visual_assignments" if live else "visual_assignments"
-            st.session_state[assignments_key][slide] = assignment
+            for index in range(3)
+        ]
+    elif card_type == "Quote / Reaction":
+        data["eyebrow"] = st.text_input("Eyebrow", value="REACTION", key=f"{state_id}-eyebrow")
+        data["quote"] = st.text_area("Quote", height=110, key=f"{state_id}-quote")
+        data["attribution"] = st.text_input("Attribution", key=f"{state_id}-attribution")
+        data["context"] = st.text_input("Context", key=f"{state_id}-context")
+    elif card_type == "Head-to-Head":
+        data["eyebrow"] = st.text_input("Eyebrow", value="COMPARISON", key=f"{state_id}-eyebrow")
+        data["headline"] = st.text_input("Headline", key=f"{state_id}-headline")
+        left_col, right_col = st.columns(2)
+        with left_col:
+            left_name = st.text_input("Left name", key=f"{state_id}-left-name")
+        with right_col:
+            right_name = st.text_input("Right name", key=f"{state_id}-right-name")
+        metrics, left_values, right_values = [], {}, {}
+        for index in range(3):
+            cols = st.columns(3)
+            with cols[0]:
+                label = st.text_input(f"Metric {index + 1}", key=f"{state_id}-compare-label-{index}")
+            with cols[1]:
+                left_value = st.text_input(f"Left {index + 1}", key=f"{state_id}-compare-left-{index}")
+            with cols[2]:
+                right_value = st.text_input(f"Right {index + 1}", key=f"{state_id}-compare-right-{index}")
+            if label.strip():
+                metrics.append(label.strip())
+                left_values[label.strip()] = left_value.strip()
+                right_values[label.strip()] = right_value.strip()
+        data["left"] = {"name": left_name, "values": left_values}
+        data["right"] = {"name": right_name, "values": right_values}
+        data["metrics"] = metrics
+    else:
+        data["eyebrow"] = st.text_input("Eyebrow", value="MILESTONE", key=f"{state_id}-eyebrow")
+        data["value"] = st.text_input("Value", key=f"{state_id}-value")
+        data["label"] = st.text_input("Label", key=f"{state_id}-label")
+        data["context"] = st.text_area("Context", height=90, key=f"{state_id}-context")
+
+    result_key = f"{state_id}-result"
+    if st.button("Render card", type="primary", width="stretch", key=f"{state_id}-render"):
+        try:
+            st.session_state[result_key] = {
+                "bytes": render_card(card_type, selected_bytes, data),
+                "type": card_type,
+                "data": data,
+                "source": selected_source,
+                "source_key": selected_key,
+            }
+        except (CardStudioError, OSError, RuntimeError) as exc:
+            st.session_state[result_key] = {"error": str(exc)}
+
+    result = st.session_state.get(result_key) or {}
+    if result.get("error"):
+        st.error(result["error"])
+    if not result.get("bytes"):
+        return
+
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">CARD STUDIO</div>'
+        '<div class="section-title">Rendered card · manual QC</div></div>'
+        '<div class="section-count">1080 × 1920 · exact frame</div></div>',
+        unsafe_allow_html=True,
+    )
+    st.image(result["bytes"], width=420)
+
+    if top5 and active_slide is not None:
+        slide = active_slide
+    elif top5:
+        slide = st.selectbox("Add card to slide", list(range(1, 7)), key=f"{state_id}-slide")
+    else:
+        slide = st.selectbox("Add card to slide", list(range(1, slide_count + 1)), key=f"{state_id}-slide")
+
+    if st.button(
+        f"Add to Slide {slide} →",
+        type="primary",
+        width="stretch",
+        key=f"{state_id}-use",
+    ):
+        assignment = {
+            "asset_key": f"card-studio-{slide}-{selected_key}",
+            "result_key": "card-studio",
+            "source": result.get("source") or "Card Studio",
+            "label": f"Card Studio · {result.get('type') or 'Card'}",
+            "bytes": selected_bytes,
+            "preview_bytes": bytes(result["bytes"]),
+            "card_studio": {
+                "type": result.get("type"),
+                "data": dict(result.get("data") or {}),
+            },
+        }
+        if top5:
+            st.session_state.test_top5_visual_assignments[slide] = assignment
+            st.session_state.test_top5_visual_handoff = None
+            st.session_state.test_top5_rendered_video_path = None
+        else:
+            assignments = st.session_state.live_visual_assignments if live else st.session_state.visual_assignments
+            assignments[slide] = assignment
             if live:
                 st.session_state.live_visuals_approved = False
             else:
                 st.session_state.visuals_approved = False
                 st.session_state.approved_visuals = None
-            st.rerun()
-        return
-
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">CARD PREVIEW</div>'
-        '<div class="section-title">Selected image + empty stats panel</div></div>'
-        '<div class="section-count">1080 × 1920</div></div>',
-        unsafe_allow_html=True,
-    )
-    st.image(build_stats_card_preview(bytes(source_bytes)), width=360)
-
-    with st.form(f"{build_key}-query-form"):
-        query = st.text_input(
-            "Manual query",
-            placeholder=(
-                "e.g. MS Dhoni ODI stats · India vs Pakistan H2H stats · "
-                "Virat Kohli's last 10 innings scores"
-            ),
-            key=f"{build_key}-query",
-        )
-        build = st.form_submit_button(
-            "Build Stats Card",
-            type="primary",
-            width="stretch",
-        )
-
-    if not build:
-        return
-
-    query = query.strip()
-    if not query:
-        st.warning("Enter a stats query first.")
-        return
-
-    with st.spinner("Building the stats card from the cricket database…"):
-        try:
-            builder = build_stats_card if live else build_test_stats_card
-            st.session_state[state_key] = builder(
-                query,
-                bytes(source_bytes),
-            )
-            st.session_state[approved_key] = False
-            st.rerun()
-        except (StatsCardError, OSError, RuntimeError) as exc:
-            st.session_state[state_key] = {"error": str(exc)}
-            st.rerun()
-
-
-
-
-def _render_quote_card(live: bool = False, slide_count: int = 0):
-    from renderer import build_quote_card_preview
-
-    prefix = "live_" if live else ""
-    script_key = f"{prefix}approved_script"
-    selection_key = f"{prefix}quote_card_image_selection"
-    crop_key = f"{prefix}quote_card_image_crop"
-    preview_key = f"{prefix}quote_card_preview"
-    quote_key = f"{prefix}quote_card_quote"
-    attribution_key = f"{prefix}quote_card_attribution"
-    slide_key = f"{prefix}quote_card_slide"
-
-    script = st.session_state.get(script_key)
-    if not isinstance(script, dict) and not live:
-        script = st.session_state.get("script_data") or {}
-    if not isinstance(script, dict):
-        st.info("Approve the Scriptwriter result first.")
-        return
-
-    entries = _stats_card_pool_entries(live)
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">QUOTE CARD</div>'
-        '<div class="section-title">Use a quote as the visual treatment for one existing slide</div></div>'
-        '<div class="section-count">existing visual pool</div></div>',
-        unsafe_allow_html=True,
-    )
-
-    quote = str(st.session_state.get(quote_key) or "")
-    attribution = str(st.session_state.get(attribution_key) or "")
-    if quote:
-        st.caption("Scriptwriter identified this quote from the research. Edit it before previewing if needed.")
-    else:
-        st.info("No quote was identified by the Scriptwriter for this story. Enter one only when the source supports it.")
-
-    if not entries:
-        st.info(
-            "Run an existing visual option first. Quote Card uses that pool and does not run another image search."
-        )
-        return
-
-    current_selection = st.session_state.get(selection_key)
-    for start_index in range(0, len(entries), 3):
-        row = entries[start_index:start_index + 3]
-        cols = st.columns(len(row), gap="medium")
-        for col, (asset_key, index, asset, image_bytes, source_name) in zip(cols, row):
-            with col:
-                source = str(
-                    asset.get("publisher")
-                    or asset.get("source")
-                    or asset.get("model")
-                    or source_name
-                )
-                label = str(
-                    asset.get("article_title")
-                    or asset.get("model")
-                    or source_name
-                )
-                with st.container(key=f"{prefix}quote-card-image-{asset_key}"):
-                    preview = _asset_to_image(image_bytes)
-                    if preview is not None:
-                        preview.thumbnail((420, 420), Image.Resampling.LANCZOS)
-                        st.image(preview, width="stretch")
-                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
-                    if label:
-                        st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
-                    selected = (
-                        isinstance(current_selection, dict)
-                        and current_selection.get("asset_key") == asset_key
-                    )
-                    if st.button(
-                        "Selected" if selected else "Select image",
-                        type="primary" if selected else "secondary",
-                        width="stretch",
-                        key=f"{prefix}quote-card-select-{asset_key}",
-                    ):
-                        st.session_state[selection_key] = {
-                            "asset_key": asset_key,
-                            "source": source,
-                            "label": label,
-                            "bytes": image_bytes,
-                        }
-                        st.session_state[crop_key] = None
-                        st.session_state[preview_key] = None
-                        st.rerun()
-
-    selected = st.session_state.get(selection_key)
-    if not isinstance(selected, dict):
-        return
-
-    crop_store = st.session_state.get(
-        "live_visual_crops" if live else "visual_crops"
-    ) or {}
-    source_bytes = crop_store.get(selected.get("asset_key")) or selected.get("bytes")
-    if not isinstance(source_bytes, (bytes, bytearray)):
-        st.error("The selected image is missing.")
-        return
-
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">QUOTE CONTENT</div>'
-        '<div class="section-title">Edit the quote before rendering</div></div>'
-        '<div class="section-count">one existing slide</div></div>',
-        unsafe_allow_html=True,
-    )
-    text_col, attr_col = st.columns([1.65, .8], gap="medium")
-    with text_col:
-        quote = st.text_area(
-            "Quote",
-            value=quote,
-            height=105,
-            max_chars=500,
-            key=quote_key,
-        ).strip()
-    with attr_col:
-        attribution = st.text_input(
-            "Attribution",
-            value=attribution,
-            max_chars=120,
-            key=attribution_key,
-        ).strip()
-
-    scenes = script.get("script") or []
-    available_slides = max(1, slide_count or len(scenes))
-    default_slide = max(
-        1,
-        min(available_slides, int(st.session_state.get(slide_key) or 1)),
-    )
-    selected_slide = st.selectbox(
-        "Use Quote Card for slide",
-        list(range(1, available_slides + 1)),
-        index=default_slide - 1,
-        key=slide_key,
-    )
-    st.session_state[slide_key] = selected_slide
-
-    crop_cols = st.columns([1, .42], gap="small")
-    with crop_cols[0]:
-        st.image(source_bytes, width=360)
-    with crop_cols[1]:
-        if st.button(
-            "Crop / reposition",
-            type="primary",
-            width="stretch",
-            key=f"{prefix}quote-card-crop-{selected.get('asset_key')}",
-        ):
-            _crop_visual_dialog(
-                selected["asset_key"],
-                bytes(selected.get("bytes") or b""),
-                str(selected.get("source") or "Selected image"),
-                crop_store="live_visual_crops" if live else "visual_crops",
-            )
-        if st.session_state.get(crop_key):
-            st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
-
-    if st.button(
-        "Preview Quote Card",
-        type="primary",
-        width="stretch",
-        key=f"{prefix}quote-card-preview-button",
-    ):
-        if not quote or not attribution:
-            st.warning("Quote and attribution are required.")
-        else:
-            try:
-                st.session_state[preview_key] = build_quote_card_preview(
-                    bytes(source_bytes),
-                    quote,
-                    attribution,
-                    source_label="SPORTS DESK",
-                )
-            except (ValueError, OSError) as exc:
-                st.error(str(exc))
-
-    preview_bytes = st.session_state.get(preview_key)
-    if not preview_bytes:
-        return
-
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">MANUAL QC</div>'
-        '<div class="section-title">Quote Card preview</div></div>'
-        '<div class="section-count">1080 × 1920</div></div>',
-        unsafe_allow_html=True,
-    )
-    st.image(preview_bytes, width=420)
-    st.caption(
-        "The selected quote is visual-only on this slide; normal subtitles are suppressed for the Quote Card."
-    )
-
-    if st.button(
-        f"Use Quote Card for slide {selected_slide}",
-        type="primary",
-        width="stretch",
-        key=f"{prefix}quote-card-attach",
-    ):
-        assignment = {
-            "asset_key": f"quote-card-{selected.get('asset_key')}",
-            "result_key": "quote-card",
-            "source": f"Quote Card · {attribution}",
-            "label": quote,
-            "bytes": bytes(source_bytes),
-            "preview_bytes": bytes(preview_bytes),
-            "quote_card": {
-                "quote": quote,
-                "attribution": attribution,
-                "language": str(script.get("language_used") or "english"),
-            },
-        }
-        assignments_key = "live_visual_assignments" if live else "visual_assignments"
-        st.session_state[assignments_key][selected_slide] = assignment
-        if live:
-            st.session_state.live_visuals_approved = False
-        else:
-            st.session_state.visuals_approved = False
-            st.session_state.approved_visuals = None
         st.rerun()
+
 
 def _top5_fit_preview(value, width=300, height=533):
     from PIL import Image
@@ -2556,16 +2224,6 @@ def _live_reset_downstream():
         "live_manual_visual_result": None,
         "live_real_image_result": None,
         "live_ai_image_result": None,
-        "live_stats_card_result": None,
-        "live_stats_card_image_selection": None,
-        "live_stats_card_image_crop": None,
-        "live_stats_card_approved": False,
-        "live_quote_card_image_selection": None,
-        "live_quote_card_image_crop": None,
-        "live_quote_card_preview": None,
-        "live_quote_card_quote": "",
-        "live_quote_card_attribution": "",
-        "live_quote_card_slide": 1,
         "live_manual_subject_cutout": {},
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
@@ -2863,16 +2521,6 @@ def _live_generate_script(
     st.session_state.live_upload_description = metadata["description"]
     st.session_state.live_upload_hashtags = metadata["hashtags"]
     st.session_state.live_upload_comment = metadata["comment"]
-    st.session_state.live_quote_card_quote = str(script.get("quote") or "")
-    st.session_state.live_quote_card_attribution = str(
-        script.get("quote_attribution") or ""
-    )
-    quote_slide = int(script.get("quote_slide") or 1)
-    slide_count = len(script.get("script") or [])
-    st.session_state.live_quote_card_slide = max(1, min(slide_count or 1, quote_slide))
-    st.session_state.live_quote_card_image_selection = None
-    st.session_state.live_quote_card_image_crop = None
-    st.session_state.live_quote_card_preview = None
     st.session_state.live_manual_subject_cutout = {}
     return script
 
@@ -3380,48 +3028,8 @@ def _render_live_visuals(slide_count: int):
                 live=True,
             )
 
-    if visual_option == "Option 7 · Text Cutout":
-        entries = _stats_card_pool_entries(live=True)
-        state = st.session_state.live_manual_subject_cutout
-        assets = [
-            {
-                "asset_key": asset_key,
-                "bytes": image_bytes,
-                "source": source_name,
-                "label": str(
-                    asset.get("article_title")
-                    or asset.get("model")
-                    or source_name
-                ),
-            }
-            for asset_key, _index, asset, image_bytes, source_name in entries
-        ]
-        st.markdown(
-            '<div class="section-head"><div><div class="eyebrow">TEXT CUTOUT</div>'
-            '<div class="section-title">Manual Subject Cutout</div></div>'
-            '<div class="section-count">Tested composition · Live</div></div>',
-            unsafe_allow_html=True,
-        )
-        _render_manual_subject_cutout(
-            state=state,
-            assets=assets,
-            crop_store=st.session_state.live_visual_crops,
-            crop_store_name="live_visual_crops",
-            state_id="live-cricket-manual-subject",
-            default_headline=str(
-                (st.session_state.get("live_approved_script") or {}).get("headline") or ""
-            ),
-            handoff="cricket",
-            slide_count=slide_count,
-            assignment_store=st.session_state.live_visual_assignments,
-            approval_state="live_visuals_approved",
-        )
-
-    if visual_option == "Option 5 · Stats Card":
-        _render_stats_card(live=True, slide_count=slide_count)
-
-    if visual_option == "Option 6 · Quote Card":
-        _render_quote_card(live=True, slide_count=slide_count)
+    if visual_option == "Option 5 · Card Studio":
+        _render_card_studio(live=True, slide_count=slide_count)
 
     ready = all(
         slide in st.session_state.live_visual_assignments
@@ -4223,8 +3831,7 @@ def render_live_top5():
 
         st.markdown(
             '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
-            '<div class="section-title">Build and review all six slides</div></div>'
-            '<div class="canvas-copy">Use the approved Scriptwriter handoff with Automatic Scraper, Manual Scraper, Real Image Search, AI Generation, Stats Card or Quote Card. Review the actual 1080 × 1920 card before approving.</div></div>',
+            '<div class="section-title">Build and review all six slides</div></div>',
             unsafe_allow_html=True,
         )
 
@@ -4261,7 +3868,7 @@ def render_live_top5():
             st.caption(f"Visual search prompt: {specific_prompt}")
 
         option = _render_visual_option_grid(
-            VISUAL_OPTIONS,
+            TOP5_LIVE_VISUAL_OPTIONS,
             session_key="live_visual_option",
             button_prefix="live-top5-visual-source",
         )
@@ -4392,19 +3999,6 @@ def render_live_top5():
                             if st.button("Crop / reposition", width="stretch", key=f"live-top5-crop-{active_slide}-{result_key}-{index}"):
                                 if isinstance(asset.get("bytes"), (bytes, bytearray)):
                                     _crop_visual_dialog(asset_key, bytes(asset["bytes"]), label, crop_store="live_visual_crops")
-        elif option == "Option 5 · Stats Card":
-            st.session_state.live_visual_result = st.session_state.live_top5_visual_results.get(story_number) or {"assets": []}
-            st.session_state.live_manual_visual_result = st.session_state.live_top5_manual_visual_results.get(active_slide) or {}
-            st.session_state.live_real_image_result = st.session_state.live_top5_real_image_results.get(active_slide) or {}
-            st.session_state.live_ai_image_result = st.session_state.live_top5_ai_image_results.get(active_slide) or {}
-            _render_stats_card(live=True, slide_count=6)
-        else:
-            st.session_state.live_visual_result = st.session_state.live_top5_visual_results.get(story_number) or {"assets": []}
-            st.session_state.live_manual_visual_result = st.session_state.live_top5_manual_visual_results.get(active_slide) or {}
-            st.session_state.live_real_image_result = st.session_state.live_top5_real_image_results.get(active_slide) or {}
-            st.session_state.live_ai_image_result = st.session_state.live_top5_ai_image_results.get(active_slide) or {}
-            _render_quote_card(live=True, slide_count=6)
-
         assignment = assignments.get(active_slide)
         if assignment:
             st.divider()
@@ -5111,14 +4705,6 @@ def render_topic_fetcher():
             "rendered_video_path": None, "upload_qc_approved": False, "upload_result": None,
             "upload_qc": None, "manual_visual_result": None, "real_image_result": None,
             "ai_image_result": None, "visual_crops": {},
-            "stats_card_result": None, "stats_card_image_selection": None,
-             "stats_card_image_crop": None, "stats_card_approved": False,
-            "quote_card_image_selection": None,
-            "quote_card_image_crop": None,
-            "quote_card_preview": None,
-            "quote_card_quote": "",
-            "quote_card_attribution": "",
-            "quote_card_slide": 1,
         }.items():
             st.session_state[key] = value
     st.session_state.topic_desk_profile = profiles[desk]
@@ -5260,14 +4846,6 @@ def render_topic_fetcher():
         st.session_state.manual_visual_result = None
         st.session_state.real_image_result = None
         st.session_state.ai_image_result = None
-        st.session_state.stats_card_result = None
-        st.session_state.stats_card_image_selection = None
-        st.session_state.quote_card_image_selection = None
-        st.session_state.quote_card_image_crop = None
-        st.session_state.quote_card_preview = None
-        st.session_state.quote_card_quote = ""
-        st.session_state.quote_card_attribution = ""
-        st.session_state.quote_card_slide = 1
         st.session_state.visual_result = None
         st.session_state.visual_loaded_story = None
         st.session_state.visual_crops = {}
@@ -5506,16 +5084,7 @@ def render_scriptwriter():
                     st.session_state.upload_description=str(approved.get("seo_description") or "")
                     st.session_state.upload_hashtags=" ".join(approved.get("hashtags") or [])
                     st.session_state.upload_comment=str(approved.get("comment") or "")
-                    st.session_state.quote_card_quote = str(approved.get("quote") or "")
-                    st.session_state.quote_card_attribution = str(
-                        approved.get("quote_attribution") or ""
-                    )
-                    quote_slide = int(approved.get("quote_slide") or 1)
                     slide_count = len(approved.get("script") or [])
-                    st.session_state.quote_card_slide = max(1, min(slide_count or 1, quote_slide))
-                    st.session_state.quote_card_image_selection = None
-                    st.session_state.quote_card_image_crop = None
-                    st.session_state.quote_card_preview = None
                 except ValueError as exc:
                     st.error(str(exc))
 
@@ -5807,37 +5376,7 @@ def render_visuals():
     elif mode.startswith("Option 4"):
         _render_manual_ai_images()
     elif mode.startswith("Option 5"):
-        _render_stats_card(live=False, slide_count=slide_count)
-    elif mode.startswith("Option 6"):
-        _render_quote_card(live=False, slide_count=slide_count)
-    elif mode == "Option 7 · Text Cutout":
-        entries = _stats_card_pool_entries(live=False)
-        state = st.session_state.manual_subject_cutout
-        assets = [
-            {
-                "asset_key": asset_key,
-                "bytes": image_bytes,
-                "source": source_name,
-                "label": str(
-                    asset.get("article_title")
-                    or asset.get("model")
-                    or source_name
-                ),
-            }
-            for asset_key, _index, asset, image_bytes, source_name in entries
-        ]
-        _render_manual_subject_cutout(
-            state=state,
-            assets=assets,
-            crop_store=st.session_state.visual_crops,
-            crop_store_name="visual_crops",
-            state_id="test-cricket-manual-subject",
-            default_headline=str((script or {}).get("headline") or ""),
-            handoff="cricket",
-            slide_count=slide_count,
-            assignment_store=st.session_state.visual_assignments,
-            approval_state="visuals_approved",
-        )
+        _render_card_studio(live=False, slide_count=slide_count)
 
     _render_visual_board(slide_count)
 
@@ -6593,7 +6132,6 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_visual_selected = {}
                 st.session_state.test_top5_visual_previews = {}
                 st.session_state.test_top5_visual_assignments = {}
-                st.session_state.test_top5_visual_card_results = {}
                 st.session_state.test_top5_manual_subject_cutouts = {}
                 st.session_state.test_top5_visual_handoff = None
                 st.session_state.test_top5_rendered_video_path = None
@@ -6674,7 +6212,6 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                                st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_manual_subject_cutouts = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -6698,7 +6235,6 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                                st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_manual_subject_cutouts = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -6722,7 +6258,6 @@ elif st.session_state.app_mode == "test":
                                 st.session_state.test_top5_visual_selected = {}
                                 st.session_state.test_top5_visual_previews = {}
                                 st.session_state.test_top5_visual_assignments = {}
-                                st.session_state.test_top5_visual_card_results = {}
                                 st.session_state.test_top5_manual_subject_cutouts = {}
                                 st.session_state.test_top5_visual_handoff = None
                                 st.session_state.test_top5_rendered_video_path = None
@@ -7030,7 +6565,6 @@ elif st.session_state.app_mode == "test":
                             st.session_state.test_top5_visual_selected = {}
                             st.session_state.test_top5_visual_previews = {}
                             st.session_state.test_top5_visual_assignments = {}
-                            st.session_state.test_top5_visual_card_results = {}
                             st.session_state.test_top5_manual_subject_cutouts = {}
                             st.session_state.test_top5_visual_handoff = None
                             st.session_state.test_top5_rendered_video_path = None
@@ -7143,7 +6677,6 @@ elif st.session_state.app_mode == "test":
         elif line_name == "Top-5" and stage == "04 · Visuals":
             from renderer import (
                 build_top5_card_preview,
-                build_quote_card_preview,
                 build_manual_subject_cutout_preview,
             )
             from visual_fetcher import crawl_visuals, manual_crawl_visuals
@@ -7177,11 +6710,11 @@ elif st.session_state.app_mode == "test":
                 '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
                 '<div class="section-title">Standalone Visual QC</div>'
                 '<div class="canvas-copy">Test every Top-5 visual option independently. No Scriptwriter approval or earlier stage is required.</div></div>'
-                '<div class="section-count">9 visual options</div></div>',
+                '<div class="section-count">5 visual options</div></div>',
                 unsafe_allow_html=True,
             )
 
-            st.markdown('<div class="mini-label">9 VISUAL OPTIONS</div>', unsafe_allow_html=True)
+            st.markdown('<div class="mini-label">5 VISUAL OPTIONS</div>', unsafe_allow_html=True)
             visual_option = _render_visual_option_grid(
                 TOP5_VISUAL_OPTIONS,
                 session_key="test_top5_visual_playground_option",
@@ -7207,7 +6740,7 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_headline",
                     height=82,
                 )
-                if visual_option not in {"Option 7 · Subject Cutout", "Option 9 · Manual Subject Cutout"}:
+                if visual_option != "Option 5 · Card Studio":
                     st.text_area(
                         "Body",
                         key="test_top5_visual_playground_body",
@@ -7307,96 +6840,12 @@ elif st.session_state.app_mode == "test":
                                 st.error(f"{type(exc).__name__}: {exc}")
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
-            elif visual_option == "Option 5 · Stats Card":
-                st.text_input(
-                    "Stats-card query",
-                    key="test_top5_visual_playground_stats_query",
-                    placeholder="Virat Kohli last 10 ODI innings",
+            elif visual_option == "Option 5 · Card Studio":
+                _render_card_studio(
+                    top5=True,
+                    current_image=current_image,
+                    current_source=current_source,
                 )
-                if st.button("Build Stats Card", type="primary", width="stretch", key="test-top5-playground-stats"):
-                    query = st.session_state.test_top5_visual_playground_stats_query.strip()
-                    if not query:
-                        st.warning("Enter a stats query first.")
-                    else:
-                        with st.spinner("Building stats card…"):
-                            try:
-                                from stats_card import build_test_stats_card
-                                result = build_test_stats_card(query, current_image)
-                                st.session_state.test_top5_visual_playground_render = bytes(result.get("bytes") or b"")
-                                st.session_state.test_top5_visual_playground_source = "Stats Card"
-                            except Exception as exc:
-                                st.session_state.test_top5_visual_playground_render = None
-                                st.error(f"{type(exc).__name__}: {exc}")
-
-            elif visual_option == "Option 6 · Quote Card":
-                st.text_area(
-                    "Quote",
-                    key="test_top5_visual_playground_quote",
-                    height=90,
-                    placeholder="Enter the identified quote",
-                )
-                st.text_input(
-                    "Attribution",
-                    key="test_top5_visual_playground_attribution",
-                    placeholder="Player / coach / official",
-                )
-                if st.button("Build Quote Card", type="primary", width="stretch", key="test-top5-playground-quote"):
-                    quote = st.session_state.test_top5_visual_playground_quote.strip()
-                    attribution = st.session_state.test_top5_visual_playground_attribution.strip()
-                    if not quote or not attribution:
-                        st.warning("Enter both the quote and attribution.")
-                    else:
-                        try:
-                            st.session_state.test_top5_visual_playground_render = build_quote_card_preview(
-                                current_image,
-                                quote,
-                                attribution,
-                                source_label=current_source,
-                            )
-                            st.session_state.test_top5_visual_playground_source = "Quote Card"
-                        except (ValueError, OSError) as exc:
-                            st.session_state.test_top5_visual_playground_render = None
-                            st.error(str(exc))
-
-            elif visual_option == "Option 9 · Manual Subject Cutout":
-                state = st.session_state.test_top5_manual_subject_playground
-                image_buffer = BytesIO()
-                current_image.convert("RGB").save(image_buffer, format="JPEG", quality=92, optimize=True)
-                playground_bytes = image_buffer.getvalue()
-                _render_manual_subject_cutout(
-                    state=state,
-                    assets=[{
-                        "asset_key": f"top5-playground-{hashlib.sha1(playground_bytes).hexdigest()[:12]}",
-                        "bytes": playground_bytes,
-                        "source": current_source,
-                        "label": "Current test image",
-                    }],
-                    crop_store=st.session_state.test_top5_visual_crops,
-                    crop_store_name="test_top5_visual_crops",
-                    state_id="test-top5-manual-subject-playground",
-                    default_headline=st.session_state.test_top5_visual_playground_headline,
-                )
-
-            elif visual_option == "Option 8 · Body Card · WIP":
-                st.info("Option 8 · Body Card is WIP. No Body Card renderer is active yet.")
-
-            elif visual_option == "Option 7 · Subject Cutout":
-                st.caption("Runs BiRefNet locally on the current image and uses the detected subject to drive headline placement and controlled occlusion.")
-                if st.button("Render Subject Cutout", type="primary", width="stretch", key="test-top5-playground-subject"):
-                    with st.spinner("Running local BiRefNet…"):
-                        try:
-                            st.session_state.test_top5_visual_playground_render = build_top5_card_preview(
-                                current_image,
-                                st.session_state.test_top5_visual_playground_headline,
-                                st.session_state.test_top5_visual_playground_body,
-                                story_number=1,
-                                total_stories=5,
-                                source_label=current_source,
-                                subject_cutout=True,
-                            )
-                        except (ValueError, OSError, RuntimeError, ImportError) as exc:
-                            st.session_state.test_top5_visual_playground_render = None
-                            st.error(str(exc))
 
             if assets:
                 st.markdown(
@@ -7593,12 +7042,10 @@ elif st.session_state.app_mode == "test":
                             "bytes": selected_bytes,
                         }
 
-                        if card_type == "quote" and isinstance(card_data, dict):
-                            assignment["quote_card"] = dict(card_data)
-                        elif card_type == "stats" and isinstance(card_data, dict):
-                            assignment["card_layout"] = dict(card_data.get("layout") or {})
-                        elif card_type == "manual-subject" and isinstance(card_data, dict):
+                        if card_type == "manual-subject" and isinstance(card_data, dict):
                             assignment["manual_subject_cutout"] = dict(card_data)
+                        elif card_type == "card-studio" and isinstance(card_data, dict):
+                            assignment["card_studio"] = dict(card_data)
                         else:
                             assignment["top5_card"] = {
                                 "headline": selected_headline,
@@ -7609,47 +7056,33 @@ elif st.session_state.app_mode == "test":
                                 "subject_cutout": bool(subject_cutout),
                             }
 
-                        if preview_bytes is None:
-                            try:
-                                if card_type == "editorial":
-                                    preview_bytes = build_top5_card_preview(
-                                        selected_bytes,
-                                        selected_headline,
-                                        selected_body,
-                                        story_number=story_number,
-                                        total_stories=5,
-                                        source_label=source,
-                                        subject_cutout=subject_cutout,
-                                    )
-                                elif card_type == "quote" and isinstance(card_data, dict):
-                                    preview_bytes = build_quote_card_preview(
-                                        selected_bytes,
-                                        str(card_data.get("quote") or ""),
-                                        str(card_data.get("attribution") or ""),
-                                        source_label=source,
-                                    )
-                                elif card_type == "manual-subject" and isinstance(card_data, dict):
-                                    preview_bytes = build_manual_subject_cutout_preview(
-                                        selected_bytes,
-                                        str(card_data.get("headline") or selected_headline),
-                                        mode=str(card_data.get("mode") or "negative-space"),
-                                        text_polygon=card_data.get("text_polygon") or (),
-                                        font_size=int(card_data.get("font_size") or 150),
-                                        font=str(card_data.get("font") or "Barlow Condensed"),
-                                        style=str(card_data.get("style") or "Crisp Outline"),
-                                    )
-                            except (ValueError, OSError, RuntimeError, ImportError) as exc:
-                                st.error(str(exc))
-                                return False
+                        if preview_bytes is None and card_type == "editorial":
+                            preview_bytes = build_top5_card_preview(
+                                selected_bytes,
+                                selected_headline,
+                                selected_body,
+                                story_number=story_number,
+                                total_stories=5,
+                                source_label=source,
+                                subject_cutout=subject_cutout,
+                            )
+                        elif preview_bytes is None and card_type == "manual-subject" and isinstance(card_data, dict):
+                            preview_bytes = build_manual_subject_cutout_preview(
+                                selected_bytes,
+                                str(card_data.get("headline") or selected_headline),
+                                mode=str(card_data.get("mode") or "negative-space"),
+                                text_polygon=card_data.get("text_polygon") or (),
+                                font_size=int(card_data.get("font_size") or 150),
+                                font=str(card_data.get("font") or "Barlow Condensed"),
+                                style=str(card_data.get("style") or "Crisp Outline"),
+                            )
 
                         if preview_bytes:
                             assignment["preview_bytes"] = bytes(preview_bytes)
-
                         st.session_state.test_top5_visual_assignments[active_slide] = assignment
                         st.session_state.test_top5_visual_previews[active_slide] = bytes(preview_bytes or selected_bytes)
                         st.session_state.test_top5_visual_handoff = None
                         st.session_state.test_top5_rendered_video_path = None
-                        st.session_state.test_top5_visual_card_results.pop(active_slide, None)
                         return True
 
                     def _top5_render_asset_pool(assets, result_key, subject_cutout=False):
@@ -7743,7 +7176,6 @@ elif st.session_state.app_mode == "test":
                                         try:
                                             from visual_fetcher import crawl_visuals
                                             auto = crawl_visuals(story_payload)
-                                            st.session_state.test_top5_visual_card_results.pop(active_slide, None)
                                             st.session_state.test_top5_visual_results[active_slide] = {
                                                 "source": "automatic",
                                                 "query": specific_prompt,
@@ -7892,225 +7324,8 @@ elif st.session_state.app_mode == "test":
                                 st.caption(f'{len(result.get("assets") or [])} AI images returned.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "ai")
 
-                    if visual_option == "Option 8 · Body Card · WIP":
-                        st.info("Option 8 · Body Card is WIP. No Body Card renderer is active yet.")
-
-                    if visual_option == "Option 7 · Subject Cutout":
-                        image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
-                        image_assets = list(image_result.get("assets") or [])
-                        if not image_assets:
-                            st.info(
-                                "Run one of Options 1–4 for this slide first. Subject Cutout reuses the existing image pool and adds the foreground subject layer locally."
-                            )
-                        else:
-                            st.caption(
-                                "BiRefNet runs locally. The first use downloads the model once; later uses stay local and free."
-                            )
-                            _top5_render_asset_pool(
-                                image_assets,
-                                "subject-cutout",
-                                subject_cutout=True,
-                            )
-
-                    if visual_option == "Option 9 · Manual Subject Cutout":
-                        image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
-                        image_assets = list(image_result.get("assets") or [])
-                        if not image_assets:
-                            st.info(
-                                "Run one of Options 1–4 for this slide first. Manual Subject Cutout reuses the existing image pool and does not run another image search."
-                            )
-                        else:
-                            manual_state = st.session_state.test_top5_manual_subject_cutouts.setdefault(active_slide, {})
-                            manual_assets = [
-                            {
-                                "asset_key": _visual_asset_key(f"manual-subject-{active_slide}", index, asset),
-                                "bytes": asset.get("bytes"),
-                                "source": _top5_asset_source(asset),
-                                "label": _top5_asset_label(asset),
-                            }
-                            for index, asset in enumerate(image_assets)
-                            ]
-                            _render_manual_subject_cutout(
-                                state=manual_state,
-                                assets=manual_assets,
-                                crop_store=st.session_state.test_top5_visual_crops,
-                                crop_store_name="test_top5_visual_crops",
-                                state_id=f"test-top5-manual-subject-{active_slide}",
-                                default_headline=headline,
-                                handoff="top5",
-                                active_slide=active_slide,
-                            )
-
-                    if visual_option in {"Option 5 · Stats Card", "Option 6 · Quote Card"}:
-                        image_result = st.session_state.test_top5_visual_results.get(active_slide) or {}
-                        image_assets = list(image_result.get("assets") or [])
-                        if not image_assets:
-                            st.info(
-                                "Run one of Options 1–4 for this slide first. Stats Card and Quote Card reuse the existing image pool and do not run another image search."
-                            )
-                        else:
-                            st.markdown(
-                                '<div class="section-head"><div><div class="eyebrow">EXISTING IMAGE POOL</div>'
-                                '<div class="section-title">Choose the image for this card</div></div>'
-                                '<div class="section-count">reuse this slide pool</div></div>',
-                                unsafe_allow_html=True,
-                            )
-                            choices = []
-                            for index, asset in enumerate(image_assets):
-                                asset_key = _visual_asset_key(f"top5-card-{active_slide}", index, asset)
-                                source = _top5_asset_source(asset)
-                                label = _top5_asset_label(asset)
-                                choices.append((index, asset, asset_key, source, label))
-
-                            card_choice_key = f"test-top5-card-choice-{active_slide}"
-                            card_index = st.selectbox(
-                                "Card image",
-                                list(range(len(choices))),
-                                index=min(int(st.session_state.get(card_choice_key) or 0), len(choices) - 1),
-                                key=card_choice_key,
-                                format_func=lambda i: choices[i][4][:80],
-                            )
-                            _, card_asset, card_asset_key, card_source, card_label = choices[card_index]
-                            cropped = st.session_state.test_top5_visual_crops.get(card_asset_key)
-                            card_source_bytes = bytes(cropped) if cropped else bytes(card_asset.get("bytes") or b"")
-                            card_preview = _top5_fit_preview(card_source_bytes)
-                            if card_preview is not None:
-                                st.image(card_preview, width=300)
-                            st.caption(f"{card_source} · {card_label}")
-
-                            if st.button(
-                                "Crop / reposition image",
-                                width="stretch",
-                                key=f"test-top5-card-crop-{active_slide}",
-                            ):
-                                _crop_visual_dialog(card_asset_key, bytes(card_asset.get("bytes") or b""), card_label, crop_store="test_top5_visual_crops")
-
-                            if visual_option == "Option 5 · Stats Card":
-                                from stats_card import StatsCardError, build_stats_card
-
-                                query = st.text_input(
-                                    "Stats query",
-                                    placeholder="e.g. Virat Kohli ODI stats · India vs Pakistan H2H stats",
-                                    key=f"test-top5-stats-query-{active_slide}",
-                                )
-                                if st.button(
-                                    "Build Stats Card",
-                                    type="primary",
-                                    width="stretch",
-                                    key=f"test-top5-stats-build-{active_slide}",
-                                ):
-                                    query = query.strip()
-                                    if not query:
-                                        st.warning("Enter a stats query first.")
-                                    else:
-                                        with st.spinner("Building the Stats Card…"):
-                                            try:
-                                                result = build_stats_card(query, card_source_bytes)
-                                                st.session_state.test_top5_visual_card_results[active_slide] = {
-                                                    "type": "stats",
-                                                    "result": result,
-                                                }
-                                            except (StatsCardError, OSError, RuntimeError) as exc:
-                                                st.session_state.test_top5_visual_card_results[active_slide] = {
-                                                    "type": "stats",
-                                                    "error": str(exc),
-                                                }
-                                        st.rerun()
-                                card_result = st.session_state.test_top5_visual_card_results.get(active_slide) or {}
-                                if card_result.get("error"):
-                                    st.error(card_result["error"])
-                                elif card_result.get("type") == "stats" and isinstance(card_result.get("result"), dict):
-                                    result = card_result["result"]
-                                    st.markdown('<div class="mini-label">RENDERED STATS CARD</div>', unsafe_allow_html=True)
-                                    st.image(result["bytes"], width=420)
-                                    st.caption(f'{result.get("label") or "Stats Card"} · {result.get("source") or "Cricket data"}')
-                                    if st.button(
-                                        f"Use Stats Card for slide {active_slide}",
-                                        type="primary",
-                                        width="stretch",
-                                        key=f"test-top5-stats-use-{active_slide}",
-                                    ):
-                                        _top5_store_assignment(
-                                            {"asset_key": f"stats-card-{active_slide}"},
-                                            result["bytes"],
-                                            "stats-card",
-                                            f"Stats Card · {result.get('source') or 'Cricket data'}",
-                                            str(result.get("label") or "Stats Card"),
-                                            card_type="stats",
-                                            card_data=result,
-                                            preview_bytes=result["bytes"],
-                                        )
-                                        st.rerun()
-
-                            else:
-                                quote = st.text_area(
-                                    "Quote",
-                                    key=f"test-top5-quote-{active_slide}",
-                                    height=105,
-                                    max_chars=280,
-                                )
-                                attribution = st.text_input(
-                                    "Attribution",
-                                    key=f"test-top5-quote-attribution-{active_slide}",
-                                    max_chars=120,
-                                )
-                                if st.button(
-                                    "Preview Quote Card",
-                                    type="primary",
-                                    width="stretch",
-                                    key=f"test-top5-quote-preview-{active_slide}",
-                                ):
-                                    quote = quote.strip()
-                                    attribution = attribution.strip()
-                                    if not quote or not attribution:
-                                        st.warning("Quote and attribution are required.")
-                                    else:
-                                        try:
-                                            preview = build_quote_card_preview(
-                                                card_source_bytes,
-                                                quote,
-                                                attribution,
-                                                source_label=card_source,
-                                            )
-                                            st.session_state.test_top5_visual_card_results[active_slide] = {
-                                                "type": "quote",
-                                                "quote": quote,
-                                                "attribution": attribution,
-                                                "source": card_source,
-                                                "label": card_label,
-                                                "preview": preview,
-                                                "bytes": card_source_bytes,
-                                            }
-                                            st.rerun()
-                                        except (ValueError, OSError) as exc:
-                                            st.error(str(exc))
-                                card_result = st.session_state.test_top5_visual_card_results.get(active_slide) or {}
-                                if card_result.get("type") == "quote" and card_result.get("preview"):
-                                    st.markdown('<div class="mini-label">RENDERED QUOTE CARD</div>', unsafe_allow_html=True)
-                                    st.image(card_result["preview"], width=420)
-                                    st.caption("Quote Card uses the approved image and replaces the normal Top-5 editorial text with the selected quote.")
-                                    if st.button(
-                                        f"Use Quote Card for slide {active_slide}",
-                                        type="primary",
-                                        width="stretch",
-                                        key=f"test-top5-quote-use-{active_slide}",
-                                    ):
-                                        _top5_store_assignment(
-                                            {"asset_key": f"quote-card-{active_slide}"},
-                                            card_result["bytes"],
-                                            "quote-card",
-                                            f"Quote Card · {card_result['attribution']}",
-                                            card_result["quote"],
-                                            card_type="quote",
-                                            card_data={
-                                                "quote": card_result["quote"],
-                                                "attribution": card_result["attribution"],
-                                                "language": "english",
-                                                "source_label": card_result["source"],
-                                            },
-                                            preview_bytes=card_result["preview"],
-                                        )
-                                        st.rerun()
+                    if visual_option == "Option 5 · Card Studio":
+                        _render_card_studio(top5=True, active_slide=active_slide)
 
                     current_assignment = assignments.get(active_slide)
                     if current_assignment:

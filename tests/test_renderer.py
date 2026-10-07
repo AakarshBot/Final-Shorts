@@ -503,69 +503,6 @@ def test_production_visuals_are_normalised_to_vertical_frame():
     assert image.size == (renderer.WIDTH, renderer.HEIGHT)
 
 
-def test_production_renderer_uses_stats_card_image_height_for_subtitles(monkeypatch, tmp_path):
-    audio_file = tmp_path / "scene1.mp3"
-    audio_file.write_bytes(b"audio")
-
-    visual_buffer = BytesIO()
-    Image.new("RGB", (1080, 1920), "white").save(visual_buffer, format="PNG")
-
-    script = {
-        "approved_for_audio": True,
-        "script": [{"voiceover": "A factual opening sentence."}],
-        "headline": "Gill Injury Scare",
-    }
-    audio = {
-        "approved_for_visuals": True,
-        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
-    }
-    visuals = [{
-        "bytes": visual_buffer.getvalue(),
-        "result_key": "stats-card",
-        "card_layout": {
-            "width": 1080,
-            "height": 1920,
-            "image_width": 1080,
-            "image_height": 860,
-            "panel_height": 1060,
-        },
-    }]
-
-    seen = []
-
-    def fake_frame(*args, **kwargs):
-        seen.append((args, kwargs))
-        return args[0]
-
-    def fake_preview(frames, path):
-        next(iter(frames))
-        path.write_bytes(b"silent")
-        return path
-
-    def fake_mux(silent_video, audio_scenes, output):
-        output.write_bytes(b"final")
-        return output
-
-    monkeypatch.setattr(renderer, "render_frame", fake_frame)
-    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
-    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
-
-    output = tmp_path / "final.mp4"
-    renderer.render_production_video(
-        script,
-        audio,
-        TEST_SUBTITLE_DATA,
-        visuals,
-        output,
-        headline_text="Gill Injury Scare",
-        source_label="Test Sports Desk",
-    )
-
-    assert seen
-    assert seen[0][0][0].size == (1080, 1920)
-    assert seen[0][0][6] == 764
-
-
 def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(monkeypatch, tmp_path):
     audio_file = tmp_path / "scene1.mp3"
     audio_file.write_bytes(b"audio")
@@ -610,177 +547,9 @@ def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(m
     )
 
     assert seen
-    assert seen[0][0][6] is None
+    assert seen[0][0][5] is None
+    assert seen[0][1].get("top5_card") is None
 
-
-
-def test_quote_card_preview_uses_top5_full_frame_treatment():
-    image_buffer = BytesIO()
-    Image.new("RGB", (1200, 800), "white").save(image_buffer, format="JPEG")
-
-    preview = renderer.build_quote_card_preview(
-        image_buffer.getvalue(),
-        "I think Virat Kohli will finish on 98 centuries.",
-        "Aakash Chopra",
-    )
-
-    image = Image.open(BytesIO(preview))
-    assert image.size == (renderer.WIDTH, renderer.HEIGHT)
-
-
-def test_quote_card_preview_accepts_multiline_quote():
-    quote = (
-        "The latest result changes the selection picture, but the final decision still depends on the "
-        "team balance, the next match conditions and what the selectors see before the series begins."
-    )
-    image_buffer = BytesIO()
-    Image.new("RGB", (1200, 800), "white").save(image_buffer, format="JPEG")
-    preview = renderer.build_quote_card_preview(
-        image_buffer.getvalue(),
-        quote,
-        "Speaker Name",
-    )
-    image = Image.open(BytesIO(preview))
-    assert image.size == (renderer.WIDTH, renderer.HEIGHT)
-
-
-
-def test_quote_card_suppresses_headline_and_subtitles(monkeypatch):
-    calls = []
-
-    monkeypatch.setattr(renderer, "_draw_quote_card", lambda *args: calls.append("quote"))
-    monkeypatch.setattr(renderer, "_draw_headline", lambda *args: calls.append("headline"))
-    monkeypatch.setattr(renderer, "_draw_subtitles", lambda *args: calls.append("subtitles"))
-    monkeypatch.setattr(renderer, "_paste_logo", lambda *args: None)
-    monkeypatch.setattr(renderer, "_paste_source", lambda *args: None)
-
-    base = _test_base()
-    renderer.render_frame(
-        base,
-        0.5,
-        quote_card={
-            "quote": "I think Virat Kohli will finish on 98 centuries.",
-            "attribution": "Aakash Chopra",
-        },
-        headline_enabled=True,
-    )
-
-    assert calls == ["quote"]
-
-
-def test_production_renderer_preserves_quote_card_handoff(monkeypatch, tmp_path):
-    audio_file = tmp_path / "scene1.mp3"
-    audio_file.write_bytes(b"audio")
-    visual = Image.new("RGB", (1080, 1920), "white")
-    visual_buffer = BytesIO()
-    visual.save(visual_buffer, format="PNG")
-
-    script = {
-        "approved_for_audio": True,
-        "script": [{"voiceover": "Aakash Chopra predicts 98 centuries."}],
-        "headline": "Kohli On 98 Centuries",
-    }
-    audio = {
-        "approved_for_visuals": True,
-        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
-    }
-    subtitles = TEST_SUBTITLE_DATA
-    quote_card = {
-        "quote": "I think Virat Kohli will finish on 98 centuries.",
-        "attribution": "Aakash Chopra",
-        "language": "english",
-    }
-    seen = []
-
-    def fake_quote(*args, **kwargs):
-        seen.append(args[1] if len(args) > 1 else kwargs.get("card"))
-        return args[0]
-
-    def fake_preview(frames, path):
-        next(iter(frames))
-        path.write_bytes(b"silent")
-        return path
-
-    def fake_mux(silent_video, audio_scenes, output):
-        output.write_bytes(b"final")
-        return output
-
-    monkeypatch.setattr(renderer, "_draw_quote_card", fake_quote)
-    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
-    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
-
-    output = tmp_path / "quote.mp4"
-    renderer.render_production_video(
-        script,
-        audio,
-        subtitles,
-        [{
-            "bytes": visual_buffer.getvalue(),
-            "result_key": "quote-card",
-            "quote_card": quote_card,
-        }],
-        output,
-    )
-
-    assert seen == [quote_card]
-
-
-def test_production_renderer_uses_quote_source_label(monkeypatch, tmp_path):
-    audio_file = tmp_path / "scene1.mp3"
-    audio_file.write_bytes(b"audio")
-    visual = BytesIO()
-    Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
-
-    quote_card = {
-        "quote": "A concise quoted line from the speaker.",
-        "attribution": "Speaker Name",
-        "language": "english",
-        "source_label": "Quote Source",
-    }
-    audio = {
-        "approved_for_visuals": True,
-        "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
-    }
-    script = {
-        "approved_for_audio": True,
-        "script": [{"voiceover": "A spoken line."}],
-        "headline": "Quote headline",
-    }
-    seen = []
-    rendered_frames = []
-
-    monkeypatch.setattr(renderer, "_draw_quote_card", lambda base, card: base)
-    monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
-    monkeypatch.setattr(renderer, "_paste_source", lambda base, label=None: seen.append(label))
-    monkeypatch.setattr(
-        renderer,
-        "write_preview_video",
-        lambda frames, path: (
-            rendered_frames.append(next(iter(frames)))
-            or path.write_bytes(b"silent")
-            or path
-        ),
-    )
-    monkeypatch.setattr(
-        renderer,
-        "_mux_audio",
-        lambda silent, scenes, output: (output.write_bytes(b"final") or output),
-    )
-
-    output = tmp_path / "quote-source.mp4"
-    renderer.render_production_video(
-        script,
-        audio,
-        TEST_SUBTITLE_DATA,
-        [{
-            "bytes": visual.getvalue(),
-            "source": "Quote Card · Speaker Name",
-            "quote_card": quote_card,
-        }],
-        output,
-    )
-
-    assert seen == ["Quote Source"]
 
 
 def test_top5_editorial_uses_oswald_and_full_frame_safe_area():
@@ -1467,38 +1236,67 @@ def test_production_top5_card_honors_logo_and_source_flags(monkeypatch, tmp_path
     assert calls == ["logo"]
 
 
-def test_production_quote_card_honors_logo_and_source_flags(monkeypatch, tmp_path):
+def test_production_renderer_uses_card_studio_static_preview_and_overlays(monkeypatch, tmp_path):
     audio_file = tmp_path / "scene1.mp3"
     audio_file.write_bytes(b"audio")
     visual = BytesIO()
     Image.new("RGB", (1080, 1920), "white").save(visual, format="PNG")
-    calls = []
+    rendered = BytesIO()
+    Image.new("RGB", (1080, 1920), (28, 42, 64)).save(rendered, format="PNG")
 
-    monkeypatch.setattr(renderer, "_draw_quote_card", lambda base, card: base)
+    calls = []
+    frames = []
+
     monkeypatch.setattr(renderer, "_paste_logo", lambda *_args: calls.append("logo"))
     monkeypatch.setattr(renderer, "_paste_source", lambda *_args: calls.append("source"))
-    monkeypatch.setattr(renderer, "write_preview_video", lambda frames, path: (next(iter(frames)), path.write_bytes(b"silent"), path)[-1])
-    monkeypatch.setattr(renderer, "_mux_audio", lambda silent, scenes, output: (output.write_bytes(b"final") or output))
+    monkeypatch.setattr(
+        renderer,
+        "write_preview_video",
+        lambda iterable, path: (
+            frames.append(next(iter(iterable))),
+            path.write_bytes(b"silent"),
+            path,
+        )[-1],
+    )
+    monkeypatch.setattr(
+        renderer,
+        "_mux_audio",
+        lambda silent, scenes, output: (output.write_bytes(b"final") or output),
+    )
 
     script = {
         "approved_for_audio": True,
         "script": [{"voiceover": "A spoken line."}],
+        "headline": "Card headline",
     }
     audio = {
         "approved_for_visuals": True,
         "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}],
     }
+    preview_bytes = rendered.getvalue()
 
+    output = tmp_path / "card.mp4"
     renderer.render_production_video(
         script,
         audio,
         TEST_SUBTITLE_DATA,
-        [{"bytes": visual.getvalue(), "quote_card": {"quote": "A concise quoted line.", "attribution": "Speaker Name"}}],
-        tmp_path / "quote.mp4",
-        logo_enabled=False,
-        source_enabled=False,
+        [{
+            "bytes": visual.getvalue(),
+            "source": "Test Sports Desk",
+            "preview_bytes": preview_bytes,
+            "card_studio": {
+                "type": "Stat Highlight",
+                "data": {"headline": "Card headline", "value": "100"},
+            },
+        }],
+        output,
+        logo_enabled=True,
+        source_enabled=True,
     )
-    assert calls == []
+
+    assert len(frames) == 1
+    assert frames[0].size == (renderer.WIDTH, renderer.HEIGHT)
+    assert calls == ["logo", "source"]
 
 
 def test_final_renderer_quality_contract():
