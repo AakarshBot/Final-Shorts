@@ -511,7 +511,7 @@ Checkpoint rule:
 
 #### Cricket Scriptwriter — protected / read-only
 
-The existing Cricket Scriptwriter remains untouched by the Niche/YT Trends rewrite.
+The old separate Cricket Scriptwriter implementation has been removed. Cricket now uses the same direct Universal Scriptwriter as Niche Sports and YouTube Search Trends.
 
 - Normal Cricket production continues to use the existing Cricket writer exactly as it does today.
 - Its prompt, schema, validation, research flow, metadata package, quote handling, manual-edit handoff and downstream behavior are outside this change.
