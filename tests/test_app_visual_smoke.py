@@ -215,6 +215,37 @@ def test_cricket_test_exposes_shared_text_cutout():
     )
 
 
+def test_manual_subject_cutout_renders_after_layout_preview():
+    asset = {
+        "bytes": _image_bytes(),
+        "source": "source-a",
+        "article_title": "Image A",
+    }
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["topic_desk_profile"] = "cricket_india_asia"
+    at.session_state["visual_test_mode"] = "Option 7 · Text Cutout"
+    at.session_state["visual_result"] = {"assets": [asset]}
+    at.session_state["script_data"] = {
+        "headline": "India win again",
+        "script": [{"voiceover": "One."}] * 4,
+    }
+    at.run()
+
+    assert not at.exception, at.exception
+    next(button for button in at.button if button.label == "Select image").click().run()
+    assert not at.exception, at.exception
+    next(
+        button for button in at.button
+        if button.label == "Preview all valid line-break options"
+    ).click().run()
+    assert not at.exception, at.exception
+    next(button for button in at.button if button.label == "Render Now").click().run()
+    assert not at.exception, at.exception
+    assert at.session_state["manual_subject_cutout"]["rendered_config"]["source_key"]
+
 def test_yt_trends_test_exposes_shared_text_cutout_option_7():
     asset = {
         "bytes": _image_bytes(),
