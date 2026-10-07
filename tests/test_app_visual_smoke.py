@@ -15,8 +15,7 @@ VISUAL_OPTIONS = (
     "Option 2 · Manual Scraper",
     "Option 3 · Real Image Search",
     "Option 4 · AI Generation",
-    "Option 5 · Stats Card",
-    "Option 6 · Quote Card",
+    "Option 5 · Card Studio",
 )
 
 
@@ -58,7 +57,7 @@ def test_card_visual_options_load():
         assert not at.exception, at.exception
 
 
-def test_top5_standalone_visual_qc_exposes_all_nine_options():
+def test_top5_standalone_visual_qc_exposes_card_studio():
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "top_5"
@@ -74,47 +73,37 @@ def test_top5_standalone_visual_qc_exposes_all_nine_options():
             "Option 2 · Manual Scraper",
             "Option 3 · Manual Fetcher",
             "Option 4 · AI Generation",
-            "Option 5 · Stats Card",
-            "Option 6 · Quote Card",
-            "Option 7 · Subject Cutout",
-            "Option 8 · Body Card · WIP",
-            "Option 9 · Manual Subject Cutout",
+            "Option 5 · Card Studio",
         )
     )
 
 
-def test_top5_subject_cutout_ui_smoke():
+
+def test_top5_card_studio_subject_cutout_ui_smoke():
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "top_5"
     at.session_state["test_stage"] = "04 · Visuals"
-    at.session_state["test_top5_visual_playground_option"] = "Option 7 · Subject Cutout"
-    at.session_state["test_top5_visual_playground_image"] = Image.new(
-        "RGB",
-        (1080, 1920),
-        (40, 40, 40),
-    )
+    at.session_state["test_top5_visual_playground_option"] = "Option 5 · Card Studio"
+    at.session_state["test_top5_visual_playground_image"] = Image.new("RGB", (1080, 1920), (40, 40, 40))
     at.session_state["test_top5_visual_playground_source"] = "Test image"
     at.run()
 
     assert not at.exception, at.exception
-    assert any(button.label == "Render Subject Cutout" for button in at.button)
+    assert any(button.label == "Select image" for button in at.button)
     assert not any(field.label == "Body" for field in at.text_area)
 
-def test_top5_manual_fetcher_and_body_card_wip_load():
-    for option in (
-        "Option 3 · Manual Fetcher",
-        "Option 8 · Body Card · WIP",
-    ):
-        at = AppTest.from_file(str(APP_PATH), default_timeout=10)
-        at.session_state["app_mode"] = "test"
-        at.session_state["test_production_line"] = "top_5"
-        at.session_state["test_stage"] = "04 · Visuals"
-        at.session_state["test_top5_visual_playground_option"] = option
-        at.run()
 
-        assert not at.exception, at.exception
 
+def test_top5_manual_fetcher_loads():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "top_5"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["test_top5_visual_playground_option"] = "Option 3 · Manual Fetcher"
+    at.run()
+
+    assert not at.exception, at.exception
 
 
 
@@ -144,13 +133,13 @@ def _live_cricket_text_cutout_test(assets, *, crops=None):
     }
     at.session_state["live_approved_audio"] = {}
     at.session_state["live_subtitle_data"] = {}
-    at.session_state["live_visual_option"] = "Option 7 · Text Cutout"
+    at.session_state["live_visual_option"] = "Option 5 · Card Studio"
     at.session_state["live_visual_result"] = {"assets": assets}
     if crops:
         at.session_state["live_visual_crops"] = crops
     at.run()
     assert not at.exception, at.exception
-    assert "Option 7 · Text Cutout" in [button.label for button in at.button]
+    assert "Option 5 · Card Studio" in [button.label for button in at.button]
     return at
 
 
@@ -165,7 +154,7 @@ def test_cricket_test_exposes_shared_text_cutout():
     at.session_state["test_production_line"] = "deep_dive"
     at.session_state["test_stage"] = "04 · Visuals"
     at.session_state["topic_desk_profile"] = "cricket_india_asia"
-    at.session_state["visual_test_mode"] = "Option 7 · Text Cutout"
+    at.session_state["visual_test_mode"] = "Option 5 · Card Studio"
     at.session_state["visual_result"] = {"assets": [asset]}
     at.session_state["script_data"] = {
         "headline": "India win again",
@@ -182,9 +171,7 @@ def test_cricket_test_exposes_shared_text_cutout():
             "Option 2 · Manual Scraper",
             "Option 3 · Real Image Search",
             "Option 4 · AI Generation",
-            "Option 5 · Stats Card",
-            "Option 6 · Quote Card",
-            "Option 7 · Text Cutout",
+            "Option 5 · Card Studio",
         )
     )
     select = next(button for button in at.button if button.label == "Select image")
@@ -226,7 +213,7 @@ def test_manual_subject_cutout_renders_after_layout_preview():
     at.session_state["test_production_line"] = "deep_dive"
     at.session_state["test_stage"] = "04 · Visuals"
     at.session_state["topic_desk_profile"] = "cricket_india_asia"
-    at.session_state["visual_test_mode"] = "Option 7 · Text Cutout"
+    at.session_state["visual_test_mode"] = "Option 5 · Card Studio"
     at.session_state["visual_result"] = {"assets": [asset]}
     at.session_state["script_data"] = {
         "headline": "India win again",
@@ -256,7 +243,7 @@ def test_yt_trends_test_exposes_shared_text_cutout_option_7():
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "youtube_trends"
     at.session_state["test_stage"] = "04 · Visuals"
-    at.session_state["visual_test_mode"] = "Option 7 · Text Cutout"
+    at.session_state["visual_test_mode"] = "Option 5 · Card Studio"
     at.session_state["visual_result"] = {"assets": [asset]}
     at.session_state["script_data"] = {
         "headline": "India win again",
@@ -265,7 +252,7 @@ def test_yt_trends_test_exposes_shared_text_cutout_option_7():
     at.run()
 
     assert not at.exception, at.exception
-    assert "Option 7 · Text Cutout" in [button.label for button in at.button]
+    assert "Option 5 · Card Studio" in [button.label for button in at.button]
     select = next(button for button in at.button if button.label == "Select image")
     select.click().run()
     assert not at.exception, at.exception
@@ -305,12 +292,12 @@ def test_yt_trends_live_exposes_shared_text_cutout_option_7():
     }
     at.session_state["live_approved_audio"] = {}
     at.session_state["live_subtitle_data"] = {}
-    at.session_state["live_visual_option"] = "Option 7 · Text Cutout"
+    at.session_state["live_visual_option"] = "Option 5 · Card Studio"
     at.session_state["live_visual_result"] = {"assets": [asset]}
     at.run()
 
     assert not at.exception, at.exception
-    assert "Option 7 · Text Cutout" in [button.label for button in at.button]
+    assert "Option 5 · Card Studio" in [button.label for button in at.button]
     select = next(button for button in at.button if button.label == "Select image")
     select.click().run()
     assert not at.exception, at.exception
@@ -320,7 +307,7 @@ def test_yt_trends_live_exposes_shared_text_cutout_option_7():
     assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["text_polygon"]
 
 
-def test_top5_option9_uses_shared_editor():
+def test_top5_card_studio_uses_shared_editor():
     asset = {
         "bytes": _image_bytes(),
         "source": "source-a",
@@ -330,7 +317,7 @@ def test_top5_option9_uses_shared_editor():
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "top_5"
     at.session_state["test_stage"] = "04 · Visuals"
-    at.session_state["test_top5_visual_playground_option"] = "Option 9 · Manual Subject Cutout"
+    at.session_state["test_top5_visual_playground_option"] = "Option 5 · Card Studio"
     at.session_state["test_top5_visual_playground_image"] = Image.new(
         "RGB",
         (1080, 1920),
@@ -367,7 +354,7 @@ def test_top5_option9_uses_shared_editor():
 
 
 
-def test_top5_option9_per_slide_uses_shared_editor():
+def test_top5_card_studio_per_slide_uses_shared_editor():
     asset = {
         "bytes": _image_bytes(),
         "source": "source-a",
@@ -389,7 +376,7 @@ def test_top5_option9_per_slide_uses_shared_editor():
         ],
         "stories": [{"title": f"Story {index}"} for index in range(1, 6)],
     }
-    at.session_state["test_top5_visual_option"] = "Option 9 · Manual Subject Cutout"
+    at.session_state["test_top5_visual_option"] = "Option 5 · Card Studio"
     at.session_state["test_top5_visual_results"] = {
         1: {"assets": [asset]},
     }
@@ -448,12 +435,12 @@ def test_live_cricket_text_cutout_switches_images_and_reuses_crop():
     assert at.session_state["live_manual_subject_cutout"]["image_key"] == second_key
 
 
-def test_top5_option9_second_run_preserves_text_size():
+def test_top5_card_studio_second_run_preserves_text_size():
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "top_5"
     at.session_state["test_stage"] = "04 · Visuals"
-    at.session_state["test_top5_visual_playground_option"] = "Option 9 · Manual Subject Cutout"
+    at.session_state["test_top5_visual_playground_option"] = "Option 5 · Card Studio"
     at.session_state["test_top5_visual_playground_image"] = Image.new(
         "RGB",
         (1080, 1920),
@@ -520,7 +507,7 @@ def test_manual_subject_cutout_migrates_four_point_polygon_to_eight_points():
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "top_5"
     at.session_state["test_stage"] = "04 · Visuals"
-    at.session_state["test_top5_visual_playground_option"] = "Option 9 · Manual Subject Cutout"
+    at.session_state["test_top5_visual_playground_option"] = "Option 5 · Card Studio"
     at.session_state["test_top5_visual_playground_image"] = Image.new("RGB", (1080, 1920), (40, 40, 40))
     at.session_state["test_top5_visual_playground_source"] = "Test image"
     at.session_state["test_top5_visual_playground_headline"] = "India win again"
