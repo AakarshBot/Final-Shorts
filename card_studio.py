@@ -42,7 +42,7 @@ LIVE_CARD_TYPES = ("Text Subject Cutout",)
 CARD_COMPOSITIONS = {
     "Stat Highlight": ("Hero Signal", "Data Stack", "Metric Rail"),
     "Quote / Reaction": ("Quote Lead", "Reaction Panel", "Context Lead"),
-    "Head-to-Head": ("Duel Columns", "Comparison Board", "Split Face-Off"),
+    "Head-to-Head": ("Duel Columns", "Comparison Board"),
     "Key Fact / Milestone": ("Number Lead", "Record Side", "Story Lead"),
 }
 
