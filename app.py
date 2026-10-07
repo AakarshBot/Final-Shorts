@@ -4953,7 +4953,6 @@ def render_youtube_trends_topic_fetcher(*, live=False):
             st.markdown(
                 f'<div class="topic-title">{item["top_news_title"]}</div>'
                 f'<div class="topic-meta">{item["signal"]}'
-                f'{" · BREAKOUT" if item["breakout"] else ""}'
                 f'{" · autocomplete" if item["youtube_autocomplete"] else ""}</div>',
                 unsafe_allow_html=True,
             )
