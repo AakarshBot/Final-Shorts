@@ -183,7 +183,7 @@ Top-5 has nine visual options in Test:
 8. Body Card — **WIP**.
 9. Manual Subject Cutout.
 
-The established Cricket/Deep-Dive visual retrieval options remain unchanged. YT Trends uses the same single-story visual framework and now exposes **Option 7 · Text Cutout** alongside Options 1–6 in Test and Live. Top-5 Option 3 is the manual real-image fetcher: it accepts a manual query and returns the real-image provider pool only. It does not render a text card. Top-5 Option 8 is the future Body Card text-based visual and remains dashboard WIP with no active renderer.
+The established Cricket/Deep-Dive visual retrieval options remain unchanged. The shared Manual Subject Cutout editor keeps the selected asset and selected line-break layout as separate UI state, so previewing layouts cannot replace the selected asset used by Render Now. YT Trends uses the same single-story visual framework and now exposes **Option 7 · Text Cutout** alongside Options 1–6 in Test and Live. Top-5 Option 3 is the manual real-image fetcher: it accepts a manual query and returns the real-image provider pool only. It does not render a text card. Top-5 Option 8 is the future Body Card text-based visual and remains dashboard WIP with no active renderer.
 
 **Global publisher discovery:** The Automatic Scraper and Manual Scraper now search publisher results without a regional search lock. DuckDuckGo text/news discovery uses the no-region `wt-wt` setting, and the Google News RSS lane no longer requests the India-specific `gl=IN`, `ceid=IN:en` feed.
 
