@@ -1362,13 +1362,13 @@ def _render_manual_subject_cutout(
                             st.warning("This visual is not crop-ready.")
 
                 with select_col:
-                    selected = asset_key == str(state.get("image_key") or "")
+                    is_selected_image = asset_key == str(state.get("image_key") or "")
                     if st.button(
-                        "Selected" if selected else "Select image",
-                        type="primary" if selected else "secondary",
+                        "Selected" if is_selected_image else "Select image",
+                        type="primary" if is_selected_image else "secondary",
                         width="stretch",
                         key=f"{state_id}-select-{asset_key}",
-                    ) and not selected:
+                    ) and not is_selected_image:
                         state.update(
                             image_key=asset_key,
                             polygon_points=None,
@@ -1612,10 +1612,10 @@ def _render_manual_subject_cutout(
                         + "</div>",
                         unsafe_allow_html=True,
                     )
-                    selected = tuple(option["line_breaks"]) == tuple(state.get("line_breaks") or ())
+                    is_selected_layout = tuple(option["line_breaks"]) == tuple(state.get("line_breaks") or ())
                     if st.button(
-                        "Selected" if selected else "Use this layout",
-                        type="primary" if selected else "secondary",
+                        "Selected" if is_selected_layout else "Use this layout",
+                        type="primary" if is_selected_layout else "secondary",
                         width="stretch",
                         key=f"{state_id}-line-break-{option['index']}",
                     ):
