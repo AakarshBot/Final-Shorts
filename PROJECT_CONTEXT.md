@@ -190,12 +190,13 @@ Card Studio WIP behavior:
 - Every WIP card type opens with concrete default test content in every editable field, so the card can be rendered immediately for visual evaluation.
 - The image picker shows the full available image pool as actual image previews, not title-only choices.
 - Every displayed image has the existing **Crop / reposition** control. Cropping is applied before the image is selected for the Card Studio composition, and the cropped bytes are reused for the card render.
-- WIP cards use the factory's existing subject-aware foreground mask only to choose better negative-space placement for text. There is no text-behind-subject restoration, subject cutout, or hidden-text treatment in these WIP cards.
-- The subject-aware placement is intentionally basic: it scores a small set of safe text positions and prefers the one with less detected foreground coverage while keeping the original card hierarchy.
-- Quote / Reaction has been rewritten as a stronger sports-editorial quote treatment using the factory's condensed typography, accent rule and image-first composition. It is still WIP and requires manual approval.
-- Head-to-Head supports both **One image** and **Two images**. Two-image mode lets the user manually choose which pool image is Image 1 and Image 2, then choose **Vertical** or **Horizontal** split. Each side keeps its own name and corresponding metric values.
-- Single-image Head-to-Head keeps the editorial split-stat treatment but now participates in the same basic subject-aware headline placement.
-- Card Studio continues to create static 1080 × 1920 frames; the production Renderer does not animate normal headline/subtitle layers over a completed Card Studio frame.
+- WIP cards are designed as an **editorial composition system, not one fixed template per card type**. Each WIP type has several materially different compositions with different information hierarchy and placement.
+- Card Studio defaults to **Auto**, which chooses a composition deterministically from the actual card content (for example metric count, quote length/context, image mode, or milestone context). It is not randomized and it does not rely on cosmetic variation.
+- Test exposes the manual composition choices so the user can override Auto during visual QC. This is the intended control for testing and approving the strongest treatment for a particular story.
+- WIP cards use the factory's existing subject-aware foreground mask only to find better negative space for text. There is no text-behind-subject restoration, subject cutout, masking, or hidden-text treatment in these cards.
+- Quote / Reaction, Stat Highlight and Key Fact / Milestone each have distinct editorial compositions that change the information hierarchy rather than merely changing colours or decorative elements.
+- Head-to-Head keeps **One image** and **Two images**. Two-image mode still allows manual Image 1/Image 2 assignment and **Vertical** or **Horizontal** split; the two-image composition is driven by the comparison itself.
+- Card Studio remains a manual-QC visual entry point and no WIP card is Live-approved. The production Renderer continues to receive the completed static 1080 × 1920 card frame without adding normal headline/subtitle layers over it.
 - No new package or external graphics framework is introduced. The existing Pillow + renderer stack remains the implementation.
 
 **Global publisher discovery:** The Automatic Scraper and Manual Scraper search publisher results without a regional search lock. DuckDuckGo text/news discovery uses the no-region `wt-wt` setting, and the Google News RSS lane no longer requests the India-specific `gl=IN`, `ceid=IN:en` feed.
@@ -501,10 +502,12 @@ Card Studio checkpoint:
 - Stat Highlight, Quote / Reaction, Head-to-Head and Key Fact / Milestone remain Test-only WIP Card Studio types.
 - All WIP card fields open with usable default test values.
 - WIP Card Studio shows the full image pool with real image previews and the existing crop/reposition control before image selection.
+- WIP Card Studio is an editorial composition system rather than one fixed template per card type. Each WIP card has materially different compositions, with deterministic Auto selection from the actual content plus manual Test override.
+- The purpose of composition variation is to reflect the story's information hierarchy and avoid interchangeable mass-produced presentation; it is not random cosmetic variation or an attempt to disguise automation.
 - WIP cards use the existing subject-aware foreground mask only for simple negative-space text placement. They do not hide text behind subjects.
 - Head-to-Head supports one-image and two-image modes. Two-image mode has manual Image 1/Image 2 assignment plus manual Vertical/Horizontal split selection.
-- Quote / Reaction is an editorial redesign and remains unapproved until the user manually reviews its output.
-- No WIP card type is promoted to Live until the user approves the actual rendered frame.
+- Quote / Reaction, Stat Highlight and Key Fact / Milestone remain unapproved until their rendered treatments are manually reviewed for both editorial usefulness and channel-level repeatability.
+- No WIP card type is promoted to Live until the user approves the actual rendered frame and the composition system is considered safe for the factory's anti-mass-production requirements.
 
 Checkpoint rule:
 - Use **Cricket line = 6/10** as the starting quality baseline for future Cricket pipeline improvements.
