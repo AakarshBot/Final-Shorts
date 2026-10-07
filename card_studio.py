@@ -171,7 +171,8 @@ def _subject_occupancy(mask: Image.Image | None, box: tuple[int, int, int, int])
     y2 = max(y1 + 1, min(HEIGHT, y2))
     crop = mask.crop((x1, y1, x2, y2))
     histogram = crop.histogram()
-    return sum(histogram[96:]) / max(1, (x2 - x1) * (y2 - y1) * 255)
+    total = sum(index * count for index, count in enumerate(histogram[96:], 96))
+    return total / max(1, (x2 - x1) * (y2 - y1) * 255)
 
 
 def _best_text_position(
