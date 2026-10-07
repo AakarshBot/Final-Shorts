@@ -3656,14 +3656,14 @@ def _render_live_upload():
                 qc.get("comment", ""),
                 privacy,
             )
-            if privacy == "public" and st.session_state.live_upload_result.get("privacy_status") == "public" and not is_top5:
+            if privacy == "public" and st.session_state.live_upload_result.get("privacy_status") == "public":
                 try:
                     from editorial_audit import record_publication
                     record_publication(
-                        st.session_state.live_approved_script,
+                        st.session_state.live_top5_script_handoff if is_top5 else st.session_state.live_approved_script,
                         st.session_state.live_visual_assignments,
                         title=qc.get("title", ""),
-                        line=st.session_state.get("live_production_line") or "",
+                        line="top_5" if is_top5 else st.session_state.get("live_production_line") or "",
                     )
                 except (OSError, TypeError, ValueError):
                     pass
