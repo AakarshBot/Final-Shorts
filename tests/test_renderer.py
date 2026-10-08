@@ -96,6 +96,55 @@ def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
     one_line = next(layout for layout in data["layouts"] if len(layout["lines"]) == 1)
     assert one_line["placements"][0][2] == 82
 
+def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatch):
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: font_path.read_bytes(),
+    )
+
+    polygon = ((80, 700), (920, 700), (920, 1550), (360, 1550), (80, 950))
+    headline = "India win today after a dramatic turnaround in the final"
+
+    default = renderer._manual_subject_cutout_layout_data(
+        headline,
+        polygon,
+        180,
+        "Barlow Condensed",
+        "Crisp Outline",
+    )
+    flowed = renderer._manual_subject_cutout_layout_data(
+        headline,
+        polygon,
+        180,
+        "Barlow Condensed",
+        "Crisp Outline",
+        polygon_flow=True,
+    )
+
+    default_by_breaks = {layout["line_breaks"]: layout for layout in default["layouts"]}
+    flowed_layout = next(
+        layout
+        for layout in flowed["layouts"]
+        if len(layout["lines"]) >= 3 and layout["line_breaks"] in default_by_breaks
+    )
+    default_layout = default_by_breaks[flowed_layout["line_breaks"]]
+
+    assert default["polygon_flow"] is False
+    assert flowed["polygon_flow"] is True
+    flow_lefts = [placement[2] for placement in flowed_layout["placements"]]
+    assert flow_lefts[-1] > flow_lefts[0]
+
+    changed = [
+        flow_placement[2] < default_placement[2]
+        for flow_placement, default_placement in zip(
+            flowed_layout["placements"],
+            default_layout["placements"],
+        )
+    ]
+    assert any(changed)
+
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
     assert renderer.HEADLINE_SECONDS == 1.35

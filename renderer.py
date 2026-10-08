@@ -779,6 +779,7 @@ def _manual_subject_cutout_layout_data(
     font_size: int,
     font_name: str,
     style: str,
+    polygon_flow: bool = False,
 ):
     clean_headline = " ".join(str(headline or "").split()).upper()
     if not clean_headline:
@@ -877,27 +878,42 @@ def _manual_subject_cutout_layout_data(
         if any(not region for region in regions):
             return None
 
-        widest = [
-            max(region, key=lambda interval: interval[1] - interval[0])
-            for region in regions
-        ]
-        common_left = max(interval[0] for interval in widest)
-        common_right = min(interval[1] for interval in widest)
-        usable_width = common_right - common_left - 4
+        if polygon_flow:
+            center_y = (line_top + line_bottom) / 2
+            regions = polygon_intervals(center_y)
+            if not regions:
+                return None
+
+            left_edge, right_edge = max(
+                regions,
+                key=lambda interval: interval[1] - interval[0],
+            )
+        else:
+            widest = [
+                max(region, key=lambda interval: interval[1] - interval[0])
+                for region in regions
+            ]
+            common_left = max(interval[0] for interval in widest)
+            common_right = min(interval[1] for interval in widest)
+            if not all(
+                any(
+                    interval_left <= common_left + 2
+                    and common_left + 2 + line_width <= interval_right
+                    for interval_left, interval_right in region
+                )
+                for region in regions
+            ):
+                return None
+            left_edge = common_left
+            right_edge = common_right
+
+        usable_width = right_edge - left_edge - 4
         if usable_width < line_width:
             return None
 
-        left = common_left + 2
+        left = left_edge + 2
         right = left + line_width
-        if not all(
-            any(
-                interval_left <= left and right <= interval_right
-                for interval_left, interval_right in region
-            )
-            for region in regions
-        ):
-            return None
-        if right > common_right - 2:
+        if right > right_edge - 2:
             return None
         return int(round(left)), bbox, usable_width
 
@@ -977,6 +993,7 @@ def _manual_subject_cutout_layout_data(
         "font_size": requested_size,
         "font_name": mode,
         "style": clean_style,
+        "polygon_flow": bool(polygon_flow),
         "font_data": font_data,
         "font": font,
         "stroke_width": stroke_width,
@@ -1119,6 +1136,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         config.get("font_size"),
         str(config.get("font") or "Barlow Condensed").strip(),
         str(config.get("style") or "Crisp Outline").strip(),
+        bool(config.get("polygon_flow")),
     )
     layouts = data["layouts"]
     if not layouts:
@@ -1171,6 +1189,7 @@ def build_manual_subject_cutout_preview(
     style: str = "Crisp Outline",
     text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
     line_breaks: tuple[int, ...] | list[int] | None = None,
+    polygon_flow: bool = False,
 ) -> bytes:
     frame = _draw_manual_subject_cutout(
         source_image,
@@ -1182,6 +1201,7 @@ def build_manual_subject_cutout_preview(
             "font": font,
             "style": style,
             "line_breaks": line_breaks,
+            "polygon_flow": polygon_flow,
         },
     )
     buffer = BytesIO()
@@ -1198,6 +1218,7 @@ def build_manual_subject_cutout_layout_previews(
     font: str = "Barlow Condensed",
     style: str = "Crisp Outline",
     text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
+    polygon_flow: bool = False,
 ) -> list[dict]:
     selected_mode = str(mode or "negative-space").strip().casefold()
     if selected_mode not in {"negative-space", "behind-subject"}:
@@ -1209,6 +1230,7 @@ def build_manual_subject_cutout_layout_previews(
         font_size,
         font,
         style,
+        polygon_flow,
     )
     if not data["layouts"]:
         raise ValueError(
