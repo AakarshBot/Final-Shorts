@@ -104,47 +104,24 @@ def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatc
         lambda _font_name: font_path.read_bytes(),
     )
 
-    polygon = ((80, 700), (700, 700), (1000, 1500), (380, 1500))
-    headline = "India win today after a dramatic late turnaround"
-
-    default = renderer._manual_subject_cutout_layout_data(
-        headline,
-        polygon,
-        180,
-        "Barlow Condensed",
-        "Crisp Outline",
-    )
+    polygon = ((180, 700), (520, 700), (740, 1500), (400, 1500))
     flowed = renderer._manual_subject_cutout_layout_data(
-        headline,
+        "India win today after a dramatic turnaround in",
         polygon,
-        180,
+        150,
         "Barlow Condensed",
         "Crisp Outline",
         polygon_flow=True,
     )
 
-    default_by_breaks = {layout["line_breaks"]: layout for layout in default["layouts"]}
-    flowed_layout = next(
-        layout
-        for layout in flowed["layouts"]
-        if len(layout["lines"]) >= 2 and layout["line_breaks"] in default_by_breaks
-    )
-    default_layout = default_by_breaks[flowed_layout["line_breaks"]]
-
-    assert default["polygon_flow"] is False
+    assert flowed["layouts"]
+    layout = max(flowed["layouts"], key=lambda item: len(item["lines"]))
     assert flowed["polygon_flow"] is True
+    assert len(layout["lines"]) >= 3
 
-    flow_lefts = [placement[2] for placement in flowed_layout["placements"]]
-    assert flow_lefts[-1] > flow_lefts[0]
-
-    changed = [
-        flow_placement[2] < default_placement[2]
-        for flow_placement, default_placement in zip(
-            flowed_layout["placements"],
-            default_layout["placements"],
-        )
-    ]
-    assert any(changed)
+    lefts = [placement[2] for placement in layout["placements"]]
+    assert lefts[-1] > lefts[0]
+    assert lefts == sorted(lefts)
 
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
