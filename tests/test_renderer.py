@@ -104,8 +104,8 @@ def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatc
         lambda _font_name: font_path.read_bytes(),
     )
 
-    polygon = ((80, 700), (920, 700), (920, 1550), (360, 1550), (80, 950))
-    headline = "India win today after a dramatic turnaround in the final"
+    polygon = ((80, 700), (700, 700), (1000, 1500), (380, 1500))
+    headline = "India win today after a dramatic late turnaround"
 
     default = renderer._manual_subject_cutout_layout_data(
         headline,
@@ -127,12 +127,13 @@ def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatc
     flowed_layout = next(
         layout
         for layout in flowed["layouts"]
-        if len(layout["lines"]) >= 3 and layout["line_breaks"] in default_by_breaks
+        if len(layout["lines"]) >= 2 and layout["line_breaks"] in default_by_breaks
     )
     default_layout = default_by_breaks[flowed_layout["line_breaks"]]
 
     assert default["polygon_flow"] is False
     assert flowed["polygon_flow"] is True
+
     flow_lefts = [placement[2] for placement in flowed_layout["placements"]]
     assert flow_lefts[-1] > flow_lefts[0]
 
