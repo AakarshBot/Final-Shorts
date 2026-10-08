@@ -3260,8 +3260,11 @@ def _render_live_visuals(slide_count: int):
             live=True,
             slide_count=slide_count,
             polygon_flow=(
-                st.session_state.get("live_production_line") == "deep_dive"
-                and st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
+                (
+                    st.session_state.get("live_production_line") == "deep_dive"
+                    and st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
+                )
+                or st.session_state.get("live_production_line") == "youtube_trends"
             ),
         )
 
@@ -5614,8 +5617,11 @@ def render_visuals():
             live=False,
             slide_count=slide_count,
             polygon_flow=(
-                st.session_state.get("test_production_line") == "deep_dive"
-                and cricket_test
+                (
+                    st.session_state.get("test_production_line") == "deep_dive"
+                    and cricket_test
+                )
+                or youtube_trends_test
             ),
         )
 

@@ -336,9 +336,9 @@ Feature contract:
 - The whole polygon can be dragged rigidly inside the frame.
 - Clicking an edge adds a point.
 - The polygon is the complete text box. For the requested font size, the renderer finds every valid word line-break combination that fits the polygon and previews them all. The user can choose a valid layout for the slide.
-- Deep-Dive Cricket uses polygon-flow mode: the text block starts 2px inside the polygon's top boundary; each line uses the polygon's left/right span at that line's vertical position, starts 2px inside the available left edge, and stays inside the available right edge. As more lines are required, the text indentation follows the polygon vertically rather than centering the text block.
-- YT Trends and Top-5 keep the existing shared Text Subject Cutout layout behaviour; polygon-flow is not enabled there.
-- Deep-Dive Cricket polygon-flow text is never horizontally or vertically re-centered.
+- Deep-Dive Cricket and YT Trends use polygon-flow mode: the text block starts 2px inside the polygon's top boundary; each line uses the polygon's left/right span at that line's vertical position, starts 2px inside the available left edge, and stays inside the available right edge. As more lines are required, the text indentation follows the polygon vertically rather than centering the text block.
+- Top-5 keeps the existing shared Text Subject Cutout layout behaviour; polygon-flow is not enabled there.
+- Deep-Dive Cricket and YT Trends polygon-flow text is never horizontally or vertically re-centered.
 - Negative Space never runs BiRefNet.
 - Behind Subject uses the existing BiRefNet model and restores detected foreground subjects, including multiple subjects and genuine gaps.
 
@@ -499,7 +499,7 @@ Current overall cricket-line checkpoint: **6/10**.
 This is the baseline for future Cricket pipeline changes. The established Cricket functionality remains usable. New card work now lives under Card Studio so Test can prove each visual type before any Live promotion.
 
 Card Studio checkpoint:
-- Text Subject Cutout remains the only approved card type. The shared Subject Cutout implementation is preserved, with polygon-flow enabled only for Deep-Dive Cricket.
+- Text Subject Cutout remains the only approved card type. The shared Subject Cutout implementation is preserved, with polygon-flow enabled only for Deep-Dive Cricket and YT Trends.
 - Stat Highlight, Quote / Reaction, Head-to-Head and Key Fact / Milestone remain Test-only WIP Card Studio types.
 - All WIP card fields open with usable default test values.
 - WIP Card Studio shows the full image pool with real image previews and the existing crop/reposition control before image selection.
@@ -588,7 +588,7 @@ Status: **Rewritten from scratch / ready for Test validation.**
 - The only intentional automatic production action is the approved automatic visual scraper after its upstream manual approval; it runs once for that handoff and must not use polling reruns.
 - Test and Live manual controls are state-driven. A widget interaction may redraw its owning fragment, but must not refresh the full dashboard unless an explicit stage/action transition requires it.
 - Text Subject Cutout uses exactly one shared fragment and one shared renderer across Top-5 Test Card Studio, Cricket Test + Live Card Studio, and YT Trends Test + Live Card Studio.
-- The shared renderer exposes one direct polygon-flow option, enabled only by the Deep-Dive Cricket Test + Live Card Studio routes. Top-5 and YT Trends do not enable it.
+- The shared renderer exposes one direct polygon-flow option, enabled only by the Deep-Dive Cricket and YT Trends Test + Live Card Studio routes. Top-5 does not enable it.
 - The cutout Text Size control must feed the actual Render Now frame; regression coverage compares rendered pixels across different size settings rather than checking only stored configuration.
 - Top-5 Live automatic visual fetching remains concurrent, but completion is collected when the Visuals stage is entered instead of using `sleep` + `st.rerun()` polling.
 - Startup remains free of project-wide file-watcher overhead; `.streamlit/config.toml` keeps `fileWatcherType = "none"` and `runOnSave = false`.
@@ -599,7 +599,7 @@ Status: **Rewritten from scratch / ready for Test validation.**
 - Python compile check passed.
 - The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
 - Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
-- Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, exact left-edge anchoring, vertical polygon-flow indentation for Deep-Dive Cricket, Top-5 Test Card Studio standalone and per-slide Test paths, Cricket Test + Live Card Studio, and YT Trends Test/Live Card Studio. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
+- Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, exact left-edge anchoring, vertical polygon-flow indentation for Deep-Dive Cricket and YT Trends, Top-5 Test Card Studio standalone and per-slide Test paths, Cricket Test + Live Card Studio, and YT Trends Test/Live Card Studio. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
 - Text Subject Cutout must remain a single shared implementation across Card Studio surfaces. Top-5 Live remains deferred until Top-5 Test is approved.
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
