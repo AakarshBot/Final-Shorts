@@ -104,11 +104,11 @@ def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatc
         lambda _font_name: font_path.read_bytes(),
     )
 
-    polygon = ((120, 700), (640, 700), (920, 1500), (400, 1500))
+    polygon = ((100, 700), (1000, 700), (1000, 1500), (500, 1500))
     flowed = renderer._manual_subject_cutout_layout_data(
-        "India win today after a dramatic late turnaround in the final over",
+        "India win after a dramatic turnaround in the final over",
         polygon,
-        120,
+        72,
         "Barlow Condensed",
         "Crisp Outline",
         polygon_flow=True,
