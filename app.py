@@ -1228,6 +1228,7 @@ def _render_manual_subject_cutout(
     active_slide: int | None = None,
     assignment_store: dict | None = None,
     approval_state: str | None = None,
+    polygon_flow: bool = False,
 ):
     from renderer import (
         MANUAL_SUBJECT_FONT_OPTIONS,
@@ -1500,6 +1501,7 @@ def _render_manual_subject_cutout(
                 state["style"],
                 font_size,
                 tuple(polygon_points),
+                bool(polygon_flow),
                 source_digest,
             )
         ).encode("utf-8")
@@ -1531,6 +1533,7 @@ def _render_manual_subject_cutout(
                     font=state["font"],
                     style=state["style"],
                     text_polygon=tuple(polygon_points),
+                    polygon_flow=polygon_flow,
                 )
             state["layout_options"] = current_layouts
             state["layout_signature"] = layout_signature
@@ -1604,6 +1607,7 @@ def _render_manual_subject_cutout(
                 "font": state["font"],
                 "style": state["style"],
                 "line_breaks": selected_line_breaks or None,
+                "polygon_flow": bool(polygon_flow),
                 "source_key": selected["asset_key"],
                 "source_digest": source_digest,
             }
@@ -1616,6 +1620,7 @@ def _render_manual_subject_cutout(
                 style=state["style"],
                 text_polygon=config["text_polygon"],
                 line_breaks=config["line_breaks"],
+                polygon_flow=polygon_flow,
             )
             state["font_size"] = font_size
             state["rendered_config"] = config
@@ -1736,6 +1741,7 @@ def _render_card_studio(
     active_slide: int | None = None,
     current_image=None,
     current_source: str = "Test image",
+    polygon_flow: bool = False,
 ):
     from card_studio import (
         CardStudioError,
@@ -1846,6 +1852,7 @@ def _render_card_studio(
                 else st.session_state.visual_assignments
             ),
             approval_state="live_visuals_approved" if live else "visuals_approved",
+            polygon_flow=polygon_flow,
         )
         return
 
@@ -3249,7 +3256,14 @@ def _render_live_visuals(slide_count: int):
             )
 
     if visual_option == "Option 5 · Card Studio":
-        _render_card_studio(live=True, slide_count=slide_count)
+        _render_card_studio(
+            live=True,
+            slide_count=slide_count,
+            polygon_flow=(
+                st.session_state.get("live_production_line") == "deep_dive"
+                and st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
+            ),
+        )
 
     ready = all(
         slide in st.session_state.live_visual_assignments
@@ -5596,7 +5610,14 @@ def render_visuals():
     elif mode.startswith("Option 4"):
         _render_manual_ai_images()
     elif mode.startswith("Option 5"):
-        _render_card_studio(live=False, slide_count=slide_count)
+        _render_card_studio(
+            live=False,
+            slide_count=slide_count,
+            polygon_flow=(
+                st.session_state.get("test_production_line") == "deep_dive"
+                and cricket_test
+            ),
+        )
 
     _render_visual_board(slide_count)
 
