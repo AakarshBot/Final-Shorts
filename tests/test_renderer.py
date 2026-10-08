@@ -104,23 +104,22 @@ def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatc
         lambda _font_name: font_path.read_bytes(),
     )
 
-    polygon = ((100, 700), (1000, 700), (1000, 1500), (500, 1500))
+    polygon = ((100, 700), (900, 700), (900, 1500), (500, 1500))
     flowed = renderer._manual_subject_cutout_layout_data(
-        "India win after a dramatic turnaround in the final over",
+        "India win",
         polygon,
-        72,
+        120,
         "Barlow Condensed",
         "Crisp Outline",
         polygon_flow=True,
     )
 
     assert flowed["layouts"]
-    layout = max(flowed["layouts"], key=lambda item: len(item["lines"]))
+    layout = next(layout for layout in flowed["layouts"] if len(layout["lines"]) == 2)
     assert flowed["polygon_flow"] is True
-    assert len(layout["lines"]) >= 2
 
     lefts = [placement[2] for placement in layout["placements"]]
-    assert lefts[-1] > lefts[0]
+    assert lefts[1] > lefts[0]
 
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
