@@ -336,7 +336,7 @@ Feature contract:
 - The whole polygon can be dragged rigidly inside the frame.
 - Clicking an edge adds a point.
 - The polygon is the complete text box. For the requested font size, the renderer finds every valid word line-break combination that fits the polygon and previews them all. The user can choose a valid layout for the slide.
-- Deep-Dive Cricket uses polygon-flow mode: the text block starts 2px inside the polygon's top boundary; each line uses the polygon's left/right span at that line's vertical position, starts 2px inside the available left edge, and stays inside the available right edge. As more lines are required, the text indentation follows the polygon vertically rather than centering the text block.
+- Deep-Dive Cricket and YT Trends use polygon-flow mode: the text block starts 2px inside the polygon's top boundary; each line uses the polygon's left/right span at that line's vertical position, starts 2px inside the available left edge, and stays inside the available right edge. As more lines are required, the text indentation follows the polygon vertically rather than centering the text block.
 - Top-5 keeps the existing shared Text Subject Cutout layout behaviour; polygon-flow is not enabled there.
 - Deep-Dive Cricket and YT Trends polygon-flow text is never horizontally or vertically re-centered.
 - Negative Space never runs BiRefNet.
