@@ -97,7 +97,7 @@ def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
     assert one_line["placements"][0][2] == 82
 
 def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatch):
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    font_path = Path("/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf")
     monkeypatch.setattr(
         renderer,
         "_manual_subject_font_bytes",
@@ -115,10 +115,12 @@ def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatc
     )
 
     assert flowed["layouts"]
-    layout = next(layout for layout in flowed["layouts"] if len(layout["lines"]) == 2)
     assert flowed["polygon_flow"] is True
 
-    lefts = [placement[2] for placement in layout["placements"]]
+    two_line = next(
+        layout for layout in flowed["layouts"] if len(layout["lines"]) == 2
+    )
+    lefts = [placement[2] for placement in two_line["placements"]]
     assert lefts[1] > lefts[0]
 
 def test_production_upload_encode_settings_are_youtube_ready():
