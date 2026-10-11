@@ -88,7 +88,7 @@ CRICKET_TERMS = (
     "shubman gill", "hardik pandya", "ravindra jadeja", "babar azam",
     "shaheen afridi", "pat cummins", "steve smith", "joe root", "ben stokes",
     "james anderson", "kane williamson", "travis head", "smriti mandhana",
-    "harmana kaur", "suryakumar yadav", "yashasvi jaiswal",
+    "harmanpreet kaur", "suryakumar yadav", "yashasvi jaiswal",
 )
 
 TRUSTED_NEWS_TERMS = (
