@@ -841,6 +841,20 @@ button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,b
 
 if "app_mode" not in st.session_state:
     st.session_state.app_mode = "home"
+if "factory_format" not in st.session_state:
+    st.session_state.factory_format = None
+if "longform_test_stage" not in st.session_state:
+    st.session_state.longform_test_stage = "01 · Topic Fetcher"
+if "longform_topic_keyword" not in st.session_state:
+    st.session_state.longform_topic_keyword = ""
+if "longform_topics" not in st.session_state:
+    st.session_state.longform_topics = []
+if "longform_selected_topic" not in st.session_state:
+    st.session_state.longform_selected_topic = None
+if "longform_approved_topic" not in st.session_state:
+    st.session_state.longform_approved_topic = None
+if "longform_topic_error" not in st.session_state:
+    st.session_state.longform_topic_error = ""
 if "test_production_line" not in st.session_state:
     st.session_state.test_production_line = None
 if "test_stage" not in st.session_state:
@@ -2265,11 +2279,44 @@ def _top5_fit_preview(value, width=300, height=533):
     return image.resize((width, height), Image.Resampling.LANCZOS)
 
 def _render_home():
+    factory_format = st.session_state.get("factory_format")
+    if not factory_format:
+        st.markdown(
+            '<div class="home-hero">'
+            '<div class="home-kicker">FINAL SHORTS</div>'
+            '<div class="home-title">Choose your format.</div>'
+            '<div class="home-copy">Select Shorts or Long-form, then choose Test or Live.</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+        left, right = st.columns(2, gap="medium")
+        choices = (
+            (left, "01", "SHORTS", "Short-form cricket and sports production.", "Open Shorts", "shorts"),
+            (right, "02", "LONG-FORM", "Long-form cricket production. Test is currently WIP.", "Open Long-form", "long_form"),
+        )
+        for column, number, title, copy, button, value in choices:
+            with column:
+                with st.container(key=f"format-choice-{value}"):
+                    st.markdown(
+                        f'<div class="home-card-top"><span class="workspace-index">{number}</span>'
+                        f'<span class="home-card-kind">FORMAT</span></div>'
+                        f'<div class="workspace-name">{title}</div>'
+                        f'<div class="workspace-desc">{copy}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if st.button(button, key=f"choose-format-{value}", type="primary", width="stretch"):
+                        st.session_state.factory_format = value
+                        st.session_state.test_production_line = None
+                        st.session_state.app_mode = "home"
+                        st.rerun()
+        return
+
+    format_label = "Shorts" if factory_format == "shorts" else "Long-form"
     st.markdown(
         '<div class="home-hero">'
-        '<div class="home-kicker">FINAL SHORTS</div>'
-        '<div class="home-title">Editorial studio.</div>'
-        '<div class="home-copy">Choose a workspace and start where you need to.</div>'
+        f'<div class="home-kicker">FINAL SHORTS · {format_label.upper()}</div>'
+        '<div class="home-title">Choose a workspace.</div>'
+        '<div class="home-copy">Test builds and inspects. Live runs approved production.</div>'
         '</div>',
         unsafe_allow_html=True,
     )
@@ -2286,7 +2333,10 @@ def _render_home():
                 '<div class="workspace-desc">Build and inspect without touching production.</div>',
                 unsafe_allow_html=True,
             )
-            st.markdown('<div><span class="badge">7 stages</span> <span class="badge">manual</span></div>', unsafe_allow_html=True)
+            if factory_format == "long_form":
+                st.markdown('<div><span class="badge">current WIP</span> <span class="badge">topic fetcher</span></div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div><span class="badge">7 stages</span> <span class="badge">manual</span></div>', unsafe_allow_html=True)
             if st.button("Open Test", key="open-test", type="primary", width="stretch"):
                 st.session_state.app_mode = "test"
                 st.rerun()
@@ -2301,10 +2351,18 @@ def _render_home():
                 '<div class="workspace-desc">Run the approved production flow.</div>',
                 unsafe_allow_html=True,
             )
-            st.markdown('<div><span class="badge">production</span> <span class="badge">public / private</span></div>', unsafe_allow_html=True)
+            if factory_format == "long_form":
+                st.markdown('<div><span class="badge">not approved</span> <span class="badge">WIP</span></div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div><span class="badge">production</span> <span class="badge">public / private</span></div>', unsafe_allow_html=True)
             if st.button("Open Live", key="open-live", type="primary", width="stretch"):
                 st.session_state.app_mode = "live"
                 st.rerun()
+    if st.button("Change format", key="change-factory-format", width="content"):
+        st.session_state.factory_format = None
+        st.session_state.test_production_line = None
+        st.session_state.app_mode = "home"
+        st.rerun()
 
 def _render_pipeline_progress(
     labels: list[str],
@@ -2388,7 +2446,22 @@ def _render_app_sidebar():
             st.session_state.app_mode = target_mode
             st.rerun()
 
-        if st.session_state.app_mode == "test" and st.session_state.test_production_line:
+        if st.session_state.app_mode == "test" and st.session_state.get("factory_format") == "long_form":
+            st.markdown(
+                '<div class="nav-sub" style="margin-top:12px;">LONG-FORM · TEST</div>',
+                unsafe_allow_html=True,
+            )
+            selected = st.pills(
+                "Long-form stages",
+                ["01 · Topic Fetcher"],
+                default=st.session_state.longform_test_stage,
+                key="longform-test-stage-switcher",
+                label_visibility="collapsed",
+            ) or st.session_state.longform_test_stage
+            if selected != st.session_state.longform_test_stage:
+                st.session_state.longform_test_stage = selected
+                st.rerun()
+        elif st.session_state.app_mode == "test" and st.session_state.test_production_line:
             line_name = {
                 "deep_dive": "Deep-Dive",
                 "top_5": "Top-5",
@@ -4919,6 +4992,122 @@ def render_youtube_trends_topic_fetcher(*, live=False):
             st.session_state.upload_qc = None
         st.rerun()
 
+def render_longform_topic_fetcher():
+    from longform_topic_fetcher import fetch_longform_topics
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">LONG-FORM · 01 · STORY DESK</div>'
+        '<div class="canvas-title">Find a story that can sustain long-form</div>'
+        '<div class="canvas-copy">Current cricket stories are ranked for narrative depth and source coverage. No article body is fetched until a story is selected.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    st.text_input(
+        "Optional player, team, competition or subject",
+        key="longform_topic_keyword",
+        placeholder="e.g. Chennai Super Kings ownership",
+    )
+    topics = list(st.session_state.longform_topics or [])
+    left, right = st.columns(2, gap="small")
+    with left:
+        if st.button("Find long-form stories", type="primary", width="stretch", key="longform-find-stories"):
+            try:
+                with st.spinner("Searching current cricket coverage…"):
+                    found = fetch_longform_topics(
+                        limit=20,
+                        keyword=st.session_state.longform_topic_keyword,
+                    )
+                st.session_state.longform_topics = found
+                st.session_state.longform_selected_topic = None
+                st.session_state.longform_approved_topic = None
+                st.session_state.longform_topic_error = ""
+            except (RuntimeError, ValueError, OSError) as exc:
+                st.session_state.longform_topic_error = str(exc)
+            st.rerun()
+    with right:
+        if st.button(
+            "Find more stories",
+            width="stretch",
+            key="longform-find-more-stories",
+            disabled=not topics,
+        ):
+            try:
+                with st.spinner("Searching a different set of cricket queries…"):
+                    found = fetch_longform_topics(
+                        limit=20,
+                        already_seen=topics,
+                        more=True,
+                        keyword=st.session_state.longform_topic_keyword,
+                    )
+                known_ids = {item.get("story_id") for item in topics}
+                st.session_state.longform_topics = topics + [
+                    item for item in found if item.get("story_id") not in known_ids
+                ]
+                st.session_state.longform_topic_error = ""
+                if not found:
+                    st.session_state.longform_topic_error = "No additional distinct long-form candidates were found. Try a different focus or search again later."
+            except (RuntimeError, ValueError, OSError) as exc:
+                st.session_state.longform_topic_error = str(exc)
+            st.rerun()
+
+    if st.session_state.longform_topic_error:
+        st.warning(st.session_state.longform_topic_error)
+    topics = list(st.session_state.longform_topics or [])
+    selected = st.session_state.longform_selected_topic
+    approved = st.session_state.longform_approved_topic
+    if topics:
+        st.caption(f"{len(topics)} candidates · ranked by freshness, narrative signals, specificity and source coverage. These are candidates, not a guarantee that every story can sustain eight minutes.")
+        for number, story in enumerate(topics, 1):
+            story_id = str(story.get("story_id") or number)
+            title = str(story.get("title") or "Untitled cricket story")
+            with st.container(key=f"longform-topic-{story_id}"):
+                st.markdown(f"**{number:02d}. {title}**")
+                published = str(story.get("published_at") or "").replace("T", " ").replace("+00:00", " UTC")
+                publishers = ", ".join(story.get("publishers") or [story.get("publisher") or "Unknown publisher"])
+                st.caption(f"{publishers} · {published}")
+                summary = str(story.get("summary") or "").strip()
+                if summary:
+                    st.write(summary)
+                st.caption(str(story.get("ranking_reason") or "Recent cricket story; depth requires editorial review."))
+                with st.expander("Source reports"):
+                    for report in story.get("reports") or [{"title": title, "url": story.get("url", ""), "publisher": story.get("publisher", "")}]:
+                        report_title = str(report.get("title") or title)
+                        report_url = str(report.get("url") or "")
+                        report_publisher = str(report.get("publisher") or "Publisher")
+                        st.markdown(f"- [{report_publisher}: {report_title}]({report_url})")
+                if st.button(
+                    "Select this story",
+                    key=f"longform-select-{story_id}",
+                    type="primary" if selected and selected.get("story_id") == story_id else "secondary",
+                    width="content",
+                ):
+                    st.session_state.longform_selected_topic = story
+                    st.session_state.longform_approved_topic = None
+                    st.rerun()
+                st.divider()
+
+    selected = st.session_state.longform_selected_topic
+    if selected:
+        st.markdown("### Selected story")
+        st.markdown(f"**{selected.get('title', 'Untitled cricket story')}**")
+        st.caption(f"{selected.get('publisher', 'Unknown publisher')} · {selected.get('published_at', '')}")
+        if st.button("Approve topic for Long-form", type="primary", width="stretch", key="longform-approve-topic"):
+            st.session_state.longform_approved_topic = dict(selected)
+            st.rerun()
+
+    approved = st.session_state.longform_approved_topic
+    if approved:
+        st.success("Topic approved and saved to the Long-form handoff. Scriptwriter is the next stage; it has not been generated yet.")
+        st.markdown(f"[Open primary source]({approved.get('url', '')})")
+
+
+def render_longform_test():
+    _render_pipeline_progress(["Topic Fetcher"], 0)
+    st.info("LONG-FORM is current WIP. Only Topic Fetcher is implemented; Shorts stages and Live production remain unchanged.")
+    if st.session_state.longform_test_stage == "01 · Topic Fetcher":
+        render_longform_topic_fetcher()
+
+
 def render_topic_fetcher():
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">01 · STORY DESK</div>'
@@ -6227,7 +6416,9 @@ if st.session_state.app_mode == "home":
     _render_home()
 elif st.session_state.app_mode == "test":
     _render_app_sidebar()
-    if st.session_state.test_production_line is None:
+    if st.session_state.get("factory_format") == "long_form":
+        render_longform_test()
+    elif st.session_state.test_production_line is None:
         st.markdown(
             '<div class="live-product-head">'
             '<div><div class="eyebrow">TEST LAB</div>'
@@ -7683,4 +7874,13 @@ elif st.session_state.app_mode == "test":
             )
 elif st.session_state.app_mode == "live":
     _render_app_sidebar()
-    render_live_dashboard()
+    if st.session_state.get("factory_format") == "long_form":
+        st.markdown(
+            '<div class="live-product-head"><div><div class="eyebrow">LONG-FORM · LIVE</div>'
+            '<div class="live-product-title">Not enabled yet.</div>'
+            '<div class="hero-subtitle">Long-form remains Test-only until its stages are built, validated and approved. No Live pipeline or upload action is available here.</div></div></div>',
+            unsafe_allow_html=True,
+        )
+        st.info("Current WIP: Long-form Topic Fetcher. Complete and approve the Test pipeline before enabling Long-form Live.")
+    else:
+        render_live_dashboard()
