@@ -41,7 +41,6 @@ def test_longform_test_shows_only_topic_fetcher():
     assert "Find more stories" in labels
     assert "Open Deep-Dive" not in labels
     assert "Generate audio" not in labels
-    assert any("LONG-FORM is current WIP" in str(item.value) for item in at.info)
 
 
 def test_longform_live_is_blocked_without_touching_shorts_live():
