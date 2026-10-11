@@ -185,6 +185,20 @@ def test_feed_failure_is_reported(monkeypatch):
         fetcher.fetch_longform_topics()
 
 
+def test_iso_publication_dates_rank_recent_over_old():
+    now = datetime.now(timezone.utc)
+    base = {
+        "title": "India cricket selection decision",
+        "publisher": "ESPNcricinfo",
+        "summary": "An evidence-rich story with relevant background and consequences.",
+        "depth_signals": ["selection", "decision"],
+    }
+    recent = {**base, "published_at": now.isoformat()}
+    older = {**base, "published_at": (now - timedelta(days=10)).isoformat()}
+
+    assert fetcher._score(recent, now) > fetcher._score(older, now)
+
+
 def test_topic_limit_is_respected(monkeypatch):
     xml = _feed(
         _item(
