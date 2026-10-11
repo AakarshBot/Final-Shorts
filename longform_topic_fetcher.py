@@ -82,10 +82,13 @@ CRICKET_TERMS = (
     "innings", "bcci", "pcb", "icc", "ipl", "wpl", "psl", "ashes", "odi",
     "t20", "test match", "test cricket", "ranji", "bbl", "sa20", "cpl",
     "virat kohli", "rohit sharma", "jasprit bumrah", "ms dhoni", "rishabh pant",
+    "chennai super kings", "mumbai indians", "royal challengers", "kolkata knight riders",
+    "rajasthan royals", "sunrisers hyderabad", "punjab kings", "delhi capitals",
+    "lucknow super giants", "gujarat titans",
     "shubman gill", "hardik pandya", "ravindra jadeja", "babar azam",
     "shaheen afridi", "pat cummins", "steve smith", "joe root", "ben stokes",
     "james anderson", "kane williamson", "travis head", "smriti mandhana",
-    "harmana", "suryakumar yadav", "yashasvi jaiswal",
+    "harmana kaur", "suryakumar yadav", "yashasvi jaiswal",
 )
 
 TRUSTED_NEWS_TERMS = (
@@ -101,10 +104,16 @@ def _clean(value: object, limit: int = 4000) -> str:
 
 
 def _parse_date(value: object) -> datetime | None:
-    try:
-        parsed = parsedate_to_datetime(str(value or "").strip())
-    except (TypeError, ValueError, OverflowError):
+    text = str(value or "").strip()
+    if not text:
         return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except (TypeError, ValueError, OverflowError):
+        try:
+            parsed = parsedate_to_datetime(text)
+        except (TypeError, ValueError, OverflowError):
+            return None
     if parsed.tzinfo is None:
         parsed = parsed.replace(tzinfo=timezone.utc)
     return parsed.astimezone(timezone.utc)
