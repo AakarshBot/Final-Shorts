@@ -16,6 +16,15 @@ This is the governing workflow for the entire factory.
 
 This rule takes precedence over convenience in implementation and should guide future architecture decisions throughout Final-Shorts.
 
+
+## Cross-chat context rule — HARD RULE
+
+Every ChatGPT conversation that works on this repository must read the current `PROJECT_CONTEXT.md` from the repository before proposing changes or answering a project-status question. Recent-chat summaries or saved memory are not a substitute for reading this file.
+
+Before sending a user-facing response during ongoing factory work, update this file first when the current task has changed the implementation, decisions, validation results, blockers, or next step. Update the existing section/checkpoint in place where possible; do not append duplicate notes or leave contradictions. State the real current status and one clear next step. Ask the user to decide only when a genuine decision is required; otherwise continue the work.
+
+This is a repository operating rule for all future chats that consult the factory context. It does not imply that a new chat can see this repository automatically without retrieving the file.
+
 ## Test-first factory operating model
 
 Test is a modular laboratory; Live is the approved production line.
@@ -604,3 +613,38 @@ Status: **Rewritten from scratch / ready for Test validation.**
 
 When changing either Function 01 or Function 02, preserve the direct architecture and check both the relevant unit tests and the actual Test/Live dashboard handoff before merging.
 
+
+
+## LONG-FORM — Current WIP
+
+**Status: CURRENT WIP — Test only. Shorts production is protected.**
+
+### Scope and protected behavior
+- Add a top-level content-format choice: **Shorts** or **Long-form**. After format selection, show the existing **Test** and **Live** workspace choices.
+- The established Shorts Test and Live paths, their stage contracts, approved functions, UI and outputs must remain unchanged. Do not refactor or alter existing Shorts behavior to make Long-form work.
+- Long-form is a new production line developed in Test first. Its stages will follow the same order as the factory: 01 Topic Fetcher, 02 Scriptwriter, 03 Audio, 04 Visuals, 05 Subtitles, 06 Renderer, 07 Upload QC. Only stages explicitly implemented and tested are considered available; do not fake unfinished stages with generic shared-stage behavior.
+- Long-form Live is not approved and must not publish or run a production pipeline. It may be identified as unavailable/WIP until long-form Test is validated and explicitly promoted.
+- Preserve all manual QC and upload visibility controls. No auto-publication or auto-approval.
+
+### Content objective
+- Channel focus is cricket. Shorts and long-form will be developed together, with related subjects but each video needs its own complete narrative.
+- Target video duration is approximately eight minutes only when evidence can sustain it. Never pad thin stories. Stories without enough development remain Shorts-only.
+- Long-form should prioritise story arcs, selection disputes, decisions and consequences, rivalries, player form/comebacks, cricket governance/business, and other stories with enough verifiable evidence. Topic discovery should rank narrative depth and available evidence, not merely a recent headline or keyword count.
+- Do not assume match footage is available. The production constraint is **zero production spend**: no paid APIs, subscriptions, paid TTS, paid stock/media, or paid video-generation services.
+- Visual direction for later stages: original graphics and animation built with the existing Pillow + FFmpeg stack, plus relevant photographs only where usage rights can be established. Examples include player/profile cards, quote/context cards, timelines, text-led emphasis, tactical/role diagrams, chapter cards, and data graphics only when the story provides real data. Do not fabricate match scenes, quotes, scores, statistics or player actions.
+- Avoid an image slideshow with minimal commentary; visuals must support story progression and genuinely original narration. Track asset source/licence/attribution where applicable.
+
+### Function 01 — Long-form Topic Fetcher
+- This is the first Long-form function being built now.
+- Implement it as a new, independently testable Long-form module. Do not change the approved `topic_fetcher.py` or its callers.
+- Discovery is for cricket stories capable of supporting a researched long-form narrative, not just a list of current headlines. Return source title, original/feed URL, publisher, published timestamp, summary/description, stable event identity, desk/profile, and a brief deterministic reason the story may have long-form depth.
+- Use only existing project dependencies and free, public discovery sources. No paid providers and no LLM calls during discovery. Fetch article bodies and related evidence only after the user selects a story.
+- Filter duplicate events, stale/irrelevant results, utility pages, fixtures, generic scoreboards and unsupported claims. Prefer fresh stories with enough follow-up context or multiple credible reports. Be transparent when sources return fewer useful candidates rather than padding the list.
+- Search More must use a widened/alternate query set and exclude already-seen event identities and URLs.
+- Add focused deterministic tests with mocked source responses. Do not claim tests passed unless executed.
+- Long-form Topic Fetcher must be reachable only when the selected format is Long-form and workspace is Test. It must have its own session-state keys so the Shorts pipeline state is isolated.
+
+### Dashboard and next steps
+- The current dashboard starts by choosing Test or Live. The new entry flow will become **Shorts / Long-form → Test / Live** while keeping all existing Shorts routes intact.
+- Current implementation stage: **Long-form Topic Fetcher + entry/navigation integration only**. Do not implement downstream stages yet. After this stage is tested, update this section in place with actual behavior, test evidence, known limitations and the next stage.
+- Do not alter a Shorts function that works properly. Any shared-file edits must be limited to the smallest necessary routing/UI additions and must have regression coverage proving the Shorts Test/Live paths still resolve as before.
