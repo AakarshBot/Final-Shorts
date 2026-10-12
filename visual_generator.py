@@ -133,12 +133,13 @@ def generate_images(query: str) -> dict[str, Any]:
 
     configured = []
     for name, provider in PROVIDERS:
+        fn = globals().get("_pollinations", provider) if name == "Pollinations.ai" and getattr(provider, "__name__", "") == "_pollinations" else provider
         if name == "Pollinations.ai":
-            configured.append((name, provider))
+            configured.append((name, fn))
         elif name == "Hugging Face" and os.getenv("HF_TOKEN"):
-            configured.append((name, provider))
+            configured.append((name, fn))
         elif name == "Cloudflare Workers AI" and os.getenv("CLOUDFLARE_ACCOUNT_ID") and os.getenv("CLOUDFLARE_API_TOKEN"):
-            configured.append((name, provider))
+            configured.append((name, fn))
 
     def run(item):
         name, provider = item

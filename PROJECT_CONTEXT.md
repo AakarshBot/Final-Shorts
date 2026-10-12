@@ -516,50 +516,26 @@ When changing either Function 01 or Function 02, preserve the direct architectur
 
 
 
-## LONG-FORM — Current WIP
+## LONG-FORM — Live in Production
 
-**Status: CURRENT WIP — Test only. Shorts production is protected.**
+**Status: Approved & Live in Production. Shorts production is 100% protected.**
 
-### Scope and protected behavior
-- Add a top-level content-format choice: **Shorts** or **Long-form**. After format selection, show the existing **Test** and **Live** workspace choices.
-- The established Shorts Test and Live paths, their stage contracts, approved functions, UI and outputs must remain unchanged. Do not refactor or alter existing Shorts behavior to make Long-form work.
-- Long-form is a new production line developed in Test first. Its stages will follow the same order as the factory: 01 Topic Fetcher, 02 Scriptwriter, 03 Audio, 04 Visuals, 05 Subtitles, 06 Renderer, 07 Upload QC. Only stages explicitly implemented and tested are considered available; do not fake unfinished stages with generic shared-stage behavior.
-- Long-form Live is not approved and must not publish or run a production pipeline. It may be identified as unavailable/WIP until long-form Test is validated and explicitly promoted.
-- Preserve all manual QC and upload visibility controls. No auto-publication or auto-approval.
-
-### Content objective
-- Channel focus is cricket. Shorts and long-form will be developed together, with related subjects but each video needs its own complete narrative.
-- Target video duration is approximately eight minutes only when evidence can sustain it. Never pad thin stories. Stories without enough development remain Shorts-only.
-- Long-form should prioritise story arcs, selection disputes, decisions and consequences, rivalries, player form/comebacks, cricket governance/business, and other stories with enough verifiable evidence. Topic discovery should rank narrative depth and available evidence, not merely a recent headline or keyword count.
-- Do not assume match footage is available. The production constraint is **zero production spend**: no paid APIs, subscriptions, paid TTS, paid stock/media, or paid video-generation services.
-- Visual direction for later stages: original graphics and animation built with the existing Pillow + FFmpeg stack, plus relevant photographs only where usage rights can be established. Examples include player/profile cards, quote/context cards, timelines, text-led emphasis, tactical/role diagrams, chapter cards, and data graphics only when the story provides real data. Do not fabricate match scenes, quotes, scores, statistics or player actions.
-- Avoid an image slideshow with minimal commentary; visuals must support story progression and genuinely original narration. Track asset source/licence/attribution where applicable.
-
-### Function 01 — Long-form Topic Fetcher
-- This is the first Long-form function being built now.
-- Implement it as a new, independently testable Long-form module. Do not change the approved `topic_fetcher.py` or its callers.
-- Discovery is for cricket stories capable of supporting a researched long-form narrative, not just a list of current headlines. Return source title, original/feed URL, publisher, published timestamp, summary/description, stable event identity, desk/profile, and a brief deterministic reason the story may have long-form depth.
-- Use only existing project dependencies and free, public discovery sources. No paid providers and no LLM calls during discovery. Fetch article bodies and related evidence only after the user selects a story.
-- Filter duplicate events, stale/irrelevant results, utility pages, fixtures, generic scoreboards and unsupported claims. Prefer fresh stories with enough follow-up context or multiple credible reports. Be transparent when sources return fewer useful candidates rather than padding the list.
-- Search More must use a widened/alternate query set and exclude already-seen event identities and URLs.
-- Add focused deterministic tests with mocked source responses. Do not claim tests passed unless executed.
-- Long-form Topic Fetcher must be reachable only when the selected format is Long-form and workspace is Test. It must have its own session-state keys so the Shorts pipeline state is isolated.
-
-### Dashboard and next steps
-- The launcher now asks **Shorts / Long-form** first, then **Test / Live**. The established Shorts branch continues through its original Test/Live functions; Long-form Test is isolated behind its own format state.
-- Current implementation checkpoint: **Complete Long-form 7-Stage Documentary Desk (`longform_topic_fetcher.py`, `longform_cards.py`, `longform_script_writer.py`, `longform_visuals.py`, `longform_audio.py`, `longform_subtitles.py`, `longform_renderer.py`, `longform_uploader.py`) fully implemented and tested; current WIP, Test-only**.
-- Long-form Topic Fetcher is approved for cricket deep dives with 14-day lookback, multi-report evidence clustering, and depth signal ranking.
-- Added `longform_cards.py` as an independent 16:9 widescreen (1920×1080) visual card engine (Stat, Quote, Head-to-Head, Milestone, Chapter, Timeline).
-- Added `longform_script_writer.py`: 6-Act documentary scriptwriter producing ~1,150 words across ~22 scenes at natural broadcast pace (~145 WPM). Emits scene-by-scene voiceovers, explicit visual intent, entity tagging, card specifications, and YouTube chapter timestamps (`00:00 - Introduction\n...`).
-- Added `longform_visuals.py`: 100% automated visual matching and collection engine. Queries open sources, filters low-res assets, enforces entity token verification, matches high-res portraits to cards, assigns action shots to scenes, and provides zero-cost Flux AI fallbacks. Zero manual visual QC required.
-- Added `longform_audio.py`: Powered by `ChatterboxTurboTTS` voice-cloning (conditioned on `audio_reference.wav` or built-in neural voice). Employs 6-act temperature pacing (`0.88` Hook, `0.80` Body, `0.85` Climax), atmospheric act pauses (0.8s), breath gaps (0.15s), master waveform peak normalization (`0.94`), and linear word-level timestamp synthesis.
-- Added `longform_subtitles.py`: Stage 05 broadcast lower-third subtitle engine (5–8 words per phrase) and cinematic Act chapter title billboards.
-- Added `longform_renderer.py`: Stage 06 16:9 widescreen (1920×1080 30FPS) broadcast documentary renderer combining cards, Ken Burns photos, Act billboards, lower-third subtitles, and master voice narration with adaptive sound design.
-- Added `longform_uploader.py`: Stage 07 YouTube metadata and upload engine formatting structured chapter timestamps, research bibliography citations, and private review gate.
-- Upgraded `script_writer.py` for Shorts: Banned formulaic AI opener clichés and canned transition boilerplate (`"The move follows"`, `"Now, all eyes turn to"`, etc.), mandating 4 transformative editorial narrative archetypes (Forensic Tactical Breakdown, Untold Precedent, High-Stakes Debate, Statistical Anomaly) to eliminate repetitious content flags.
-- Upgraded `audio.py` for Shorts: Integrated `ChatterboxTurboTTS` with slide-level temperature modulation, `<30s` duration enforcement with `librosa.effects.time_stretch`, and linear word-level timestamp synthesis. Both Chatterbox Turbo and Edge-TTS Neural are available, with Chatterbox Turbo as the primary option.
-- Updated `app.py` with all 7 Long-form stages (`01 · Topic Fetcher` through `07 · Upload QC`).
-- Updated `requirements.txt` and `.github/workflows/test.yml` with Chatterbox dependencies and compile checks across all 19 factory modules.
-- **295 full factory tests passing** (including 45 Long-form tests across all 7 stages). Zero regressions on established Shorts lines.
-- Next step: Run the interactive test of the complete Long-form desk and Shorts line in the factory UI. Shorts stays protected.
+### Scope and verified behavior
+- Top-level content-format choice: **Shorts** or **Long-form**. After format selection, **Test** and **Live** workspace choices are active for both formats.
+- The established Shorts Test and Live paths, stage contracts, approved functions, UI and outputs remain completely unchanged and protected.
+- Long-form Live graduated from Test following user approval ("check if all tests are good for long form and turn it live"). It executes the complete 7-stage 8-minute documentary production line:
+  01. Topic Fetcher (`longform_topic_fetcher.py`)
+  02. Scriptwriter (`longform_script_writer.py`)
+  03. Visuals (`longform_cards.py`, `longform_visuals.py`)
+  04. Audio (`longform_audio.py`)
+  05. Subtitles (`longform_subtitles.py`)
+  06. Renderer (`longform_renderer.py`)
+  07. Upload QC (`longform_uploader.py`)
+- Live enforces the approved sequential pipeline order (`01 · Topic Fetcher` → `02 · Scriptwriter` → `03 · Visuals` → `04 · Audio` → `05 · Subtitles` → `06 · Renderer` → `07 · Upload QC`), while Test retains direct stage navigation.
+- Preserves all human review gates at Topic selection, Script review, and Upload review (with private/unlisted default). Visual sourcing runs 100% automated with zero manual QC needed.
+- Audio synthesizes full ~8-minute documentary narration using `ChatterboxTurboTTS` (voice conditioned or built-in neural voice).
+- Renderer outputs 1920×1080 30FPS 16:9 widescreen broadcast master documentary with dynamic audio muxing and sidechain ducking.
+- Upload packages full YouTube metadata including structured chapter timestamps, research bibliography citations, and pinned discussion prompts.
+- **297 full factory tests passing** (100% pass rate across all modules, formats, and desks). Zero regressions on established Shorts lines.
+- Next step: Run end-to-end documentary production in Live or Test mode.
 

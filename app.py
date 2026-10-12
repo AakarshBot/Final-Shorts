@@ -1582,8 +1582,80 @@ if "longform_script_error" not in st.session_state:
     st.session_state.longform_script_error = ""
 if "longform_visuals_data" not in st.session_state:
     st.session_state.longform_visuals_data = None
+if "longform_approved_visuals" not in st.session_state:
+    st.session_state.longform_approved_visuals = None
 if "longform_visuals_error" not in st.session_state:
     st.session_state.longform_visuals_error = ""
+if "longform_audio_data" not in st.session_state:
+    st.session_state.longform_audio_data = None
+if "longform_approved_audio" not in st.session_state:
+    st.session_state.longform_approved_audio = None
+if "longform_audio_error" not in st.session_state:
+    st.session_state.longform_audio_error = ""
+if "longform_subtitles_data" not in st.session_state:
+    st.session_state.longform_subtitles_data = None
+if "longform_approved_subtitles" not in st.session_state:
+    st.session_state.longform_approved_subtitles = None
+if "longform_subtitles_error" not in st.session_state:
+    st.session_state.longform_subtitles_error = ""
+if "longform_rendered_video" not in st.session_state:
+    st.session_state.longform_rendered_video = None
+if "longform_approved_video" not in st.session_state:
+    st.session_state.longform_approved_video = None
+if "longform_render_error" not in st.session_state:
+    st.session_state.longform_render_error = ""
+if "longform_upload_result" not in st.session_state:
+    st.session_state.longform_upload_result = None
+if "longform_upload_error" not in st.session_state:
+    st.session_state.longform_upload_error = ""
+
+# Long-form Live session state
+if "longform_live_stage" not in st.session_state:
+    st.session_state.longform_live_stage = "01 · Topic Fetcher"
+if "longform_live_topic_keyword" not in st.session_state:
+    st.session_state.longform_live_topic_keyword = ""
+if "longform_live_topics" not in st.session_state:
+    st.session_state.longform_live_topics = []
+if "longform_live_selected_topic" not in st.session_state:
+    st.session_state.longform_live_selected_topic = None
+if "longform_live_approved_topic" not in st.session_state:
+    st.session_state.longform_live_approved_topic = None
+if "longform_live_topic_error" not in st.session_state:
+    st.session_state.longform_live_topic_error = ""
+if "longform_live_script_data" not in st.session_state:
+    st.session_state.longform_live_script_data = None
+if "longform_live_approved_script" not in st.session_state:
+    st.session_state.longform_live_approved_script = None
+if "longform_live_script_error" not in st.session_state:
+    st.session_state.longform_live_script_error = ""
+if "longform_live_visuals_data" not in st.session_state:
+    st.session_state.longform_live_visuals_data = None
+if "longform_live_approved_visuals" not in st.session_state:
+    st.session_state.longform_live_approved_visuals = None
+if "longform_live_visuals_error" not in st.session_state:
+    st.session_state.longform_live_visuals_error = ""
+if "longform_live_audio_data" not in st.session_state:
+    st.session_state.longform_live_audio_data = None
+if "longform_live_approved_audio" not in st.session_state:
+    st.session_state.longform_live_approved_audio = None
+if "longform_live_audio_error" not in st.session_state:
+    st.session_state.longform_live_audio_error = ""
+if "longform_live_subtitles_data" not in st.session_state:
+    st.session_state.longform_live_subtitles_data = None
+if "longform_live_approved_subtitles" not in st.session_state:
+    st.session_state.longform_live_approved_subtitles = None
+if "longform_live_subtitles_error" not in st.session_state:
+    st.session_state.longform_live_subtitles_error = ""
+if "longform_live_rendered_video" not in st.session_state:
+    st.session_state.longform_live_rendered_video = None
+if "longform_live_approved_video" not in st.session_state:
+    st.session_state.longform_live_approved_video = None
+if "longform_live_render_error" not in st.session_state:
+    st.session_state.longform_live_render_error = ""
+if "longform_live_upload_result" not in st.session_state:
+    st.session_state.longform_live_upload_result = None
+if "longform_live_upload_error" not in st.session_state:
+    st.session_state.longform_live_upload_error = ""
 if "test_production_line" not in st.session_state:
     st.session_state.test_production_line = None
 if "test_stage" not in st.session_state:
@@ -3409,7 +3481,7 @@ def _render_home():
                 unsafe_allow_html=True,
             )
             if factory_format == "long_form":
-                st.markdown('<div><span class="badge">current WIP</span> <span class="badge">topic fetcher</span></div>', unsafe_allow_html=True)
+                st.markdown('<div><span class="badge">7 stages</span> <span class="badge">documentary lab</span></div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div><span class="badge">7 stages</span> <span class="badge">manual</span></div>', unsafe_allow_html=True)
             if st.button("Open Test", key="open-test", type="primary", width="stretch"):
@@ -3427,7 +3499,7 @@ def _render_home():
                 unsafe_allow_html=True,
             )
             if factory_format == "long_form":
-                st.markdown('<div><span class="badge">not approved</span> <span class="badge">WIP</span></div>', unsafe_allow_html=True)
+                st.markdown('<div><span class="badge">production</span> <span class="badge">8-min documentary</span></div>', unsafe_allow_html=True)
             else:
                 st.markdown('<div><span class="badge">production</span> <span class="badge">public / private</span></div>', unsafe_allow_html=True)
             if st.button("Open Live", key="open-live", type="primary", width="stretch"):
@@ -3545,21 +3617,38 @@ def _render_app_sidebar():
                         st.session_state.live_stage = "01 · Story"
                         st.rerun()
 
-        if st.session_state.app_mode == "test" and st.session_state.get("factory_format") == "long_form":
-            st.markdown(
-                '<div class="nav-sub" style="margin-top:12px;">LONG-FORM · TEST</div>',
-                unsafe_allow_html=True,
-            )
-            selected = st.pills(
-                "Long-form stages",
-                ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Visuals", "04 · Audio", "05 · Subtitles", "06 · Renderer", "07 · Upload QC"],
-                default=st.session_state.longform_test_stage,
-                key="longform-test-stage-switcher",
-                label_visibility="collapsed",
-            ) or st.session_state.longform_test_stage
-            if selected != st.session_state.longform_test_stage:
-                st.session_state.longform_test_stage = selected
-                st.rerun()
+        if st.session_state.get("factory_format") == "long_form":
+            if st.session_state.app_mode == "test":
+                st.markdown(
+                    '<div class="nav-sub" style="margin-top:12px;">LONG-FORM · TEST</div>',
+                    unsafe_allow_html=True,
+                )
+                selected = st.pills(
+                    "Long-form stages",
+                    ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Visuals", "04 · Audio", "05 · Subtitles", "06 · Renderer", "07 · Upload QC"],
+                    default=st.session_state.longform_test_stage,
+                    key="longform-test-stage-switcher",
+                    label_visibility="collapsed",
+                ) or st.session_state.longform_test_stage
+                if selected != st.session_state.longform_test_stage:
+                    st.session_state.longform_test_stage = selected
+                    st.rerun()
+            elif st.session_state.app_mode == "live":
+                st.markdown(
+                    '<div class="nav-sub" style="margin-top:12px;">LONG-FORM · LIVE PRODUCTION</div>',
+                    unsafe_allow_html=True,
+                )
+                unlocked = _longform_live_get_unlocked_stages()
+                selected = st.pills(
+                    "Long-form Live stages",
+                    unlocked,
+                    default=st.session_state.longform_live_stage,
+                    key="longform-live-stage-switcher",
+                    label_visibility="collapsed",
+                ) or st.session_state.longform_live_stage
+                if selected != st.session_state.longform_live_stage:
+                    st.session_state.longform_live_stage = selected
+                    st.rerun()
         elif st.session_state.app_mode == "test" and st.session_state.test_production_line:
             line_name = {
                 "deep_dive": "Deep-Dive Cricket",
@@ -3590,6 +3679,60 @@ def _render_app_sidebar():
             if selected != st.session_state.test_stage:
                 st.session_state.test_stage = selected
                 st.session_state.test_pipeline_notice = None
+
+
+def _longform_live_reset_downstream():
+    for key, value in {
+        "longform_live_selected_topic": None,
+        "longform_live_approved_topic": None,
+        "longform_live_topic_error": "",
+        "longform_live_script_data": None,
+        "longform_live_approved_script": None,
+        "longform_live_script_error": "",
+        "longform_live_visuals_data": None,
+        "longform_live_approved_visuals": None,
+        "longform_live_visuals_error": "",
+        "longform_live_audio_data": None,
+        "longform_live_approved_audio": None,
+        "longform_live_audio_error": "",
+        "longform_live_subtitles_data": None,
+        "longform_live_approved_subtitles": None,
+        "longform_live_subtitles_error": "",
+        "longform_live_rendered_video": None,
+        "longform_live_approved_video": None,
+        "longform_live_render_error": "",
+        "longform_live_upload_result": None,
+        "longform_live_upload_error": "",
+    }.items():
+        st.session_state[key] = value
+
+
+def _longform_live_get_unlocked_stages() -> list[str]:
+    stage_order = [
+        "01 · Topic Fetcher",
+        "02 · Scriptwriter",
+        "03 · Visuals",
+        "04 · Audio",
+        "05 · Subtitles",
+        "06 · Renderer",
+        "07 · Upload QC",
+    ]
+    current_stage = st.session_state.get("longform_live_stage") or "01 · Topic Fetcher"
+    curr_idx = stage_order.index(current_stage) if current_stage in stage_order else 0
+    stages = set(stage_order[: curr_idx + 1])
+    if st.session_state.get("longform_live_approved_topic"):
+        stages.add("02 · Scriptwriter")
+    if st.session_state.get("longform_live_approved_script"):
+        stages.add("03 · Visuals")
+    if st.session_state.get("longform_live_approved_visuals"):
+        stages.add("04 · Audio")
+    if st.session_state.get("longform_live_approved_audio"):
+        stages.add("05 · Subtitles")
+    if st.session_state.get("longform_live_approved_subtitles"):
+        stages.add("06 · Renderer")
+    if st.session_state.get("longform_live_approved_video"):
+        stages.add("07 · Upload QC")
+    return [s for s in stage_order if s in stages]
 
 
 def _live_story_key(topic) -> str:
@@ -6598,11 +6741,20 @@ def render_youtube_trends_topic_fetcher(*, live=False):
             st.session_state.upload_qc = None
         st.rerun()
 
-def render_longform_topic_fetcher():
+def render_longform_topic_fetcher(live: bool = False):
     from longform_topic_fetcher import fetch_longform_topics
 
+    prefix = "longform_live_" if live else "longform_"
+    k_prefix = "longform-live-" if live else "longform-"
+    topics_key = f"{prefix}topics"
+    kw_key = f"{prefix}topic_keyword"
+    selected_key = f"{prefix}selected_topic"
+    approved_key = f"{prefix}approved_topic"
+    error_key = f"{prefix}topic_error"
+
+    stage_title = "LONG-FORM · LIVE · 01 · STORY DESK" if live else "LONG-FORM · 01 · STORY DESK"
     st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">LONG-FORM · 01 · STORY DESK</div>'
+        f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Find a story that can sustain long-form</div>'
         '<div class="canvas-copy">Current cricket stories are ranked for narrative depth and source coverage. No article body is fetched until a story is selected.</div></div></div>',
         unsafe_allow_html=True,
@@ -6610,31 +6762,31 @@ def render_longform_topic_fetcher():
 
     st.text_input(
         "Optional player, team, competition or subject",
-        key="longform_topic_keyword",
+        key=kw_key,
         placeholder="e.g. Chennai Super Kings ownership",
     )
-    topics = list(st.session_state.longform_topics or [])
+    topics = list(st.session_state.get(topics_key) or [])
     left, right = st.columns(2, gap="small")
     with left:
-        if st.button("Find long-form stories", type="primary", width="stretch", key="longform-find-stories"):
+        if st.button("Find long-form stories", type="primary", width="stretch", key=f"{k_prefix}find-stories"):
             try:
                 with st.spinner("Searching current cricket coverage…"):
                     found = fetch_longform_topics(
                         limit=20,
-                        keyword=st.session_state.longform_topic_keyword,
+                        keyword=st.session_state.get(kw_key, ""),
                     )
-                st.session_state.longform_topics = found
-                st.session_state.longform_selected_topic = None
-                st.session_state.longform_approved_topic = None
-                st.session_state.longform_topic_error = ""
+                st.session_state[topics_key] = found
+                st.session_state[selected_key] = None
+                st.session_state[approved_key] = None
+                st.session_state[error_key] = ""
             except (RuntimeError, ValueError, OSError) as exc:
-                st.session_state.longform_topic_error = str(exc)
+                st.session_state[error_key] = str(exc)
             st.rerun()
     with right:
         if st.button(
             "Find more stories",
             width="stretch",
-            key="longform-find-more-stories",
+            key=f"{k_prefix}find-more-stories",
             disabled=not topics,
         ):
             try:
@@ -6643,30 +6795,30 @@ def render_longform_topic_fetcher():
                         limit=20,
                         already_seen=topics,
                         more=True,
-                        keyword=st.session_state.longform_topic_keyword,
+                        keyword=st.session_state.get(kw_key, ""),
                     )
                 known_ids = {item.get("story_id") for item in topics}
-                st.session_state.longform_topics = topics + [
+                st.session_state[topics_key] = topics + [
                     item for item in found if item.get("story_id") not in known_ids
                 ]
-                st.session_state.longform_topic_error = ""
+                st.session_state[error_key] = ""
                 if not found:
-                    st.session_state.longform_topic_error = "No additional distinct long-form candidates were found. Try a different focus or search again later."
+                    st.session_state[error_key] = "No additional distinct long-form candidates were found. Try a different focus or search again later."
             except (RuntimeError, ValueError, OSError) as exc:
-                st.session_state.longform_topic_error = str(exc)
+                st.session_state[error_key] = str(exc)
             st.rerun()
 
-    if st.session_state.longform_topic_error:
-        st.warning(st.session_state.longform_topic_error)
-    topics = list(st.session_state.longform_topics or [])
-    selected = st.session_state.longform_selected_topic
-    approved = st.session_state.longform_approved_topic
+    if st.session_state.get(error_key):
+        st.warning(st.session_state[error_key])
+    topics = list(st.session_state.get(topics_key) or [])
+    selected = st.session_state.get(selected_key)
+    approved = st.session_state.get(approved_key)
     if topics:
         st.caption(f"{len(topics)} candidates · ranked by freshness, narrative signals, specificity and source coverage. These are candidates, not a guarantee that every story can sustain eight minutes.")
         for number, story in enumerate(topics, 1):
             story_id = str(story.get("story_id") or number)
             title = str(story.get("title") or "Untitled cricket story")
-            with st.container(key=f"longform-topic-{story_id}"):
+            with st.container(key=f"{k_prefix}topic-{story_id}"):
                 st.markdown(f"**{number:02d}. {title}**")
                 published = str(story.get("published_at") or "").replace("T", " ").replace("+00:00", " UTC")
                 publishers = ", ".join(story.get("publishers") or [story.get("publisher") or "Unknown publisher"])
@@ -6683,64 +6835,69 @@ def render_longform_topic_fetcher():
                         st.markdown(f"- [{report_publisher}: {report_title}]({report_url})")
                 if st.button(
                     "Select this story",
-                    key=f"longform-select-{story_id}",
+                    key=f"{k_prefix}select-{story_id}",
                     type="primary" if selected and selected.get("story_id") == story_id else "secondary",
                     width="content",
                 ):
-                    st.session_state.longform_selected_topic = story
-                    st.session_state.longform_approved_topic = None
+                    st.session_state[selected_key] = story
+                    st.session_state[approved_key] = None
                     st.rerun()
                 st.divider()
 
-    selected = st.session_state.longform_selected_topic
+    selected = st.session_state.get(selected_key)
     if selected:
         st.markdown("### Selected story")
         st.markdown(f"**{selected.get('title', 'Untitled cricket story')}**")
         st.caption(f"{selected.get('publisher', 'Unknown publisher')} · {selected.get('published_at', '')}")
-        if st.button("Approve topic for Long-form", type="primary", width="stretch", key="longform-approve-topic"):
-            st.session_state.longform_approved_topic = dict(selected)
+        if st.button("Approve topic for Long-form", type="primary", width="stretch", key=f"{k_prefix}approve-topic"):
+            st.session_state[approved_key] = dict(selected)
+            if live:
+                st.session_state.longform_live_stage = "02 · Scriptwriter"
             st.rerun()
 
-    approved = st.session_state.longform_approved_topic
+    approved = st.session_state.get(approved_key)
     if approved:
         st.success("Topic approved and saved to the Long-form handoff. Scriptwriter is the next stage; it has not been generated yet.")
         st.markdown(f"[Open primary source]({approved.get('url', '')})")
 
 
-def render_longform_scriptwriter():
-    approved_topic = st.session_state.longform_approved_topic
+def render_longform_scriptwriter(live: bool = False):
+    prefix = "longform_live_" if live else "longform_"
+    k_prefix = "longform-live-" if live else "longform-"
+    approved_topic = st.session_state.get(f"{prefix}approved_topic")
     if not approved_topic:
         st.info("No topic has been approved for Long-form yet. Open **01 · Topic Fetcher** and approve a cricket story first.")
         return
 
+    stage_title = "LONG-FORM · LIVE · 02 · SCRIPTWRITER" if live else "02 · LONG-FORM SCRIPTWRITER · 8-MINUTE DOCUMENTARY"
     st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">02 · LONG-FORM SCRIPTWRITER · 8-MINUTE DOCUMENTARY</div>'
+        f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         f'<div class="canvas-title">{approved_topic.get("title", "Documentary Script")}</div>'
         '<div class="canvas-copy">Researched 6-Act narrative arc (~1,150 words) with scene-level entity tags, broadcast cards, and YouTube chapters.</div></div></div>',
         unsafe_allow_html=True,
     )
 
-    with st.container(key="longform-script-toolbar"):
+    with st.container(key=f"{k_prefix}script-toolbar"):
         col_btn, col_info = st.columns([1, 2])
         with col_btn:
-            if st.button("Generate 8-Min Documentary Script", type="primary", width="stretch", key="longform-gen-script"):
+            if st.button("Generate 8-Min Documentary Script", type="primary", width="stretch", key=f"{k_prefix}gen-script"):
                 with st.spinner("Extracting multi-source evidence and structuring 6-Act documentary script..."):
                     try:
                         from longform_script_writer import LongformScriptWriter
                         script = LongformScriptWriter.write(approved_topic)
-                        st.session_state.longform_script_data = script
-                        st.session_state.longform_approved_script = None
-                        st.session_state.longform_script_error = ""
+                        st.session_state[f"{prefix}script_data"] = script
+                        st.session_state[f"{prefix}approved_script"] = None
+                        st.session_state[f"{prefix}script_error"] = ""
                         st.rerun()
                     except Exception as exc:
-                        st.session_state.longform_script_error = str(exc)
+                        st.session_state[f"{prefix}script_error"] = str(exc)
         with col_info:
             st.caption(f"Sources: {approved_topic.get('publisher')} + {len(approved_topic.get('reports', []))} linked reports · Lookback: 14 days")
 
-    if st.session_state.longform_script_error:
-        st.error(st.session_state.longform_script_error)
+    if st.session_state.get(f"{prefix}script_error"):
+        st.error(st.session_state[f"{prefix}script_error"])
 
-    script = st.session_state.longform_script_data
+    script = st.session_state.get(f"{prefix}script_data")
     if not script:
         return
 
@@ -6757,7 +6914,7 @@ def render_longform_scriptwriter():
         for idx, t in enumerate(script.get("titles", []), 1):
             st.markdown(f"- **Option {idx}:** {t}")
         st.markdown("**Description & Chapters:**")
-        st.text_area("YouTube Description", script.get("seo_description", ""), height=180, key="lf-seo-desc")
+        st.text_area("YouTube Description", script.get("seo_description", ""), height=180, key=f"{k_prefix}seo-desc")
         st.markdown(f"**Pinned Comment:** {script.get('pinned_comment', '')}")
         st.caption(f"Hashtags: {' '.join(script.get('hashtags', []))}")
 
@@ -6779,49 +6936,55 @@ def render_longform_scriptwriter():
     st.markdown("---")
     app_col1, app_col2 = st.columns([2, 1])
     with app_col1:
-        if st.button("Approve Script for Long-form", type="primary", width="stretch", key="longform-approve-script"):
-            st.session_state.longform_approved_script = dict(script)
-            st.session_state.longform_test_stage = "03 · Visuals"
+        if st.button("Approve Script for Long-form", type="primary", width="stretch", key=f"{k_prefix}approve-script"):
+            st.session_state[f"{prefix}approved_script"] = dict(script)
+            if live:
+                st.session_state.longform_live_stage = "03 · Visuals"
+            else:
+                st.session_state.longform_test_stage = "03 · Visuals"
             st.rerun()
     with app_col2:
-        if st.session_state.longform_approved_script:
+        if st.session_state.get(f"{prefix}approved_script"):
             st.success("✓ Script Approved")
 
 
-def render_longform_visuals():
-    approved_script = st.session_state.longform_approved_script
-    approved_topic = st.session_state.longform_approved_topic
+def render_longform_visuals(live: bool = False):
+    prefix = "longform_live_" if live else "longform_"
+    k_prefix = "longform-live-" if live else "longform-"
+    approved_script = st.session_state.get(f"{prefix}approved_script")
+    approved_topic = st.session_state.get(f"{prefix}approved_topic")
     if not approved_script or not approved_topic:
         st.info("No approved script found. Please approve a script in **02 · Scriptwriter** first.")
         return
 
+    stage_title = "LONG-FORM · LIVE · 03 · AUTOMATED VISUALS" if live else "03 · AUTOMATED VISUALS · 16:9 WIDESCREEN ENGINE"
     st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">03 · AUTOMATED VISUALS · 16:9 WIDESCREEN ENGINE</div>'
+        f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         f'<div class="canvas-title">Visual Matcher & Card Studio</div>'
         '<div class="canvas-copy">100% automated visual sourcing, entity verification, and broadcast card rendering. Zero manual QC needed.</div></div></div>',
         unsafe_allow_html=True,
     )
 
-    with st.container(key="longform-visuals-toolbar"):
+    with st.container(key=f"{k_prefix}visuals-toolbar"):
         col_btn, col_info = st.columns([1, 2])
         with col_btn:
-            if st.button("Run Automated Visual Engine", type="primary", width="stretch", key="longform-run-visuals"):
+            if st.button("Run Automated Visual Engine", type="primary", width="stretch", key=f"{k_prefix}run-visuals"):
                 with st.spinner("Searching open sources, verifying entities, and rendering 16:9 broadcast cards..."):
                     try:
                         from longform_visuals import LongformVisualMatcher
                         vis_result = LongformVisualMatcher.match_and_collect(approved_script, approved_topic)
-                        st.session_state.longform_visuals_data = vis_result
-                        st.session_state.longform_visuals_error = ""
+                        st.session_state[f"{prefix}visuals_data"] = vis_result
+                        st.session_state[f"{prefix}visuals_error"] = ""
                         st.rerun()
                     except Exception as exc:
-                        st.session_state.longform_visuals_error = str(exc)
+                        st.session_state[f"{prefix}visuals_error"] = str(exc)
         with col_info:
             st.caption("Visual pipeline queries Commons, Wikipedia, DuckDuckGo & Flickr, and builds 1920×1080 cards.")
 
-    if st.session_state.longform_visuals_error:
-        st.error(st.session_state.longform_visuals_error)
+    if st.session_state.get(f"{prefix}visuals_error"):
+        st.error(st.session_state[f"{prefix}visuals_error"])
 
-    v_data = st.session_state.longform_visuals_data
+    v_data = st.session_state.get(f"{prefix}visuals_data")
     if not v_data:
         return
 
@@ -6848,23 +7011,29 @@ def render_longform_visuals():
     st.markdown("---")
     app_col1, app_col2 = st.columns([2, 1])
     with app_col1:
-        if st.button("Proceed to Audio · 04", type="primary", width="stretch", key="longform-proceed-audio"):
-            st.session_state.longform_approved_visuals = dict(v_data)
-            st.session_state.longform_test_stage = "04 · Audio"
+        if st.button("Proceed to Audio · 04", type="primary", width="stretch", key=f"{k_prefix}proceed-audio"):
+            st.session_state[f"{prefix}approved_visuals"] = dict(v_data)
+            if live:
+                st.session_state.longform_live_stage = "04 · Audio"
+            else:
+                st.session_state.longform_test_stage = "04 · Audio"
             st.rerun()
     with app_col2:
-        if st.session_state.get("longform_approved_visuals"):
+        if st.session_state.get(f"{prefix}approved_visuals"):
             st.success("✓ Visuals Ready")
 
 
-def render_longform_audio():
-    approved_script = st.session_state.longform_approved_script
+def render_longform_audio(live: bool = False):
+    prefix = "longform_live_" if live else "longform_"
+    k_prefix = "longform-live-" if live else "longform-"
+    approved_script = st.session_state.get(f"{prefix}approved_script")
     if not approved_script:
         st.info("No approved script found. Please approve a script in **02 · Scriptwriter** first.")
         return
 
+    stage_title = "LONG-FORM · LIVE · 04 · AUDIO ENGINE" if live else "04 · LONG-FORM AUDIO ENGINE · CHATTERBOX TURBO"
     st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">04 · LONG-FORM AUDIO ENGINE · CHATTERBOX TURBO</div>'
+        f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Voice Cloning & Paced Narration</div>'
         '<div class="canvas-copy">High-fidelity voice synthesis with per-act temperature pacing (0.88 Hook, 0.80 Body, 0.85 Climax), atmospheric act pauses, and linear word timings.</div></div></div>',
         unsafe_allow_html=True,
@@ -6886,26 +7055,27 @@ def render_longform_audio():
         unsafe_allow_html=True,
     )
 
-    with st.container(key="longform-audio-toolbar"):
+    with st.container(key=f"{k_prefix}audio-toolbar"):
         col_btn, col_info = st.columns([1, 2])
         with col_btn:
-            if st.button("Synthesize Full Narration", type="primary", width="stretch", key="longform-gen-audio"):
+            if st.button("Synthesize Full Narration", type="primary", width="stretch", key=f"{k_prefix}gen-audio"):
                 with st.spinner("Synthesizing ~8-minute documentary narration with Chatterbox Turbo..."):
                     try:
                         from longform_audio import LongformAudioEngine
-                        audio_res = LongformAudioEngine.generate(approved_script)
-                        st.session_state.longform_audio_data = audio_res
-                        st.session_state.longform_audio_error = ""
+                        out_dir = Path("output/live/longform_audio") if live else Path("output/longform_audio")
+                        audio_res = LongformAudioEngine.generate(approved_script, output_dir=out_dir)
+                        st.session_state[f"{prefix}audio_data"] = audio_res
+                        st.session_state[f"{prefix}audio_error"] = ""
                         st.rerun()
                     except Exception as exc:
-                        st.session_state.longform_audio_error = str(exc)
+                        st.session_state[f"{prefix}audio_error"] = str(exc)
         with col_info:
             st.caption("Narration is rendered scene-by-scene with 0.8s act pauses and breath gaps, generating full master audio + word timings.")
 
-    if st.session_state.get("longform_audio_error"):
-        st.error(st.session_state.longform_audio_error)
+    if st.session_state.get(f"{prefix}audio_error"):
+        st.error(st.session_state[f"{prefix}audio_error"])
 
-    audio_data = st.session_state.get("longform_audio_data")
+    audio_data = st.session_state.get(f"{prefix}audio_data")
     if not audio_data:
         return
 
@@ -6942,50 +7112,56 @@ def render_longform_audio():
     st.markdown("---")
     app_col1, app_col2 = st.columns([2, 1])
     with app_col1:
-        if st.button("Approve Audio for Long-form", type="primary", width="stretch", key="longform-approve-audio"):
+        if st.button("Approve Audio for Long-form", type="primary", width="stretch", key=f"{k_prefix}approve-audio"):
             from longform_audio import LongformAudioEngine
-            st.session_state.longform_approved_audio = LongformAudioEngine.approve_audio(audio_data)
-            st.session_state.longform_test_stage = "05 · Subtitles"
+            st.session_state[f"{prefix}approved_audio"] = LongformAudioEngine.approve_audio(audio_data)
+            if live:
+                st.session_state.longform_live_stage = "05 · Subtitles"
+            else:
+                st.session_state.longform_test_stage = "05 · Subtitles"
             st.rerun()
     with app_col2:
-        if st.session_state.get("longform_approved_audio"):
+        if st.session_state.get(f"{prefix}approved_audio"):
             st.success("✓ Audio Approved")
 
 
-def render_longform_subtitles():
-    approved_script = st.session_state.get("longform_approved_script")
-    approved_audio = st.session_state.get("longform_approved_audio")
+def render_longform_subtitles(live: bool = False):
+    prefix = "longform_live_" if live else "longform_"
+    k_prefix = "longform-live-" if live else "longform-"
+    approved_script = st.session_state.get(f"{prefix}approved_script")
+    approved_audio = st.session_state.get(f"{prefix}approved_audio")
     if not approved_script or not approved_audio:
         st.info("Approve the Scriptwriter (02) and Audio (04) stages first.")
         return
 
+    stage_title = "LONG-FORM · LIVE · 05 · SUBTITLES" if live else "05 · LONG-FORM SUBTITLES · BROADCAST LOWER-THIRDS"
     st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">05 · LONG-FORM SUBTITLES · BROADCAST LOWER-THIRDS</div>'
+        f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Documentary Subtitles & Act Billboards</div>'
         '<div class="canvas-copy">Generates clean 16:9 lower-third subtitles (Netflix/BBC style) and cinematic Act chapter billboards.</div></div></div>',
         unsafe_allow_html=True,
     )
 
-    with st.container(key="longform-subs-toolbar"):
+    with st.container(key=f"{k_prefix}subs-toolbar"):
         col_btn, col_info = st.columns([1, 2])
         with col_btn:
-            if st.button("Generate Broadcast Subtitles", type="primary", width="stretch", key="longform-gen-subs"):
+            if st.button("Generate Broadcast Subtitles", type="primary", width="stretch", key=f"{k_prefix}gen-subs"):
                 with st.spinner("Aligning word timings and building broadcast lower-third cues..."):
                     try:
                         from longform_subtitles import LongformSubtitleEngine
                         subs = LongformSubtitleEngine.generate(approved_script, approved_audio)
-                        st.session_state.longform_subtitles_data = subs
-                        st.session_state.longform_subtitles_error = ""
+                        st.session_state[f"{prefix}subtitles_data"] = subs
+                        st.session_state[f"{prefix}subtitles_error"] = ""
                         st.rerun()
                     except Exception as exc:
-                        st.session_state.longform_subtitles_error = str(exc)
+                        st.session_state[f"{prefix}subtitles_error"] = str(exc)
         with col_info:
             st.caption("Groups speech into natural human reading phrases (5–8 words) and adds chapter title overlays.")
 
-    if st.session_state.get("longform_subtitles_error"):
-        st.error(st.session_state.longform_subtitles_error)
+    if st.session_state.get(f"{prefix}subtitles_error"):
+        st.error(st.session_state[f"{prefix}subtitles_error"])
 
-    sub_data = st.session_state.get("longform_subtitles_data")
+    sub_data = st.session_state.get(f"{prefix}subtitles_data")
     if not sub_data:
         return
 
@@ -7007,21 +7183,26 @@ def render_longform_subtitles():
     st.markdown("---")
     app_col1, app_col2 = st.columns([2, 1])
     with app_col1:
-        if st.button("Approve Subtitles for Long-form", type="primary", width="stretch", key="longform-approve-subs"):
+        if st.button("Approve Subtitles for Long-form", type="primary", width="stretch", key=f"{k_prefix}approve-subs"):
             from longform_subtitles import LongformSubtitleEngine
-            st.session_state.longform_approved_subtitles = LongformSubtitleEngine.approve(sub_data)
-            st.session_state.longform_test_stage = "06 · Renderer"
+            st.session_state[f"{prefix}approved_subtitles"] = LongformSubtitleEngine.approve(sub_data)
+            if live:
+                st.session_state.longform_live_stage = "06 · Renderer"
+            else:
+                st.session_state.longform_test_stage = "06 · Renderer"
             st.rerun()
     with app_col2:
-        if st.session_state.get("longform_approved_subtitles"):
+        if st.session_state.get(f"{prefix}approved_subtitles"):
             st.success("✓ Subtitles Approved")
 
 
-def render_longform_renderer():
-    approved_script = st.session_state.get("longform_approved_script")
-    approved_audio = st.session_state.get("longform_approved_audio")
-    approved_visuals = st.session_state.get("longform_approved_visuals")
-    approved_subs = st.session_state.get("longform_approved_subtitles")
+def render_longform_renderer(live: bool = False):
+    prefix = "longform_live_" if live else "longform_"
+    k_prefix = "longform-live-" if live else "longform-"
+    approved_script = st.session_state.get(f"{prefix}approved_script")
+    approved_audio = st.session_state.get(f"{prefix}approved_audio")
+    approved_visuals = st.session_state.get(f"{prefix}approved_visuals")
+    approved_subs = st.session_state.get(f"{prefix}approved_subtitles")
 
     missing = []
     if not approved_script: missing.append("02 Scriptwriter")
@@ -7029,8 +7210,9 @@ def render_longform_renderer():
     if not approved_audio: missing.append("04 Audio")
     if not approved_subs: missing.append("05 Subtitles")
 
+    stage_title = "LONG-FORM · LIVE · 06 · RENDERER" if live else "06 · LONG-FORM RENDERER · 16:9 WIDESCREEN ENGINE"
     st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">06 · LONG-FORM RENDERER · 16:9 WIDESCREEN ENGINE</div>'
+        f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Broadcast Documentary Rendering</div>'
         '<div class="canvas-copy">Assembles 1920×1080 30FPS video essay combining broadcast cards, Ken Burns photos, Act title billboards, lower-third subtitles, and master narration.</div></div></div>',
         unsafe_allow_html=True,
@@ -7042,14 +7224,16 @@ def render_longform_renderer():
 
     col_cfg1, col_cfg2 = st.columns(2)
     with col_cfg1:
-        render_mode = st.pills("Render Mode", ["Fast Preview Clip (15s)", "Full Documentary (~8 Min)"], default="Fast Preview Clip (15s)", key="lf_render_mode") or "Fast Preview Clip (15s)"
+        render_mode = st.pills("Render Mode", ["Fast Preview Clip (15s)", "Full Documentary (~8 Min)"], default="Fast Preview Clip (15s)", key=f"{k_prefix}render_mode") or "Fast Preview Clip (15s)"
     with col_cfg2:
-        audio_profile = st.pills("Audio Profile", ["Clean Studio Master (Loudnorm)", "Dynamic Soundscape Bed"], default="Clean Studio Master (Loudnorm)", key="lf_audio_profile") or "Clean Studio Master (Loudnorm)"
+        audio_profile = st.pills("Audio Profile", ["Clean Studio Master (Loudnorm)", "Dynamic Soundscape Bed"], default="Clean Studio Master (Loudnorm)", key=f"{k_prefix}audio_profile") or "Clean Studio Master (Loudnorm)"
 
-    with st.container(key="longform-render-toolbar"):
-        if st.button("Render 16:9 Documentary Video", type="primary", width="stretch", key="longform-run-render"):
+    with st.container(key=f"{k_prefix}render-toolbar"):
+        if st.button("Render 16:9 Documentary Video", type="primary", width="stretch", key=f"{k_prefix}run-render"):
             max_sec = 15.0 if "Preview" in render_mode else None
-            out_file = Path("output/longform_rendered/documentary_master.mp4")
+            out_dir = Path("output/live/longform_rendered") if live else Path("output/longform_rendered")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            out_file = out_dir / "documentary_master.mp4"
             with st.spinner("Rendering 1920×1080 30FPS broadcast documentary video..."):
                 try:
                     from longform_renderer import LongformRenderer
@@ -7061,16 +7245,16 @@ def render_longform_renderer():
                         output_path=out_file,
                         max_duration_seconds=max_sec,
                     )
-                    st.session_state.longform_rendered_video = str(rendered)
-                    st.session_state.longform_render_error = ""
+                    st.session_state[f"{prefix}rendered_video"] = str(rendered)
+                    st.session_state[f"{prefix}render_error"] = ""
                     st.rerun()
                 except Exception as exc:
-                    st.session_state.longform_render_error = str(exc)
+                    st.session_state[f"{prefix}render_error"] = str(exc)
 
-    if st.session_state.get("longform_render_error"):
-        st.error(st.session_state.longform_render_error)
+    if st.session_state.get(f"{prefix}render_error"):
+        st.error(st.session_state[f"{prefix}render_error"])
 
-    vid_path = st.session_state.get("longform_rendered_video")
+    vid_path = st.session_state.get(f"{prefix}rendered_video")
     if vid_path and Path(vid_path).exists():
         st.markdown("### Master 16:9 Video Player")
         st.video(vid_path)
@@ -7078,19 +7262,24 @@ def render_longform_renderer():
         st.markdown("---")
         app_col1, app_col2 = st.columns([2, 1])
         with app_col1:
-            if st.button("Approve Video for Long-form", type="primary", width="stretch", key="longform-approve-video"):
-                st.session_state.longform_approved_video = vid_path
-                st.session_state.longform_test_stage = "07 · Upload QC"
+            if st.button("Approve Video for Long-form", type="primary", width="stretch", key=f"{k_prefix}approve-video"):
+                st.session_state[f"{prefix}approved_video"] = vid_path
+                if live:
+                    st.session_state.longform_live_stage = "07 · Upload QC"
+                else:
+                    st.session_state.longform_test_stage = "07 · Upload QC"
                 st.rerun()
         with app_col2:
-            if st.session_state.get("longform_approved_video"):
+            if st.session_state.get(f"{prefix}approved_video"):
                 st.success("✓ Video Approved")
 
 
-def render_longform_upload_qc():
-    approved_script = st.session_state.get("longform_approved_script")
-    approved_topic = st.session_state.get("longform_approved_topic")
-    approved_video = st.session_state.get("longform_approved_video")
+def render_longform_upload_qc(live: bool = False):
+    prefix = "longform_live_" if live else "longform_"
+    k_prefix = "longform-live-" if live else "longform-"
+    approved_script = st.session_state.get(f"{prefix}approved_script")
+    approved_topic = st.session_state.get(f"{prefix}approved_topic")
+    approved_video = st.session_state.get(f"{prefix}approved_video")
 
     if not approved_script or not approved_topic or not approved_video:
         st.info("Render and approve the documentary video (06) first.")
@@ -7099,8 +7288,9 @@ def render_longform_upload_qc():
     from longform_uploader import LongformUploader
     package = LongformUploader.prepare_package(approved_script, approved_topic, approved_video)
 
+    stage_title = "LONG-FORM · LIVE · 07 · PUBLISH PACKAGE" if live else "07 · YOUTUBE DOCUMENTARY PUBLISH PACKAGE"
     st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">07 · YOUTUBE DOCUMENTARY PUBLISH PACKAGE</div>'
+        f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Metadata Packaging & Upload Review</div>'
         '<div class="canvas-copy">Monetization-compliant packaging: timestamped chapters, research bibliography, and private review gate.</div></div></div>',
         unsafe_allow_html=True,
@@ -7109,13 +7299,13 @@ def render_longform_upload_qc():
     left, right = st.columns([1.1, 0.9], gap="large")
     with left:
         st.markdown("### Video Metadata Package")
-        selected_title = st.selectbox("Video Title Candidate", package.get("title_candidates") or [package.get("title")], key="lf_upload_title")
-        desc_text = st.text_area("YouTube Description (with Chapters & Sources)", package.get("description", ""), height=240, key="lf_upload_desc")
-        pinned_c = st.text_input("Pinned Discussion Prompt", package.get("pinned_comment", ""), key="lf_upload_comment")
+        selected_title = st.selectbox("Video Title Candidate", package.get("title_candidates") or [package.get("title")], key=f"{k_prefix}upload_title")
+        desc_text = st.text_area("YouTube Description (with Chapters & Sources)", package.get("description", ""), height=240, key=f"{k_prefix}upload_desc")
+        pinned_c = st.text_input("Pinned Discussion Prompt", package.get("pinned_comment", ""), key=f"{k_prefix}upload_comment")
 
-        privacy = st.pills("Upload Privacy Status", ["private", "unlisted", "public"], default="private", key="lf_privacy_status") or "private"
+        privacy = st.pills("Upload Privacy Status", ["private", "unlisted", "public"], default="private", key=f"{k_prefix}privacy_status") or "private"
 
-        if st.button("Upload Documentary to YouTube", type="primary", width="stretch", key="longform-upload-btn"):
+        if st.button("Upload Documentary to YouTube", type="primary", width="stretch", key=f"{k_prefix}upload-btn"):
             upload_pkg = dict(package)
             upload_pkg["title"] = selected_title
             upload_pkg["description"] = desc_text
@@ -7123,17 +7313,17 @@ def render_longform_upload_qc():
             with st.spinner("Connecting to YouTube API and uploading broadcast documentary..."):
                 try:
                     res = LongformUploader.upload_to_youtube(upload_pkg, privacy_status=privacy)
-                    st.session_state.longform_upload_result = res
-                    st.session_state.longform_upload_error = ""
+                    st.session_state[f"{prefix}upload_result"] = res
+                    st.session_state[f"{prefix}upload_error"] = ""
                     st.rerun()
                 except Exception as exc:
-                    st.session_state.longform_upload_error = str(exc)
+                    st.session_state[f"{prefix}upload_error"] = str(exc)
 
-        if st.session_state.get("longform_upload_error"):
-            st.error(st.session_state.longform_upload_error)
+        if st.session_state.get(f"{prefix}upload_error"):
+            st.error(st.session_state[f"{prefix}upload_error"])
 
-        if st.session_state.get("longform_upload_result"):
-            up = st.session_state.longform_upload_result
+        if st.session_state.get(f"{prefix}upload_result"):
+            up = st.session_state[f"{prefix}upload_result"]
             st.success(f"✓ Uploaded successfully! Video ID: `{up.get('video_id')}` (Status: {up.get('privacy_status')})")
             if up.get("video_url"):
                 st.markdown(f"[Watch on YouTube]({up.get('video_url')})")
@@ -7162,19 +7352,78 @@ def render_longform_test():
     _render_pipeline_progress(stage_names, stage_idx)
 
     if st.session_state.longform_test_stage == "01 · Topic Fetcher":
-        render_longform_topic_fetcher()
+        render_longform_topic_fetcher(live=False)
     elif st.session_state.longform_test_stage == "02 · Scriptwriter":
-        render_longform_scriptwriter()
+        render_longform_scriptwriter(live=False)
     elif st.session_state.longform_test_stage == "03 · Visuals":
-        render_longform_visuals()
+        render_longform_visuals(live=False)
     elif st.session_state.longform_test_stage == "04 · Audio":
-        render_longform_audio()
+        render_longform_audio(live=False)
     elif st.session_state.longform_test_stage == "05 · Subtitles":
-        render_longform_subtitles()
+        render_longform_subtitles(live=False)
     elif st.session_state.longform_test_stage == "06 · Renderer":
-        render_longform_renderer()
+        render_longform_renderer(live=False)
     elif st.session_state.longform_test_stage == "07 · Upload QC":
-        render_longform_upload_qc()
+        render_longform_upload_qc(live=False)
+
+
+def render_longform_live():
+    stage_names = ["Topic Fetcher", "Scriptwriter", "Visuals", "Audio", "Subtitles", "Renderer", "Upload QC"]
+    stage = st.session_state.get("longform_live_stage") or "01 · Topic Fetcher"
+    stage_idx = 0
+    if stage == "02 · Scriptwriter":
+        stage_idx = 1
+    elif stage == "03 · Visuals":
+        stage_idx = 2
+    elif stage == "04 · Audio":
+        stage_idx = 3
+    elif stage == "05 · Subtitles":
+        stage_idx = 4
+    elif stage == "06 · Renderer":
+        stage_idx = 5
+    elif stage == "07 · Upload QC":
+        stage_idx = 6
+
+    upload_complete = stage_idx == 6 and bool(st.session_state.get("longform_live_upload_result"))
+    _render_pipeline_progress(stage_names, stage_idx, complete_last=upload_complete)
+
+    left, right = st.columns([1.4, .45], gap="large")
+    with left:
+        st.markdown(
+            '<div class="live-product-head">'
+            '<div><div class="eyebrow">LONG-FORM · LIVE PRODUCTION</div>'
+            '<div class="live-product-title">8-Minute Documentary Studio</div>'
+            '<div class="hero-subtitle">Broadcast 16:9 documentary production line with Chatterbox Turbo and monetization packaging.</div></div>'
+            '<div class="live-status"><span></span> Live Production Active</div>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    with right:
+        controls = st.columns(2, gap="small")
+        with controls[0]:
+            if st.button("New Doc", key="longform-live-new", width="stretch"):
+                _longform_live_reset_downstream()
+                st.session_state.longform_live_stage = "01 · Topic Fetcher"
+                st.rerun()
+        with controls[1]:
+            if st.button("Home", key="longform-live-home", width="stretch"):
+                st.session_state.app_mode = "home"
+                st.rerun()
+
+    if stage == "01 · Topic Fetcher":
+        render_longform_topic_fetcher(live=True)
+    elif stage == "02 · Scriptwriter":
+        render_longform_scriptwriter(live=True)
+    elif stage == "03 · Visuals":
+        render_longform_visuals(live=True)
+    elif stage == "04 · Audio":
+        render_longform_audio(live=True)
+    elif stage == "05 · Subtitles":
+        render_longform_subtitles(live=True)
+    elif stage == "06 · Renderer":
+        render_longform_renderer(live=True)
+    elif stage == "07 · Upload QC":
+        render_longform_upload_qc(live=True)
 
 
 def render_otd_topic_fetcher():
@@ -10406,12 +10655,6 @@ elif st.session_state.app_mode == "test":
 elif st.session_state.app_mode == "live":
     _render_app_sidebar()
     if st.session_state.get("factory_format") == "long_form":
-        st.markdown(
-            '<div class="live-product-head"><div><div class="eyebrow">LONG-FORM · LIVE</div>'
-            '<div class="live-product-title">Not enabled yet.</div>'
-            '<div class="hero-subtitle">Long-form remains Test-only until its stages are built, validated and approved. No Live pipeline or upload action is available here.</div></div></div>',
-            unsafe_allow_html=True,
-        )
-        st.info("Current WIP: Long-form Topic Fetcher. Complete and approve the Test pipeline before enabling Long-form Live.")
+        render_longform_live()
     else:
         render_live_dashboard()
