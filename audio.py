@@ -15,6 +15,10 @@ from typing import Any
 import edge_tts
 
 CACHE_DIR = Path(__file__).resolve().with_name(".audio_cache")
+ROOT_DIR = Path(__file__).resolve().parent
+AUDIO_REFERENCE = Path(os.getenv("AUDIO_REFERENCE", ROOT_DIR / "audio_reference.wav"))
+CHATTERBOX_OUTPUT_ROOT = ROOT_DIR / "output" / "generated_audio"
+_CHATTERBOX_MODEL = None
 MAX_CONCURRENCY = 2
 MAX_ATTEMPTS = 2
 MAX_DURATION_SECONDS = 30.0
@@ -378,17 +382,165 @@ def package_human_audio(
         "path": str(target),
         "duration": duration,
         "timings": timings,
-        "from_cache": False,
-        "human_recorded": True,
     }
+
+
+def get_chatterbox_model():
+    """Lazily loads and caches the Chatterbox Turbo TTS model."""
+    global _CHATTERBOX_MODEL
+    if _CHATTERBOX_MODEL is None:
+        try:
+            import torch
+            from chatterbox.tts_turbo import ChatterboxTurboTTS
+            device = "cuda" if torch.cuda.is_available() else "cpu"
+            _CHATTERBOX_MODEL = ChatterboxTurboTTS.from_pretrained(device=device)
+        except Exception as exc:
+            raise RuntimeError(f"Chatterbox Audio could not be loaded: {exc}") from exc
+    return _CHATTERBOX_MODEL
+
+
+def generate_chatterbox_audio(
+    version_or_slides: list[dict[str, Any]] | dict[str, Any],
+    run_number: int = 1,
+    output_dir: str | Path | None = None,
+    reference: Path | str | None = None,
+) -> dict[str, Any]:
+    """Generates Shorts narration using Chatterbox Turbo TTS with voice cloning and linear timings."""
+    if isinstance(version_or_slides, dict):
+        slides = version_or_slides.get("slides") or version_or_slides.get("script") or []
+    else:
+        slides = list(version_or_slides or [])
+
+    if not slides:
+        raise ValueError("The approved Scriptwriter version has no slides.")
+
+    import torch
+    import torchaudio
+
+    model = get_chatterbox_model()
+
+    key = hashlib.sha1(" ".join(str(s.get("voiceover") or s.get("headline") or "") for s in slides).encode("utf-8")).hexdigest()[:12]
+    out_path = Path(output_dir or (CHATTERBOX_OUTPUT_ROOT / key))
+    out_path.mkdir(parents=True, exist_ok=True)
+    for f in out_path.glob("*.wav"):
+        try:
+            f.unlink()
+        except OSError:
+            pass
+
+    ref = Path(reference) if reference else AUDIO_REFERENCE
+    actual_ref = ref if ref.is_file() else None
+    if actual_ref:
+        try:
+            model.prepare_conditionals(str(actual_ref), exaggeration=0.5)
+        except Exception:
+            actual_ref = None
+
+    waves = []
+    paths = []
+    durations = []
+    scenes = []
+
+    for number, slide in enumerate(slides, 1):
+        text = _clean_text(slide.get("voiceover") or slide.get("headline"))
+        if not text:
+            raise ValueError(f"Slide {number} has no voiceover.")
+        seed = run_number * 100 + number
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+
+        temperature = 0.80
+        if number == 1:
+            temperature = 0.88
+        elif number == len(slides):
+            temperature = 0.84
+
+        wav = model.generate(text, temperature=temperature)
+        wav = wav.detach().cpu()
+        if wav.ndim == 1:
+            wav = wav.unsqueeze(0)
+        waves.append(wav)
+        dur = wav.shape[-1] / model.sr
+        durations.append(dur)
+
+    gap_samples = int(model.sr * 0.08)
+    raw_duration = sum(durations) + max(0, len(waves) - 1) * 0.08
+    if raw_duration > 30.0:
+        try:
+            import librosa
+            rate = min(1.05, raw_duration / 29.7)
+            waves = [
+                torch.from_numpy(
+                    librosa.effects.time_stretch(w.squeeze(0).numpy(), rate=rate)
+                ).unsqueeze(0)
+                for w in waves
+            ]
+        except Exception as exc:
+            raise RuntimeError("Audio is over 30 seconds and librosa time-stretch failed.") from exc
+
+    final_duration = sum(w.shape[-1] / model.sr for w in waves) + max(0, len(waves) - 1) * 0.08
+    if final_duration > 30.5:
+        raise RuntimeError("The generated narration is too long to fit the 30-second Short even with slight speed adjustment.")
+
+    for number, (wav, slide) in enumerate(zip(waves, slides), 1):
+        text = _clean_text(slide.get("voiceover") or slide.get("headline"))
+        slide_file = out_path / f"slide_{number:02d}.wav"
+        torchaudio.save(str(slide_file), wav, model.sr)
+        paths.append(str(slide_file))
+        dur = wav.shape[-1] / model.sr
+        timings = synthesize_linear_timings(text, dur)
+        scenes.append({
+            "scene": number,
+            "path": str(slide_file),
+            "duration": round(dur, 3),
+            "timings": timings,
+            "from_cache": False,
+        })
+
+    silence = torch.zeros((1, gap_samples))
+    combined = []
+    for number, wav in enumerate(waves):
+        combined.append(wav)
+        if number < len(waves) - 1:
+            combined.append(silence)
+    full_wav = torch.cat(combined, dim=-1)
+    peak = full_wav.abs().max()
+    if peak.item() > 0:
+        full_wav = full_wav * (0.94 / peak)
+    full_path = out_path / "full.wav"
+    torchaudio.save(str(full_path), full_wav, model.sr)
+    total_dur = full_wav.shape[-1] / model.sr
+
+    res = {
+        "full_path": str(full_path),
+        "slide_paths": paths,
+        "duration": round(total_dur, 3),
+        "total_duration": round(total_dur, 3),
+        "model": "Chatterbox-Turbo",
+        "reference": str(actual_ref) if actual_ref else "Built-in Chatterbox voice",
+        "scenes": scenes,
+        "language": "english",
+        "voice": "chatterbox-turbo",
+        "rate_percent": 0.0,
+        "pitch": PITCH,
+        "duration_corrected": raw_duration > 30.0,
+    }
+    if isinstance(version_or_slides, dict) and version_or_slides.get("schema") == "final-shorts.top5-script.v1":
+        res["schema"] = "final-shorts.top5-audio.v1"
+        res["source_schema"] = "final-shorts.top5-script.v1"
+        res["max_scene_duration"] = round(max(float(s["duration"]) for s in scenes), 3) if scenes else 0.0
+    return res
 
 
 def generate_audio(
     approved_script: dict,
     output_dir: str | Path = "output/audio_test",
     voice: str | None = None,
+    engine: str | None = None,
+    run_number: int = 1,
 ) -> dict[str, Any]:
-    """Generate approved narration audio with native Edge-TTS word timings."""
+    """Generate approved narration audio with Chatterbox Turbo voice cloning or Edge-TTS."""
     if (
         not isinstance(approved_script, dict)
         or approved_script.get("approved_for_audio") is not True
@@ -398,6 +550,18 @@ def generate_audio(
     scenes = approved_script.get("script")
     if not isinstance(scenes, list) or not scenes:
         raise ValueError("Approved script contains no scenes.")
+
+    is_chatterbox = (
+        engine == "chatterbox"
+        or (voice and str(voice).lower() in ("chatterbox", "chatterbox-turbo", "chatterbox turbo", "clone"))
+        or approved_script.get("voice_engine") == "chatterbox"
+    )
+    if is_chatterbox:
+        return generate_chatterbox_audio(
+            approved_script,
+            run_number=run_number,
+            output_dir=output_dir,
+        )
 
     language = str(
         approved_script.get("language_used") or "english"
@@ -463,12 +627,26 @@ def generate_top5_audio(
     approved_top5_script: dict[str, Any],
     output_dir: str | Path = "output/audio_top5_test",
     voice: str | None = None,
+    engine: str | None = None,
+    run_number: int = 1,
 ) -> dict[str, Any]:
     """Generate one audio scene for each of the six approved Top-5 spoken headlines."""
     if not isinstance(approved_top5_script, dict):
         raise ValueError("Top-5 Audio requires the approved Top-5 Scriptwriter handoff.")
     if approved_top5_script.get("schema") != "final-shorts.top5-script.v1":
         raise ValueError("Top-5 Audio requires the approved Top-5 Scriptwriter handoff.")
+
+    is_chatterbox = (
+        engine == "chatterbox"
+        or (voice and str(voice).lower() in ("chatterbox", "chatterbox-turbo", "chatterbox turbo", "clone"))
+        or approved_top5_script.get("voice_engine") == "chatterbox"
+    )
+    if is_chatterbox:
+        return generate_chatterbox_audio(
+            approved_top5_script,
+            run_number=run_number,
+            output_dir=output_dir,
+        )
 
     slides = approved_top5_script.get("slides")
     if not isinstance(slides, list) or len(slides) != TOP5_SCENE_COUNT:

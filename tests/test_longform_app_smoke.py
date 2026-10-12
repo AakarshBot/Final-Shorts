@@ -60,3 +60,65 @@ def test_existing_shorts_test_line_selector_remains_available():
     assert "Open Deep-Dive" in labels
     assert "Open Top-5" in labels
     assert "Open YT Trends" in labels
+
+
+def test_longform_test_stages_navigation():
+    at = _run_app({
+        "app_mode": "test",
+        "factory_format": "long_form",
+        "longform_test_stage": "02 · Scriptwriter",
+        "longform_approved_topic": {
+            "title": "BCCI Names Bumrah Captain",
+            "publisher": "ESPNcricinfo",
+            "reports": [],
+        },
+    })
+
+    assert not at.exception, at.exception
+    labels = [button.label for button in at.button]
+    assert "Generate 8-Min Documentary Script" in labels
+
+
+def test_longform_test_visuals_navigation():
+    at = _run_app({
+        "app_mode": "test",
+        "factory_format": "long_form",
+        "longform_test_stage": "03 · Visuals",
+        "longform_approved_topic": {
+            "title": "BCCI Names Bumrah Captain",
+            "publisher": "ESPNcricinfo",
+            "reports": [],
+        },
+        "longform_approved_script": {
+            "title": "BCCI Names Bumrah Captain",
+            "scenes": [],
+        },
+    })
+
+    assert not at.exception, at.exception
+    labels = [button.label for button in at.button]
+    assert "Run Automated Visual Engine" in labels
+
+
+def test_longform_test_audio_navigation():
+    at = _run_app({
+        "app_mode": "test",
+        "factory_format": "long_form",
+        "longform_test_stage": "04 · Audio",
+        "longform_approved_topic": {
+            "title": "BCCI Names Bumrah Captain",
+            "publisher": "ESPNcricinfo",
+            "reports": [],
+        },
+        "longform_approved_script": {
+            "title": "BCCI Names Bumrah Captain",
+            "scenes": [
+                {"scene_number": 1, "voiceover": "Bumrah leads the attack.", "primary_entity": "Bumrah"},
+            ],
+        },
+    })
+
+    assert not at.exception, at.exception
+    labels = [button.label for button in at.button]
+    assert "Synthesize Full Narration" in labels
+

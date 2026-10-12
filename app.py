@@ -1574,6 +1574,16 @@ if "longform_approved_topic" not in st.session_state:
     st.session_state.longform_approved_topic = None
 if "longform_topic_error" not in st.session_state:
     st.session_state.longform_topic_error = ""
+if "longform_script_data" not in st.session_state:
+    st.session_state.longform_script_data = None
+if "longform_approved_script" not in st.session_state:
+    st.session_state.longform_approved_script = None
+if "longform_script_error" not in st.session_state:
+    st.session_state.longform_script_error = ""
+if "longform_visuals_data" not in st.session_state:
+    st.session_state.longform_visuals_data = None
+if "longform_visuals_error" not in st.session_state:
+    st.session_state.longform_visuals_error = ""
 if "test_production_line" not in st.session_state:
     st.session_state.test_production_line = None
 if "test_stage" not in st.session_state:
@@ -3542,7 +3552,7 @@ def _render_app_sidebar():
             )
             selected = st.pills(
                 "Long-form stages",
-                ["01 · Topic Fetcher"],
+                ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Visuals", "04 · Audio"],
                 default=st.session_state.longform_test_stage,
                 key="longform-test-stage-switcher",
                 label_visibility="collapsed",
@@ -6697,11 +6707,269 @@ def render_longform_topic_fetcher():
         st.markdown(f"[Open primary source]({approved.get('url', '')})")
 
 
+def render_longform_scriptwriter():
+    approved_topic = st.session_state.longform_approved_topic
+    if not approved_topic:
+        st.info("No topic has been approved for Long-form yet. Open **01 · Topic Fetcher** and approve a cricket story first.")
+        return
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">02 · LONG-FORM SCRIPTWRITER · 8-MINUTE DOCUMENTARY</div>'
+        f'<div class="canvas-title">{approved_topic.get("title", "Documentary Script")}</div>'
+        '<div class="canvas-copy">Researched 6-Act narrative arc (~1,150 words) with scene-level entity tags, broadcast cards, and YouTube chapters.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="longform-script-toolbar"):
+        col_btn, col_info = st.columns([1, 2])
+        with col_btn:
+            if st.button("Generate 8-Min Documentary Script", type="primary", width="stretch", key="longform-gen-script"):
+                with st.spinner("Extracting multi-source evidence and structuring 6-Act documentary script..."):
+                    try:
+                        from longform_script_writer import LongformScriptWriter
+                        script = LongformScriptWriter.write(approved_topic)
+                        st.session_state.longform_script_data = script
+                        st.session_state.longform_approved_script = None
+                        st.session_state.longform_script_error = ""
+                        st.rerun()
+                    except Exception as exc:
+                        st.session_state.longform_script_error = str(exc)
+        with col_info:
+            st.caption(f"Sources: {approved_topic.get('publisher')} + {len(approved_topic.get('reports', []))} linked reports · Lookback: 14 days")
+
+    if st.session_state.longform_script_error:
+        st.error(st.session_state.longform_script_error)
+
+    script = st.session_state.longform_script_data
+    if not script:
+        return
+
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+    mins = int(script.get("estimated_duration_seconds", 0) // 60)
+    secs = int(script.get("estimated_duration_seconds", 0) % 60)
+    m_col1.metric("Total Spoken Words", f"{script.get('total_words', 0):,}")
+    m_col2.metric("Estimated Runtime", f"{mins}m {secs:02d}s")
+    m_col3.metric("Narrative Structure", f"{len(script.get('acts', []))} Acts")
+    m_col4.metric("Documentary Beats", f"{script.get('scene_count', 0)} Scenes")
+
+    with st.expander("📺 YouTube Publish Package & Chapter Timestamps", expanded=False):
+        st.markdown("**Proposed Title Candidates:**")
+        for idx, t in enumerate(script.get("titles", []), 1):
+            st.markdown(f"- **Option {idx}:** {t}")
+        st.markdown("**Description & Chapters:**")
+        st.text_area("YouTube Description", script.get("seo_description", ""), height=180, key="lf-seo-desc")
+        st.markdown(f"**Pinned Comment:** {script.get('pinned_comment', '')}")
+        st.caption(f"Hashtags: {' '.join(script.get('hashtags', []))}")
+
+    st.markdown("### 6-Act Narrative Teleprompter")
+    for act in script.get("acts", []):
+        act_num = act.get("act_number", 1)
+        ch_title = act.get("chapter_title", f"Act {act_num}")
+        act_scenes = act.get("scenes", [])
+        act_words = sum(len(s.get("voiceover", "").split()) for s in act_scenes)
+        with st.expander(f"ACT {act_num:02d} · {ch_title.upper()} ({act_words} words, {len(act_scenes)} beats)", expanded=True):
+            for sc in act_scenes:
+                sc_col1, sc_col2 = st.columns([3, 1])
+                with sc_col1:
+                    st.markdown(f"**Beat {sc.get('scene_number')}:** {sc.get('voiceover')}")
+                with sc_col2:
+                    st.caption(f"**Entity:** `{sc.get('primary_entity')}`")
+                    st.caption(f"**Visual:** `{sc.get('visual_type')}` ({sc.get('card_type', 'none')})")
+
+    st.markdown("---")
+    app_col1, app_col2 = st.columns([2, 1])
+    with app_col1:
+        if st.button("Approve Script for Long-form", type="primary", width="stretch", key="longform-approve-script"):
+            st.session_state.longform_approved_script = dict(script)
+            st.session_state.longform_test_stage = "03 · Visuals"
+            st.rerun()
+    with app_col2:
+        if st.session_state.longform_approved_script:
+            st.success("✓ Script Approved")
+
+
+def render_longform_visuals():
+    approved_script = st.session_state.longform_approved_script
+    approved_topic = st.session_state.longform_approved_topic
+    if not approved_script or not approved_topic:
+        st.info("No approved script found. Please approve a script in **02 · Scriptwriter** first.")
+        return
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">03 · AUTOMATED VISUALS · 16:9 WIDESCREEN ENGINE</div>'
+        f'<div class="canvas-title">Visual Matcher & Card Studio</div>'
+        '<div class="canvas-copy">100% automated visual sourcing, entity verification, and broadcast card rendering. Zero manual QC needed.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="longform-visuals-toolbar"):
+        col_btn, col_info = st.columns([1, 2])
+        with col_btn:
+            if st.button("Run Automated Visual Engine", type="primary", width="stretch", key="longform-run-visuals"):
+                with st.spinner("Searching open sources, verifying entities, and rendering 16:9 broadcast cards..."):
+                    try:
+                        from longform_visuals import LongformVisualMatcher
+                        vis_result = LongformVisualMatcher.match_and_collect(approved_script, approved_topic)
+                        st.session_state.longform_visuals_data = vis_result
+                        st.session_state.longform_visuals_error = ""
+                        st.rerun()
+                    except Exception as exc:
+                        st.session_state.longform_visuals_error = str(exc)
+        with col_info:
+            st.caption("Visual pipeline queries Commons, Wikipedia, DuckDuckGo & Flickr, and builds 1920×1080 cards.")
+
+    if st.session_state.longform_visuals_error:
+        st.error(st.session_state.longform_visuals_error)
+
+    v_data = st.session_state.longform_visuals_data
+    if not v_data:
+        return
+
+    v_col1, v_col2, v_col3, v_col4 = st.columns(4)
+    v_col1.metric("Documentary Scenes", v_data.get("total_scenes", 0))
+    v_col2.metric("Open Asset Pool", v_data.get("pool_size", 0))
+    v_col3.metric("Broadcast Cards", v_data.get("cards_count", 0))
+    v_col4.metric("Ken Burns Photos", v_data.get("photos_count", 0))
+
+    st.markdown("### Widescreen 16:9 Documentary Storyboard")
+    scenes_vis = v_data.get("scenes_visuals", [])
+    for i in range(0, len(scenes_vis), 3):
+        row_scenes = scenes_vis[i:i+3]
+        cols = st.columns(3)
+        for c, s in zip(cols, row_scenes):
+            with c:
+                with st.container(border=True):
+                    st.caption(f"**Scene {s.get('scene_number')}** · Act {s.get('act_number')} ({s.get('visual_type')})")
+                    if s.get("image_bytes"):
+                        st.image(s["image_bytes"], use_container_width=True)
+                    st.caption(f"Entity: `{s.get('primary_entity')}` · Source: {s.get('image_source')}")
+                    st.text(s.get("voiceover", "")[:90] + "…")
+
+    st.markdown("---")
+    app_col1, app_col2 = st.columns([2, 1])
+    with app_col1:
+        if st.button("Proceed to Audio · 04", type="primary", width="stretch", key="longform-proceed-audio"):
+            st.session_state.longform_approved_visuals = dict(v_data)
+            st.session_state.longform_test_stage = "04 · Audio"
+            st.rerun()
+    with app_col2:
+        if st.session_state.get("longform_approved_visuals"):
+            st.success("✓ Visuals Ready")
+
+
+def render_longform_audio():
+    approved_script = st.session_state.longform_approved_script
+    if not approved_script:
+        st.info("No approved script found. Please approve a script in **02 · Scriptwriter** first.")
+        return
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">04 · LONG-FORM AUDIO ENGINE · CHATTERBOX TURBO</div>'
+        '<div class="canvas-title">Voice Cloning & Paced Narration</div>'
+        '<div class="canvas-copy">High-fidelity voice synthesis with per-act temperature pacing (0.88 Hook, 0.80 Body, 0.85 Climax), atmospheric act pauses, and linear word timings.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    from pathlib import Path
+    ref_file = Path("audio_reference.wav")
+    ref_status = f"🎙️ Using `{ref_file.name}` voice conditioning" if ref_file.is_file() else "🔊 Using built-in Chatterbox neural voice"
+
+    st.markdown(
+        f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 14px 0;">'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
+        f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">AUDIO ENGINE · CHATTERBOX TURBO TTS</span>'
+        f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{ref_status}</span>'
+        f'</div>'
+        f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Documentary Narration Suite (6 Acts · ~8 Min)</div>'
+        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Dynamic temperature modulation · Linear word-level subtitle timings · Normalized master audio</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="longform-audio-toolbar"):
+        col_btn, col_info = st.columns([1, 2])
+        with col_btn:
+            if st.button("Synthesize Full Narration", type="primary", width="stretch", key="longform-gen-audio"):
+                with st.spinner("Synthesizing ~8-minute documentary narration with Chatterbox Turbo..."):
+                    try:
+                        from longform_audio import LongformAudioEngine
+                        audio_res = LongformAudioEngine.generate(approved_script)
+                        st.session_state.longform_audio_data = audio_res
+                        st.session_state.longform_audio_error = ""
+                        st.rerun()
+                    except Exception as exc:
+                        st.session_state.longform_audio_error = str(exc)
+        with col_info:
+            st.caption("Narration is rendered scene-by-scene with 0.8s act pauses and breath gaps, generating full master audio + word timings.")
+
+    if st.session_state.get("longform_audio_error"):
+        st.error(st.session_state.longform_audio_error)
+
+    audio_data = st.session_state.get("longform_audio_data")
+    if not audio_data:
+        return
+
+    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
+    tot_s = audio_data.get("total_duration", 0)
+    mins = int(tot_s // 60)
+    secs = int(tot_s % 60)
+    m_col1.metric("Master Duration", f"{mins}m {secs:02d}s")
+    m_col2.metric("Narrated Scenes", len(audio_data.get("scenes", [])))
+    m_col3.metric("Engine", audio_data.get("engine", "Chatterbox-Turbo"))
+    m_col4.metric("Reference Voice", "Conditioned" if "audio_reference" in audio_data.get("reference", "") else "Built-in")
+
+    st.markdown("### Master Audio Track")
+    master_path = audio_data.get("master_path")
+    if master_path and Path(master_path).exists():
+        st.audio(master_path)
+
+    with st.expander("🎧 Scene-by-Scene Audio Breakdown & Timings", expanded=False):
+        for sc in audio_data.get("scenes", []):
+            sc_c1, sc_c2 = st.columns([1, 2])
+            with sc_c1:
+                st.caption(f"**Scene {sc.get('scene')}** (Act {sc.get('act')}) · {sc.get('duration')}s")
+                p = sc.get("path")
+                if p and Path(p).exists():
+                    st.audio(p)
+            with sc_c2:
+                timings = sc.get("timings", [])
+                st.caption(f"Word timings ({len(timings)} words):")
+                preview_words = " ".join(t.get("word", "") for t in timings[:15])
+                if len(timings) > 15:
+                    preview_words += "…"
+                st.text(preview_words)
+
+    st.markdown("---")
+    app_col1, app_col2 = st.columns([2, 1])
+    with app_col1:
+        if st.button("Approve Audio for Long-form", type="primary", width="stretch", key="longform-approve-audio"):
+            from longform_audio import LongformAudioEngine
+            st.session_state.longform_approved_audio = LongformAudioEngine.approve_audio(audio_data)
+            st.rerun()
+    with app_col2:
+        if st.session_state.get("longform_approved_audio"):
+            st.success("✓ Audio Approved")
+
+
 def render_longform_test():
-    _render_pipeline_progress(["Topic Fetcher"], 0)
-    st.info("LONG-FORM is current WIP. Only Topic Fetcher is implemented; Shorts stages and Live production remain unchanged.")
+    stage_names = ["Topic Fetcher", "Scriptwriter", "Visuals", "Audio"]
+    stage_idx = 0
+    if st.session_state.longform_test_stage == "02 · Scriptwriter":
+        stage_idx = 1
+    elif st.session_state.longform_test_stage == "03 · Visuals":
+        stage_idx = 2
+    elif st.session_state.longform_test_stage == "04 · Audio":
+        stage_idx = 3
+    _render_pipeline_progress(stage_names, stage_idx)
+
     if st.session_state.longform_test_stage == "01 · Topic Fetcher":
         render_longform_topic_fetcher()
+    elif st.session_state.longform_test_stage == "02 · Scriptwriter":
+        render_longform_scriptwriter()
+    elif st.session_state.longform_test_stage == "03 · Visuals":
+        render_longform_visuals()
+    elif st.session_state.longform_test_stage == "04 · Audio":
+        render_longform_audio()
 
 
 def render_otd_topic_fetcher():
@@ -8221,6 +8489,12 @@ def render_audio():
     stored=str(script.get("language_used") or "english").casefold()
     default_language=stored if stored in {"english","hindi","telugu"} else "english"
     with left:
+        engine_choice = st.pills(
+            "Voice Engine",
+            ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
+            default="Chatterbox Turbo (Voice Cloning)",
+            key="audio_engine_choice",
+        ) or "Chatterbox Turbo (Voice Cloning)"
         col_l, col_g = st.columns(2)
         with col_l:
             language=st.pills("Language",languages,default=default_language.title(),key="audio_language") or default_language.title()
@@ -8228,25 +8502,49 @@ def render_audio():
             gender=st.pills("Voice Gender",["Female","Male"],default="Female",key="audio_gender") or "Female"
         selected_voice = resolve_voice(language.casefold(), gender.casefold())
         flag = "🇺🇸 / 🇬🇧" if language == "English" else "🇮🇳"
-        st.markdown(
-            f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 12px 0;">'
-            f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
-            f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">VOICE ENGINE · NEURAL EDGE-TTS</span>'
-            f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{flag} {language} {gender}</span>'
-            f'</div>'
-            f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">{selected_voice}</div>'
-            f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Native word-level timestamps · 24kHz HD Audio stream</div>'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
+
+        if "Chatterbox" in engine_choice:
+            from pathlib import Path
+            has_ref = Path("audio_reference.wav").is_file()
+            ref_info = "audio_reference.wav conditioned" if has_ref else "Built-in neural voice"
+            st.markdown(
+                f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 12px 0;">'
+                f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
+                f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">VOICE ENGINE · CHATTERBOX TURBO (VOICE CLONING)</span>'
+                f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">🎙️ {ref_info}</span>'
+                f'</div>'
+                f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">ChatterboxTurboTTS Voice Cloning</div>'
+                f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Seed-locked pacing · Linear word timings · 24kHz studio stream</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            st.markdown(
+                f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 12px 0;">'
+                f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
+                f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">VOICE ENGINE · NEURAL EDGE-TTS</span>'
+                f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{flag} {language} {gender}</span>'
+                f'</div>'
+                f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">{selected_voice}</div>'
+                f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Native word-level timestamps · 24kHz HD Audio stream</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
         if st.button("Generate audio",type="primary",width="stretch"):
             selected=dict(script)
             selected["language_used"]=language.casefold()
             selected["voice_gender"]=gender.casefold()
-            selected["voice"]=selected_voice
+            is_cb = "Chatterbox" in engine_choice
+            selected["voice"]="chatterbox" if is_cb else selected_voice
+            selected["voice_engine"]="chatterbox" if is_cb else "edge"
             with st.spinner("Generating voiceover…"):
                 try:
-                    st.session_state.audio_data=generate_audio(selected, voice=selected_voice)
+                    st.session_state.audio_data=generate_audio(
+                        selected,
+                        voice="chatterbox" if is_cb else selected_voice,
+                        engine="chatterbox" if is_cb else "edge",
+                    )
                     st.session_state.approved_audio=None
                 except (RuntimeError,ValueError) as exc:
                     st.error(str(exc)); st.session_state.audio_data=None; st.session_state.approved_audio=None
