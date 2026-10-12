@@ -6,3 +6,5 @@ __pycache__/
 .audio_cache/
 output/
 token.json
+client_secret.json
+.venv/

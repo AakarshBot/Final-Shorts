@@ -6704,8 +6704,6 @@ def render_longform_test():
         render_longform_topic_fetcher()
 
 
-def render_topic_fetcher():
-
 def render_otd_topic_fetcher():
     from datetime import date as dt_date
     from topic_fetcher import fetch_otd_topics
