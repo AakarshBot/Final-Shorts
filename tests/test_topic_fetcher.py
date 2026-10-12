@@ -825,3 +825,92 @@ def test_fetch_youtube_trend_topics_uses_only_last_24_hours_and_global_news(monk
     assert all(geo is None for _, geo in captured)
     assert all("when:1d" in query for query, _ in captured)
     assert all("after:" not in query and "before:" not in query for query, _ in captured)
+
+
+def test_fetch_otd_topics_sources_and_sport_filtering(monkeypatch):
+    from datetime import date
+
+    class MockResponse:
+        def __init__(self, text="", payload=None, status_code=200):
+            self.text = text
+            self._payload = payload
+            self.status_code = status_code
+
+        def json(self):
+            return self._payload
+
+    def fake_get(url, **kwargs):
+        if "Portal:Cricket" in url:
+            html = "<ul><li>'''1983''' – Kapil Dev scores 175 not out against Zimbabwe in the World Cup.</li></ul>"
+            return MockResponse(text=html)
+        if "onthisday.com" in url:
+            html = """
+            <li class="event"><b>1990</b> Ayrton Senna secures the Formula One World Drivers Championship.</li>
+            <li class="event"><b>1974</b> Muhammad Ali defeats George Foreman in The Rumble in the Jungle.</li>
+            """
+            return MockResponse(text=html)
+        if "onthisday/all" in url or "wikimedia" in url:
+            payload = {
+                "events": [
+                    {
+                        "year": 1968,
+                        "text": "Bob Beamon sets the world record in long jump at Mexico Olympics.",
+                    }
+                ]
+            }
+            return MockResponse(payload=payload)
+        return MockResponse(text="")
+
+    monkeypatch.setattr(topic_fetcher.requests, "get", fake_get)
+
+    target_date = date(2026, 6, 18)
+
+    # All sports
+    all_topics = topic_fetcher.fetch_otd_topics(target_date=target_date, sport="All Sports", limit=10)
+    assert len(all_topics) >= 3
+    titles = [t.title for t in all_topics]
+    assert any("Kapil Dev" in t for t in titles)
+    assert any("Ayrton Senna" in t or "Muhammad Ali" in t for t in titles)
+
+    # Cricket only
+    cricket_topics = topic_fetcher.fetch_otd_topics(target_date=target_date, sport="Cricket", limit=10)
+    assert len(cricket_topics) >= 1
+    assert all("cricket" in t.title.lower() or "kapil dev" in t.title.lower() or "world cup" in t.title.lower() for t in cricket_topics)
+
+    # Other sports only
+    other_topics = topic_fetcher.fetch_otd_topics(target_date=target_date, sport="Other Sports", limit=10)
+    assert len(other_topics) >= 1
+    assert all("kapil dev" not in t.title.lower() for t in other_topics)
+
+
+def test_unified_topic_fetcher_dispatch(monkeypatch):
+    # Top-5 dispatch
+    monkeypatch.setattr(
+        topic_fetcher,
+        "fetch_top5_topics",
+        lambda limit=20, **kwargs: [make_topic("Top 5 Story")]
+    )
+    res_top5 = topic_fetcher.TopicFetcher.fetch_topics(profile="top_5")
+    assert len(res_top5) == 1
+    assert res_top5[0].title == "Top 5 Story"
+
+    # OTD dispatch
+    monkeypatch.setattr(
+        topic_fetcher,
+        "fetch_otd_topics",
+        lambda **kwargs: [make_topic("OTD Milestone")]
+    )
+    res_otd = topic_fetcher.TopicFetcher.fetch_topics(profile="otd")
+    assert len(res_otd) == 1
+    assert res_otd[0].title == "OTD Milestone"
+
+    # YouTube trends query dispatch
+    monkeypatch.setattr(
+        topic_fetcher,
+        "fetch_youtube_trend_topics",
+        lambda keyword, **kwargs: [make_topic(f"YT: {keyword}")]
+    )
+    res_yt = topic_fetcher.TopicFetcher.fetch_topics(profile="youtube_trends", query="Virat Kohli")
+    assert len(res_yt) == 1
+    assert res_yt[0].title == "YT: Virat Kohli"
+

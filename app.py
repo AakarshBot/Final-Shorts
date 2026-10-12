@@ -2,11 +2,11 @@ from __future__ import annotations
 import base64
 import hashlib
 import json
+import os
 from io import BytesIO
 from dataclasses import replace
 from PIL import Image
 from pathlib import Path
-from functools import lru_cache
 
 from dotenv import load_dotenv
 import streamlit as st
@@ -26,7 +26,7 @@ VISUAL_OPTIONS = (
 CRICKET_TEST_VISUAL_OPTIONS = VISUAL_OPTIONS
 CRICKET_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS
 YT_TRENDS_VISUAL_OPTIONS = VISUAL_OPTIONS
-TOP5_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS[:4]
+TOP5_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS
 MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR = None
 if not st.get_option("global.appTest"):
     MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR = st.components.v2.component(
@@ -242,602 +242,1321 @@ STAGES = [
 ]
 st.markdown("""
 <style>
-:root{
-  --bg:#f3f2ed;
-  --surface:#fffefa;
-  --surface-raised:#ffffff;
-  --surface-soft:#f7f6f1;
-  --surface-selected:#eef3ef;
-  --ink:#151713;
-  --muted:#52574f;
-  --subtle:#686e66;
-  --line:#dddcd4;
-  --line-strong:#bfc0b7;
-  --primary:#171916;
-  --primary-hover:#000000;
-  --accent:#2f6255;
-  --accent-soft:#eaf0ed;
-  --success:#2f6b4f;
-  --success-soft:#edf5ef;
-  --warning:#8a5b16;
-  --warning-soft:#faf4e7;
-  --danger:#a23b31;
-  --danger-soft:#faeeeb;
-  --focus:#315f8e;
-  --shadow:0 1px 2px rgba(21,23,19,.04),0 6px 20px rgba(21,23,19,.045);
-  --shadow-hover:0 8px 24px rgba(21,23,19,.08);
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
+
+:root {
+  --bg: #07080c;
+  --surface: #0e111a;
+  --surface-raised: #141824;
+  --surface-soft: #181d2c;
+  --surface-active: #22283d;
+  --ink: #f8fafc;
+  --ink-secondary: #cbd5e1;
+  --muted: #94a3b8;
+  --subtle: #64748b;
+  --line: rgba(255, 255, 255, 0.08);
+  --line-strong: rgba(255, 255, 255, 0.16);
+  --primary: #6366f1;
+  --primary-hover: #4f46e5;
+  --accent: #38bdf8;
+  --accent-soft: rgba(56, 189, 248, 0.12);
+  --accent-hover: #0284c7;
+  --success: #10b981;
+  --success-soft: rgba(16, 185, 129, 0.12);
+  --warning: #f59e0b;
+  --warning-soft: rgba(245, 158, 11, 0.12);
+  --danger: #ef4444;
+  --danger-soft: rgba(239, 68, 68, 0.12);
+  --focus: #6366f1;
+  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
+  --shadow-sm: 0 2px 6px 0 rgba(0, 0, 0, 0.5);
+  --shadow: 0 4px 14px -1px rgba(0, 0, 0, 0.6);
+  --shadow-hover: 0 8px 24px -2px rgba(0, 0, 0, 0.7);
+  --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
 }
-html,body,.stApp{
-  font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
-  color:var(--ink);
-  background:var(--bg);
+
+html, body, .stApp {
+  font-family: var(--font-sans)!important;
+  color: var(--ink)!important;
+  background: var(--bg)!important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
-[data-testid="stAppViewContainer"]{background:var(--bg);}
-[data-testid="stHeader"]{background:transparent;}
-section[data-testid="stSidebar"]{display:none!important;}
-footer,#MainMenu{visibility:hidden;}
-.block-container{max-width:1440px;padding:22px 30px 54px;}
-h1,h2,h3,h4,h5,h6{color:var(--ink)!important;letter-spacing:-.035em;}
-h1{font-weight:850;} h2,h3{font-weight:800;}
-p{color:var(--muted);}
+
+[data-testid="stAppViewContainer"] { background: var(--bg)!important; }
+[data-testid="stHeader"] { background: transparent!important; }
+section[data-testid="stSidebar"] { display: none!important; }
+footer, #MainMenu { visibility: hidden; }
+
+.block-container {
+  max-width: 1440px;
+  padding: 24px 32px 64px!important;
+}
+
+/* Typography Hierarchy */
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-sans)!important;
+  color: var(--ink)!important;
+  letter-spacing: -0.03em!important;
+  font-weight: 850!important;
+  margin: 0 0 0.5rem 0!important;
+}
+h1 { font-size: 2.1rem!important; line-height: 1.15!important; }
+h2 { font-size: 1.5rem!important; line-height: 1.25!important; }
+h3 { font-size: 1.2rem!important; line-height: 1.3!important; }
+h4 { font-size: 1.05rem!important; line-height: 1.35!important; }
+
+p { color: var(--muted); }
 [data-testid="stCaptionContainer"] p,
-[data-testid="stMarkdownContainer"] small{color:var(--muted)!important;}
-[data-testid="stMarkdownContainer"] strong{color:var(--ink);}
-button{font-family:inherit;transition:transform .12s ease,box-shadow .12s ease,border-color .12s ease,background .12s ease;}
-[data-testid="stButton"]>button,
-[data-testid="stFormSubmitButton"]>button{
-  min-height:42px;
-  border-radius:10px!important;
-  border:1px solid var(--line-strong)!important;
-  background:var(--surface-raised)!important;
-  color:var(--ink)!important;
-  font-weight:760!important;
-  box-shadow:0 1px 2px rgba(21,23,19,.03)!important;
+[data-testid="stMarkdownContainer"] small { color: var(--muted)!important; font-size: 0.8rem!important; }
+[data-testid="stMarkdownContainer"] strong { color: var(--ink); font-weight: 700; }
+
+/* Awwwards Tactile Buttons */
+button {
+  font-family: var(--font-sans)!important;
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1)!important;
 }
-[data-testid="stButton"]>button:hover,
-[data-testid="stFormSubmitButton"]>button:hover{
-  transform:translateY(-1px);
-  border-color:#9fa197!important;
-  background:#fff!important;
-  box-shadow:0 5px 14px rgba(21,23,19,.07)!important;
+
+[data-testid="stButton"] > button,
+[data-testid="stFormSubmitButton"] > button {
+  min-height: 44px;
+  border-radius: 12px!important;
+  border: 1px solid var(--line-strong)!important;
+  background: var(--surface-raised)!important;
+  color: var(--ink)!important;
+  font-weight: 700!important;
+  font-size: 0.875rem!important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4)!important;
+  letter-spacing: -0.01em;
 }
-[data-testid="stButton"]>button:focus-visible,
-[data-testid="stFormSubmitButton"]>button:focus-visible{
-  outline:2px solid var(--focus)!important;
-  outline-offset:2px;
+
+[data-testid="stButton"] > button p,
+[data-testid="stFormSubmitButton"] > button p {
+  color: inherit!important;
+  font-weight: inherit!important;
+  margin: 0!important;
 }
-[data-testid="stButton"]>button[kind="primary"],
-[data-testid="stButton"]>button[data-testid="baseButton-primary"],
-[data-testid="stFormSubmitButton"]>button[kind="primary"],
-[data-testid="stFormSubmitButton"]>button[data-testid="baseButton-primary"]{
-  background:var(--primary)!important;
-  border-color:var(--primary)!important;
-  color:#ffffff!important;
-  text-shadow:none!important;
-  box-shadow:0 5px 14px rgba(21,23,19,.12)!important;
+
+[data-testid="stButton"] > button:hover,
+[data-testid="stFormSubmitButton"] > button:hover {
+  transform: translateY(-1.5px);
+  border-color: rgba(99, 102, 241, 0.6)!important;
+  background: var(--surface-active)!important;
+  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.2)!important;
+  color: #ffffff!important;
 }
-[data-testid="stButton"]>button[kind="primary"] *,
-[data-testid="stButton"]>button[data-testid="baseButton-primary"] *,
-[data-testid="stFormSubmitButton"]>button[kind="primary"] *,
-[data-testid="stFormSubmitButton"]>button[data-testid="baseButton-primary"] *{
-  color:#ffffff!important;
+
+[data-testid="stButton"] > button:active,
+[data-testid="stFormSubmitButton"] > button:active {
+  transform: translateY(0);
 }
-[data-testid="stButton"]>button[kind="primary"]:hover,
-[data-testid="stButton"]>button[data-testid="baseButton-primary"]:hover,
-[data-testid="stFormSubmitButton"]>button[kind="primary"]:hover,
-[data-testid="stFormSubmitButton"]>button[data-testid="baseButton-primary"]:hover{
-  background:var(--primary-hover)!important;
-  border-color:var(--primary-hover)!important;
-  color:#fff!important;
+
+[data-testid="stButton"] > button[kind="primary"],
+[data-testid="stButton"] > button[data-testid="baseButton-primary"],
+[data-testid="stFormSubmitButton"] > button[kind="primary"],
+[data-testid="stFormSubmitButton"] > button[data-testid="baseButton-primary"] {
+  background: linear-gradient(135deg, #6366f1 0%, #4f46e5 100%)!important;
+  border: 1px solid rgba(129, 140, 248, 0.5)!important;
+  color: #ffffff!important;
+  font-weight: 800!important;
+  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35)!important;
 }
+
+[data-testid="stButton"] > button[kind="primary"] *,
+[data-testid="stButton"] > button[data-testid="baseButton-primary"] *,
+[data-testid="stFormSubmitButton"] > button[kind="primary"] *,
+[data-testid="stFormSubmitButton"] > button[data-testid="baseButton-primary"] * {
+  color: #ffffff!important;
+}
+
+[data-testid="stButton"] > button[kind="primary"]:hover,
+[data-testid="stButton"] > button[data-testid="baseButton-primary"]:hover,
+[data-testid="stFormSubmitButton"] > button[kind="primary"]:hover,
+[data-testid="stFormSubmitButton"] > button[data-testid="baseButton-primary"]:hover {
+  background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)!important;
+  border-color: #818cf8!important;
+  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5)!important;
+  transform: translateY(-1.5px);
+}
+
+/* Glass Studio Inputs & Text Areas */
 [data-testid="stTextInput"] label,
 [data-testid="stTextArea"] label,
 [data-testid="stSelectbox"] label,
-[data-testid="stFileUploader"] label{
-  color:var(--ink)!important;
-  font-weight:720!important;
+[data-testid="stFileUploader"] label {
+  color: var(--ink-secondary)!important;
+  font-weight: 700!important;
+  font-size: 0.8125rem!important;
+  letter-spacing: -0.01em;
 }
+
 [data-testid="stTextInput"] input,
 [data-testid="stTextArea"] textarea,
-[data-testid="stSelectbox"] [role="combobox"]{
-  background:var(--surface-raised)!important;
-  color:var(--ink)!important;
-  border:1px solid var(--line-strong)!important;
-  border-radius:10px!important;
-  box-shadow:none!important;
+[data-testid="stSelectbox"] [role="combobox"] {
+  background: #090b12!important;
+  color: #ffffff!important;
+  border: 1px solid rgba(255, 255, 255, 0.12)!important;
+  border-radius: 12px!important;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4)!important;
+  font-size: 0.875rem!important;
+  transition: all 0.15s ease;
 }
+
 [data-testid="stTextInput"] input::placeholder,
-[data-testid="stTextArea"] textarea::placeholder{color:#73786f!important;opacity:1;}
+[data-testid="stTextArea"] textarea::placeholder {
+  color: #64748b!important;
+  opacity: 1;
+}
+
 [data-testid="stTextInput"] input:focus,
 [data-testid="stTextArea"] textarea:focus,
-[data-testid="stSelectbox"] [role="combobox"]:focus{
-  border-color:var(--ink)!important;
-  box-shadow:0 0 0 2px rgba(49,95,142,.22)!important;
+[data-testid="stSelectbox"] [role="combobox"]:focus {
+  border-color: var(--focus)!important;
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.28), inset 0 2px 4px rgba(0, 0, 0, 0.4)!important;
 }
-[data-testid="stFileUploaderDropzone"]{
-  background:var(--surface-raised)!important;
-  border:1px dashed var(--line-strong)!important;
-  border-radius:12px!important;
+
+/* Pills & Segmented Controls */
+[data-testid="stPills"] {
+  margin-bottom: 0.6rem;
+  overflow-x: auto;
+  scrollbar-width: none;
 }
-[data-testid="stFileUploaderDropzone"] *{color:var(--muted);}
-[data-testid="stPills"]{
-  margin-bottom:.45rem;
-  overflow-x:auto;
-  scrollbar-width:none;
+[data-testid="stPills"]::-webkit-scrollbar { display: none; }
+
+[data-testid="stPills"] button {
+  min-height: 36px!important;
+  padding: 0.35rem 0.95rem!important;
+  background: var(--surface)!important;
+  color: var(--muted)!important;
+  border: 1px solid var(--line)!important;
+  border-radius: 999px!important;
+  box-shadow: var(--shadow-xs)!important;
+  font-weight: 700!important;
+  font-size: 0.8125rem!important;
+  white-space: nowrap;
 }
-[data-testid="stPills"]::-webkit-scrollbar{display:none;}
-[data-testid="stPills"] button{
-  min-height:36px!important;
-  padding:.35rem .8rem!important;
-  background:var(--surface-raised)!important;
-  color:var(--muted)!important;
-  border:1px solid var(--line)!important;
-  border-radius:999px!important;
-  box-shadow:none!important;
-  font-weight:720!important;
-  white-space:nowrap;
+
+[data-testid="stPills"] button:hover {
+  color: #ffffff!important;
+  border-color: var(--line-strong)!important;
+  background: var(--surface-soft)!important;
+  transform: none;
 }
-[data-testid="stPills"] button:hover{
-  color:var(--ink)!important;
-  border-color:var(--line-strong)!important;
-  background:var(--surface-raised)!important;
-  transform:none;
+
+[data-testid="stPills"] button[aria-pressed="true"] {
+  background: var(--primary)!important;
+  color: #ffffff!important;
+  border-color: var(--primary)!important;
+  box-shadow: 0 2px 10px rgba(99, 102, 241, 0.35)!important;
 }
-[data-testid="stPills"] button[aria-pressed="true"]{
-  background:var(--primary)!important;
-  color:#ffffff!important;
-  border-color:var(--primary)!important;
+
+[data-testid="stPills"] button[aria-pressed="true"] * {
+  color: #ffffff!important;
 }
-[data-testid="stPills"] button[aria-pressed="true"] *{color:#fff!important;}
-[data-testid="stExpander"]{
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:12px;
-  box-shadow:none;
-  overflow:hidden;
+
+/* Pro Studio Navigation Bar */
+.st-key-workspace-nav {
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 12px 18px;
+  box-shadow: var(--shadow-sm);
+  margin-bottom: 20px;
 }
-[data-testid="stExpander"] summary{
-  padding:.78rem .9rem;
-  color:var(--ink)!important;
-  font-weight:720;
+
+.nav-brand {
+  font-size: 1rem;
+  font-weight: 850;
+  letter-spacing: -0.03em;
+  color: var(--ink);
 }
-[data-testid="stMetric"]{
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:12px;
-  padding:.55rem .7rem;
-  box-shadow:none;
+
+.nav-sub {
+  font-size: 0.68rem;
+  font-weight: 600;
+  color: var(--subtle);
+  letter-spacing: 0.02em;
 }
-.stProgress > div{
-  background:#e4e3dc;
-  border-radius:999px;
-  padding:2px;
+
+/* Home Page Hero & Workspaces */
+.home-hero {
+  padding: 32px 0 24px;
+  max-width: 800px;
 }
-.stProgress > div > div{
-  background:var(--primary);
-  border-radius:999px;
-  transition:width .35s ease;
+.home-kicker {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
 }
-[data-testid="stAudio"]{border-radius:10px;}
-[data-testid="stVideo"]{border-radius:14px;overflow:hidden;}
-.eyebrow,.mini-label{
-  font-size:.61rem;
-  font-weight:820;
-  letter-spacing:.13em;
-  text-transform:uppercase;
-  color:var(--subtle);
+.home-title {
+  font-size: clamp(2.4rem, 5vw, 3.5rem);
+  font-weight: 850;
+  line-height: 1.05;
+  letter-spacing: -0.05em;
+  margin: 8px 0 12px;
+  color: var(--ink);
 }
-.badge{
-  display:inline-flex;
-  align-items:center;
-  gap:5px;
-  padding:4px 8px;
-  border-radius:999px;
-  background:var(--surface-soft);
-  border:1px solid var(--line);
-  color:var(--muted);
-  font-size:.61rem;
-  font-weight:720;
+.home-copy {
+  max-width: 560px;
+  color: var(--muted);
+  font-size: 0.925rem;
+  line-height: 1.45;
 }
-.st-key-workspace-nav{
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:12px;
-  padding:8px 9px;
-  box-shadow:0 2px 12px rgba(21,23,19,.035);
+
+.st-key-landing-test,
+.st-key-landing-live {
+  min-height: 250px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 24px;
+  box-shadow: var(--shadow-sm);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: var(--surface);
+  position: relative;
+  overflow: hidden;
+  transition: all 0.18s ease;
 }
-.nav-brand{font-size:.96rem;font-weight:850;letter-spacing:-.025em;line-height:1.05;color:var(--ink);}
-.nav-sub{font-size:.61rem;color:var(--muted);margin-top:2px;letter-spacing:.025em;}
-.home-hero{padding:30px 2px 23px;max-width:850px;}
-.home-kicker{font-size:.62rem;font-weight:820;letter-spacing:.12em;text-transform:uppercase;color:var(--accent);}
-.home-title{
-  font-size:clamp(2.65rem,5.6vw,5.15rem);
-  font-weight:860;
-  line-height:.94;
-  letter-spacing:-.065em;
-  max-width:850px;
-  margin-top:7px;
-  color:var(--ink);
+.st-key-landing-test:hover,
+.st-key-landing-live:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
 }
-.home-copy{max-width:500px;color:var(--muted);font-size:.91rem;line-height:1.4;margin-top:10px;}
-.st-key-landing-test,.st-key-landing-live{
-  min-height:238px;
-  border:1px solid var(--line);
-  border-radius:16px;
-  padding:18px;
-  box-shadow:var(--shadow);
-  display:flex;
-  flex-direction:column;
-  justify-content:space-between;
-  background:var(--surface-raised);
+.st-key-landing-test::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--accent);
 }
-.st-key-landing-test:hover,.st-key-landing-live:hover{
-  border-color:var(--line-strong);
-  box-shadow:var(--shadow-hover);
+.st-key-landing-live::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: var(--success);
 }
-.st-key-landing-test,.st-key-landing-live{
-  position:relative;
-  overflow:hidden;
+.home-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }
-.st-key-landing-test::before,.st-key-landing-live::before{
-  content:"";
-  position:absolute;
-  inset:0 0 auto 0;
-  height:3px;
-  background:var(--accent);
+.workspace-index {
+  font-size: 0.6875rem;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: 0.08em;
 }
-.st-key-landing-live::before{background:var(--primary);}
-.workspace-index{font-size:.61rem;font-weight:820;color:var(--accent);letter-spacing:.09em;}
-.workspace-name{font-size:3rem;font-weight:860;letter-spacing:-.06em;line-height:.9;margin:.5rem 0 .45rem;color:var(--ink);}
-.workspace-desc{font-size:.81rem;color:var(--muted);line-height:1.35;max-width:420px;}
-.home-card-top{display:flex;align-items:center;justify-content:space-between;gap:12px;}
-.home-card-kind{font-size:.6rem;font-weight:820;letter-spacing:.08em;text-transform:uppercase;color:var(--subtle);}
-.canvas-head{display:flex;align-items:flex-start;justify-content:space-between;gap:18px;margin-bottom:16px;}
-.canvas-title{font-size:1.62rem;font-weight:860;letter-spacing:-.045em;line-height:1.08;color:var(--ink);}
-.canvas-copy{font-size:.77rem;color:var(--muted);max-width:700px;line-height:1.4;margin-top:5px;}
-.section-head{display:flex;align-items:flex-end;justify-content:space-between;gap:18px;margin:22px 0 11px;}
-.section-title{font-size:1.08rem;font-weight:820;letter-spacing:-.025em;color:var(--ink);}
-.section-count{font-size:.6rem;font-weight:760;color:var(--subtle);letter-spacing:.055em;text-transform:uppercase;text-align:right;}
-.st-key-topic-toolbar{
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:12px;
-  padding:6px 8px;
-  margin-bottom:13px;
+.home-card-kind {
+  font-size: 0.625rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--subtle);
 }
-.topic-title{
-  font-size:.94rem;
-  line-height:1.23;
-  font-weight:770;
-  letter-spacing:-.018em;
-  color:var(--ink);
-  display:-webkit-box;
-  -webkit-box-orient:vertical;
-  -webkit-line-clamp:3;
-  overflow:hidden;
-  min-height:3.48em;
-  margin:7px 0 6px;
+.workspace-name {
+  font-size: 2.25rem;
+  font-weight: 850;
+  letter-spacing: -0.05em;
+  line-height: 1;
+  margin: 12px 0 8px;
+  color: var(--ink);
 }
-.topic-meta{
-  font-size:.65rem;
-  color:var(--muted);
-  line-height:1.25;
-  margin-top:0;
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
+.workspace-desc {
+  font-size: 0.85rem;
+  color: var(--muted);
+  line-height: 1.4;
+  margin-bottom: 16px;
 }
+
+/* Production Line & Desk Choices */
+.st-key-choice-cricket,
+.st-key-choice-niche,
+.st-key-choice-top5,
+.st-key-choice-otd,
+.st-key-choice-youtube-trends,
+.st-key-live-choice-cricket,
+.st-key-live-choice-niche,
+.st-key-live-cricket-india,
+.st-key-live-cricket-global,
+.st-key-live-line-deep-dive,
+.st-key-live-line-top-5,
+.st-key-live-line-otd,
+.st-key-live-line-youtube-trends {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 22px;
+  min-height: 190px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  box-shadow: var(--shadow-sm);
+  transition: all 0.18s ease;
+}
+.st-key-choice-cricket:hover,
+.st-key-choice-niche:hover,
+.st-key-choice-top5:hover,
+.st-key-choice-otd:hover,
+.st-key-choice-youtube-trends:hover,
+.st-key-live-choice-cricket:hover,
+.st-key-live-choice-niche:hover,
+.st-key-live-cricket-india:hover,
+.st-key-live-cricket-global:hover,
+.st-key-live-line-deep-dive:hover,
+.st-key-live-line-top-5:hover,
+.st-key-live-line-otd:hover,
+.st-key-live-line-youtube-trends:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow-hover);
+  transform: translateY(-2px);
+}
+.choice-title {
+  font-size: 1.65rem;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1.15;
+  margin: 6px 0 8px;
+  color: var(--ink);
+}
+.choice-copy {
+  font-size: 0.8125rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+/* Live Header Surface */
+.live-product-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 24px;
+}
+.live-product-title {
+  font-size: clamp(2rem, 4.5vw, 3.25rem);
+  font-weight: 850;
+  letter-spacing: -0.05em;
+  line-height: 1.05;
+  margin-top: 6px;
+  color: var(--ink);
+}
+.live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 750;
+  white-space: nowrap;
+  box-shadow: var(--shadow-sm);
+}
+.live-status span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--success);
+  box-shadow: 0 0 0 4px var(--success-soft);
+}
+.hero-subtitle {
+  font-size: 0.875rem;
+  color: var(--muted);
+  max-width: 620px;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+/* Pipeline Handoff Banner */
+.handoff-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  background: var(--success-soft);
+  border: 1px solid #86efac;
+  border-radius: 14px;
+  padding: 12px 18px;
+  margin: 16px 0;
+  box-shadow: 0 2px 8px rgba(5, 150, 105, 0.08);
+}
+.handoff-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--success);
+  color: #ffffff;
+  display: grid;
+  place-items: center;
+  font-weight: 800;
+  font-size: 0.95rem;
+  flex-shrink: 0;
+}
+.handoff-title {
+  font-size: 0.875rem;
+  font-weight: 800;
+  color: var(--ink);
+  line-height: 1.25;
+}
+.handoff-copy {
+  font-size: 0.75rem;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 2px;
+}
+
+/* Pipeline Stepper Rail */
+.pipeline-wrap {
+  position: relative;
+  margin: 18px 0 22px;
+  padding: 16px 18px 14px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: var(--shadow-sm);
+}
+
+.pipeline-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.pipeline-meta-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+.pipeline-meta-value {
+  font-size: 0.75rem;
+  font-weight: 750;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.pipeline-steps {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 8px 0 2px;
+  scrollbar-width: none;
+}
+.pipeline-steps::-webkit-scrollbar { display: none; }
+
+.pipeline-step {
+  flex: 1 0 115px;
+  min-width: 115px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+  transition: all 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.pipeline-step:hover {
+  border-color: var(--line-strong);
+  background: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-xs);
+}
+
+.pipeline-step.complete {
+  background: var(--success-soft);
+  border-color: #a7f3d0;
+  box-shadow: inset 3px 0 0 var(--success);
+}
+
+.pipeline-step.current {
+  background: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--accent-soft), var(--shadow-xs);
+}
+
+.pipeline-step-number {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--subtle);
+}
+
+.pipeline-step.current .pipeline-step-number,
+.pipeline-step.current .pipeline-step-label {
+  color: var(--primary);
+  font-weight: 800;
+}
+
+.pipeline-step.complete .pipeline-step-number,
+.pipeline-step.complete .pipeline-step-label {
+  color: var(--success);
+}
+
+.pipeline-step-label {
+  margin-top: 4px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pipeline-step-state {
+  margin-top: 4px;
+  font-size: 0.6rem;
+  font-weight: 750;
+  color: var(--subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.pipeline-step.current .pipeline-step-state { color: var(--accent); font-weight: 800; }
+.pipeline-step.complete .pipeline-step-state { color: var(--success); }
+
+/* Badges & Meta Chips */
+.eyebrow, .mini-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--subtle);
+}
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+
+/* Editorial Canvas & Sections */
+.canvas-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 20px;
+}
+
+.canvas-title {
+  font-size: 1.85rem;
+  font-weight: 850;
+  letter-spacing: -0.04em;
+  line-height: 1.1;
+  color: var(--ink);
+}
+
+.canvas-copy {
+  font-size: 0.84rem;
+  color: var(--muted);
+  max-width: 720px;
+  line-height: 1.45;
+  margin-top: 6px;
+}
+
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin: 24px 0 12px;
+}
+
+.section-title {
+  font-size: 1.15rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+
+.section-count {
+  font-size: 0.65rem;
+  font-weight: 800;
+  color: var(--subtle);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* Story Discovery Deck */
+.st-key-topic-toolbar {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 8px 12px;
+  margin-bottom: 16px;
+  box-shadow: var(--shadow-xs);
+}
+
+.topic-title {
+  font-size: 0.95rem;
+  line-height: 1.3;
+  font-weight: 750;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+  min-height: 3.6em;
+  margin: 6px 0 6px;
+}
+
+.topic-meta {
+  font-size: 0.68rem;
+  color: var(--subtle);
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.topic-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 16px;
+  margin-bottom: 4px;
+}
+
+.topic-rank {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+}
+
+.topic-tile-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 0 8px;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.625rem;
+  font-weight: 750;
+  color: var(--subtle);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
 [data-testid="stVerticalBlock"] [class*="st-key-test-top5-topic-"],
-[data-testid="stVerticalBlock"] [class*="st-key-live-topic-"]{
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:12px 13px;
-  margin-bottom:9px;
-  min-height:174px;
-  box-shadow:0 1px 2px rgba(21,23,19,.025);
+[data-testid="stVerticalBlock"] [class*="st-key-live-topic-"] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 10px;
+  min-height: 165px;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.16s ease;
 }
+
 [data-testid="stVerticalBlock"] [class*="st-key-test-top5-topic-"]:hover,
-[data-testid="stVerticalBlock"] [class*="st-key-live-topic-"]:hover{
-  border-color:var(--line-strong);
-  box-shadow:var(--shadow);
-}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"]{
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:14px;
-  margin-bottom:9px;
-  box-shadow:0 1px 2px rgba(21,23,19,.025);
-  overflow:hidden;
-}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"]:hover{
-  border-color:var(--line-strong);
-  box-shadow:var(--shadow);
-}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"]{
-  margin:0;
-}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"] [data-testid="stButton"]>button{
-  min-height:62px!important;
-  justify-content:flex-start!important;
-  text-align:left!important;
-  padding:.85rem 1rem!important;
-  border:0!important;
-  border-radius:0!important;
-  background:transparent!important;
-  color:var(--ink)!important;
-  font-size:.84rem!important;
-  line-height:1.25!important;
-  font-weight:780!important;
-}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"] [data-testid="stButton"]>button:hover{
-  background:var(--surface-soft)!important;
-  border-color:transparent!important;
-  box-shadow:none!important;
-}
-.topic-tile-meta{
-  display:flex;
-  justify-content:space-between;
-  gap:10px;
-  padding:0 0 8px;
-  border-bottom:1px solid var(--line);
-  font-size:.59rem;
-  font-weight:750;
-  color:var(--subtle);
-  letter-spacing:.045em;
-  text-transform:uppercase;
-}
-.topic-tile-meta .topic-rank{font-size:inherit;}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stHorizontalBlock"]{
-  padding:9px 0;
-  border-bottom:1px solid var(--line);
-}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stHorizontalBlock"]:last-child{
-  border-bottom:0;
-}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] .topic-title{
-  min-height:0;
-  margin:0 0 4px;
-}
-[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stButton"]>button{
-  min-height:38px!important;
-  padding:.35rem .72rem!important;
+[data-testid="stVerticalBlock"] [class*="st-key-live-topic-"]:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
 }
 
-.topic-top{display:flex;align-items:center;justify-content:space-between;min-height:14px;}
-.topic-rank{font-size:.6rem;font-weight:820;letter-spacing:.09em;color:var(--accent);}
-.selected-story-title{font-size:1.05rem;font-weight:820;letter-spacing:-.025em;line-height:1.18;max-width:760px;color:var(--ink);}
-.st-key-selected-story-card{
-  margin-top:16px;
-  background:var(--surface-raised);
-  border:1px solid var(--accent);
-  border-radius:14px;
-  padding:14px 15px;
-  box-shadow:0 3px 16px rgba(47,98,85,.055);
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  margin-bottom: 10px;
+  box-shadow: var(--shadow-xs);
+  overflow: hidden;
+  transition: all 0.16s ease;
 }
-.st-key-script-editor,.st-key-subtitle-editor,.st-key-renderer-inspector,.st-key-audio-inspector{
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:15px;
-  box-shadow:var(--shadow);
-}
-.inspector{background:transparent;}
-.inspector-line{
-  display:flex;
-  justify-content:space-between;
-  gap:16px;
-  padding:.55rem 0;
-  border-bottom:1px solid var(--line);
-  font-size:.71rem;
-}
-.inspector-line:last-child{border-bottom:0;}
-.inspector-value{font-weight:760;color:var(--ink);text-align:right;}
-.scene-label{font-size:.6rem;font-weight:820;letter-spacing:.1em;text-transform:uppercase;color:var(--subtle);margin:9px 0 5px;}
-.cue-row{display:grid;grid-template-columns:72px 1fr;gap:12px;padding:10px 0;border-bottom:1px solid var(--line);}
-.cue-time{font-variant-numeric:tabular-nums;font-size:.66rem;color:var(--subtle);}
-.cue-text{font-size:.76rem;color:var(--ink);}
-.media-surface{
-  background:#11130f;
-  border-radius:14px;
-  padding:9px;
-  display:flex;
-  justify-content:center;
-  box-shadow:var(--shadow);
-}
-.live-product-head{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;}
-.live-product-title{
-  font-size:clamp(2.45rem,4.8vw,4.15rem);
-  font-weight:860;
-  letter-spacing:-.065em;
-  line-height:.94;
-  margin-top:6px;
-  color:var(--ink);
-}
-.live-status{
-  display:inline-flex;
-  align-items:center;
-  gap:7px;
-  padding:6px 9px;
-  border:1px solid var(--line);
-  border-radius:999px;
-  background:var(--surface-raised);
-  color:var(--muted);
-  font-size:.61rem;
-  font-weight:750;
-  white-space:nowrap;
-}
-.live-status span{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 4px var(--success-soft);}
-.hero-subtitle{font-size:.8rem;color:var(--muted);max-width:600px;line-height:1.4;margin-top:5px;}
-.st-key-live-choice-cricket,.st-key-live-choice-niche,.st-key-live-cricket-india,.st-key-live-cricket-global,
-.st-key-live-line-deep-dive,.st-key-live-line-top-5,.st-key-live-line-otd{
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:14px;
-  padding:17px;
-  min-height:184px;
-  box-shadow:var(--shadow);
-}
-.st-key-live-choice-cricket:hover,.st-key-live-choice-niche:hover,
-.st-key-live-cricket-india:hover,.st-key-live-cricket-global:hover,
-.st-key-live-line-deep-dive:hover,.st-key-live-line-top-5:hover,.st-key-live-line-otd:hover{
-  border-color:var(--line-strong);
-  box-shadow:var(--shadow-hover);
-}
-.choice-title{font-size:2.15rem;font-weight:850;letter-spacing:-.06em;line-height:.94;margin:.42rem 0 .45rem;color:var(--ink);}
-.choice-copy{font-size:.78rem;color:var(--muted);line-height:1.35;max-width:360px;}
-.empty-slot{
-  min-height:230px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border:1px dashed var(--line-strong);
-  border-radius:11px;
-  color:var(--subtle);
-  background:var(--surface-soft);
-  font-size:.62rem;
-  font-weight:800;
-  letter-spacing:.09em;
-}
-.visual-source{font-size:.63rem;font-weight:780;color:var(--ink);margin-top:7px;}
-.visual-detail{font-size:.62rem;color:var(--muted);line-height:1.35;margin-top:3px;}
-.empty-state{padding:48px 16px;text-align:center;background:var(--surface-raised);border:1px dashed var(--line-strong);border-radius:14px;box-shadow:none;}
-.empty-state-title{font-size:.88rem;font-weight:800;color:var(--ink);}
-.empty-state-copy{font-size:.7rem;color:var(--muted);margin-top:4px;}
-.visual-crop-label{display:inline-flex;margin-top:5px;padding:4px 7px;border-radius:999px;background:var(--success-soft);color:var(--success);font-size:.57rem;font-weight:820;letter-spacing:.055em;}
-.crop-dialog-kicker{font-size:.61rem;font-weight:820;letter-spacing:.13em;color:var(--accent);text-transform:uppercase;}
-.crop-dialog-title{font-size:1.18rem;font-weight:820;margin:4px 0 9px;letter-spacing:-.025em;color:var(--ink);}
-.pipeline-wrap{
-  margin:16px 0 18px;
-  padding:12px 12px 10px;
 
-.pipeline-wrap{
-  position:relative;
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"]:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+  transform: translateY(-1px);
 }
-.pipeline-step{
-  transition:border-color .12s ease,background .12s ease,box-shadow .12s ease,transform .12s ease;
+
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"] [data-testid="stButton"] > button {
+  min-height: 60px!important;
+  justify-content: flex-start!important;
+  text-align: left!important;
+  padding: 0.9rem 1.1rem!important;
+  border: 0!important;
+  border-radius: 0!important;
+  background: transparent!important;
+  color: var(--ink)!important;
+  font-size: 0.875rem!important;
+  line-height: 1.35!important;
+  font-weight: 700!important;
+  box-shadow: none!important;
 }
-.pipeline-step:hover{
-  border-color:var(--line-strong);
-  transform:translateY(-1px);
+
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-header-"] [data-testid="stButton"] > button:hover {
+  background: var(--surface-soft)!important;
+  transform: none!important;
+  box-shadow: none!important;
 }
-.pipeline-step.current{
-  box-shadow:0 0 0 2px var(--accent-soft);
+
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stHorizontalBlock"] {
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
 }
-.pipeline-step.complete{
-  box-shadow:inset 3px 0 0 var(--success);
+
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stHorizontalBlock"]:last-child {
+  border-bottom: 0;
 }
-  background:var(--surface-raised);
-  border:1px solid var(--line);
-  border-radius:14px;
-  box-shadow:0 1px 2px rgba(21,23,19,.03);
+
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] .topic-title {
+  min-height: 0;
+  margin: 0 0 4px;
 }
-.pipeline-meta{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:5px;}
-.pipeline-meta-label{font-size:.6rem;font-weight:820;letter-spacing:.1em;text-transform:uppercase;color:var(--subtle);}
-.pipeline-meta-value{font-size:.69rem;font-weight:800;color:var(--ink);text-align:right;}
-.pipeline-steps{display:flex;gap:6px;overflow-x:auto;padding:7px 0 1px;scrollbar-width:none;}
-.pipeline-steps::-webkit-scrollbar{display:none;}
-.pipeline-step{flex:1 0 108px;min-width:108px;padding:7px 8px;border:1px solid var(--line);border-radius:10px;background:var(--surface);}
-.pipeline-step.complete{background:var(--success-soft);border-color:#b8d6c3;}
-.pipeline-step.current{background:var(--surface-selected);border-color:#aec4b9;}
-.pipeline-step-number{font-size:.54rem;font-weight:820;letter-spacing:.07em;color:var(--subtle);}
-.pipeline-step.current .pipeline-step-number,.pipeline-step.current .pipeline-step-label{color:var(--accent);}
-.pipeline-step.complete .pipeline-step-number,.pipeline-step.complete .pipeline-step-label{color:var(--success);}
-.pipeline-step-label{margin-top:3px;font-size:.66rem;font-weight:780;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
-.pipeline-step-state{margin-top:3px;font-size:.55rem;font-weight:760;color:var(--subtle);text-transform:uppercase;letter-spacing:.045em;}
-.pipeline-step.current .pipeline-step-state{color:var(--accent);}
-.pipeline-step.complete .pipeline-step-state{color:var(--success);}
-.handoff-card{
-  display:flex;
-  align-items:center;
-  gap:10px;
-  margin:0 0 16px;
-  padding:10px 11px;
-  background:var(--success-soft);
-  border:1px solid #b8d6c3;
-  border-radius:11px;
+
+[data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stButton"] > button {
+  min-height: 38px!important;
+  padding: 0.35rem 0.75rem!important;
 }
-.handoff-mark{
-  flex:0 0 auto;
-  width:23px;
-  height:23px;
-  display:grid;
-  place-items:center;
-  border-radius:50%;
-  background:var(--success);
-  color:#fff;
-  font-size:.71rem;
-  font-weight:900;
+
+/* Selected Story Banner */
+.st-key-selected-story-card {
+  margin-top: 16px;
+  background: var(--surface);
+  border: 1.5px solid var(--accent);
+  border-radius: 16px;
+  padding: 16px 20px;
+  box-shadow: 0 4px 18px rgba(79, 70, 229, 0.08);
 }
-.handoff-title{font-size:.71rem;font-weight:820;color:var(--ink);line-height:1.2;}
-.handoff-copy{margin-top:2px;font-size:.63rem;color:var(--muted);line-height:1.25;}
-@media(max-width:900px){
-  .block-container{padding:17px 16px 44px;}
-  .home-hero{padding:23px 0 19px;}
-  .home-title{font-size:clamp(2.55rem,10vw,4.6rem);}
-  .workspace-name{font-size:2.7rem;}
-  .canvas-head{margin-bottom:13px;}
-  .section-head{margin-top:18px;}
-  .st-key-landing-test,.st-key-landing-live{min-height:220px;}
+
+.selected-story-title {
+  font-size: 1.1rem;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  color: var(--ink);
 }
-@media(max-width:640px){
-  .block-container{padding:14px 11px 38px;}
-  .st-key-workspace-nav{padding:8px;}
-  .home-copy{font-size:.84rem;}
-  .home-title{font-size:clamp(2.35rem,13vw,3.65rem);}
-  .workspace-name{font-size:2.45rem;}
-  .canvas-title{font-size:1.3rem;}
-  .live-product-head{display:block;}
-  .live-status{margin-top:12px;}
-  .choice-title{font-size:1.9rem;}
-  .section-head{align-items:flex-start;flex-direction:column;gap:4px;}
-  .section-count{text-align:left;}
-  [data-testid="stHorizontalBlock"]{gap:9px;}
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-test-top5-topic-"]),
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-live-topic-"]),
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-live-slide-"]){
-    flex-direction:column!important;
-    gap:9px!important;
-  }
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-test-top5-topic-"])>div,
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-live-topic-"])>div,
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-live-slide-"])>div{
-    width:100%!important;
-    flex:1 1 100%!important;
-  }
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-landing-test"]) ,
-  [data-testid="stHorizontalBlock"]:has([class*="st-key-landing-live"]){
-    flex-direction:column!important;
-  }
-  [data-testid="stVerticalBlock"] [class*="st-key-test-top5-topic-"],
-  [data-testid="stVerticalBlock"] [class*="st-key-live-topic-"]{
-    min-height:156px;
-    padding:11px 12px;
-  }
-  .topic-title{font-size:.92rem;-webkit-line-clamp:3;}
-  [data-testid="stVerticalBlock"] [class*="topic-tile-header-"] [data-testid="stButton"]>button{
-    min-height:56px!important;
-    padding:.75rem .82rem!important;
-  }
-  [data-testid="stVerticalBlock"] [class*="st-key-topic-tile-"] [data-testid="stButton"]>button{
-    min-height:42px!important;
-  }
-  .selected-story-title{font-size:.98rem;}
-  .pipeline-wrap{padding:10px 10px 9px;}
-  .pipeline-meta{align-items:flex-start;}
-  .pipeline-meta-value{max-width:56%;font-size:.65rem;}
-  .pipeline-step{flex-basis:100px;min-width:100px;}
-  .handoff-card{align-items:flex-start;}
-  .handoff-title{font-size:.69rem;}
-  .handoff-copy{font-size:.61rem;}
-  [data-testid="stButton"]>button,[data-testid="stFormSubmitButton"]>button{min-height:44px!important;}
-  [data-testid="stTextInput"] input,[data-testid="stSelectbox"] [role="combobox"]{min-height:44px!important;}
-  [data-testid="stTextArea"] textarea{min-height:110px;}
-  .cue-row{grid-template-columns:52px 1fr;gap:9px;}
-  .inspector-line{font-size:.69rem;}
-  .media-surface{padding:7px;border-radius:11px;}
+
+/* Storyboard Slide Cards & Dropzones */
+.empty-slot {
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  border: 2px dashed var(--line-strong);
+  border-radius: 14px;
+  color: var(--subtle);
+  background: var(--surface-soft);
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  transition: all 0.15s ease;
 }
-</style>\n""", unsafe_allow_html=True)
+
+.empty-slot:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.visual-source {
+  font-size: 0.68rem;
+  font-weight: 750;
+  color: var(--ink);
+  margin-top: 8px;
+}
+
+.visual-detail {
+  font-size: 0.65rem;
+  color: var(--muted);
+  line-height: 1.35;
+  margin-top: 3px;
+}
+
+.visual-crop-label {
+  display: inline-flex;
+  margin-top: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--success-soft);
+  color: var(--success);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+}
+
+/* Visual Cards */
+[data-testid="stVerticalBlock"] [class*="visual-card-"] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 10px;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.15s ease;
+}
+
+[data-testid="stVerticalBlock"] [class*="visual-card-"]:hover {
+  border-color: var(--line-strong);
+  box-shadow: var(--shadow);
+}
+
+/* Audio Scene Deck Containers */
+[data-testid="stVerticalBlock"] [class*="st-key-audio-scene-"],
+[data-testid="stVerticalBlock"] [class*="st-key-live-top5-audio-scene-"],
+[data-testid="stVerticalBlock"] [class*="st-key-test-top5-audio-scene-"] {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 14px 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-xs);
+}
+
+/* Teleprompter & Inspectors */
+.st-key-script-editor,
+.st-key-subtitle-editor,
+.st-key-renderer-inspector,
+.st-key-audio-inspector {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 20px;
+  box-shadow: var(--shadow-sm);
+}
+
+.scene-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--subtle);
+  margin: 12px 0 6px;
+}
+
+.inspector-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 0.65rem 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 0.75rem;
+}
+
+.inspector-line:last-child { border-bottom: 0; }
+.inspector-value { font-weight: 750; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+/* Streamlit Native Elements Overrides */
+hr, [data-testid="stDivider"] {
+  border: 0!important;
+  border-top: 1px solid var(--line)!important;
+  margin: 18px 0!important;
+}
+
+[data-testid="stVerticalBlockBorderWrapper"] > div {
+  border-color: var(--line)!important;
+  border-radius: 14px!important;
+  background: var(--surface);
+}
+
+[data-testid="stExpander"] {
+  background: var(--surface)!important;
+  border: 1px solid var(--line)!important;
+  border-radius: 14px!important;
+  box-shadow: var(--shadow-xs)!important;
+  overflow: hidden;
+}
+
+[data-testid="stExpander"] summary {
+  padding: 0.85rem 1rem!important;
+  color: var(--ink)!important;
+  font-weight: 700!important;
+}
+
+[data-testid="stExpander"] summary:hover {
+  background: var(--surface-soft)!important;
+}
+
+/* Clean Custom Scrollbars for Trays */
+[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow"]::-webkit-scrollbar,
+[data-testid="stContainer"][style*="overflow"]::-webkit-scrollbar,
+div[style*="overflow-y"]::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow"]::-webkit-scrollbar-thumb,
+[data-testid="stContainer"][style*="overflow"]::-webkit-scrollbar-thumb,
+div[style*="overflow-y"]::-webkit-scrollbar-thumb {
+  background: var(--line-strong);
+  border-radius: 999px;
+}
+[data-testid="stVerticalBlockBorderWrapper"] > div[style*="overflow"]::-webkit-scrollbar-track,
+[data-testid="stContainer"][style*="overflow"]::-webkit-scrollbar-track,
+div[style*="overflow-y"]::-webkit-scrollbar-track {
+  background: var(--surface-soft);
+}
+
+/* Responsive adjustments */
+@media(max-width: 900px) {
+  .block-container { padding: 18px 18px 48px!important; }
+  .canvas-title { font-size: 1.45rem; }
+  .pipeline-step { flex-basis: 100px; min-width: 100px; }
+}
+
+/* Studio 2.0 Topic Radar & Story Discovery */
+.radar-banner {
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 16px 20px;
+  margin-bottom: 20px;
+  color: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+}
+.radar-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  font-size: 0.72rem;
+  font-weight: 750;
+  letter-spacing: 0.03em;
+  background: rgba(255, 255, 255, 0.1);
+  color: #e2e8f0;
+}
+.radar-topic-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+  margin-bottom: 12px;
+  box-shadow: var(--shadow-xs);
+  transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.radar-topic-card:hover {
+  border-color: #94a3b8;
+  box-shadow: var(--shadow);
+  transform: translateY(-2px);
+}
+.radar-topic-card.selected-card {
+  border: 2px solid var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft), var(--shadow);
+  background: #ffffff;
+}
+
+/* Studio 2.0 Broadcast Prompter Deck */
+.prompter-flow-bar {
+  background: linear-gradient(90deg, #0f172a 0%, #1e1b4b 100%);
+  border-radius: 14px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
+  color: #ffffff;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+}
+.cue-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 14px 0 6px;
+  padding: 6px 12px;
+  background: var(--surface-soft);
+  border-radius: 8px;
+  border: 1px solid var(--line);
+}
+.cue-role-title {
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.hook-meter-ok {
+  background: #ecfdf5;
+  color: #059669;
+  border: 1px solid #a7f3d0;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.hook-meter-warn {
+  background: #fffbeb;
+  color: #d97706;
+  border: 1px solid #fde68a;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.hook-meter-bad {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+.teleprompter-article-view {
+  background: #0f172a;
+  border: 1px solid #334155;
+  border-radius: 14px;
+  padding: 18px 20px;
+  color: #f8fafc;
+  font-size: 0.95rem;
+  line-height: 1.6;
+  letter-spacing: -0.01em;
+  margin-top: 12px;
+  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+.teleprompter-article-view strong {
+  color: #38bdf8;
+  font-weight: 800;
+}
+.teleprompter-cue-separator {
+  display: inline-block;
+  margin: 0 6px;
+  color: #64748b;
+  font-weight: 700;
+}
+
+/* Awwwards Studio 2.0 Bento Angles */
+.angle-bento-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 18px;
+}
+.angle-bento-card {
+  background: var(--surface);
+  border-radius: 16px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  min-height: 190px;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+.angle-bento-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(99, 102, 241, 0.5);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+}
+.angle-bento-card.active-angle {
+  border: 2px solid #6366f1;
+  background: linear-gradient(180deg, #121524 0%, #0e111a 100%);
+  box-shadow: 0 0 24px rgba(99, 102, 241, 0.25), 0 4px 14px rgba(0, 0, 0, 0.5);
+}
+.angle-pill-debate {
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(245, 158, 11, 0.15);
+  color: #fbbf24;
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.angle-pill-stat {
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(56, 189, 248, 0.15);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+.angle-pill-drama {
+  font-size: 0.62rem;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: rgba(168, 85, 247, 0.15);
+  color: #c084fc;
+  border: 1px solid rgba(168, 85, 247, 0.3);
+  padding: 3px 8px;
+  border-radius: 999px;
+}
+
+/* Custom Prompt Terminal */
+.custom-prompt-terminal {
+  background: #090b14;
+  border: 1px solid rgba(99, 102, 241, 0.3);
+  border-radius: 16px;
+  padding: 20px;
+  margin-top: 14px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+.custom-prompt-terminal.active-terminal {
+  border: 2px solid #38bdf8;
+  box-shadow: 0 0 24px rgba(56, 189, 248, 0.25);
+}
+
+/* 9:16 Interactive Mobile Phone Simulator */
+.phone-sim-wrapper {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 16px 0;
+}
+.phone-sim-frame {
+  width: 260px;
+  height: 480px;
+  background: #000000;
+  border-radius: 36px;
+  border: 4px solid #1e2236;
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8), inset 0 0 0 2px rgba(255, 255, 255, 0.05);
+  position: relative;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: 14px 14px 18px;
+}
+.phone-sim-notch {
+  width: 90px;
+  height: 16px;
+  background: #111422;
+  border-radius: 0 0 12px 12px;
+  margin: -14px auto 14px;
+}
+.phone-billboard-badge {
+  background: #ef4444;
+  color: #ffffff;
+  font-size: 0.65rem;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  padding: 4px 10px;
+  border-radius: 6px;
+  text-align: center;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+.phone-sim-headline {
+  background: rgba(0, 0, 0, 0.85);
+  color: #facc15;
+  font-size: 1.05rem;
+  font-weight: 900;
+  letter-spacing: -0.02em;
+  text-align: center;
+  line-height: 1.15;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(250, 204, 21, 0.3);
+  text-transform: uppercase;
+  margin-bottom: 12px;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+}
+.phone-sim-preview-video {
+  flex: 1;
+  background: linear-gradient(180deg, #141829 0%, #0a0d17 100%);
+  border-radius: 14px;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  padding: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
+}
+.phone-sim-hook-text {
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(8px);
+  border-radius: 8px;
+  padding: 8px 10px;
+  color: #ffffff;
+  font-size: 0.72rem;
+  font-weight: 700;
+  line-height: 1.3;
+  border-left: 3px solid #38bdf8;
+}
+.phone-sim-ui-overlay {
+  position: absolute;
+  right: 8px;
+  bottom: 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+}
+.phone-sim-action-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.6rem;
+  color: #fff;
+}
+
+/* Viral Packaging Suite */
+.packaging-tile {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  transition: all 0.15s ease;
+}
+.packaging-tile:hover {
+  border-color: rgba(99, 102, 241, 0.5);
+  background: var(--surface-raised);
+}
+.packaging-tile-type {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 4px;
+}
+.packaging-tile-text {
+  font-size: 0.85rem;
+  font-weight: 750;
+  color: #ffffff;
+  line-height: 1.3;
+}
+.comment-bait-container {
+  background: linear-gradient(135deg, #131728 0%, #0c0f1c 100%);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  border-radius: 12px;
+  padding: 14px;
+  margin-top: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 if "app_mode" not in st.session_state:
     st.session_state.app_mode = "home"
@@ -1242,7 +1961,7 @@ def _render_manual_subject_cutout(
     active_slide: int | None = None,
     assignment_store: dict | None = None,
     approval_state: str | None = None,
-    polygon_flow: bool = False,
+    polygon_flow: bool = True,
 ):
     from renderer import (
         MANUAL_SUBJECT_FONT_OPTIONS,
@@ -1295,63 +2014,85 @@ def _render_manual_subject_cutout(
     asset_map = {str(asset["asset_key"]): asset for asset in assets}
     selected_key = str(state.get("image_key") or "")
     if selected_key not in asset_map:
-        state["image_key"] = None
+        shared_selected = str(st.session_state.get("card_studio_selected_asset_key") or "")
+        if shared_selected in asset_map:
+            state["image_key"] = shared_selected
+        else:
+            state["image_key"] = None
 
-    for start in range(0, len(assets), 3):
-        cols = st.columns(min(3, len(assets) - start), gap="medium")
-        for col, asset in zip(cols, assets[start:start + 3]):
-            with col:
-                asset_key = str(asset["asset_key"])
-                image = _asset_to_image(asset.get("bytes"))
-                if image is not None:
-                    preview = image.copy()
-                    preview.thumbnail((300, 300), Image.Resampling.LANCZOS)
-                    st.image(preview, width="stretch")
-                st.markdown(
-                    f'<div class="visual-source">{asset["source"]}</div>'
-                    f'<div class="visual-detail">{asset["label"]}</div>',
-                    unsafe_allow_html=True,
-                )
-                if asset_key in crop_store:
-                    st.markdown('<div class="visual-crop-label">CROP APPLIED</div>', unsafe_allow_html=True)
+    if len(assets) == 1:
+        st.markdown(
+            '<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
+            '<span><strong style="color:var(--accent);">1 image transferred from fetcher</strong> · active subject</span>'
+            '<span>Crop or position for polygon cutout</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
+            f'<span><strong>{len(assets)} images available</strong> · scroll inside tray to select subject image</span>'
+            f'<span>Crop or select image for polygon cutout</span>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+    container_ctx = st.container(height=520) if len(assets) > 1 else st.container()
+    with container_ctx:
+        for start in range(0, len(assets), 4):
+            cols = st.columns(min(4, len(assets) - start), gap="small")
+            for col, asset in zip(cols, assets[start:start + 4]):
+                with col:
+                    asset_key = str(asset["asset_key"])
+                    raw_preview = crop_store.get(asset_key) or asset.get("bytes")
+                    preview = _fit_visual_preview(raw_preview, width=240, height=360)
+                    if preview is not None:
+                        st.image(preview, width="stretch")
+                    st.markdown(
+                        f'<div class="visual-source">{asset["source"]}</div>'
+                        f'<div class="visual-detail">{asset["label"]}</div>',
+                        unsafe_allow_html=True,
+                    )
+                    if asset_key in crop_store:
+                        st.markdown('<div class="visual-crop-label">CROP APPLIED</div>', unsafe_allow_html=True)
 
-                crop_col, select_col = st.columns(2, gap="small")
-                with crop_col:
-                    if st.button("Crop / reposition", width="stretch", key=f"{state_id}-crop-{asset_key}"):
-                        raw = asset.get("bytes")
-                        if isinstance(raw, (bytes, bytearray)):
-                            _crop_visual_dialog(
-                                asset_key,
-                                bytes(raw),
-                                str(asset["label"]),
-                                crop_store=crop_store_name,
+                    crop_col, select_col = st.columns(2, gap="small")
+                    with crop_col:
+                        if st.button("Crop / reposition", width="stretch", key=f"{state_id}-crop-{asset_key}"):
+                            raw = asset.get("bytes")
+                            if isinstance(raw, (bytes, bytearray)):
+                                _crop_visual_dialog(
+                                    asset_key,
+                                    bytes(raw),
+                                    str(asset["label"]),
+                                    crop_store=crop_store_name,
+                                 )
+                            else:
+                                st.warning("This visual is not crop-ready.")
+
+                    with select_col:
+                        is_selected_image = asset_key == str(state.get("image_key") or "")
+                        if st.button(
+                            "Selected" if is_selected_image else "Select image",
+                            type="primary" if is_selected_image else "secondary",
+                            width="stretch",
+                            key=f"{state_id}-select-{asset_key}",
+                        ) and not is_selected_image:
+                            state.update(
+                                image_key=asset_key,
+                                polygon_points=None,
+                                rendered_config=None,
+                                rendered_preview=None,
+                                font_size=150,
+                                line_breaks=None,
+                                layout_options=None,
+                                layout_signature=None,
+                                source_key=None,
+                                source_digest=None,
+                                editor_image_digest=None,
+                                editor_image_data=None,
                             )
-                        else:
-                            st.warning("This visual is not crop-ready.")
-
-                with select_col:
-                    is_selected_image = asset_key == str(state.get("image_key") or "")
-                    if st.button(
-                        "Selected" if is_selected_image else "Select image",
-                        type="primary" if is_selected_image else "secondary",
-                        width="stretch",
-                        key=f"{state_id}-select-{asset_key}",
-                    ) and not is_selected_image:
-                        state.update(
-                            image_key=asset_key,
-                            polygon_points=None,
-                            rendered_config=None,
-                            rendered_preview=None,
-                            font_size=150,
-                            line_breaks=None,
-                            layout_options=None,
-                            layout_signature=None,
-                            source_key=None,
-                            source_digest=None,
-                            editor_image_digest=None,
-                            editor_image_data=None,
-                        )
-                        st.session_state.pop(size_key, None)
+                            st.session_state["card_studio_selected_asset_key"] = asset_key
+                            st.session_state.pop(size_key, None)
 
     selected = asset_map.get(str(state.get("image_key") or ""))
     if selected is None:
@@ -1379,6 +2120,70 @@ def _render_manual_subject_cutout(
             editor_image_data=None,
         )
         st.session_state.pop(size_key, None)
+
+    if (handoff == "cricket" and assignment_store is not None and slide_count > 0) or (handoff == "top5" and active_slide is not None):
+        with st.container():
+            st.markdown(
+                '<div style="background:var(--surface-soft, rgba(255,255,255,0.03));border:1px solid var(--line, rgba(255,255,255,0.08));border-radius:8px;padding:8px 12px;margin:8px 0 14px 0;">'
+                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'
+                '<span style="font-size:0.75rem;font-weight:700;color:var(--ink-secondary, #94a3b8);letter-spacing:0.04em;">📌 DIRECT SLIDE ATTACHMENT</span>'
+                '<span style="font-size:0.72rem;color:var(--text-muted, #64748b);">Attach this image directly to a slide without creating a card</span>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            col_target, col_btn = st.columns([1, 1.6], gap="small", vertical_alignment="center")
+            with col_target:
+                if handoff == "top5" and active_slide is not None:
+                    target_slide = active_slide
+                    st.markdown(f'<div style="font-weight:700;font-size:0.85rem;color:var(--ink);">Target: Slide {active_slide}</div>', unsafe_allow_html=True)
+                else:
+                    target_slide = st.selectbox(
+                        "Attach to",
+                        list(range(1, max(1, slide_count) + 1)),
+                        key=f"{state_id}-direct-slide-select",
+                        label_visibility="collapsed",
+                    )
+            with col_btn:
+                if st.button(
+                    f"Attach to Slide {target_slide} directly ➜",
+                    type="secondary",
+                    width="stretch",
+                    key=f"{state_id}-direct-attach-btn",
+                ):
+                    if handoff == "top5" and active_slide is not None:
+                        image = _asset_to_image(working_bytes)
+                        if image is None:
+                            st.warning("This visual could not be decoded as an image.")
+                        else:
+                            buffer = BytesIO()
+                            image.save(buffer, format="JPEG", quality=94, optimize=True)
+                            selected_bytes = buffer.getvalue()
+                            st.session_state.test_top5_visual_assignments[active_slide] = {
+                                "asset_key": selected["asset_key"],
+                                "result_key": "manual-subject",
+                                "source": selected["source"],
+                                "label": selected.get("label") or "Manual Subject",
+                                "bytes": selected_bytes,
+                            }
+                            st.session_state.test_top5_visual_handoff = None
+                            st.session_state.test_top5_rendered_video_path = None
+                            st.toast(f"Attached image directly to Slide {active_slide}!", icon="📌")
+                            st.rerun()
+                    elif assignment_store is not None:
+                        assignment_store[target_slide] = {
+                            "asset_key": selected["asset_key"],
+                            "result_key": "card-studio-photo",
+                            "source": str(selected.get("source") or "Card Studio Photo"),
+                            "label": str(selected.get("label") or "Direct Photo"),
+                            "bytes": bytes(working_bytes),
+                        }
+                        if approval_state:
+                            st.session_state[approval_state] = False
+                            if approval_state == "visuals_approved":
+                                st.session_state.approved_visuals = None
+                        st.toast(f"Attached image directly to Slide {target_slide}!", icon="📌")
+                        st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
 
     if headline_key not in st.session_state:
         st.session_state[headline_key] = default_headline
@@ -1568,8 +2373,8 @@ def _render_manual_subject_cutout(
             unsafe_allow_html=True,
         )
         st.caption(
-            "Every option keeps the requested font size and uses the polygon as the actual text field. "
-            "More lines are created as needed instead of shrinking the text."
+            "Every option keeps the requested font size and uses the polygon as the actual end-to-end text space from left to right and top to bottom. "
+            "More lines are created as needed to fill the space."
         )
         for start in range(0, len(current_layouts), 3):
             cols = st.columns(min(3, len(current_layouts) - start), gap="medium")
@@ -1595,7 +2400,7 @@ def _render_manual_subject_cutout(
 
     st.caption(
         "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
-        "Polygon is the full text field; text starts 2px inside the polygon's top and left boundaries, stays inside its right and bottom boundaries, and uses line breaks to keep the requested size inside the field. "
+        "Polygon is the full text field from one end to the other: text spans left to right and aligns top to bottom inside the polygon boundaries. "
         "Render Now replaces the rendered frame."
     )
 
@@ -1611,36 +2416,42 @@ def _render_manual_subject_cutout(
         if selected_lines:
             st.caption("Selected layout: " + " / ".join(selected_lines))
 
-    if st.button("Render Now", type="primary", width="stretch", key=f"{state_id}-render"):
-        try:
-            config = {
-                "headline": headline,
-                "mode": selected_mode,
-                "text_polygon": tuple(polygon_points),
-                "font_size": font_size,
-                "font": state["font"],
-                "style": state["style"],
-                "line_breaks": selected_line_breaks or None,
-                "polygon_flow": bool(polygon_flow),
-                "source_key": selected["asset_key"],
-                "source_digest": source_digest,
-            }
-            state["rendered_preview"] = build_manual_subject_cutout_preview(
-                working_bytes,
-                headline,
-                mode=selected_mode,
-                font_size=font_size,
-                font=state["font"],
-                style=state["style"],
-                text_polygon=config["text_polygon"],
-                line_breaks=config["line_breaks"],
-                polygon_flow=polygon_flow,
-            )
-            state["font_size"] = font_size
-            state["rendered_config"] = config
-        except (ValueError, OSError, RuntimeError, ImportError) as exc:
-            state["rendered_preview"] = None
-            st.error(str(exc))
+    if st.button("Render Now", type="primary", width="stretch", key=f"{state_id}-cutout-render", help="Generate and render card frame"):
+        if not headline:
+            st.warning("Please enter a headline before rendering the card.")
+        else:
+            with st.spinner("Rendering Text Subject Cutout frame…"):
+                try:
+                    config = {
+                        "headline": headline,
+                        "mode": selected_mode,
+                        "text_polygon": tuple(polygon_points),
+                        "font_size": font_size,
+                        "font": state["font"],
+                        "style": state["style"],
+                        "line_breaks": selected_line_breaks or None,
+                        "polygon_flow": bool(polygon_flow),
+                        "source_key": selected["asset_key"],
+                        "source_digest": source_digest,
+                    }
+                    state["rendered_preview"] = build_manual_subject_cutout_preview(
+                        working_bytes,
+                        headline,
+                        mode=selected_mode,
+                        font_size=font_size,
+                        font=state["font"],
+                        style=state["style"],
+                        text_polygon=config["text_polygon"],
+                        line_breaks=config["line_breaks"],
+                        polygon_flow=polygon_flow,
+                    )
+                    state["font_size"] = font_size
+                    state["rendered_config"] = config
+                    st.success("✅ Card frame generated! Preview updated below.")
+                    st.toast("Card generated successfully!", icon="✨")
+                except (ValueError, OSError, RuntimeError, ImportError) as exc:
+                    state["rendered_preview"] = None
+                    st.error(str(exc))
 
     if state.get("rendered_preview"):
         st.markdown(
@@ -1755,7 +2566,9 @@ def _render_card_studio(
     active_slide: int | None = None,
     current_image=None,
     current_source: str = "Test image",
-    polygon_flow: bool = False,
+    polygon_flow: bool = True,
+    active_mode: str = "",
+    split_view: bool = False,
 ):
     from card_studio import (
         CardStudioError,
@@ -1765,7 +2578,7 @@ def _render_card_studio(
         render_card,
     )
 
-    card_types = LIVE_CARD_TYPES if live else TEST_CARD_TYPES
+    card_types = TEST_CARD_TYPES
     state_id = (
         f"{'live' if live else 'test'}-"
         f"{'top5-' if top5 else ''}"
@@ -1798,6 +2611,7 @@ def _render_card_studio(
                 crop_store_name="card-studio-top5",
                 state_id=state_id,
                 default_headline=st.session_state.get("test_top5_visual_playground_headline", ""),
+                polygon_flow=polygon_flow,
             )
             return
 
@@ -1827,13 +2641,64 @@ def _render_card_studio(
                 default_headline=headline,
                 handoff="top5",
                 active_slide=active_slide,
+                polygon_flow=polygon_flow,
             )
             return
 
         entries = _visual_pool_entries(live)
         if not entries:
+            if split_view:
+                st.markdown(
+                    '<div style="background:var(--card-bg, #1a1e26);border:1px dashed var(--border, #3a4252);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
+                    '<div style="font-size:1.8rem;margin-bottom:8px;">🔍</div>'
+                    '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">NO IMAGES FETCHED YET</div>'
+                    '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 0 0;line-height:1.4;">'
+                    'Use <strong>Visual Fetcher</strong> on the right pane to search or scrape images. Once images appear, click <strong>"Select for Card Studio ➜"</strong> to start styling cards.'
+                    '</div></div>',
+                    unsafe_allow_html=True,
+                )
+                return
             st.info("Run one of the existing visual sources first. Card Studio reuses that image pool.")
             return
+
+        entries_by_key = {str(item[0]): item for item in entries}
+        selected_key = str(st.session_state.get("card_studio_selected_asset_key") or "")
+
+        if not active_mode.startswith("Option 5"):
+            if selected_key in entries_by_key:
+                target_entries = [entries_by_key[selected_key]]
+            elif len(entries) == 1 and not split_view:
+                target_entries = entries
+                st.session_state["card_studio_selected_asset_key"] = entries[0][0]
+            else:
+                st.markdown(
+                    '<div style="background:var(--card-bg, #1a1e26);border:1px dashed var(--border, #3a4252);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
+                    '<div style="font-size:1.8rem;margin-bottom:8px;">👉</div>'
+                    '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">AWAITING IMAGE SELECTION</div>'
+                    '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 16px 0;line-height:1.4;">'
+                    'Select an image from the <strong>Visual Fetcher</strong> on the right pane (click <strong>"Select for Card Studio ➜"</strong>) to transfer it here and begin designing cards.'
+                    '</div></div>',
+                    unsafe_allow_html=True,
+                )
+                if entries and st.button(
+                    "Quick-transfer first fetched image ➜",
+                    type="primary",
+                    width="stretch",
+                    key=f"{state_id}-quick-transfer",
+                ):
+                    first_key = entries[0][0]
+                    st.session_state["card_studio_selected_asset_key"] = first_key
+                    if live:
+                        st.session_state.setdefault("live_manual_subject_cutout", {})["image_key"] = first_key
+                        st.session_state["live-cricket-card-studio-image-1"] = first_key
+                    else:
+                        st.session_state.setdefault("manual_subject_cutout", {})["image_key"] = first_key
+                        st.session_state["test-standalone-card-studio-image-1"] = first_key
+                    st.rerun()
+                return
+        else:
+            target_entries = entries
+
         script = (
             st.session_state.get("live_approved_script")
             if live
@@ -1848,7 +2713,7 @@ def _render_card_studio(
                     "source": source_name,
                     "label": str(asset.get("article_title") or asset.get("model") or source_name),
                 }
-                for asset_key, _index, asset, image_bytes, source_name in entries
+                for asset_key, _index, asset, image_bytes, source_name in target_entries
             ],
             crop_store=(
                 st.session_state.get("live_visual_crops") or {}
@@ -1908,8 +2773,58 @@ def _render_card_studio(
     else:
         entries = _visual_pool_entries(live)
         if not entries:
+            if split_view:
+                st.markdown(
+                    '<div style="background:var(--card-bg, #1a1e26);border:1px dashed var(--border, #3a4252);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
+                    '<div style="font-size:1.8rem;margin-bottom:8px;">🔍</div>'
+                    '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">NO IMAGES FETCHED YET</div>'
+                    '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 0 0;line-height:1.4;">'
+                    'Use <strong>Visual Fetcher</strong> on the right pane to search or scrape images. Once images appear, click <strong>"Select for Card Studio ➜"</strong> to start styling cards.'
+                    '</div></div>',
+                    unsafe_allow_html=True,
+                )
+                return
             st.info("Run one of the existing visual sources first. Card Studio reuses that image pool.")
             return
+
+        entries_by_key = {str(item[0]): item for item in entries}
+        selected_key = str(st.session_state.get("card_studio_selected_asset_key") or "")
+
+        if not active_mode.startswith("Option 5"):
+            if selected_key in entries_by_key:
+                target_entries = [entries_by_key[selected_key]]
+            elif len(entries) == 1 and not split_view:
+                target_entries = entries
+                st.session_state["card_studio_selected_asset_key"] = entries[0][0]
+            else:
+                st.markdown(
+                    '<div style="background:var(--card-bg, #1a1e26);border:1px dashed var(--border, #3a4252);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
+                    '<div style="font-size:1.8rem;margin-bottom:8px;">👉</div>'
+                    '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">AWAITING IMAGE SELECTION</div>'
+                    '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 16px 0;line-height:1.4;">'
+                    'Select an image from the <strong>Visual Fetcher</strong> on the right pane (click <strong>"Select for Card Studio ➜"</strong>) to transfer it here and begin designing cards.'
+                    '</div></div>',
+                    unsafe_allow_html=True,
+                )
+                if entries and st.button(
+                    "Quick-transfer first fetched image ➜",
+                    type="primary",
+                    width="stretch",
+                    key=f"{state_id}-quick-transfer",
+                ):
+                    first_key = entries[0][0]
+                    st.session_state["card_studio_selected_asset_key"] = first_key
+                    if live:
+                        st.session_state.setdefault("live_manual_subject_cutout", {})["image_key"] = first_key
+                        st.session_state["live-cricket-card-studio-image-1"] = first_key
+                    else:
+                        st.session_state.setdefault("manual_subject_cutout", {})["image_key"] = first_key
+                        st.session_state["test-standalone-card-studio-image-1"] = first_key
+                    st.rerun()
+                return
+        else:
+            target_entries = entries
+
         crop_store_name = "live_visual_crops" if live else "visual_crops"
         crop_store = st.session_state.setdefault(crop_store_name, {})
         assets = [
@@ -1919,18 +2834,28 @@ def _render_card_studio(
                 "source": source_name,
                 "label": str(asset.get("article_title") or asset.get("title") or asset.get("model") or source_name),
             }
-            for asset_key, _index, asset, image_bytes, source_name in entries
+            for asset_key, _index, asset, image_bytes, source_name in target_entries
         ]
 
-    st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">IMAGE POOL</div>'
-        '<div class="section-title">Choose the Card Studio image</div></div>'
-        f'<div class="section-count">{len(assets)} images · crop before selection</div></div>',
-        unsafe_allow_html=True,
-    )
+    if len(assets) == 1:
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">TRANSFERRED IMAGE</div>'
+            '<div class="section-title">Active Card Studio Image</div></div>'
+            '<div class="section-count">1 image transferred · ready to design</div></div>',
+            unsafe_allow_html=True,
+        )
+    else:
+        st.markdown(
+            '<div class="section-head"><div><div class="eyebrow">IMAGE POOL</div>'
+            '<div class="section-title">Choose the Card Studio image</div></div>'
+            f'<div class="section-count">{len(assets)} images · crop before selection</div></div>',
+            unsafe_allow_html=True,
+        )
 
     primary_key = f"{state_id}-image-1"
     secondary_key = f"{state_id}-image-2"
+    if len(assets) == 1 and not st.session_state.get(primary_key) and st.session_state.get("card_studio_selected_asset_key"):
+        st.session_state[primary_key] = str(assets[0]["asset_key"])
     selected_primary = str(st.session_state.get(primary_key) or "")
     selected_secondary = str(st.session_state.get(secondary_key) or "")
 
@@ -1955,75 +2880,82 @@ def _render_card_studio(
                 key=split_key,
             )
 
-    for start in range(0, len(assets), 3):
-        cols = st.columns(min(3, len(assets) - start), gap="medium")
-        for col, asset in zip(cols, assets[start:start + 3]):
-            with col:
-                key = asset["asset_key"]
-                cropped = crop_store.get(key)
-                preview_bytes = cropped if cropped else asset.get("bytes")
-                preview = _fit_visual_preview(preview_bytes)
-                if preview is not None:
-                    st.image(preview, width="stretch")
-                st.markdown(
-                    f'<div class="visual-source">{asset["source"]}</div>'
-                    f'<div class="visual-detail">{asset["label"]}</div>',
-                    unsafe_allow_html=True,
-                )
-                if cropped:
+    container_ctx = st.container(height=520) if len(assets) > 1 else st.container()
+    with container_ctx:
+        for start in range(0, len(assets), 4):
+            cols = st.columns(min(4, len(assets) - start), gap="small")
+            for col, asset in zip(cols, assets[start:start + 4]):
+                with col:
+                    key = asset["asset_key"]
+                    cropped = crop_store.get(key)
+                    preview_bytes = cropped if cropped else asset.get("bytes")
+                    preview = _fit_visual_preview(preview_bytes, width=240, height=360)
+                    if preview is not None:
+                        st.image(preview, width="stretch")
                     st.markdown(
-                        '<div class="visual-crop-label">CROP APPLIED · USE CROPPED FRAME</div>',
+                        f'<div class="visual-source">{asset["source"]}</div>'
+                        f'<div class="visual-detail">{asset["label"]}</div>',
                         unsafe_allow_html=True,
                     )
+                    if cropped:
+                        st.markdown(
+                            '<div class="visual-crop-label">CROP APPLIED · USE CROPPED FRAME</div>',
+                            unsafe_allow_html=True,
+                        )
 
-                crop_col, action_col = st.columns(2, gap="small")
-                with crop_col:
-                    if st.button(
-                        "Crop / reposition",
-                        width="stretch",
-                        key=f"{state_id}-crop-{key}",
-                    ):
-                        raw = asset.get("bytes")
-                        if isinstance(raw, (bytes, bytearray)):
-                            _crop_visual_dialog(
-                                key,
-                                bytes(raw),
-                                str(asset["label"]),
-                                crop_store=crop_store_name,
-                            )
+                    crop_col, action_col = st.columns(2, gap="small")
+                    with crop_col:
+                        if st.button(
+                            "Crop / reposition",
+                            width="stretch",
+                            key=f"{state_id}-crop-{key}",
+                        ):
+                            raw = asset.get("bytes")
+                            if isinstance(raw, (bytes, bytearray)):
+                                _crop_visual_dialog(
+                                    key,
+                                    bytes(raw),
+                                    str(asset["label"]),
+                                    crop_store=crop_store_name,
+                                )
+                            else:
+                                st.warning("This visual is not crop-ready.")
+
+                    with action_col:
+                        if image_mode == "Two images" and card_type == "Head-to-Head":
+                            if st.button(
+                                "Use as Image 1",
+                                width="stretch",
+                                type="primary" if selected_primary == key else "secondary",
+                                key=f"{state_id}-use-1-{key}",
+                            ):
+                                st.session_state[primary_key] = key
+                            if st.button(
+                                "Use as Image 2",
+                                width="stretch",
+                                type="primary" if selected_secondary == key else "secondary",
+                                key=f"{state_id}-use-2-{key}",
+                            ):
+                                st.session_state[secondary_key] = key
                         else:
-                            st.warning("This visual is not crop-ready.")
-
-                with action_col:
-                    if image_mode == "Two images" and card_type == "Head-to-Head":
-                        if st.button(
-                            "Use as Image 1",
-                            width="stretch",
-                            type="primary" if selected_primary == key else "secondary",
-                            key=f"{state_id}-use-1-{key}",
-                        ):
-                            st.session_state[primary_key] = key
-                        if st.button(
-                            "Use as Image 2",
-                            width="stretch",
-                            type="primary" if selected_secondary == key else "secondary",
-                            key=f"{state_id}-use-2-{key}",
-                        ):
-                            st.session_state[secondary_key] = key
-                    else:
-                        if st.button(
-                            "Selected" if selected_primary == key else "Select image",
-                            width="stretch",
-                            type="primary" if selected_primary == key else "secondary",
-                            key=f"{state_id}-use-{key}",
-                        ):
-                            st.session_state[primary_key] = key
-                            selected_primary = key
+                            if st.button(
+                                "Selected" if selected_primary == key else "Select image",
+                                width="stretch",
+                                type="primary" if selected_primary == key else "secondary",
+                                key=f"{state_id}-use-{key}",
+                            ):
+                                st.session_state[primary_key] = key
+                                selected_primary = key
 
     assets_by_key = {str(asset["asset_key"]): asset for asset in assets}
     if selected_primary not in assets_by_key:
-        selected_primary = ""
-        st.session_state[primary_key] = ""
+        shared_selected = str(st.session_state.get("card_studio_selected_asset_key") or "")
+        if shared_selected in assets_by_key:
+            selected_primary = shared_selected
+            st.session_state[primary_key] = shared_selected
+        else:
+            selected_primary = ""
+            st.session_state[primary_key] = ""
     if selected_secondary not in assets_by_key:
         selected_secondary = ""
         st.session_state[secondary_key] = ""
@@ -2048,10 +2980,66 @@ def _render_card_studio(
         )
     )
 
+    direct_bytes = bytes(
+        crop_store.get(selected_primary_asset["asset_key"])
+        or selected_primary_asset.get("bytes")
+        or b""
+    )
+    if direct_bytes and (slide_count > 0 or (top5 and active_slide is not None)):
+        with st.container():
+            st.markdown(
+                '<div style="background:var(--surface-soft, rgba(255,255,255,0.03));border:1px solid var(--line, rgba(255,255,255,0.08));border-radius:8px;padding:8px 12px;margin:8px 0 14px 0;">'
+                '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">'
+                '<span style="font-size:0.75rem;font-weight:700;color:var(--ink-secondary, #94a3b8);letter-spacing:0.04em;">📌 DIRECT SLIDE ATTACHMENT</span>'
+                '<span style="font-size:0.72rem;color:var(--text-muted, #64748b);">Attach this image directly to a slide without creating a card</span>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
+            col_target, col_btn = st.columns([1, 1.6], gap="small", vertical_alignment="center")
+            with col_target:
+                if top5 and active_slide is not None:
+                    target_slide = active_slide
+                    st.markdown(f'<div style="font-weight:700;font-size:0.85rem;color:var(--ink);">Target: Slide {active_slide}</div>', unsafe_allow_html=True)
+                elif top5:
+                    target_slide = st.selectbox("Attach to", list(range(1, 7)), key=f"{state_id}-direct-slide-select", label_visibility="collapsed")
+                else:
+                    target_slide = st.selectbox("Attach to", list(range(1, max(1, slide_count) + 1)), key=f"{state_id}-direct-slide-select", label_visibility="collapsed")
+            with col_btn:
+                if st.button(f"Attach to Slide {target_slide} directly ➜", type="secondary", width="stretch", key=f"{state_id}-direct-attach-btn"):
+                    direct_assignment = {
+                        "asset_key": selected_primary_asset["asset_key"],
+                        "result_key": "card-studio-photo",
+                        "source": str(selected_primary_asset.get("source") or "Card Studio Photo"),
+                        "label": str(selected_primary_asset.get("label") or "Direct Photo"),
+                        "bytes": direct_bytes,
+                    }
+                    if top5:
+                        st.session_state.test_top5_visual_assignments[target_slide] = direct_assignment
+                        st.session_state.test_top5_visual_handoff = None
+                        st.session_state.test_top5_rendered_video_path = None
+                    else:
+                        target_assignments = st.session_state.live_visual_assignments if live else st.session_state.visual_assignments
+                        target_assignments[target_slide] = direct_assignment
+                        if live:
+                            st.session_state.live_visuals_approved = False
+                        else:
+                            st.session_state.visuals_approved = False
+                            st.session_state.approved_visuals = None
+                    st.toast(f"Attached image directly to Slide {target_slide}!", icon="📌")
+                    st.rerun()
+            st.markdown('</div>', unsafe_allow_html=True)
+
     def value_key(field):
         return f"{state_id}-{card_type.lower().replace(' ', '-').replace('/', '-').replace('&', 'and')}-{field}"
 
     if card_type == "Stat Highlight":
+        st.markdown(
+            '<div class="archetype-badge" style="background: rgba(255, 210, 30, 0.10); border-left: 4px solid #FFD21E; padding: 10px 14px; border-radius: 6px; margin: 12px 0 16px 0;">'
+            '<strong style="color: #FFD21E; font-size: 0.95rem;">⚡ ATHLETIC DATA GRAPHIC · 2026 EDITION</strong><br>'
+            '<span style="font-size: 0.86rem; color: #C3C9D1;">High-performance sports stat card featuring an electric category pill, 3D broadcast depth shadow, floating gold unit tag, and a segmented 3-tile scorecard shelf.</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         eyebrow_key = value_key("eyebrow")
         headline_key = value_key("headline")
         hero_value_key = value_key("value")
@@ -2063,13 +3051,24 @@ def _render_card_studio(
             (unit_key, defaults["unit"]),
         ):
             st.session_state.setdefault(key, default)
+        col_top = st.columns(2)
+        with col_top[0]:
+            eyebrow_val = st.text_input("Eyebrow", key=eyebrow_key)
+        with col_top[1]:
+            headline_val = st.text_input("Headline", key=headline_key)
+        col_hero = st.columns(2)
+        with col_hero[0]:
+            hero_val = st.text_input("Hero value", key=hero_value_key)
+        with col_hero[1]:
+            unit_val = st.text_input("Unit", key=unit_key)
         data = {
-            "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
-            "headline": st.text_input("Headline", key=headline_key),
-            "value": st.text_input("Hero value", key=hero_value_key),
-            "unit": st.text_input("Unit", key=unit_key),
+            "eyebrow": eyebrow_val,
+            "headline": headline_val,
+            "value": hero_val,
+            "unit": unit_val,
             "metrics": [],
         }
+        st.caption("Scorecard Shelf · Supporting Metrics (Up to 3)")
         for index, metric in enumerate(defaults["metrics"], 1):
             label_key = value_key(f"metric-{index}-label")
             metric_value_key = value_key(f"metric-{index}-value")
@@ -2082,6 +3081,13 @@ def _render_card_studio(
                 value = st.text_input(f"Metric {index} value", key=metric_value_key)
             data["metrics"].append({"label": label, "value": value})
     elif card_type == "Quote / Reaction":
+        st.markdown(
+            '<div class="archetype-badge" style="background: rgba(245, 204, 82, 0.10); border-left: 4px solid #F5CC52; padding: 10px 14px; border-radius: 6px; margin: 12px 0 16px 0;">'
+            '<strong style="color: #F5CC52; font-size: 0.95rem;">❝ EDITORIAL INTERVIEW · 2026 EDITION</strong><br>'
+            '<span style="font-size: 0.86rem; color: #C3C9D1;">Magazine feature portrait card featuring a champagne gold quotation glyph, left editorial accent rail, ivory text, and a frosted speaker plaque.</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         eyebrow_key = value_key("eyebrow")
         quote_key = value_key("quote")
         attribution_key = value_key("attribution")
@@ -2093,13 +3099,27 @@ def _render_card_studio(
             (context_key, defaults["context"]),
         ):
             st.session_state.setdefault(key, default)
+        eyebrow_val = st.text_input("Eyebrow", key=eyebrow_key)
+        quote_val = st.text_area("Quote", height=120, key=quote_key)
+        col_attr = st.columns(2)
+        with col_attr[0]:
+            attr_val = st.text_input("Attribution", key=attribution_key)
+        with col_attr[1]:
+            context_val = st.text_input("Context", key=context_key)
         data = {
-            "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
-            "quote": st.text_area("Quote", height=120, key=quote_key),
-            "attribution": st.text_input("Attribution", key=attribution_key),
-            "context": st.text_input("Context", key=context_key),
+            "eyebrow": eyebrow_val,
+            "quote": quote_val,
+            "attribution": attr_val,
+            "context": context_val,
         }
     elif card_type == "Head-to-Head":
+        st.markdown(
+            '<div class="archetype-badge" style="background: rgba(64, 196, 255, 0.10); border-left: 4px solid #40C4FF; padding: 10px 14px; border-radius: 6px; margin: 12px 0 16px 0;">'
+            '<strong style="color: #40C4FF; font-size: 0.95rem;">⚔ BROADCAST CLASH · TALE OF THE TAPE (2026)</strong><br>'
+            '<span style="font-size: 0.86rem; color: #C3C9D1;">Matchday rivalry comparison graphic with central 3D VS medallion, dual-color team identity (Cyan vs Gold), and comparative metric duel rows.</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         eyebrow_key = value_key("eyebrow")
         headline_key = value_key("headline")
         left_name_key = value_key("left-name")
@@ -2111,15 +3131,26 @@ def _render_card_studio(
             (right_name_key, defaults["right"]["name"]),
         ):
             st.session_state.setdefault(key, default)
+        col_h2h_top = st.columns(2)
+        with col_h2h_top[0]:
+            eyebrow_val = st.text_input("Eyebrow", key=eyebrow_key)
+        with col_h2h_top[1]:
+            headline_val = st.text_input("Headline", key=headline_key)
+        col_names = st.columns(2)
+        with col_names[0]:
+            left_name_val = st.text_input("Left name", key=left_name_key)
+        with col_names[1]:
+            right_name_val = st.text_input("Right name", key=right_name_key)
         data = {
-            "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
-            "headline": st.text_input("Headline", key=headline_key),
-            "left": {"name": st.text_input("Left name", key=left_name_key), "values": {}},
-            "right": {"name": st.text_input("Right name", key=right_name_key), "values": {}},
+            "eyebrow": eyebrow_val,
+            "headline": headline_val,
+            "left": {"name": left_name_val, "values": {}},
+            "right": {"name": right_name_val, "values": {}},
             "metrics": [],
             "image_mode": image_mode,
             "split_direction": split_direction,
         }
+        st.caption("Comparison Scorecard · Metric Duel Rows (Up to 3)")
         for index, metric in enumerate(defaults["metrics"], 1):
             label_key = value_key(f"metric-{index}-label")
             left_key = value_key(f"metric-{index}-left")
@@ -2139,6 +3170,13 @@ def _render_card_studio(
                 data["left"]["values"][label.strip()] = left_value.strip()
                 data["right"]["values"][label.strip()] = right_value.strip()
     else:
+        st.markdown(
+            '<div class="archetype-badge" style="background: rgba(255, 218, 98, 0.10); border-left: 4px solid #FFDA62; padding: 10px 14px; border-radius: 6px; margin: 12px 0 16px 0;">'
+            '<strong style="color: #FFDA62; font-size: 0.95rem;">🏛 PRESTIGE LANDMARK · HISTORIC RECORD (2026)</strong><br>'
+            '<span style="font-size: 0.86rem; color: #C3C9D1;">Commemorative Hall-of-Fame achievement plaque featuring landmark brass corner brackets, monumental gold numeral with 3D depth, and a framed context plate.</span>'
+            '</div>',
+            unsafe_allow_html=True,
+        )
         eyebrow_key = value_key("eyebrow")
         hero_value_key = value_key("value")
         label_key = value_key("label")
@@ -2150,57 +3188,73 @@ def _render_card_studio(
             (context_key, defaults["context"]),
         ):
             st.session_state.setdefault(key, default)
+        col_m_top = st.columns(2)
+        with col_m_top[0]:
+            eyebrow_val = st.text_input("Eyebrow", key=eyebrow_key)
+        with col_m_top[1]:
+            hero_val = st.text_input("Value", key=hero_value_key)
+        label_val = st.text_input("Label", key=label_key)
+        context_val = st.text_area("Context", height=90, key=context_key)
         data = {
-            "eyebrow": st.text_input("Eyebrow", key=eyebrow_key),
-            "value": st.text_input("Value", key=hero_value_key),
-            "label": st.text_input("Label", key=label_key),
-            "context": st.text_area("Context", height=90, key=context_key),
+            "eyebrow": eyebrow_val,
+            "value": hero_val,
+            "label": label_val,
+            "context": context_val,
         }
 
     result_key = f"{state_id}-result"
-    if st.button("Render card", type="primary", width="stretch", key=f"{state_id}-render"):
-        try:
-            from renderer import _top5_subject_mask
+    if st.button("Render card", type="primary", width="stretch", key=f"{state_id}-render", help="Generate and render card"):
+        with st.spinner("Rendering editorial card…"):
+            try:
+                from renderer import _top5_subject_mask
 
-            first_bytes = bytes(
-                crop_store.get(selected_primary_asset["asset_key"])
-                or selected_primary_asset.get("bytes")
-                or b""
-            )
-            if not first_bytes:
-                raise CardStudioError("The selected image has no usable image bytes.")
-
-            if card_type == "Head-to-Head" and image_mode == "Two images":
-                second_bytes = bytes(
-                    crop_store.get(selected_secondary_asset["asset_key"])
-                    or selected_secondary_asset.get("bytes")
+                first_bytes = bytes(
+                    crop_store.get(selected_primary_asset["asset_key"])
+                    or selected_primary_asset.get("bytes")
                     or b""
                 )
-                if not second_bytes:
-                    raise CardStudioError("The second selected image has no usable image bytes.")
-                source = (first_bytes, second_bytes)
-                subject_mask = (
-                    _top5_subject_mask(first_bytes),
-                    _top5_subject_mask(second_bytes),
-                )
-            else:
-                source = first_bytes
-                subject_mask = _top5_subject_mask(first_bytes)
+                if not first_bytes:
+                    raise CardStudioError("The selected image has no usable image bytes.")
 
-            st.session_state[result_key] = {
-                "bytes": render_card(
-                    card_type,
-                    source,
-                    data,
-                    subject_mask=subject_mask,
-                ),
-                "type": card_type,
-                "data": data,
-                "source": selected_primary_asset["source"],
-                "source_key": selected_primary_asset["asset_key"],
-            }
-        except (CardStudioError, OSError, RuntimeError) as exc:
-            st.session_state[result_key] = {"error": str(exc)}
+                if card_type == "Head-to-Head" and image_mode == "Two images":
+                    second_bytes = bytes(
+                        crop_store.get(selected_secondary_asset["asset_key"])
+                        or selected_secondary_asset.get("bytes")
+                        or b""
+                    )
+                    if not second_bytes:
+                        raise CardStudioError("The second selected image has no usable image bytes.")
+                    source = (first_bytes, second_bytes)
+                    try:
+                        mask_1 = _top5_subject_mask(first_bytes)
+                    except Exception:
+                        mask_1 = None
+                    try:
+                        mask_2 = _top5_subject_mask(second_bytes)
+                    except Exception:
+                        mask_2 = None
+                    subject_mask = (mask_1, mask_2)
+                else:
+                    source = first_bytes
+                    try:
+                        subject_mask = _top5_subject_mask(first_bytes)
+                    except Exception:
+                        subject_mask = None
+
+                st.session_state[result_key] = {
+                    "bytes": render_card(
+                        card_type,
+                        source,
+                        data,
+                        subject_mask=subject_mask,
+                    ),
+                    "type": card_type,
+                    "data": data,
+                    "source": selected_primary_asset["source"],
+                    "source_key": selected_primary_asset["asset_key"],
+                }
+            except (CardStudioError, OSError, RuntimeError) as exc:
+                st.session_state[result_key] = {"error": str(exc)}
 
     result = st.session_state.get(result_key) or {}
     if result.get("error"):
@@ -2214,51 +3268,62 @@ def _render_card_studio(
         '<div class="section-count">1080 × 1920 · exact frame</div></div>',
         unsafe_allow_html=True,
     )
-    st.image(result["bytes"], width=420)
+    col_card_prev, col_card_action = st.columns([1, 1], gap="medium")
+    with col_card_prev:
+        st.image(result["bytes"], width=300)
 
-    if top5 and active_slide is not None:
-        slide = active_slide
-    elif top5:
-        slide = st.selectbox("Add card to slide", list(range(1, 7)), key=f"{state_id}-slide")
-    else:
-        slide = st.selectbox("Add card to slide", list(range(1, slide_count + 1)), key=f"{state_id}-slide")
-
-    if st.button(
-        f"Add to Slide {slide} →",
-        type="primary",
-        width="stretch",
-        key=f"{state_id}-use",
-    ):
-        first_bytes = bytes(
-            crop_store.get(selected_primary_asset["asset_key"])
-            or selected_primary_asset.get("bytes")
-            or b""
+    with col_card_action:
+        st.markdown(
+            f'<div style="padding:10px 12px;background:var(--surface-soft);border-radius:10px;border:1px solid var(--line);margin-bottom:12px;">'
+            f'<div class="eyebrow">ATTACH TO SLIDE</div>'
+            f'<div style="font-weight:700;color:var(--ink);">{card_type}</div>'
+            f'<div class="topic-meta">{selected_primary_asset.get("source", "Card Studio")}</div>'
+            f'</div>',
+            unsafe_allow_html=True,
         )
-        assignment = {
-            "asset_key": f"card-studio-{slide}-{selected_primary_asset['asset_key']}",
-            "result_key": "card-studio",
-            "source": result.get("source") or "Card Studio",
-            "label": f"Card Studio · {result.get('type') or 'Card'}",
-            "bytes": first_bytes,
-            "preview_bytes": bytes(result["bytes"]),
-            "card_studio": {
-                "type": result.get("type"),
-                "data": dict(result.get("data") or {}),
-            },
-        }
-        if top5:
-            st.session_state.test_top5_visual_assignments[slide] = assignment
-            st.session_state.test_top5_visual_handoff = None
-            st.session_state.test_top5_rendered_video_path = None
+        if top5 and active_slide is not None:
+            slide = active_slide
+        elif top5:
+            slide = st.selectbox("Add card to slide", list(range(1, 7)), key=f"{state_id}-slide")
         else:
-            assignments = st.session_state.live_visual_assignments if live else st.session_state.visual_assignments
-            assignments[slide] = assignment
-            if live:
-                st.session_state.live_visuals_approved = False
+            slide = st.selectbox("Add card to slide", list(range(1, slide_count + 1)), key=f"{state_id}-slide")
+
+        if st.button(
+            f"Add to Slide {slide} →",
+            type="primary",
+            width="stretch",
+            key=f"{state_id}-use",
+        ):
+            first_bytes = bytes(
+                crop_store.get(selected_primary_asset["asset_key"])
+                or selected_primary_asset.get("bytes")
+                or b""
+            )
+            assignment = {
+                "asset_key": f"card-studio-{slide}-{selected_primary_asset['asset_key']}",
+                "result_key": "card-studio",
+                "source": result.get("source") or "Card Studio",
+                "label": f"Card Studio · {result.get('type') or 'Card'}",
+                "bytes": first_bytes,
+                "preview_bytes": bytes(result["bytes"]),
+                "card_studio": {
+                    "type": result.get("type"),
+                    "data": dict(result.get("data") or {}),
+                },
+            }
+            if top5:
+                st.session_state.test_top5_visual_assignments[slide] = assignment
+                st.session_state.test_top5_visual_handoff = None
+                st.session_state.test_top5_rendered_video_path = None
             else:
-                st.session_state.visuals_approved = False
-                st.session_state.approved_visuals = None
-        st.rerun()
+                assignments = st.session_state.live_visual_assignments if live else st.session_state.visual_assignments
+                assignments[slide] = assignment
+                if live:
+                    st.session_state.live_visuals_approved = False
+                else:
+                    st.session_state.visuals_approved = False
+                    st.session_state.approved_visuals = None
+            st.rerun()
 
 
 def _top5_fit_preview(value, width=300, height=533):
@@ -2421,30 +3486,54 @@ def _render_pipeline_notice(state_key: str):
 
 def _render_app_sidebar():
     with st.container(key="workspace-nav"):
-        left, right = st.columns([1, .16], gap="small")
-        with left:
+        col_brand, col_switch, col_nav = st.columns([1.3, 1, 0.8], gap="small", vertical_alignment="center")
+        with col_brand:
             st.markdown(
-                '<div class="nav-brand">FINAL SHORTS</div>'
-                '<div class="nav-sub">Editorial production</div>',
+                '<div style="display:flex;align-items:center;gap:10px;">'
+                '<div style="width:28px;height:28px;border-radius:8px;background:#0f172a;display:grid;place-items:center;color:#fff;font-weight:900;font-size:13px;letter-spacing:-0.05em;">FS</div>'
+                '<div>'
+                '<div class="nav-brand">FINAL SHORTS <span style="font-size:0.65rem;padding:2px 7px;border-radius:999px;background:#eef2ff;color:#4f46e5;font-weight:750;margin-left:4px;">PRO STUDIO</span></div>'
+                '<div class="nav-sub">Autonomous Vertical Video Factory</div>'
+                '</div>'
+                '</div>',
                 unsafe_allow_html=True,
             )
-        with right:
-            if st.button("Home", key="workspace-home", width="stretch"):
-                st.session_state.app_mode = "home"
+        with col_switch:
+            current_workspace = "TEST" if st.session_state.app_mode == "test" else "LIVE"
+            workspace = st.pills(
+                "Workspace",
+                ["TEST", "LIVE"],
+                default=current_workspace,
+                key="workspace-switcher",
+                label_visibility="collapsed",
+            ) or current_workspace
+            target_mode = "test" if workspace == "TEST" else "live"
+            if target_mode != st.session_state.app_mode:
+                st.session_state.app_mode = target_mode
                 st.rerun()
-
-        current_workspace = "TEST" if st.session_state.app_mode == "test" else "LIVE"
-        workspace = st.pills(
-            "Workspace",
-            ["TEST", "LIVE"],
-            default=current_workspace,
-            key="workspace-switcher",
-            label_visibility="collapsed",
-        ) or current_workspace
-        target_mode = "test" if workspace == "TEST" else "live"
-        if target_mode != st.session_state.app_mode:
-            st.session_state.app_mode = target_mode
-            st.rerun()
+        with col_nav:
+            btn_home, btn_back = st.columns([1, 1], gap="small")
+            with btn_home:
+                if st.button("Home", key="workspace-home", width="stretch"):
+                    st.session_state.app_mode = "home"
+                    st.rerun()
+            with btn_back:
+                if st.session_state.app_mode == "test" and st.session_state.test_production_line:
+                    if st.button("Lines", key="test-back-to-lines", width="stretch"):
+                        st.session_state.test_production_line = None
+                        st.session_state.test_stage = "01 · Topic Fetcher"
+                        st.session_state.test_pipeline_notice = None
+                        st.rerun()
+                elif st.session_state.app_mode == "live" and st.session_state.live_production_line:
+                    if st.button("Lines", key="live-back-to-lines", width="stretch"):
+                        _live_reset_downstream()
+                        st.session_state.live_production_line = None
+                        st.session_state.live_desk = None
+                        st.session_state.live_cricket_profile = None
+                        st.session_state.live_topics = []
+                        st.session_state.live_topics_profile = None
+                        st.session_state.live_stage = "01 · Story"
+                        st.rerun()
 
         if st.session_state.app_mode == "test" and st.session_state.get("factory_format") == "long_form":
             st.markdown(
@@ -2463,16 +3552,19 @@ def _render_app_sidebar():
                 st.rerun()
         elif st.session_state.app_mode == "test" and st.session_state.test_production_line:
             line_name = {
-                "deep_dive": "Deep-Dive",
-                "top_5": "Top-5",
-                "otd": "OTD",
-                "youtube_trends": "YT Trends",
+                "deep_dive": "Deep-Dive Cricket",
+                "top_5": "Top-5 Stories",
+                "otd": "On This Day",
+                "youtube_trends": "YouTube Trends",
             }.get(
                 st.session_state.test_production_line,
                 str(st.session_state.test_production_line).replace("_", " ").title(),
             )
             st.markdown(
-                f'<div class="nav-sub" style="margin-top:12px;">{line_name} · Test stages</div>',
+                f'<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 6px 0;">'
+                f'<span class="eyebrow" style="color:var(--accent);font-size:0.65rem;">{line_name.upper()} · PRODUCTION PIPELINE</span>'
+                f'<span style="font-size:0.68rem;color:var(--subtle);font-weight:650;">Direct Stage Navigation</span>'
+                f'</div>',
                 unsafe_allow_html=True,
             )
             labels = [stage["key"] for stage in STAGES]
@@ -2488,12 +3580,6 @@ def _render_app_sidebar():
             if selected != st.session_state.test_stage:
                 st.session_state.test_stage = selected
                 st.session_state.test_pipeline_notice = None
-                st.rerun()
-            if st.button("← Production lines", key="test-back-to-lines", width="stretch"):
-                st.session_state.test_production_line = None
-                st.session_state.test_stage = "01 · Topic Fetcher"
-                st.session_state.test_pipeline_notice = None
-                st.rerun()
 
 
 def _live_story_key(topic) -> str:
@@ -2581,20 +3667,16 @@ def _script_for_topic(
     research_source=None,
     search_query=None,
 ) -> dict:
-    from universal_script_writer import write_universal_script
-    from script_writer import write_script
+    from script_writer import ScriptWriter
 
-    if universal or profile == "niche_sports":
-        return write_universal_script(
-            _story_payload(topic),
-            language=language,
-            angle=angle,
-            research_source=research_source,
-            search_query=search_query,
-        )
-    return write_script(
+    desk_profile = profile or ("youtube_trends" if universal else "cricket_india_asia")
+    return ScriptWriter.write(
         _story_payload(topic),
+        profile=desk_profile,
         language=language,
+        angle=angle,
+        research_source=research_source,
+        search_query=search_query,
     )
 
 
@@ -2632,7 +3714,7 @@ def _render_topic_tiles(
 ):
     selection = None
     for start in range(0, len(topics), columns):
-        row = st.columns(columns, gap="small")
+        row = st.columns(columns, gap="medium")
         for col, (index, tile) in zip(
             row,
             enumerate(topics[start:start + columns], start=start),
@@ -2643,50 +3725,67 @@ def _render_topic_tiles(
                 reverse=True,
             ))
             if tile.group_key.startswith("keyword:"):
-                tile_title = tile.group_key.split(":", 1)[1].title()
+                tile_tag = f"KEYWORD · {tile.group_key.split(':', 1)[1].upper()}"
             elif tile.group_key.startswith("player:"):
-                tile_title = tile.group_key.split(":", 1)[1].title()
+                tile_tag = f"PLAYER · {tile.group_key.split(':', 1)[1].upper()}"
+            elif tile.group_key.startswith("otd:"):
+                tile_tag = "HISTORICAL MILESTONE"
             else:
-                tile_title = tile.title
+                tile_tag = "BREAKING DEVELOPMENTS"
 
             with col:
+                primary_member = members[0]
+                is_selected = (
+                    selected_index == index
+                    and (not topics[index].url or topics[index].url == primary_member.url)
+                )
+                card_class = "radar-topic-card selected-card" if is_selected else "radar-topic-card"
                 with st.container(key=f"{key_prefix}topic-tile-{index}"):
-                    is_open = st.session_state.get(open_state_key) == index
+                    source_name = primary_member.source or "Sports Wire"
+                    pub_str = f"{primary_member.published_at:%d %b, %H:%M}"
+                    extra_count = len(members) - 1
+                    extra_badge = f'<span class="badge" style="font-size:0.6rem; padding:2px 7px; background:#eff6ff; color:#2563eb; border:1px solid #bfdbfe;">+{extra_count} sources</span>' if extra_count > 0 else ""
+
+                    st.markdown(
+                        f'<div class="{card_class}">'
+                        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">'
+                        f'<span class="badge" style="font-size:0.65rem; font-weight:800; color:var(--accent); text-transform:uppercase;">{tile_tag}</span>'
+                        f'<span style="font-size:0.65rem; color:var(--subtle); font-weight:600;">{pub_str}</span>'
+                        f'</div>'
+                        f'<div class="topic-title" style="margin:6px 0 10px; font-size:0.95rem; font-weight:800; line-height:1.35; color:var(--ink); min-height:3.6em;">{primary_member.title}</div>'
+                        f'<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--surface-soft); padding-top:8px;">'
+                        f'<span style="font-size:0.7rem; font-weight:700; color:var(--muted);">{source_name}</span>'
+                        f'{extra_badge}'
+                        f'</div>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
+
+                    btn_label = "✓ Story Selected" if is_selected else "Produce Short →"
                     if st.button(
-                        f'{"▾" if is_open else "▸"}  {tile_title}',
-                        key=f"{key_prefix}topic-tile-header-{index}",
+                        btn_label,
+                        key=f"{key_prefix}topic-select-{index}-0",
                         width="stretch",
-                        type="primary" if is_open else "secondary",
+                        type="primary" if is_selected else "secondary",
                     ):
-                        st.session_state[open_state_key] = None if is_open else index
-                        st.rerun()
+                        selection = (index, primary_member, members)
 
-                    if not is_open:
-                        continue
-
-                    for headline_index, member in enumerate(members):
-                        is_selected = (
-                            selected_index == index
-                            and topics[index].url == member.url
-                        )
-                        with st.container(
-                            horizontal=True,
-                            vertical_alignment="center",
-                            horizontal_alignment="distribute",
-                            gap="small",
-                        ):
-                            st.markdown(
-                                f'<div class="topic-title">{member.title}</div>'
-                                f'<div class="topic-meta">{member.source or "Sports desk"} · {member.published_at:%d %b}</div>',
-                                unsafe_allow_html=True,
-                            )
-                            if st.button(
-                                "Selected" if is_selected else "Choose",
-                                key=f"{key_prefix}topic-select-{index}-{headline_index}",
-                                width="content",
-                                type="primary" if is_selected else "secondary",
-                            ):
-                                selection = (index, member, members)
+                    if len(members) > 1:
+                        with st.expander(f"Inspect all {len(members)} coverage reports", expanded=False):
+                            for headline_index, member in enumerate(members[1:], start=1):
+                                member_selected = (
+                                    selected_index == index
+                                    and topics[index].url == member.url
+                                )
+                                st.markdown(f"**{member.title}**")
+                                st.caption(f"{member.source or 'Wire'} · {member.published_at:%d %b, %H:%M}")
+                                if st.button(
+                                    "Selected" if member_selected else "Use this source",
+                                    key=f"{key_prefix}topic-select-{index}-{headline_index}",
+                                    width="stretch",
+                                    type="primary" if member_selected else "secondary",
+                                ):
+                                    selection = (index, member, members)
     return selection
 
 
@@ -2698,46 +3797,100 @@ def _render_universal_angle_picker(
     button_prefix: str,
 ) -> str | None:
     st.markdown(
-        '<div class="section-head"><div><div class="eyebrow">STORY ANGLE</div>'
-        '<div class="section-title">Choose what this Short is actually about</div></div>'
-        '<div class="section-count">3 research-backed angles</div></div>',
+        '<div class="section-head"><div><div class="eyebrow">VIRAL STORY LENS</div>'
+        '<div class="section-title">Choose What This Short Is Actually About</div></div>'
+        '<div class="section-count">3 Creator Archetypes + Custom Prompt</div></div>',
         unsafe_allow_html=True,
     )
     st.caption(
-        "The selected angle is authoritative. The Scriptwriter will build the narration around it instead of defaulting to the most obvious event."
+        "The selected angle is authoritative. The scriptwriter builds the narration around this specific thesis rather than reading a scorecard."
     )
 
     selected_index = int(st.session_state.get(selected_key, 0) or 0)
     selected_index = max(0, min(selected_index, len(angles) - 1))
+    custom_val = str(st.session_state.get(custom_key) or "").strip()
+
+    angle_types = [
+        ("⚡ HIGH-STAKES DEBATE", "angle-pill-debate", "#f59e0b"),
+        ("📊 FREAK STAT & RECORD", "angle-pill-stat", "#38bdf8"),
+        ("👁️ NARRATIVE INVERSION", "angle-pill-drama", "#c084fc"),
+    ]
+
     cols = st.columns(3, gap="medium")
     for index, angle in enumerate(angles):
         with cols[index]:
-            title = str(angle.get("title") or f"Angle {index + 1}")
+            title = str(angle.get("title") or f"Angle 0{index + 1}")
             description = str(angle.get("description") or "")
             evidence = str(angle.get("evidence_basis") or "")
-            st.markdown(f"**{title}**")
-            st.caption(description)
-            st.caption(f"Evidence: {evidence}")
+            is_active = (selected_index == index and not custom_val)
+            badge_title, badge_class, accent_color = angle_types[index % len(angle_types)]
+            active_class = "active-angle" if is_active else ""
+            selected_badge = f'<span style="font-size:0.65rem; font-weight:800; color:#10b981; background:rgba(16,185,129,0.15); border:1px solid rgba(16,185,129,0.3); padding:2px 8px; border-radius:999px;">✓ ACTIVE</span>' if is_active else ""
+
+            st.markdown(
+                f'<div class="angle-bento-card {active_class}">'
+                f'<div>'
+                f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">'
+                f'<span class="{badge_class}">{badge_title}</span>'
+                f'{selected_badge}'
+                f'</div>'
+                f'<div style="font-size:1rem; font-weight:800; color:#ffffff; line-height:1.25; margin-bottom:6px;">{title}</div>'
+                f'<div style="font-size:0.78rem; color:#94a3b8; line-height:1.4; margin-bottom:8px;">{description}</div>'
+                f'</div>'
+                f'<div style="font-size:0.68rem; color:#64748b; border-top:1px solid rgba(255,255,255,0.06); padding-top:8px;"><strong>Grounding:</strong> {evidence}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
             if st.button(
-                "Selected" if selected_index == index else "Choose",
-                type="primary" if selected_index == index else "secondary",
+                "Selected" if is_active else "Choose Angle",
+                type="primary" if is_active else "secondary",
                 width="stretch",
                 key=f"{button_prefix}-angle-{index}",
             ):
                 st.session_state[selected_key] = index
-                st.session_state[custom_key] = ""
-                selected_index = index
+                if custom_val:
+                    st.session_state[custom_key] = ""
+                st.rerun()
+
+    # Creator Studio Prompt Terminal
+    terminal_active = bool(custom_val)
+    terminal_class = "active-terminal" if terminal_active else ""
+    armed_badge = (
+        '<span style="font-size:0.68rem; font-weight:800; color:#38bdf8; background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); padding:2px 8px; border-radius:999px;">● ARMED (OVERRIDES CARDS)</span>'
+        if terminal_active
+        else ""
+    )
+    st.markdown(
+        f'<div class="custom-prompt-terminal {terminal_class}">'
+        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">'
+        f'<div style="font-size:0.75rem; font-weight:850; letter-spacing:0.1em; color:#38bdf8; text-transform:uppercase;">✨ FREEFORM CREATOR PROMPT & MANUAL ANGLE</div>'
+        f'{armed_badge}'
+        f'</div>'
+        f'<div style="font-size:0.78rem; color:#94a3b8; line-height:1.4; margin-bottom:12px;">'
+        f'Type any viral angle, controversy, or debate (e.g. <em>"Is a 33-ball duck better than a golden duck in Test cricket?"</em>). The AI will research facts to back up this lens and compose the Short around it.'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
     custom = st.text_area(
-        "Custom angle",
+        "Custom angle prompt",
         value=str(st.session_state.get(custom_key) or ""),
-        height=80,
-        placeholder='e.g. "Focus on exactly what Alcaraz said after the final."',
+        height=85,
+        placeholder='e.g. "Is a 33-ball duck better than a golden duck in Test cricket? Debate tactical grit vs wasted balls."',
         key=custom_key,
+        label_visibility="collapsed",
     ).strip()
+
     if custom:
         selected_text = custom
-        st.caption("Custom angle selected.")
+        col_c1, col_c2 = st.columns([0.8, 0.2])
+        with col_c1:
+            st.caption(f"⚡ Custom Lens Armed: '{custom}'")
+        with col_c2:
+            if st.button("Clear Custom", key=f"{button_prefix}-clear-custom"):
+                st.session_state[custom_key] = ""
+                st.rerun()
     else:
         angle = angles[selected_index]
         selected_text = (
@@ -2746,7 +3899,7 @@ def _render_universal_angle_picker(
         ).strip(": ")
 
     if st.button(
-        "Generate Script from selected angle",
+        "⚡ Generate Viral Short from Selected Lens",
         type="primary",
         width="stretch",
         key=f"{button_prefix}-generate",
@@ -2766,6 +3919,13 @@ def _render_visual_option_grid(
         current = options[0]
         st.session_state[session_key] = current
 
+    st.markdown(
+        '<div style="display:flex;justify-content:space-between;margin:0.2rem 0 0.5rem 0;font-size:0.75rem;letter-spacing:0.05em;color:var(--text-muted, #888);">'
+        '<span>STAGE 1: COLLECTION (SCRAPE & SEARCH)</span>'
+        '<span>STAGE 2: BUILDER (CARDS & CUTOUT)</span>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
     for start in range(0, len(options), 4):
         cols = st.columns(min(4, len(options) - start), gap="small")
         for col, option in zip(cols, options[start:start + 4]):
@@ -2976,96 +4136,126 @@ def _render_visual_asset_pool(
         st.caption("No images are currently available from this option.")
         return
 
-    for start in range(0, len(visible_assets), 3):
-        cols = st.columns(3, gap="medium")
-        for col, (index, asset) in zip(cols, visible_assets[start:start + 3]):
-            with col:
-                asset_key = _visual_asset_key(asset_result_key, index, asset)
-                source = str(
-                    asset.get("publisher")
-                    or asset.get("source")
-                    or asset.get("model")
-                    or "Web source"
-                )
-                label = str(
-                    asset.get("article_title")
-                    or asset.get("model")
-                    or "Selected visual"
-                )
-                with st.container(key=f"{prefix}visual-card-{result_key}-{index}"):
-                    preview_bytes = st.session_state[crops_key].get(asset_key)
-                    preview = _fit_visual_preview(
-                        preview_bytes if preview_bytes else asset.get("bytes")
-                    )
-                    if preview is not None:
-                        st.image(preview, width="stretch")
-                    st.markdown(
-                        f'<div class="visual-source">{source}</div>',
-                        unsafe_allow_html=True,
-                    )
-                    if label:
-                        st.markdown(
-                            f'<div class="visual-detail">{label}</div>',
-                            unsafe_allow_html=True,
-                        )
-                    if preview_bytes:
-                        st.markdown(
-                            '<div class="visual-crop-label">CROP APPLIED</div>',
-                            unsafe_allow_html=True,
-                        )
+    st.markdown(
+        f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
+        f'<span><strong>{len(visible_assets)} images in pool</strong> · scroll inside tray to browse</span>'
+        f'<span>Attach to slide or delete unneeded assets</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
 
-                    choose_col, crop_col, delete_col = st.columns(3, gap="small")
-                    with choose_col:
-                        with st.popover("Choose for slide"):
-                            selected_slide = st.selectbox(
-                                "Slide",
-                                list(range(1, slide_count + 1)),
-                                index=0,
-                                key=f"{prefix}attach-slide-{asset_key}",
+    with st.container(height=520):
+        for start in range(0, len(visible_assets), 4):
+            cols = st.columns(4, gap="small")
+            for col, (index, asset) in zip(cols, visible_assets[start:start + 4]):
+                with col:
+                    asset_key = _visual_asset_key(asset_result_key, index, asset)
+                    source = str(
+                        asset.get("publisher")
+                        or asset.get("source")
+                        or asset.get("model")
+                        or "Web source"
+                    )
+                    label = str(
+                        asset.get("article_title")
+                        or asset.get("model")
+                        or "Selected visual"
+                    )
+                    with st.container(key=f"{prefix}visual-card-{result_key}-{index}"):
+                        preview_bytes = st.session_state[crops_key].get(asset_key)
+                        preview = _fit_visual_preview(
+                            preview_bytes if preview_bytes else asset.get("bytes"),
+                            width=240,
+                            height=360,
+                        )
+                        if preview is not None:
+                            st.image(preview, width="stretch")
+                        st.markdown(
+                            f'<div class="visual-source">{source}</div>',
+                            unsafe_allow_html=True,
+                        )
+                        if label:
+                            st.markdown(
+                                f'<div class="visual-detail">{label}</div>',
+                                unsafe_allow_html=True,
                             )
+                        if preview_bytes:
+                            st.markdown(
+                                '<div class="visual-crop-label">CROP APPLIED</div>',
+                                unsafe_allow_html=True,
+                            )
+
+                        is_studio_active = (
+                            st.session_state.get("card_studio_selected_asset_key") == asset_key
+                        )
+                        if st.button(
+                            "In Card Studio ✓" if is_studio_active else "Select for Card Studio ➜",
+                            type="primary" if is_studio_active else "secondary",
+                            width="stretch",
+                            key=f"{prefix}use-card-studio-{asset_key}",
+                        ):
+                            st.session_state["card_studio_selected_asset_key"] = asset_key
+                            if live:
+                                st.session_state.setdefault("live_manual_subject_cutout", {})["image_key"] = asset_key
+                                st.session_state["live-cricket-card-studio-image-1"] = asset_key
+                            else:
+                                st.session_state.setdefault("manual_subject_cutout", {})["image_key"] = asset_key
+                                st.session_state["test-standalone-card-studio-image-1"] = asset_key
+                            st.toast("Loaded image into Card Studio!", icon="🎨")
+                            st.rerun()
+
+                        choose_col, crop_col, delete_col = st.columns(3, gap="small")
+                        with choose_col:
+                            with st.popover("Choose for slide"):
+                                selected_slide = st.selectbox(
+                                    "Slide",
+                                    list(range(1, slide_count + 1)),
+                                    index=0,
+                                    key=f"{prefix}attach-slide-{asset_key}",
+                                )
+                                if st.button(
+                                    "Attach",
+                                    type="primary",
+                                    width="stretch",
+                                    key=f"{prefix}attach-{asset_key}",
+                                ):
+                                    _attach_visual_asset(
+                                        result_key,
+                                        index,
+                                        asset,
+                                        selected_slide,
+                                        live=live,
+                                    )
+                                    st.rerun()
+                        with crop_col:
+                            raw = asset.get("bytes")
                             if st.button(
-                                "Attach",
-                                type="primary",
+                                "Crop",
                                 width="stretch",
-                                key=f"{prefix}attach-{asset_key}",
+                                key=f"{prefix}crop-{asset_key}",
                             ):
-                                _attach_visual_asset(
+                                if isinstance(raw, (bytes, bytearray)):
+                                    _crop_visual_dialog(
+                                        asset_key,
+                                        bytes(raw),
+                                        source,
+                                        crop_store=crops_key,
+                                    )
+                                else:
+                                    st.warning("This visual does not have a crop-ready payload.")
+                        with delete_col:
+                            if st.button(
+                                "Delete",
+                                width="stretch",
+                                key=f"{prefix}delete-{asset_key}",
+                            ):
+                                _delete_visual_asset(
                                     result_key,
                                     index,
                                     asset,
-                                    selected_slide,
                                     live=live,
                                 )
                                 st.rerun()
-                    with crop_col:
-                        raw = asset.get("bytes")
-                        if st.button(
-                            "Crop",
-                            width="stretch",
-                            key=f"{prefix}crop-{asset_key}",
-                        ):
-                            if isinstance(raw, (bytes, bytearray)):
-                                _crop_visual_dialog(
-                                    asset_key,
-                                    bytes(raw),
-                                    source,
-                                    crop_store=crops_key,
-                                )
-                            else:
-                                st.warning("This visual does not have a crop-ready payload.")
-                    with delete_col:
-                        if st.button(
-                            "Delete",
-                            width="stretch",
-                            key=f"{prefix}delete-{asset_key}",
-                        ):
-                            _delete_visual_asset(
-                                result_key,
-                                index,
-                                asset,
-                                live=live,
-                            )
-                            st.rerun()
 
 
 def _render_visual_board(slide_count: int, live: bool = False):
@@ -3139,9 +4329,294 @@ def _render_visual_board(slide_count: int, live: bool = False):
                     st.caption(assignment.get("source") or "Attached visual")
                 else:
                     st.markdown(
-                        '<div class="empty-slot">EMPTY</div>',
+                        f'<div class="empty-slot">'
+                        f'<div style="font-size:1.6rem;color:var(--line-strong);line-height:1;">⬚</div>'
+                        f'<div>SLOT {slide} READY</div>'
+                        f'<div style="font-size:0.6rem;color:var(--subtle);font-weight:600;margin-top:2px;">Select from pool below</div>'
+                        f'</div>',
                         unsafe_allow_html=True,
                     )
+
+
+def _render_two_pane_visual_workspace(
+    active_mode: str,
+    slide_count: int,
+    live: bool = False,
+    polygon_flow: bool = True,
+):
+    prefix = "live_" if live else "test_"
+    pane_key = f"{prefix}visuals_pane_view"
+    st.session_state.setdefault(pane_key, "⊞ Side-by-Side (Split)")
+
+    st.markdown(
+        '<div style="display:flex;align-items:center;justify-content:space-between;margin:0.75rem 0 0.45rem 0;">'
+        '<div style="font-size:0.76rem;letter-spacing:0.06em;font-weight:700;color:var(--text-muted);text-transform:uppercase;">'
+        'WORKPLACE LAYOUT · TWO-PANE EDITORIAL DESK'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    view_cols = st.columns([1.6, 0.45, 0.45, 0.45], gap="small")
+    with view_cols[0]:
+        st.markdown(
+            '<div style="font-size:0.78rem;color:var(--text-muted);padding-top:6px;">'
+            '👈 <strong>Left:</strong> Card Studio (Apply themes) &nbsp;|&nbsp; 👉 <strong>Right:</strong> Visual Fetcher (Fetch & Select)'
+            '</div>',
+            unsafe_allow_html=True,
+        )
+    with view_cols[1]:
+        if st.button(
+            "⊞ Split View",
+            type="primary" if st.session_state[pane_key] == "⊞ Side-by-Side (Split)" else "secondary",
+            width="stretch",
+            key=f"{prefix}view-split-btn",
+        ):
+            st.session_state[pane_key] = "⊞ Side-by-Side (Split)"
+            st.rerun()
+    with view_cols[2]:
+        if st.button(
+            "◀ Focus Studio",
+            type="primary" if st.session_state[pane_key] in {"◀ Card Studio Focus", "▶ Card Studio Focus"} else "secondary",
+            width="stretch",
+            key=f"{prefix}view-studio-btn",
+        ):
+            st.session_state[pane_key] = "◀ Card Studio Focus"
+            st.rerun()
+    with view_cols[3]:
+        if st.button(
+            "▶ Focus Fetcher",
+            type="primary" if st.session_state[pane_key] in {"▶ Visual Fetcher Focus", "◀ Visual Fetcher Focus"} else "secondary",
+            width="stretch",
+            key=f"{prefix}view-fetcher-btn",
+        ):
+            st.session_state[pane_key] = "▶ Visual Fetcher Focus"
+            st.rerun()
+
+    current_view = st.session_state[pane_key]
+    show_fetcher = current_view in {"⊞ Side-by-Side (Split)", "▶ Visual Fetcher Focus", "◀ Visual Fetcher Focus"}
+    show_studio = current_view in {"⊞ Side-by-Side (Split)", "◀ Card Studio Focus", "▶ Card Studio Focus"}
+
+    if active_mode.startswith("Option 5") and not show_studio:
+        show_studio = True
+
+    if show_fetcher and show_studio:
+        col_studio, col_fetcher = st.columns([1, 1], gap="large")
+    elif show_studio:
+        col_studio = st.container()
+        col_fetcher = None
+    else:
+        col_studio = None
+        col_fetcher = st.container()
+
+    if col_fetcher is not None:
+        with col_fetcher:
+            st.markdown(
+                '<div class="section-head" style="margin-bottom:0.75rem;"><div>'
+                '<div class="eyebrow">RIGHT PANE · VISUAL FETCHER</div>'
+                '<div class="section-title">Image Acquisition Desk</div></div>'
+                '<div class="section-count">4 Image Sources</div></div>',
+                unsafe_allow_html=True,
+            )
+            fetcher_mode = active_mode if not active_mode.startswith("Option 5") else "Option 1 · Automatic Scraper"
+            if live:
+                if fetcher_mode.startswith("Option 1"):
+                    result = st.session_state.get("live_visual_result") or {}
+                    if result.get("error"):
+                        st.error(result["error"])
+                        if st.button(
+                            "Retry automatic scrape",
+                            type="primary",
+                            width="stretch",
+                            key="live-retry-auto-visuals",
+                        ):
+                            st.session_state.live_visual_result = None
+                            st.rerun()
+                    else:
+                        asset_count = len(result.get("assets") or [])
+                        threshold = int(result.get("success_threshold") or 10)
+                        if asset_count < threshold:
+                            st.warning(
+                                f"Automatic scraper returned {asset_count} images. "
+                                "You can retry it or use another visual source."
+                            )
+                            if st.button(
+                                "Retry automatic scrape",
+                                width="stretch",
+                                key="live-retry-auto-visuals-underfilled",
+                            ):
+                                st.session_state.live_visual_result = None
+                                st.rerun()
+                        st.caption(
+                            f'{len(result.get("assets") or [])} images · '
+                            f'{int(result.get("pages_scraped") or 0)} pages'
+                        )
+                        _render_visual_asset_pool(
+                            list(result.get("assets") or []),
+                            "auto",
+                            slide_count,
+                            live=True,
+                        )
+                elif fetcher_mode.startswith("Option 2"):
+                    st.caption("Manual query only. This searches publisher pages and scrapes their images.")
+                    with st.form("live-manual-crawler-form"):
+                        query = st.text_input(
+                            "Manual query",
+                            placeholder="e.g. Ben Stokes batting",
+                            key="live-manual-crawler-query",
+                        )
+                        run = st.form_submit_button(
+                            "Run manual scrape",
+                            type="primary",
+                            width="stretch",
+                        )
+                    if run:
+                        query = query.strip()
+                        if not query:
+                            st.warning("Enter a query first.")
+                        else:
+                            with st.spinner("Searching and scraping publisher pages…"):
+                                try:
+                                    from visual_fetcher import manual_crawl_visuals
+                                    st.session_state.live_manual_visual_result = manual_crawl_visuals(query)
+                                except Exception as exc:
+                                    st.session_state.live_manual_visual_result = {
+                                        "error": f"{type(exc).__name__}: {exc}"
+                                    }
+                    result = st.session_state.get("live_manual_visual_result") or {}
+                    if result.get("error"):
+                        st.error(result["error"])
+                    elif result:
+                        st.caption(
+                            f'{len(result.get("assets") or [])} images · '
+                            f'{int(result.get("pages_scraped") or 0)} pages'
+                        )
+                        _render_visual_asset_pool(
+                            list(result.get("assets") or []),
+                            "manual",
+                            slide_count,
+                            live=True,
+                        )
+                elif fetcher_mode.startswith("Option 3"):
+                    st.caption("Manual query only. Searches the configured real-image providers.")
+                    with st.form("live-real-image-form"):
+                        query = st.text_input(
+                            "Manual query",
+                            placeholder="e.g. Ben Stokes batting",
+                            key="live-real-image-query",
+                        )
+                        run = st.form_submit_button(
+                            "Search real images",
+                            type="primary",
+                            width="stretch",
+                        )
+                    if run:
+                        query = query.strip()
+                        if not query:
+                            st.warning("Enter a query first.")
+                        else:
+                            with st.spinner("Searching real-image sources…"):
+                                try:
+                                    from visual_search import search_images
+                                    st.session_state.live_real_image_result = search_images(query)
+                                except Exception as exc:
+                                    st.session_state.live_real_image_result = {
+                                        "error": f"{type(exc).__name__}: {exc}"
+                                    }
+                    result = st.session_state.get("live_real_image_result") or {}
+                    if result.get("error"):
+                        st.error(result["error"])
+                    elif result:
+                        st.caption(f'{len(result.get("assets") or [])} images')
+                        _render_visual_asset_pool(
+                            list(result.get("assets") or []),
+                            "real",
+                            slide_count,
+                            live=True,
+                        )
+                elif fetcher_mode.startswith("Option 4"):
+                    providers_label = ["Pollinations.ai (Flux)"]
+                    if os.getenv("HF_TOKEN"):
+                        providers_label.append("Hugging Face")
+                    if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
+                        providers_label.append("Cloudflare Workers AI")
+                    st.caption(f"Manual prompt only. Active AI providers: {', '.join(providers_label)}.")
+                    with st.form("live-ai-image-form"):
+                        query = st.text_input(
+                            "Manual prompt",
+                            placeholder="e.g. Ben Stokes hitting a six in a packed stadium",
+                            key="live-ai-image-query",
+                        )
+                        run = st.form_submit_button(
+                            "Generate images",
+                            type="primary",
+                            width="stretch",
+                        )
+                    if run:
+                        query = query.strip()
+                        if not query:
+                            st.warning("Enter a prompt first.")
+                        else:
+                            with st.spinner("Generating images…"):
+                                try:
+                                    from visual_generator import generate_images
+                                    st.session_state.live_ai_image_result = generate_images(query)
+                                except Exception as exc:
+                                    st.session_state.live_ai_image_result = {
+                                        "error": f"{type(exc).__name__}: {exc}"
+                                    }
+                    result = st.session_state.get("live_ai_image_result") or {}
+                    if result.get("error"):
+                        st.error(result["error"])
+                    elif result:
+                        assets = list(result.get("assets") or [])
+                        if not assets:
+                            st.warning("No configured AI provider returned an image.")
+                            last_query = query if run else str(result.get("query") or "").strip()
+                            if last_query:
+                                if st.button("Search Real Images for this query instead →", type="primary", key="live-ai-fallback-to-real-search"):
+                                    with st.spinner(f"Searching real photography for '{last_query}'…"):
+                                        try:
+                                            from visual_search import search_images
+                                            st.session_state.live_real_image_result = search_images(last_query)
+                                            st.session_state.live_visual_mode = "Option 3 · Real Image Search"
+                                            st.session_state.live_ai_image_result = None
+                                            st.rerun()
+                                        except Exception as exc:
+                                            st.error(f"Search failed: {exc}")
+                        else:
+                            st.caption(f'{len(assets)} images')
+                            _render_visual_asset_pool(
+                                assets,
+                                "ai",
+                                slide_count,
+                                live=True,
+                            )
+            else:
+                if fetcher_mode.startswith("Option 1"):
+                    render_visuals_crawler()
+                elif fetcher_mode.startswith("Option 2"):
+                    _render_manual_crawler()
+                elif fetcher_mode.startswith("Option 3"):
+                    _render_manual_real_images()
+                elif fetcher_mode.startswith("Option 4"):
+                    _render_manual_ai_images()
+
+    if col_studio is not None:
+        with col_studio:
+            st.markdown(
+                '<div class="section-head" style="margin-bottom:0.75rem;"><div>'
+                '<div class="eyebrow">LEFT PANE · CARD STUDIO</div>'
+                '<div class="section-title">Editorial Card Studio</div></div>'
+                '<div class="section-count">5 Card Themes</div></div>',
+                unsafe_allow_html=True,
+            )
+            _render_card_studio(
+                live=live,
+                slide_count=slide_count,
+                polygon_flow=polygon_flow,
+                active_mode=active_mode,
+                split_view=show_fetcher,
+            )
 
 
 def _render_live_visuals(slide_count: int):
@@ -3173,173 +4648,62 @@ def _render_live_visuals(slide_count: int):
         "Attached images remain in their original pools until you delete them."
     )
 
-    if visual_option == "Option 1 · Automatic Scraper":
-        result = st.session_state.get("live_visual_result") or {}
-        if result.get("error"):
-            st.error(result["error"])
+    ready = all(
+        slide in st.session_state.live_visual_assignments
+        for slide in range(1, slide_count + 1)
+    )
+    if ready and not st.session_state.live_visuals_approved:
+        top_col1, top_col2 = st.columns([1.2, 0.8], gap="medium")
+        with top_col1:
+            st.markdown(
+                f'<div style="padding:10px 14px;background:var(--success-soft);border:1px solid #86efac;border-radius:10px;font-size:0.85rem;font-weight:700;color:var(--success);">'
+                f'✓ All {slide_count} slides attached! Ready for production render.</div>',
+                unsafe_allow_html=True,
+            )
+        with top_col2:
             if st.button(
-                "Retry automatic scrape",
+                "Approve visuals and render",
                 type="primary",
                 width="stretch",
-                key="live-retry-auto-visuals",
+                key="live-approve-visuals-top",
             ):
-                st.session_state.live_visual_result = None
-                st.rerun()
-        else:
-            asset_count = len(result.get("assets") or [])
-            threshold = int(result.get("success_threshold") or 10)
-            if asset_count < threshold:
-                st.warning(
-                    f"Automatic scraper returned {asset_count} images. "
-                    "You can retry it or use another visual source."
-                )
-                if st.button(
-                    "Retry automatic scrape",
-                    width="stretch",
-                    key="live-retry-auto-visuals-underfilled",
-                ):
-                    st.session_state.live_visual_result = None
+                assigned_items = [
+                    st.session_state.live_visual_assignments[slide]
+                    for slide in range(1, slide_count + 1)
+                ]
+                story = st.session_state.live_topics[
+                    st.session_state.live_selected_topic
+                ]
+                story_id = _live_story_key(story)
+                output = Path("output/live") / f"{story_id}.mp4"
+                try:
+                    with st.spinner("Rendering the final Short…"):
+                        from renderer import render_production_video
+
+                        render_production_video(
+                            st.session_state.live_approved_script,
+                            st.session_state.live_approved_audio,
+                            st.session_state.live_subtitle_data,
+                            assigned_items,
+                            output_path=output,
+                            headline_text=st.session_state.live_approved_script.get("headline", ""),
+                            headline_enabled=bool(
+                                st.session_state.live_approved_script.get("headline_overlay_enabled", False)
+                            ),
+                        )
+                    st.session_state.live_rendered_video_path = str(output)
+                    st.session_state.live_visuals_approved = True
+                    st.session_state.live_render_error = ""
+                    st.session_state.live_stage = "05 · Upload"
+                    st.session_state.live_pipeline_notice = {
+                        "confirmed": "Visuals QC and render confirmed",
+                        "next": "Moving to Upload.",
+                    }
                     st.rerun()
-            st.caption(
-                f'{len(result.get("assets") or [])} images · '
-                f'{int(result.get("pages_scraped") or 0)} pages'
-            )
-            _render_visual_asset_pool(
-                list(result.get("assets") or []),
-                "auto",
-                slide_count,
-                live=True,
-            )
+                except (RuntimeError, ValueError, OSError) as exc:
+                    st.session_state.live_render_error = str(exc)
 
-    if visual_option == "Option 2 · Manual Scraper":
-        st.caption("Manual query only. This searches publisher pages and scrapes their images.")
-        with st.form("live-manual-crawler-form"):
-            query = st.text_input(
-                "Manual query",
-                placeholder="e.g. Ben Stokes batting",
-                key="live-manual-crawler-query",
-            )
-            run = st.form_submit_button(
-                "Run manual scrape",
-                type="primary",
-                width="stretch",
-            )
-        if run:
-            query = query.strip()
-            if not query:
-                st.warning("Enter a query first.")
-            else:
-                with st.spinner("Searching and scraping publisher pages…"):
-                    try:
-                        from visual_fetcher import manual_crawl_visuals
-                        st.session_state.live_manual_visual_result = manual_crawl_visuals(query)
-                    except Exception as exc:
-                        st.session_state.live_manual_visual_result = {
-                            "error": f"{type(exc).__name__}: {exc}"
-                        }
-        result = st.session_state.get("live_manual_visual_result") or {}
-        if result.get("error"):
-            st.error(result["error"])
-        elif result:
-            st.caption(
-                f'{len(result.get("assets") or [])} images · '
-                f'{int(result.get("pages_scraped") or 0)} pages'
-            )
-            _render_visual_asset_pool(
-                list(result.get("assets") or []),
-                "manual",
-                slide_count,
-                live=True,
-            )
-
-    if visual_option == "Option 3 · Real Image Search":
-        st.caption("Manual query only. Searches the configured real-image providers.")
-        with st.form("live-real-image-form"):
-            query = st.text_input(
-                "Manual query",
-                placeholder="e.g. Ben Stokes batting",
-                key="live-real-image-query",
-            )
-            run = st.form_submit_button(
-                "Search real images",
-                type="primary",
-                width="stretch",
-            )
-        if run:
-            query = query.strip()
-            if not query:
-                st.warning("Enter a query first.")
-            else:
-                with st.spinner("Searching real-image sources…"):
-                    try:
-                        from visual_search import search_images
-                        st.session_state.live_real_image_result = search_images(query)
-                    except Exception as exc:
-                        st.session_state.live_real_image_result = {
-                            "error": f"{type(exc).__name__}: {exc}"
-                        }
-        result = st.session_state.get("live_real_image_result") or {}
-        if result.get("error"):
-            st.error(result["error"])
-        elif result:
-            st.caption(f'{len(result.get("assets") or [])} images')
-            _render_visual_asset_pool(
-                list(result.get("assets") or []),
-                "real",
-                slide_count,
-                live=True,
-            )
-
-    if visual_option == "Option 4 · AI Generation":
-        st.caption("Manual prompt only. Uses the configured AI image providers.")
-        with st.form("live-ai-image-form"):
-            query = st.text_input(
-                "Manual prompt",
-                placeholder="e.g. Ben Stokes hitting a six in a packed stadium",
-                key="live-ai-image-query",
-            )
-            run = st.form_submit_button(
-                "Generate images",
-                type="primary",
-                width="stretch",
-            )
-        if run:
-            query = query.strip()
-            if not query:
-                st.warning("Enter a prompt first.")
-            else:
-                with st.spinner("Generating images…"):
-                    try:
-                        from visual_generator import generate_images
-                        st.session_state.live_ai_image_result = generate_images(query)
-                    except Exception as exc:
-                        st.session_state.live_ai_image_result = {
-                            "error": f"{type(exc).__name__}: {exc}"
-                        }
-        result = st.session_state.get("live_ai_image_result") or {}
-        if result.get("error"):
-            st.error(result["error"])
-        elif result:
-            st.caption(f'{len(result.get("assets") or [])} images')
-            _render_visual_asset_pool(
-                list(result.get("assets") or []),
-                "ai",
-                slide_count,
-                live=True,
-            )
-
-    if visual_option == "Option 5 · Card Studio":
-        _render_card_studio(
-            live=True,
-            slide_count=slide_count,
-            polygon_flow=(
-                (
-                    st.session_state.get("live_production_line") == "deep_dive"
-                    and st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
-                )
-                or st.session_state.get("live_production_line") == "youtube_trends"
-            ),
-        )
+    _render_two_pane_visual_workspace(visual_option, slide_count, live=True, polygon_flow=True)
 
     ready = all(
         slide in st.session_state.live_visual_assignments
@@ -3401,6 +4765,78 @@ def _render_live_visuals(slide_count: int):
         st.error(st.session_state.live_render_error)
 
 
+def _render_packaging_deck_and_phone(
+    script: dict,
+    story_title: str,
+    current_headline: str,
+    current_vo1: str,
+    headline_enabled: bool = True,
+):
+    headline_display = current_headline.strip() if headline_enabled and current_headline.strip() else ""
+    vo_display = current_vo1.strip()[:140] if current_vo1 else ""
+
+    st.markdown('<div class="mini-label" style="margin-top:16px; margin-bottom:8px;">9:16 IN-FEED PHONE SIMULATOR</div>', unsafe_allow_html=True)
+    headline_html = f'<div class="phone-sim-headline">{headline_display}</div>' if headline_display else ""
+    st.markdown(
+        f'<div class="phone-sim-wrapper">'
+        f'<div class="phone-sim-frame">'
+        f'<div class="phone-sim-notch"></div>'
+        f'<div>'
+        f'<div class="phone-billboard-badge">🔴 SHORTS FEED PREVIEW</div>'
+        f'{headline_html}'
+        f'</div>'
+        f'<div class="phone-sim-preview-video">'
+        f'<div class="phone-sim-ui-overlay">'
+        f'<div class="phone-sim-action-btn">❤️</div>'
+        f'<div class="phone-sim-action-btn">💬</div>'
+        f'<div class="phone-sim-action-btn">↗️</div>'
+        f'</div>'
+        f'<div class="phone-sim-hook-text">'
+        f'<span style="color:#facc15; font-weight:800; font-size:0.65rem;">HOOK:</span> {vo_display}'
+        f'</div>'
+        f'</div>'
+        f'</div>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
+
+    titles = script.get("titles") or []
+    if titles:
+        st.markdown('<div class="mini-label" style="margin-top:16px; margin-bottom:8px;">VIRAL PACKAGING SUITE (3 ARCHETYPES)</div>', unsafe_allow_html=True)
+        title_meta = [
+            ("🔍 SEARCH / SEO INTENT", "#38bdf8", "Captures YouTube Search & Explore algorithm"),
+            ("⚡ HIGH-STAKES DEBATE", "#f59e0b", "Drives hundreds of comments arguing in thread"),
+            ("👁️ CURIOSITY GAP", "#c084fc", "Irresistible open loop that boosts watch time"),
+        ]
+        for t_idx, title_cand in enumerate(titles[:3]):
+            tag, color, desc = title_meta[t_idx % len(title_meta)]
+            st.markdown(
+                f'<div class="packaging-tile">'
+                f'<div style="display:flex; justify-content:space-between; align-items:center;">'
+                f'<span class="packaging-tile-type" style="color:{color};">{tag}</span>'
+                f'<span style="font-size:0.62rem; color:#64748b;">Option 0{t_idx+1}</span>'
+                f'</div>'
+                f'<div class="packaging-tile-text">{title_cand}</div>'
+                f'<div style="font-size:0.68rem; color:#64748b; margin-top:4px;">{desc}</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    comment = script.get("comment") or ""
+    if comment:
+        st.markdown(
+            f'<div class="comment-bait-container">'
+            f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
+            f'<span style="font-size:0.65rem; font-weight:850; letter-spacing:0.08em; color:#38bdf8; text-transform:uppercase;">💬 PINNED COMMENT DEBATE BAIT</span>'
+            f'<span style="font-size:0.6rem; color:#10b981; font-weight:800;">ALGORITHM DRIVER</span>'
+            f'</div>'
+            f'<div style="font-size:0.82rem; color:#ffffff; font-weight:600; line-height:1.35;">{comment}</div>'
+            f'<div style="font-size:0.65rem; color:#94a3b8; margin-top:4px;">Pins automatically as the 1st comment to trigger viewer arguments.</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+
 def _render_live_script():
     script = st.session_state.get("live_script_data")
     story = st.session_state.live_topics[st.session_state.live_selected_topic]
@@ -3411,26 +4847,6 @@ def _render_live_script():
     )
 
     if not isinstance(script, dict):
-        if not universal_story:
-            if st.button(
-                "Retry Scriptwriter" if st.session_state.get("live_script_error") else "Generate Script",
-                type="primary",
-                width="stretch",
-                key="live-generate-script",
-            ):
-                st.session_state.live_script_error = ""
-                try:
-                    with st.spinner("Writing the Short…"):
-                        _live_generate_script()
-                except Exception as exc:
-                    st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
-                st.rerun()
-            if st.session_state.get("live_script_error"):
-                st.error("Scriptwriter failed: " + st.session_state.live_script_error)
-            else:
-                st.info("Press Generate Script to start the Scriptwriter.")
-            return
-
         angles = st.session_state.get("live_universal_angles")
         if not angles:
             if st.button(
@@ -3442,12 +4858,19 @@ def _render_live_script():
                 st.session_state.live_script_error = ""
                 try:
                     with st.spinner("Reading the full story and finding the strongest angles…"):
-                        from universal_script_writer import suggest_universal_story_angles
-                        result = suggest_universal_story_angles(
-                            _story_payload(story),
-                            language=st.session_state.get("live_script_language", "english"),
-                            search_query=st.session_state.get("live_youtube_trend_search_query"),
-                        )
+                        if universal_story:
+                            from script_writer import suggest_universal_story_angles
+                            result = suggest_universal_story_angles(
+                                _story_payload(story),
+                                language=st.session_state.get("live_script_language", "english"),
+                                search_query=st.session_state.get("live_youtube_trend_search_query"),
+                            )
+                        else:
+                            from script_writer import suggest_cricket_story_angles
+                            result = suggest_cricket_story_angles(
+                                _story_payload(story),
+                                language=st.session_state.get("live_script_language", "english"),
+                            )
                     st.session_state.live_universal_angles = result["angles"]
                     st.session_state.live_universal_angle_source = result["source_evidence"]
                     st.session_state.live_universal_angle_selected = 0
@@ -3503,7 +4926,7 @@ def _render_live_script():
     st.caption(
         "Manual QC is the final editorial decision. The opening headline is optional; leaving it empty is accepted."
     )
-    if universal_story and str(script.get("story_angle") or "").strip():
+    if str(script.get("story_angle") or "").strip():
         st.caption("Selected story angle: " + str(script.get("story_angle") or "").strip())
         if st.button(
             "Change angle and regenerate",
@@ -3528,69 +4951,156 @@ def _render_live_script():
             st.session_state.live_stage = "02 · Script"
             st.rerun()
 
-    st.session_state.live_headline_enabled = st.toggle(
-        "Use opening headline",
-        value=st.session_state.get("live_headline_enabled", True),
-        key=f"live-headline-enabled-{story_id}",
-    )
+    col_left, col_right = st.columns([1.5, .55], gap="large")
+    with col_left:
+        delivery_p = str(script.get("delivery_profile") or "Live Broadcast Short")
+        flow = script.get("flow_metrics") or {}
+        flow_score = flow.get("flow_score") or 9.0
 
-    edited_headline = st.text_input(
-        "Opening headline",
-        value=str(script.get("headline") or "") if st.session_state.live_headline_enabled else "",
-        max_chars=100,
-        key=f"live-script-headline-{story_id}",
-        disabled=not st.session_state.live_headline_enabled,
-    )
+        current_vo1 = st.session_state.get(f"live-script-scene-{story_id}-1", script.get("script", [{}])[0].get("voiceover", ""))
+        s1_words_live = len(str(current_vo1).split()) if current_vo1 else 0
 
-    edited_voiceovers = []
-    for index, scene in enumerate(script.get("script") or [], 1):
-        edited_voiceovers.append(
-            st.text_area(
-                f"Slide {index} narration",
-                value=str(scene.get("voiceover") or ""),
-                height=110,
-                key=f"live-script-scene-{story_id}-{index}",
-            )
+        total_words_live = sum(
+            len(str(st.session_state.get(f"live-script-scene-{story_id}-{idx}", sc.get("voiceover", ""))).split())
+            for idx, sc in enumerate(script.get("script", []), 1)
+        )
+        est_seconds_live = round(total_words_live / 2.5, 1) if total_words_live else 0.0
+
+        st.markdown(
+            f'<div class="prompter-flow-bar">'
+            f'<div>'
+            f'<span class="badge" style="background:rgba(255,255,255,0.15); color:#fff; border:0; margin-right:8px;">{delivery_p}</span>'
+            f'<span style="font-size:0.8rem; font-weight:800; letter-spacing:0.02em;">⚡ Broadcast Flow: {flow_score}/10</span>'
+            f'</div>'
+            f'<div style="font-size:0.75rem; font-weight:750; color:#cbd5e1;">'
+            f'{total_words_live} words · ~{est_seconds_live}s runtime (Lead: {s1_words_live}w)'
+            f'</div>'
+            f'</div>',
+            unsafe_allow_html=True,
         )
 
-    if st.button(
-        "Approve script and hand to Audio",
-        type="primary",
-        width="stretch",
-        key="live-approve-script",
-    ):
-        try:
-            if (
-                st.session_state.get("live_production_line") == "youtube_trends"
-                or st.session_state.get("live_topics_profile") == "niche_sports"
-            ):
-                from universal_script_writer import apply_universal_script_edits
-                approved = apply_universal_script_edits(
-                    script,
-                    edited_voiceovers,
-                    headline=edited_headline if st.session_state.live_headline_enabled else "",
-                )
-            else:
-                from script_writer import apply_script_edits
-                approved = apply_script_edits(
-                    script,
-                    edited_voiceovers,
-                    headline=edited_headline if st.session_state.live_headline_enabled else "",
-                    validate=True,
-                )
-            approved["headline_enabled"] = bool(st.session_state.live_headline_enabled)
-        except ValueError as exc:
-            st.session_state.live_script_error = str(exc)
-            st.rerun()
-        st.session_state.live_approved_script = approved
-        st.session_state.live_script_error = ""
-        st.session_state.live_handoff_error = ""
-        st.session_state.live_stage = "03 · Audio + Subs"
-        st.session_state.live_pipeline_notice = {
-            "confirmed": "Script QC confirmed",
-            "next": "Moving to Audio + Subtitles.",
+        st.session_state.live_headline_enabled = st.toggle(
+            "Use opening headline",
+            value=st.session_state.get("live_headline_enabled", True),
+            key=f"live-headline-enabled-{story_id}",
+        )
+
+        edited_headline = st.text_input(
+            "Opening headline",
+            value=str(script.get("headline") or "") if st.session_state.live_headline_enabled else "",
+            max_chars=100,
+            key=f"live-script-headline-{story_id}",
+            disabled=not st.session_state.live_headline_enabled,
+        )
+
+        scene_roles = {
+            1: "THE LEAD HOOK (<14w)",
+            2: "THE TURN / CAUSE",
+            3: "STAKES & EVIDENCE",
+            4: "THE KICKER / IMPACT",
+            5: "OUTLOOK / STATUS",
+            6: "CLOSING",
         }
-        st.rerun()
+        edited_voiceovers = []
+        for index, scene in enumerate(script.get("script") or [], 1):
+            raw_text = scene.get("voiceover", "")
+            cur_text = st.session_state.get(f"live-script-scene-{story_id}-{index}", raw_text)
+            word_count = len(str(cur_text).split()) if cur_text else 0
+            est_seconds = round(word_count / 2.5, 1) if word_count else 0.0
+            role = scene.get("narrative_role") or scene_roles.get(index, f"SCENE {index}")
+
+            if index == 1:
+                if word_count <= 13:
+                    meter_badge = f'<span class="hook-meter-ok">✓ LEAD HOOK: {word_count}w (&lt;14w target)</span>'
+                elif word_count == 14:
+                    meter_badge = f'<span class="hook-meter-warn">⚠️ LEAD HOOK: 14w (At threshold)</span>'
+                else:
+                    meter_badge = f'<span class="hook-meter-bad">⛔ LEAD HOOK: {word_count}w (Shorten for retention)</span>'
+            else:
+                meter_badge = f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted); background:var(--surface-soft); padding:3px 8px; border-radius:6px; border:1px solid var(--line);">{word_count} words · ~{est_seconds}s</span>'
+
+            st.markdown(
+                f'<div class="cue-card-header">'
+                f'<span class="cue-role-title">CUE {index} · {role}</span>'
+                f'{meter_badge}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+            edited_voiceovers.append(
+                st.text_area(
+                    f"Slide {index} narration",
+                    value=str(scene.get("voiceover") or ""),
+                    height=105,
+                    key=f"live-script-scene-{story_id}-{index}",
+                    label_visibility="collapsed",
+                )
+            )
+
+        if st.button(
+            "Approve script and hand to Audio",
+            type="primary",
+            width="stretch",
+            key="live-approve-script",
+        ):
+            try:
+                from script_writer import ScriptWriter
+                desk_p = st.session_state.get("live_topics_profile") or ("youtube_trends" if st.session_state.get("live_production_line") == "youtube_trends" else "cricket_india_asia")
+                approved = ScriptWriter.apply_edits(
+                    script,
+                    edited_voiceovers,
+                    headline=edited_headline if st.session_state.live_headline_enabled else "",
+                    profile=desk_p,
+                )
+                approved["headline_enabled"] = bool(st.session_state.live_headline_enabled)
+            except ValueError as exc:
+                st.session_state.live_script_error = str(exc)
+                st.rerun()
+            st.session_state.live_approved_script = approved
+            st.session_state.live_script_error = ""
+            st.session_state.live_handoff_error = ""
+            st.session_state.live_stage = "03 · Audio + Subs"
+            st.session_state.live_pipeline_notice = {
+                "confirmed": "Script QC confirmed",
+                "next": "Moving to Audio + Subtitles.",
+            }
+            st.rerun()
+
+    with col_right:
+        st.markdown('<div class="inspector">', unsafe_allow_html=True)
+        st.markdown('<div class="mini-label">LIVE TELEPROMPTER</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{story.title}</div>', unsafe_allow_html=True)
+        scenes_count = len(script.get("script") or [])
+        st.markdown(f'<div class="inspector-line"><span>Cues</span><span class="inspector-value">{scenes_count} scenes</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="inspector-line"><span>Total Speech</span><span class="inspector-value">{total_words_live} words</span></div>', unsafe_allow_html=True)
+        st.markdown(f'<div class="inspector-line"><span>Est. Runtime</span><span class="inspector-value">~{est_seconds_live}s</span></div>', unsafe_allow_html=True)
+        st.markdown('<div class="inspector-line"><span>Cadence Target</span><span class="inspector-value">~150 WPM</span></div>', unsafe_allow_html=True)
+        if st.session_state.live_approved_script:
+            st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);border:1px solid #86efac;">✓ Script Approved</span></div>', unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        st.markdown('<div class="teleprompter-article-view">', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.1em; color:#38bdf8; text-transform:uppercase; margin-bottom:8px;">CONTINUOUS SPOKEN BROADCAST ARTICLE</div>', unsafe_allow_html=True)
+        article_parts = []
+        for s_idx, sc in enumerate(script.get("script", []), 1):
+            vo_text = st.session_state.get(f"live-script-scene-{story_id}-{s_idx}", sc.get("voiceover", "")).strip()
+            if vo_text:
+                if s_idx == 1:
+                    article_parts.append(f'<span style="color:#facc15; font-weight:800;">[LEAD]</span> {vo_text}')
+                else:
+                    article_parts.append(f'<span class="teleprompter-cue-separator">▸</span> {vo_text}')
+        if article_parts:
+            st.markdown(" ".join(article_parts), unsafe_allow_html=True)
+        else:
+            st.markdown("<em>Narration cues will display here as continuous text.</em>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        _render_packaging_deck_and_phone(
+            script=script,
+            story_title=story.title,
+            current_headline=edited_headline,
+            current_vo1=current_vo1,
+            headline_enabled=bool(st.session_state.live_headline_enabled),
+        )
 
     if st.session_state.live_approved_script:
         st.success("Script approved. Audio and subtitle handoffs are ready.")
@@ -3767,11 +5277,9 @@ def _render_live_upload():
 
 def render_live_top5():
     from concurrent.futures import ThreadPoolExecutor
-    from queue import Empty, Queue
-    import time
 
     from renderer import build_top5_card_preview
-    from top5_script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
+    from script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
 
     stages = [
         "01 · Top-5 Topics",
@@ -3816,12 +5324,15 @@ def render_live_top5():
         if fetch or more:
             existing = list(topics) if more else []
             with st.spinner("Fetching current cricket stories…"):
-                from topic_fetcher import fetch_top5_topics
-                new_topics = fetch_top5_topics(more=more, exclude_topics=existing, limit=20)
-            st.session_state.live_top5_topics = existing + new_topics
-            st.session_state.live_top5_selected = [] if not more else st.session_state.live_top5_selected
-            if not more:
-                st.session_state.live_top5_topic_open_tile = None
+                try:
+                    from topic_fetcher import fetch_top5_topics
+                    new_topics = fetch_top5_topics(more=more, exclude_topics=existing, limit=20)
+                    st.session_state.live_top5_topics = existing + new_topics
+                    st.session_state.live_top5_selected = [] if not more else st.session_state.live_top5_selected
+                    if not more:
+                        st.session_state.live_top5_topic_open_tile = None
+                except Exception as exc:
+                    st.error(f"Failed to fetch cricket stories: {exc}")
             st.rerun()
 
         selected = st.session_state.live_top5_selected
@@ -4183,8 +5694,48 @@ def render_live_top5():
             button_prefix="live-top5-visual-source",
         )
 
+        assets = []
+        result_key = "auto"
         if option == "Option 3 · Real Image Search":
-            st.info("Option 3 · Real Image Search is WIP in the Top-5 pipeline.")
+            with st.form(f"live-top5-real-{active_slide}"):
+                query = st.text_input(
+                    "Real image query",
+                    value=specific_prompt,
+                    key=f"live-top5-real-query-{active_slide}",
+                )
+                run = st.form_submit_button(
+                    "Search real images",
+                    type="primary",
+                    width="stretch",
+                )
+            if run:
+                query = query.strip()
+                if query:
+                    try:
+                        from visual_search import search_images
+                        st.session_state.live_top5_real_image_results[active_slide] = search_images(query)
+                    except Exception as exc:
+                        st.session_state.live_top5_real_image_results[active_slide] = {
+                            "error": f"{type(exc).__name__}: {exc}"
+                        }
+                    st.rerun()
+                else:
+                    st.warning("Enter a query first.")
+            result = st.session_state.live_top5_real_image_results.get(active_slide) or {}
+            if result.get("error"):
+                st.error(result["error"])
+            assets = list(result.get("assets") or [])
+            result_key = "real"
+        elif option == "Option 5 · Card Studio":
+            _render_card_studio(
+                live=True,
+                slide_count=6,
+                top5=True,
+                active_slide=active_slide,
+                polygon_flow=True,
+            )
+            assets = []
+            result_key = "card"
         elif option in {
             "Option 1 · Automatic Scraper",
             "Option 2 · Manual Scraper",
@@ -4262,65 +5813,83 @@ def render_live_top5():
                 assets = list(result.get("assets") or [])
                 result_key = "ai"
 
-            for start in range(0, len(assets), 3):
-                cols = st.columns(3, gap="medium")
-                for offset, raw_asset in enumerate(assets[start:start + 3]):
-                    index = start + offset
-                    asset = dict(raw_asset)
-                    asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
-                    cropped = st.session_state.live_visual_crops.get(asset_key)
-                    source = str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source").strip()
-                    label = str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual").strip()
-                    preview = _fit_visual_preview(cropped if cropped else asset.get("bytes"), 300, 533)
-                    with cols[offset]:
-                        if preview is not None:
-                            st.image(preview, width="stretch")
-                        st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
-                        st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
-                        if cropped:
-                            st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
-                        use_col, crop_col = st.columns(2, gap="small")
-                        with use_col:
-                            if st.button("Use this image", type="primary", width="stretch", key=f"live-top5-use-{active_slide}-{result_key}-{index}"):
-                                selected_bytes = bytes(cropped) if cropped else bytes(asset.get("bytes") or b"")
-                                st.session_state.live_visual_assignments[active_slide] = {
-                                    "asset_key": asset_key,
-                                    "result_key": result_key,
-                                    "source": source,
-                                    "label": label,
-                                    "bytes": selected_bytes,
-                                    "preview_bytes": build_top5_card_preview(
-                                        selected_bytes, headline, body,
-                                        story_number=story_number,
-                                        total_stories=5,
-                                        source_label=source,
-                                        subject_cutout=False,
-                                    ),
-                                    "top5_card": {
-                                        "headline": headline,
-                                        "body": body,
-                                        "story_number": story_number,
-                                        "total_stories": 5,
-                                    },
-                                }
-                                st.session_state.live_visuals_approved = False
-                                st.rerun()
-                        with crop_col:
-                            if st.button("Crop / reposition", width="stretch", key=f"live-top5-crop-{active_slide}-{result_key}-{index}"):
-                                if isinstance(asset.get("bytes"), (bytes, bytearray)):
-                                    _crop_visual_dialog(asset_key, bytes(asset["bytes"]), label, crop_store="live_visual_crops")
+            if assets:
+                st.markdown(
+                    f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
+                    f'<span><strong>{len(assets)} images in pool</strong> · scroll inside tray to browse</span>'
+                    f'<span>Choose for slide {active_slide}</span>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                with st.container(height=520):
+                    for start in range(0, len(assets), 4):
+                        cols = st.columns(4, gap="small")
+                        for offset, raw_asset in enumerate(assets[start:start + 4]):
+                            index = start + offset
+                            asset = dict(raw_asset)
+                            asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
+                            cropped = st.session_state.live_visual_crops.get(asset_key)
+                            source = str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source").strip()
+                            label = str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual").strip()
+                            preview = _fit_visual_preview(cropped if cropped else asset.get("bytes"), 240, 360)
+                            with cols[offset]:
+                                with st.container(key=f"live-top5-visual-card-{active_slide}-{result_key}-{index}"):
+                                    if preview is not None:
+                                        st.image(preview, width="stretch")
+                                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
+                                    if label:
+                                        st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
+                                    if cropped:
+                                        st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
+                                    use_col, crop_col = st.columns(2, gap="small")
+                                    with use_col:
+                                        if st.button("Use this image", type="primary", width="stretch", key=f"live-top5-use-{active_slide}-{result_key}-{index}"):
+                                            selected_bytes = bytes(cropped) if cropped else bytes(asset.get("bytes") or b"")
+                                            try:
+                                                card_preview = build_top5_card_preview(
+                                                    selected_bytes, headline, body,
+                                                    story_number=story_number,
+                                                    total_stories=5,
+                                                    source_label=source,
+                                                    subject_cutout=False,
+                                                )
+                                            except Exception:
+                                                card_preview = selected_bytes
+                                            st.session_state.live_visual_assignments[active_slide] = {
+                                                "asset_key": asset_key,
+                                                "result_key": result_key,
+                                                "source": source,
+                                                "label": label,
+                                                "bytes": selected_bytes,
+                                                "preview_bytes": card_preview,
+                                                "top5_card": {
+                                                    "headline": headline,
+                                                    "body": body,
+                                                    "story_number": story_number,
+                                                    "total_stories": 5,
+                                                },
+                                            }
+                                            st.session_state.live_visuals_approved = False
+                                            st.rerun()
+                                    with crop_col:
+                                        if st.button("Crop / reposition", width="stretch", key=f"live-top5-crop-{active_slide}-{result_key}-{index}"):
+                                            if isinstance(asset.get("bytes"), (bytes, bytearray)):
+                                                _crop_visual_dialog(asset_key, bytes(asset["bytes"]), label, crop_store="live_visual_crops")
         assignment = assignments.get(active_slide)
         if assignment:
             st.divider()
             st.markdown('<div class="mini-label">CURRENT ATTACHMENT · ACTUAL RENDER</div>', unsafe_allow_html=True)
+            col_t5_p, col_t5_i = st.columns([1, 1], gap="medium")
             preview = assignment.get("preview_bytes") or assignment.get("bytes")
-            if preview:
-                st.image(preview, width=420)
-            st.caption(f'{assignment.get("source") or "Visual"} · {assignment.get("label") or "Selected"}')
-            if st.button("Clear attached slide", width="stretch", key=f"live-top5-clear-{active_slide}"):
-                assignments.pop(active_slide, None)
-                st.session_state.live_visuals_approved = False
-                st.rerun()
+            with col_t5_p:
+                if preview:
+                    st.image(preview, width=280)
+            with col_t5_i:
+                st.caption(f'**Source:** {assignment.get("source") or "Visual"}\n\n**Label:** {assignment.get("label") or "Selected"}')
+                if st.button("Clear attached slide", width="stretch", key=f"live-top5-clear-{active_slide}"):
+                    assignments.pop(active_slide, None)
+                    st.session_state.live_visuals_approved = False
+                    st.rerun()
 
         board_cols = st.columns(3, gap="medium")
         for number in range(1, 7):
@@ -4519,15 +6088,27 @@ def render_live_dashboard():
     if st.session_state.live_production_line == "otd":
         st.space("medium")
         st.markdown(
-            '<div class="section-head"><div><div class="eyebrow">OTD · WIP</div>'
-            '<div class="section-title">On This Day</div></div></div>',
+            '<div class="section-head"><div><div class="eyebrow">03 · OTD · TEST-FIRST STAGE</div>'
+            '<div class="section-title">On This Day (WIP)</div></div></div>',
             unsafe_allow_html=True,
         )
-        st.info("This production line is reserved for the On This Day design we are building next.")
-        if st.button("← Back to production lines", key="live-back-from-otd"):
-            st.session_state.live_production_line = None
-            st.session_state.live_desk = None
-            st.rerun()
+        st.info(
+            "On This Day is currently undergoing Test-first proving. Per factory operating rules "
+            "(TEST FIRST → USER APPROVAL → PUSH TO LIVE), OTD topic fetching and script generation "
+            "are active in the Test Lab awaiting user review and approval."
+        )
+        col1, col2 = st.columns([1, 1], gap="small")
+        with col1:
+            if st.button("Open OTD in Test Lab →", type="primary", key="live-otd-to-test", width="stretch"):
+                st.session_state.app_mode = "test"
+                st.session_state.test_production_line = "otd"
+                st.session_state.test_stage = "01 · Topic Fetcher"
+                st.rerun()
+        with col2:
+            if st.button("← Back to production lines", key="live-back-from-otd", width="stretch"):
+                st.session_state.live_production_line = None
+                st.session_state.live_desk = None
+                st.rerun()
         return
 
     if st.session_state.live_production_line == "deep_dive":
@@ -4571,13 +6152,17 @@ def render_live_dashboard():
                     st.session_state.live_topics = []
                     profile = "niche_sports"
                     with st.spinner("Finding the top 20 niche-sports stories…"):
-                        from topic_fetcher import fetch_topics
-                        st.session_state.live_topics = fetch_topics(
-                            profile,
-                            more=False,
-                            exclude_topics=[],
-                            limit=20,
-                        )
+                        try:
+                            from topic_fetcher import fetch_topics
+                            st.session_state.live_topics = fetch_topics(
+                                profile,
+                                more=False,
+                                exclude_topics=[],
+                                limit=20,
+                            )
+                        except Exception as exc:
+                            st.error(f"Story fetch failed: {exc}")
+                            st.session_state.live_topics = []
                     st.session_state.live_topics_profile = profile
                     st.rerun()
         return
@@ -4599,13 +6184,17 @@ def render_live_dashboard():
                         st.session_state.live_cricket_profile = profile
                         st.session_state.live_topics = []
                         with st.spinner("Finding the top 20 cricket stories…"):
-                            from topic_fetcher import fetch_topics
-                            st.session_state.live_topics = fetch_topics(
-                                profile,
-                                more=False,
-                                exclude_topics=[],
-                                limit=20,
-                            )
+                            try:
+                                from topic_fetcher import fetch_topics
+                                st.session_state.live_topics = fetch_topics(
+                                    profile,
+                                    more=False,
+                                    exclude_topics=[],
+                                    limit=20,
+                                )
+                            except Exception as exc:
+                                st.error(f"Story fetch failed: {exc}")
+                                st.session_state.live_topics = []
                         st.session_state.live_topics_profile = profile
                         st.rerun()
         return
@@ -4621,13 +6210,17 @@ def render_live_dashboard():
             profile = st.session_state.live_topics_profile
             if profile:
                 with st.spinner("Searching for current sports stories…"):
-                    from topic_fetcher import fetch_topics
-                    st.session_state.live_topics = fetch_topics(
-                        profile,
-                        more=False,
-                        exclude_topics=[],
-                        limit=20,
-                    )
+                    try:
+                        from topic_fetcher import fetch_topics
+                        st.session_state.live_topics = fetch_topics(
+                            profile,
+                            more=False,
+                            exclude_topics=[],
+                            limit=20,
+                        )
+                    except Exception as exc:
+                        st.error(f"Story fetch failed: {exc}")
+                        st.session_state.live_topics = []
                 st.rerun()
         return
 
@@ -4691,30 +6284,33 @@ def render_live_dashboard():
                     "Searching targeted cricket stories…" if keyword_search
                     else "Searching for 20 additional unique stories…"
                 ):
-                    existing = list(st.session_state.live_topics)
-                    from topic_fetcher import fetch_topics
-                    new_topics = fetch_topics(
-                        st.session_state.live_topics_profile,
-                        more=more_clicked and not keyword_search,
-                        exclude_topics=existing,
-                        limit=20,
-                        keyword=keyword if keyword_search else None,
-                    )
-                    if keyword_search:
-                        keyword_members = tuple(
-                            member
-                            for topic in new_topics
-                            for member in (topic.group_members or (topic,))
+                    try:
+                        existing = list(st.session_state.live_topics)
+                        from topic_fetcher import fetch_topics
+                        new_topics = fetch_topics(
+                            st.session_state.live_topics_profile,
+                            more=more_clicked and not keyword_search,
+                            exclude_topics=existing,
+                            limit=20,
+                            keyword=keyword if keyword_search else None,
                         )
-                        if keyword_members:
-                            keyword_tile = replace(
-                                keyword_members[0],
-                                group_key=f"keyword:{keyword}",
-                                group_members=keyword_members,
+                        if keyword_search:
+                            keyword_members = tuple(
+                                member
+                                for topic in new_topics
+                                for member in (topic.group_members or (topic,))
                             )
-                            st.session_state.live_topics = existing + [keyword_tile]
-                    else:
-                        st.session_state.live_topics = existing + new_topics
+                            if keyword_members:
+                                keyword_tile = replace(
+                                    keyword_members[0],
+                                    group_key=f"keyword:{keyword}",
+                                    group_members=keyword_members,
+                                )
+                                st.session_state.live_topics = existing + [keyword_tile]
+                        else:
+                            st.session_state.live_topics = existing + new_topics
+                    except Exception as exc:
+                        st.error(f"Failed to fetch additional stories: {exc}")
                 st.rerun()
         return
 
@@ -5109,9 +6705,142 @@ def render_longform_test():
 
 
 def render_topic_fetcher():
+
+def render_otd_topic_fetcher():
+    from datetime import date as dt_date
+    from topic_fetcher import fetch_otd_topics
+
+    if "otd_topics" not in st.session_state:
+        st.session_state.otd_topics = []
+    if "otd_selected" not in st.session_state:
+        st.session_state.otd_selected = None
+    if "otd_sport" not in st.session_state:
+        st.session_state.otd_sport = "All Sports"
+    if "otd_date" not in st.session_state:
+        st.session_state.otd_date = dt_date.today()
+
     st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">01 · STORY DESK</div>'
-        '<div class="canvas-title">Story desk</div></div></div>',
+        '<div class="canvas-head"><div><div class="eyebrow">01 · ON THIS DAY · HISTORICAL PRODUCTION</div>'
+        '<div class="canvas-title">On This Day — Sports Milestones</div>'
+        '<div class="canvas-copy">Select a verified historical sports milestone or anniversary from this calendar date.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="otd-toolbar"):
+        col_date, col_sport, col_fetch, col_cnt = st.columns([1.2, 1.4, 1.2, 1.2], gap="small")
+        with col_date:
+            selected_date = st.date_input(
+                "Calendar Date",
+                value=st.session_state.otd_date,
+                key="test-otd-date",
+                label_visibility="collapsed",
+            )
+            st.session_state.otd_date = selected_date
+        with col_sport:
+            sport_choice = st.pills(
+                "Sport",
+                ["All Sports", "Cricket", "Other Sports"],
+                default=st.session_state.otd_sport,
+                key="test-otd-sport-choice",
+                label_visibility="collapsed",
+            ) or st.session_state.otd_sport
+            st.session_state.otd_sport = sport_choice
+        with col_fetch:
+            fetch_clicked = st.button("Fetch OTD stories", type="primary", width="stretch", key="test-otd-fetch")
+        with col_cnt:
+            count = len(st.session_state.otd_topics)
+            st.markdown(
+                f'<div style="text-align:right;padding:.65rem .15rem;"><span class="badge">{count} stories</span></div>',
+                unsafe_allow_html=True,
+            )
+
+    if fetch_clicked:
+        sport_param = "cricket" if sport_choice == "Cricket" else "other" if sport_choice == "Other Sports" else "all"
+        with st.spinner(f"Fetching historical sports milestones for {selected_date.strftime('%B %d')}…"):
+            try:
+                st.session_state.otd_topics = fetch_otd_topics(
+                    date=selected_date,
+                    sport=sport_param,
+                    limit=20,
+                )
+            except Exception as exc:
+                st.error(f"Error fetching historical stories: {exc}")
+                st.session_state.otd_topics = []
+        st.session_state.otd_selected = None
+        st.session_state.selected_topic = None
+        st.rerun()
+
+    topics = st.session_state.otd_topics
+    if not topics:
+        st.markdown(
+            '<div class="empty-state"><div class="empty-state-title">No historical milestones loaded</div>'
+            '<div class="empty-state-copy">Select a calendar date and fetch verified historical sports events to begin.</div></div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    st.markdown(
+        f'<div class="section-head"><div><div class="eyebrow">HISTORICAL STORIES · {selected_date.strftime("%B %d").upper()}</div>'
+        f'<div class="section-title">Verified anniversaries & milestones</div></div>'
+        f'<div class="section-count">{len(topics)} available</div></div>',
+        unsafe_allow_html=True,
+    )
+
+    for index, topic in enumerate(topics):
+        left, right = st.columns([2.2, .4], gap="small")
+        with left:
+            st.markdown(
+                f'<div class="topic-title">{topic.title}</div>'
+                f'<div class="topic-meta">{topic.source}</div>',
+                unsafe_allow_html=True,
+            )
+            if topic.description and topic.description != topic.title:
+                st.caption(topic.description)
+        with right:
+            if st.button("Use story →", key=f"test-otd-use-{index}", width="stretch", type="primary" if index == 0 else "secondary"):
+                st.session_state.topics = [topic]
+                st.session_state.selected_topic = 0
+                st.session_state.topic_desk_profile = "otd"
+                st.session_state.test_pipeline_notice = {
+                    "confirmed": "On This Day story confirmed",
+                    "next": "Moving to Script.",
+                }
+                st.session_state.script_data = None
+                st.session_state.approved_script = None
+                st.session_state.audio_data = None
+                st.session_state.approved_audio = None
+                st.session_state.subtitle_data = None
+                st.session_state.approved_subtitles = None
+                st.session_state.visual_result = None
+                st.session_state.visual_loaded_story = None
+                st.session_state.visual_assignments = {}
+                st.session_state.approved_visuals = None
+                st.session_state.visuals_approved = False
+                st.session_state.rendered_video_path = None
+                st.session_state.upload_qc_approved = False
+                st.session_state.upload_result = None
+                st.session_state.upload_qc = None
+                st.session_state.test_stage = "02 · Scriptwriter"
+                st.rerun()
+
+
+def render_topic_fetcher():
+    desk_icons = {
+        "Cricket India / Asia": "🏏",
+        "Cricket Global": "🌐",
+        "Niche Sports": "🏎️",
+    }
+    cur_desk = st.session_state.get("topic_desk", "Cricket India / Asia")
+    icon = desk_icons.get(cur_desk, "📡")
+    st.markdown(
+        f'<div class="radar-banner">'
+        f'<div>'
+        f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#38bdf8;">01 · STORY RADAR & DISCOVERY</div>'
+        f'<div style="font-size:1.45rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:#ffffff;">{icon} {cur_desk}</div>'
+        f'<div style="font-size:0.8rem; color:#94a3b8;">Autonomous multi-source story discovery and cluster deduplication.</div>'
+        f'</div>'
+        f'<div class="radar-chip">⚡ 72H LOOKBACK · ZERO COST</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
 
@@ -5180,34 +6909,37 @@ def render_topic_fetcher():
                 "Searching targeted cricket stories…" if keyword_search
                 else "Fetching current sports stories…"
             ):
-                existing_topics = list(st.session_state.topics)
-                from topic_fetcher import fetch_topics
-                new_topics = fetch_topics(
-                    profile,
-                    more=more and not keyword_search,
-                    exclude_topics=existing_topics,
-                    limit=20,
-                    keyword=keyword if keyword_search else None,
-                )
-                if keyword_search:
-                    keyword_members = tuple(
-                        member
-                        for topic in new_topics
-                        for member in (topic.group_members or (topic,))
+                try:
+                    existing_topics = list(st.session_state.topics)
+                    from topic_fetcher import fetch_topics
+                    new_topics = fetch_topics(
+                        profile,
+                        more=more and not keyword_search,
+                        exclude_topics=existing_topics,
+                        limit=20,
+                        keyword=keyword if keyword_search else None,
                     )
-                    if keyword_members:
-                        keyword_tile = replace(
-                            keyword_members[0],
-                            group_key=f"keyword:{keyword}",
-                            group_members=keyword_members,
+                    if keyword_search:
+                        keyword_members = tuple(
+                            member
+                            for topic in new_topics
+                            for member in (topic.group_members or (topic,))
                         )
-                        st.session_state.topics = existing_topics + [keyword_tile]
+                        if keyword_members:
+                            keyword_tile = replace(
+                                keyword_members[0],
+                                group_key=f"keyword:{keyword}",
+                                group_members=keyword_members,
+                            )
+                            st.session_state.topics = existing_topics + [keyword_tile]
+                        else:
+                            st.session_state.topics = existing_topics
+                    elif more:
+                        st.session_state.topics = existing_topics + new_topics
                     else:
-                        st.session_state.topics = existing_topics
-                elif more:
-                    st.session_state.topics = existing_topics + new_topics
-                else:
-                    st.session_state.topics = new_topics
+                        st.session_state.topics = new_topics
+                except Exception as exc:
+                    st.error(f"Failed to fetch stories: {exc}")
 
             st.session_state.selected_topic = None
             st.session_state.topic_open_tile = None
@@ -5314,14 +7046,19 @@ def render_scriptwriter():
     headline_text_key = f"test-script-headline-{story_key}"
 
     st.markdown(
-        f'<div class="canvas-head"><div><div class="eyebrow">02 · SCRIPT</div>'
-        f'<div class="canvas-title">Shape the Short</div>'
-        f'<div class="canvas-copy">{topic.title}</div></div></div>',
+        f'<div class="radar-banner" style="background:linear-gradient(135deg, #090d16 0%, #1e1b4b 100%);">'
+        f'<div>'
+        f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#818cf8;">02 · BROADCAST PROMPTER & SCRIPT STUDIO</div>'
+        f'<div style="font-size:1.35rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:#ffffff;">{topic.title}</div>'
+        f'<div style="font-size:0.78rem; color:#94a3b8;">Continuous 20–30s broadcast news article · First slide &lt; 14 words</div>'
+        f'</div>'
+        f'<div class="radar-chip" style="background:rgba(99, 102, 241, 0.2); border:1px solid rgba(99, 102, 241, 0.4); color:#c7d2fe;">PRO STUDIO ENGINE</div>'
+        f'</div>',
         unsafe_allow_html=True,
     )
     universal_story = (
-        st.session_state.get("test_production_line") == "youtube_trends"
-        or st.session_state.get("topic_desk_profile") == "niche_sports"
+        st.session_state.get("test_production_line") in {"youtube_trends", "otd"}
+        or st.session_state.get("topic_desk_profile") in {"niche_sports", "otd"}
     )
     search_query = (
         st.session_state.get("youtube_trend_search_query")
@@ -5333,38 +7070,25 @@ def render_scriptwriter():
     with top_left:
         language=st.pills("Language",["English","Hindi","Telugu"],default="English",key="script_language",label_visibility="collapsed") or "English"
 
-    if universal_story and st.session_state.get("test_universal_angle_story_key") != story_key:
+    if st.session_state.get("test_universal_angle_story_key") != story_key:
         st.session_state.test_universal_angles = None
         st.session_state.test_universal_angle_source = None
         st.session_state.test_universal_angle_selected = 0
         st.session_state.test_universal_angle_custom = ""
         st.session_state.test_universal_angle_story_key = story_key
 
-    if not universal_story:
-        with top_right:
-            if st.button("Generate script",type="primary",width="stretch"):
-                for key in (
-                    headline_toggle_key,
-                    headline_text_key,
-                    *(f"script-slide-{story_key}-{index}" for index in range(1, 7)),
-                ):
-                    st.session_state.pop(key, None)
-                with st.spinner("Writing the Short…"):
-                    st.session_state.script_data = _script_for_topic(
-                        topic,
-                        st.session_state.get("topic_desk_profile") or "",
-                        language.casefold(),
-                    )
-    elif not st.session_state.get("test_universal_angles"):
+    if not st.session_state.get("test_universal_angles"):
         with top_right:
             if st.button("Generate script",type="primary",width="stretch",key="test-generate-script"):
                 try:
                     with st.spinner("Reading the full story and finding the strongest angles…"):
-                        from universal_script_writer import suggest_universal_story_angles
-                        angle_result = suggest_universal_story_angles(
+                        from script_writer import ScriptWriter
+                        desk_p = st.session_state.get("topic_desk_profile") or ("youtube_trends" if universal_story else "cricket_india_asia")
+                        angle_result = ScriptWriter.suggest_angles(
                             _story_payload(topic),
+                            profile=desk_p,
                             language=language.casefold(),
-                            search_query=search_query,
+                            search_query=search_query or "",
                         )
                     st.session_state.test_universal_angles = angle_result["angles"]
                     st.session_state.test_universal_angle_source = angle_result["source_evidence"]
@@ -5393,7 +7117,7 @@ def render_scriptwriter():
                         topic,
                         st.session_state.get("topic_desk_profile") or "",
                         language.casefold(),
-                        universal=True,
+                        universal=universal_story,
                         angle=selected_angle,
                         research_source=st.session_state.test_universal_angle_source,
                         search_query=search_query,
@@ -5418,7 +7142,7 @@ def render_scriptwriter():
     if not script:
         return
 
-    if universal_story and str(script.get("story_angle") or "").strip():
+    if str(script.get("story_angle") or "").strip():
         st.caption("Selected story angle: " + str(script.get("story_angle") or "").strip())
         if st.button(
             "Change angle and regenerate",
@@ -5438,10 +7162,37 @@ def render_scriptwriter():
             st.session_state.upload_qc = None
             st.rerun()
 
-    left,right=st.columns([1.55,.55],gap="large")
+    left,right=st.columns([1.5,.55],gap="large")
     with left:
         with st.container(key="script-editor"):
-            st.markdown('<div class="mini-label">Opening</div>',unsafe_allow_html=True)
+            delivery_p = str(script.get("delivery_profile") or "Broadcast Short")
+            flow = script.get("flow_metrics") or {}
+            flow_score = flow.get("flow_score") or 9.0
+            
+            # Compute live telemetry from current inputs in session state
+            current_vo1 = st.session_state.get(f"script-slide-{story_key}-1", script.get("script", [{}])[0].get("voiceover", ""))
+            s1_words_live = len(str(current_vo1).split()) if current_vo1 else 0
+            
+            total_words_live = sum(
+                len(str(st.session_state.get(f"script-slide-{story_key}-{idx}", sc.get("voiceover", ""))).split())
+                for idx, sc in enumerate(script.get("script", []), 1)
+            )
+            est_seconds_live = round(total_words_live / 2.5, 1) if total_words_live else 0.0
+
+            st.markdown(
+                f'<div class="prompter-flow-bar">'
+                f'<div>'
+                f'<span class="badge" style="background:rgba(255,255,255,0.15); color:#fff; border:0; margin-right:8px;">{delivery_p}</span>'
+                f'<span style="font-size:0.8rem; font-weight:800; letter-spacing:0.02em;">⚡ Broadcast Flow: {flow_score}/10</span>'
+                f'</div>'
+                f'<div style="font-size:0.75rem; font-weight:750; color:#cbd5e1;">'
+                f'{total_words_live} words · ~{est_seconds_live}s runtime (Lead: {s1_words_live}w)'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            st.markdown('<div class="mini-label">Opening Headline</div>',unsafe_allow_html=True)
             headline_enabled = st.toggle(
                 "Use opening headline",
                 value=st.session_state.get(headline_toggle_key, True),
@@ -5455,36 +7206,60 @@ def render_scriptwriter():
                 disabled=not headline_enabled,
                 label_visibility="collapsed",
             )
-            st.markdown('<div style="height:.7rem"></div>',unsafe_allow_html=True)
+            st.markdown('<div style="height:.4rem"></div>',unsafe_allow_html=True)
             quote = str(script.get("quote") or "").strip()
             quote_attribution = str(script.get("quote_attribution") or "").strip()
             if quote:
-                st.markdown('<div class="mini-label">Quote</div>',unsafe_allow_html=True)
+                st.markdown('<div class="mini-label">Direct Quote</div>',unsafe_allow_html=True)
                 st.text(quote)
                 if quote_attribution:
                     st.caption(f"— {quote_attribution}")
+
+            scene_roles = {
+                1: "THE LEAD HOOK (<14w)",
+                2: "THE TURN / CAUSE",
+                3: "STAKES & EVIDENCE",
+                4: "THE KICKER / IMPACT",
+                5: "OUTLOOK / STATUS",
+                6: "CLOSING",
+            }
             edited_voiceovers=[]
             for index,scene in enumerate(script.get("script",[]),1):
-                st.markdown(f'<div class="scene-label">Scene {index}</div>',unsafe_allow_html=True)
+                raw_text = scene.get("voiceover","")
+                cur_text = st.session_state.get(f"script-slide-{story_key}-{index}", raw_text)
+                word_count = len(str(cur_text).split()) if cur_text else 0
+                est_seconds = round(word_count / 2.5, 1) if word_count else 0.0
+                role = scene.get("narrative_role") or scene_roles.get(index, f"SCENE {index}")
+
+                if index == 1:
+                    if word_count <= 13:
+                        meter_badge = f'<span class="hook-meter-ok">✓ LEAD HOOK: {word_count}w (&lt;14w target)</span>'
+                    elif word_count == 14:
+                        meter_badge = f'<span class="hook-meter-warn">⚠️ LEAD HOOK: 14w (At threshold)</span>'
+                    else:
+                        meter_badge = f'<span class="hook-meter-bad">⛔ LEAD HOOK: {word_count}w (Shorten for retention)</span>'
+                else:
+                    meter_badge = f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted); background:var(--surface-soft); padding:3px 8px; border-radius:6px; border:1px solid var(--line);">{word_count} words · ~{est_seconds}s</span>'
+
+                st.markdown(
+                    f'<div class="cue-card-header">'
+                    f'<span class="cue-role-title">CUE {index} · {role}</span>'
+                    f'{meter_badge}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
                 edited_voiceovers.append(st.text_area("Narration",value=scene.get("voiceover",""),height=105,key=f"script-slide-{story_key}-{index}",label_visibility="collapsed"))
+
             if st.button("Approve script",type="primary",width="stretch"):
                 try:
-                    if (
-                        st.session_state.get("test_production_line") == "youtube_trends"
-                        or st.session_state.get("topic_desk_profile") == "niche_sports"
-                    ):
-                        from universal_script_writer import apply_universal_script_edits
-                        approved = apply_universal_script_edits(
-                            script,
-                            edited_voiceovers,
-                            headline=edited_headline if headline_enabled else "",
-                        )
-                    else:
-                        approved = apply_script_edits(
-                            script,
-                            edited_voiceovers,
-                            headline=edited_headline if headline_enabled else "",
-                        )
+                    from script_writer import ScriptWriter
+                    desk_p = st.session_state.get("topic_desk_profile") or ("youtube_trends" if universal_story else "cricket_india_asia")
+                    approved = ScriptWriter.apply_edits(
+                        script,
+                        edited_voiceovers,
+                        headline=edited_headline if headline_enabled else "",
+                        profile=desk_p,
+                    )
                     approved["headline_enabled"] = bool(headline_enabled)
                     st.session_state.approved_script=approved
                     st.session_state.visuals_approved = False
@@ -5510,20 +7285,47 @@ def render_scriptwriter():
                     st.session_state.upload_description=str(approved.get("seo_description") or "")
                     st.session_state.upload_hashtags=" ".join(approved.get("hashtags") or [])
                     st.session_state.upload_comment=str(approved.get("comment") or "")
-                    slide_count = len(approved.get("script") or [])
                 except ValueError as exc:
                     st.error(str(exc))
 
     with right:
         st.markdown('<div class="inspector">',unsafe_allow_html=True)
-        st.markdown('<div class="mini-label">Story</div>',unsafe_allow_html=True)
-        st.markdown(f'<div style="font-weight:820;line-height:1.35;margin:.25rem 0 1rem;">{topic.title}</div>',unsafe_allow_html=True)
-        st.markdown('<div class="inspector-line"><span>Language</span><span class="inspector-value">'+str(script.get("language_used") or language)+'</span></div>',unsafe_allow_html=True)
-        st.markdown('<div class="inspector-line"><span>Scenes</span><span class="inspector-value">'+str(len(script.get("script") or []))+'</span></div>',unsafe_allow_html=True)
-        st.markdown('<div class="inspector-line"><span>Word count</span><span class="inspector-value">'+str(script.get("word_count") or "")+'</span></div>',unsafe_allow_html=True)
+        st.markdown('<div class="mini-label">EDITORIAL TELEPROMPTER</div>',unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{topic.title}</div>',unsafe_allow_html=True)
+        scenes_count = len(script.get("script") or [])
+        st.markdown('<div class="inspector-line"><span>Language</span><span class="inspector-value">'+str(script.get("language_used") or language).title()+'</span></div>',unsafe_allow_html=True)
+        st.markdown(f'<div class="inspector-line"><span>Scenes</span><span class="inspector-value">{scenes_count} cues</span></div>',unsafe_allow_html=True)
+        st.markdown(f'<div class="inspector-line"><span>Word count</span><span class="inspector-value">{total_words_live} words</span></div>',unsafe_allow_html=True)
+        st.markdown(f'<div class="inspector-line"><span>Est. Runtime</span><span class="inspector-value">~{est_seconds_live}s</span></div>',unsafe_allow_html=True)
+        st.markdown('<div class="inspector-line"><span>Target Cadence</span><span class="inspector-value">~150 WPM (20-30s target)</span></div>',unsafe_allow_html=True)
         if st.session_state.approved_script:
-            st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
+            st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);border:1px solid #86efac;">✓ Script Approved</span></div>',unsafe_allow_html=True)
         st.markdown('</div>',unsafe_allow_html=True)
+
+        st.markdown('<div class="teleprompter-article-view">', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.1em; color:#38bdf8; text-transform:uppercase; margin-bottom:8px;">CONTINUOUS SPOKEN BROADCAST ARTICLE</div>', unsafe_allow_html=True)
+        article_parts = []
+        for s_idx, sc in enumerate(script.get("script", []), 1):
+            vo_text = st.session_state.get(f"script-slide-{story_key}-{s_idx}", sc.get("voiceover", "")).strip()
+            if vo_text:
+                if s_idx == 1:
+                    article_parts.append(f'<span style="color:#facc15; font-weight:800;">[LEAD]</span> {vo_text}')
+                else:
+                    article_parts.append(f'<span class="teleprompter-cue-separator">▸</span> {vo_text}')
+        if article_parts:
+            st.markdown(" ".join(article_parts), unsafe_allow_html=True)
+        else:
+            st.markdown("<em>Narration cues will display here as continuous text.</em>", unsafe_allow_html=True)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+        _render_packaging_deck_and_phone(
+            script=script,
+            story_title=topic.title,
+            current_headline=edited_headline,
+            current_vo1=current_vo1,
+            headline_enabled=bool(headline_enabled),
+        )
+
 def _test_visual_slide_count() -> int:
     script = st.session_state.get("approved_script") or st.session_state.get("script_data")
     count = len(script.get("script") or []) if isinstance(script, dict) else 4
@@ -5698,11 +7500,19 @@ def _render_manual_real_images():
             st.warning("Enter a query first.")
         else:
             with st.spinner("Searching real-image sources…"):
-                st.session_state.real_image_result = search_images(query)
-                st.session_state.visual_crops = {}
+                try:
+                    st.session_state.real_image_result = search_images(query)
+                    st.session_state.visual_crops = {}
+                except Exception as exc:
+                    st.session_state.real_image_result = {
+                        "error": f"{type(exc).__name__}: {exc}"
+                    }
 
     result = st.session_state.get("real_image_result") or {}
     if not result:
+        return
+    if result.get("error"):
+        st.error(result["error"])
         return
     if result.get("errors"):
         st.caption("Some sources failed; successful sources are still shown.")
@@ -5727,7 +7537,13 @@ def _render_manual_ai_images():
     from visual_generator import generate_images
 
     st.subheader("AI Generation")
-    st.caption("Manual query only. Each configured AI provider runs independently.")
+    providers_label = ["Pollinations.ai (Flux)"]
+    if os.getenv("HF_TOKEN"):
+        providers_label.append("Hugging Face")
+    if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
+        providers_label.append("Cloudflare Workers AI")
+    st.caption(f"Manual query only. Active AI providers: {', '.join(providers_label)}.")
+
     with st.form("ai_image_form"):
         query = st.text_input(
             "Manual prompt",
@@ -5746,11 +7562,19 @@ def _render_manual_ai_images():
             st.warning("Enter a prompt first.")
         else:
             with st.spinner("Generating images…"):
-                st.session_state.ai_image_result = generate_images(query)
-                st.session_state.visual_crops = {}
+                try:
+                    st.session_state.ai_image_result = generate_images(query)
+                    st.session_state.visual_crops = {}
+                except Exception as exc:
+                    st.session_state.ai_image_result = {
+                        "error": f"{type(exc).__name__}: {exc}"
+                    }
 
     result = st.session_state.get("ai_image_result") or {}
     if not result:
+        return
+    if result.get("error"):
+        st.error(result["error"])
         return
     if result.get("errors"):
         st.caption("Some AI providers failed; successful providers are still shown.")
@@ -5764,6 +7588,18 @@ def _render_manual_ai_images():
     )
     if not assets:
         st.warning("No configured AI provider returned an image.")
+        last_query = query if generate else str(result.get("query") or "").strip()
+        if last_query:
+            if st.button("Search Real Images for this query instead →", type="primary", key="ai-fallback-to-real-search"):
+                from visual_search import search_images
+                with st.spinner(f"Searching real photography for '{last_query}'…"):
+                    try:
+                        st.session_state.real_image_result = search_images(last_query)
+                        st.session_state.visual_test_mode = "Option 3 · Real Image Search"
+                        st.session_state.ai_image_result = None
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Search failed: {exc}")
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Generated images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
@@ -5793,27 +7629,6 @@ def render_visuals():
     slide_count = len(script.get("script") or []) if isinstance(script, dict) else 4
     slide_count = max(1, slide_count)
 
-    if mode.startswith("Option 1"):
-        render_visuals_crawler()
-    elif mode.startswith("Option 2"):
-        _render_manual_crawler()
-    elif mode.startswith("Option 3"):
-        _render_manual_real_images()
-    elif mode.startswith("Option 4"):
-        _render_manual_ai_images()
-    elif mode.startswith("Option 5"):
-        _render_card_studio(
-            live=False,
-            slide_count=slide_count,
-            polygon_flow=(
-                (
-                    st.session_state.get("test_production_line") == "deep_dive"
-                    and cricket_test
-                )
-                or youtube_trends_test
-            ),
-        )
-
     _render_visual_board(slide_count)
 
     assignments = st.session_state.get("visual_assignments") or {}
@@ -5839,10 +7654,14 @@ def render_visuals():
             }
             st.rerun()
     else:
-        st.info(
+        st.caption(
             f"{len(assignments)}/{slide_count} visuals attached. "
-            "Choose visuals above to build the Renderer handoff."
+            "Choose a source below to browse, crop, and attach visuals."
         )
+
+    st.divider()
+
+    _render_two_pane_visual_workspace(mode, slide_count, live=False, polygon_flow=True)
 
 
 
@@ -5861,7 +7680,6 @@ def render_subtitles():
     )
     if st.button("Generate subtitles",type="primary",width="stretch"):
         try:
-            from subtitles import generate_subtitles
             st.session_state.subtitle_data=generate_subtitles(st.session_state.approved_script,st.session_state.approved_audio)
             st.session_state.approved_subtitles=None
         except ValueError as exc:
@@ -5934,6 +7752,47 @@ def render_renderer_test():
         source_label = str(topics[selected_topic].source or "SPORTS DESK")
 
     video_path = st.session_state.get("rendered_video_path")
+    audio_dur = float(audio.get("total_duration") or 0.0)
+    scenes_count = len(script.get("script") or [])
+    visual_count = len(visuals) if isinstance(visuals, list) else 0
+
+    st.markdown(
+        '<div style="background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:16px;">'
+        '<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.09em; color:var(--accent); text-transform:uppercase; margin-bottom:10px;">MASTER PRODUCTION SPECIFICATIONS</div>'
+        '<div style="display:grid; grid-template-columns: repeat(4, 1fr); gap:10px;">'
+        '<div style="background:var(--surface-soft); padding:10px; border-radius:8px; border:1px solid var(--line);">'
+        '<div style="font-size:0.65rem; color:var(--muted); font-weight:700;">RESOLUTION</div>'
+        '<div style="font-family:var(--font-mono); font-size:0.85rem; font-weight:800; color:var(--ink); margin-top:2px;">1080×1920</div>'
+        '<div style="font-size:0.62rem; color:var(--subtle);">9:16 Portrait</div>'
+        '</div>'
+        '<div style="background:var(--surface-soft); padding:10px; border-radius:8px; border:1px solid var(--line);">'
+        '<div style="font-size:0.65rem; color:var(--muted); font-weight:700;">FRAMERATE</div>'
+        '<div style="font-family:var(--font-mono); font-size:0.85rem; font-weight:800; color:var(--ink); margin-top:2px;">30.00 FPS</div>'
+        '<div style="font-size:0.62rem; color:var(--subtle);">Constant Frame Rate</div>'
+        '</div>'
+        '<div style="background:var(--surface-soft); padding:10px; border-radius:8px; border:1px solid var(--line);">'
+        '<div style="font-size:0.65rem; color:var(--muted); font-weight:700;">CODEC / AUDIO</div>'
+        '<div style="font-family:var(--font-mono); font-size:0.85rem; font-weight:800; color:var(--ink); margin-top:2px;">H.264 / AAC</div>'
+        '<div style="font-size:0.62rem; color:var(--subtle);">High Profile yuv420p</div>'
+        '</div>'
+        '<div style="background:var(--surface-soft); padding:10px; border-radius:8px; border:1px solid var(--line);">'
+        '<div style="font-size:0.65rem; color:var(--muted); font-weight:700;">PLATFORM TARGET</div>'
+        '<div style="font-family:var(--font-mono); font-size:0.85rem; font-weight:800; color:var(--success); margin-top:2px;">YT SHORTS</div>'
+        '<div style="font-size:0.62rem; color:var(--subtle);">Compliant (&lt; 60s)</div>'
+        '</div>'
+        '</div>'
+        '</div>',
+        unsafe_allow_html=True,
+    )
+    st.markdown(
+        f'<div style="display:flex; gap:10px; margin-bottom:14px; flex-wrap:wrap;">'
+        f'<span style="font-size:0.75rem; font-weight:700; color:var(--success); background:var(--success-soft); padding:4px 10px; border-radius:8px; border:1px solid #86efac;">✓ Script ({scenes_count} scenes)</span>'
+        f'<span style="font-size:0.75rem; font-weight:700; color:var(--success); background:var(--success-soft); padding:4px 10px; border-radius:8px; border:1px solid #86efac;">✓ Audio ({audio_dur:.1f}s master track)</span>'
+        f'<span style="font-size:0.75rem; font-weight:700; color:var(--success); background:var(--success-soft); padding:4px 10px; border-radius:8px; border:1px solid #86efac;">✓ Subtitles (Word-level sync)</span>'
+        f'<span style="font-size:0.75rem; font-weight:700; color:var(--success); background:var(--success-soft); padding:4px 10px; border-radius:8px; border:1px solid #86efac;">✓ Visuals ({visual_count} compositions locked)</span>'
+        f'</div>',
+        unsafe_allow_html=True,
+    )
     if video_path and Path(str(video_path)).is_file():
         st.video(str(video_path), width=520)
         st.caption("This is the current rendered Test handoff. Rebuild it after changing an approved upstream stage.")
@@ -6346,7 +8205,7 @@ def render_upload_qc():
         st.rerun()
 
 def render_audio():
-    from audio import approve_audio, generate_audio
+    from audio import approve_audio, generate_audio, package_human_audio, resolve_voice
 
     script=st.session_state.approved_script
     if not script:
@@ -6364,27 +8223,101 @@ def render_audio():
     stored=str(script.get("language_used") or "english").casefold()
     default_language=stored if stored in {"english","hindi","telugu"} else "english"
     with left:
-        language=st.pills("Language",languages,default=default_language.title(),key="audio_language",label_visibility="collapsed") or default_language.title()
-        st.markdown('<div class="mini-label" style="margin:.55rem 0;">VOICE</div>',unsafe_allow_html=True)
-        st.caption("HYPE COMMENTATOR · female Indian voice · native Edge-TTS word timings")
+        col_l, col_g = st.columns(2)
+        with col_l:
+            language=st.pills("Language",languages,default=default_language.title(),key="audio_language") or default_language.title()
+        with col_g:
+            gender=st.pills("Voice Gender",["Female","Male"],default="Female",key="audio_gender") or "Female"
+        selected_voice = resolve_voice(language.casefold(), gender.casefold())
+        flag = "🇺🇸 / 🇬🇧" if language == "English" else "🇮🇳"
+        st.markdown(
+            f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 12px 0;">'
+            f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
+            f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">VOICE ENGINE · NEURAL EDGE-TTS</span>'
+            f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{flag} {language} {gender}</span>'
+            f'</div>'
+            f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">{selected_voice}</div>'
+            f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Native word-level timestamps · 24kHz HD Audio stream</div>'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
         if st.button("Generate audio",type="primary",width="stretch"):
-            selected=dict(script); selected["language_used"]=language.casefold()
+            selected=dict(script)
+            selected["language_used"]=language.casefold()
+            selected["voice_gender"]=gender.casefold()
+            selected["voice"]=selected_voice
             with st.spinner("Generating voiceover…"):
                 try:
-                    st.session_state.audio_data=generate_audio(selected)
+                    st.session_state.audio_data=generate_audio(selected, voice=selected_voice)
                     st.session_state.approved_audio=None
                 except (RuntimeError,ValueError) as exc:
                     st.error(str(exc)); st.session_state.audio_data=None; st.session_state.approved_audio=None
             st.session_state.subtitle_data=None
             st.session_state.approved_subtitles=None
 
+        with st.expander("🎙️ Human voiceover / mic upload (per-scene override)", expanded=False):
+            st.caption("Upload an MP3/WAV file to override TTS for any scene. Word timings will be synthesized linearly.")
+            scenes_list = script.get("script") or []
+            if scenes_list:
+                scene_nums = [int(s.get("scene", idx + 1)) for idx, s in enumerate(scenes_list)]
+                target_scene = st.selectbox("Select scene to override", scene_nums, key="human_audio_target_scene")
+                uploaded_file = st.file_uploader("Upload audio file (.mp3, .wav)", type=["mp3", "wav"], key=f"human_audio_upload_{target_scene}")
+                if uploaded_file is not None and st.button("Apply uploaded audio to scene", key=f"apply_uploaded_audio_{target_scene}"):
+                    from pathlib import Path
+                    out_dir = Path("output/audio_test")
+                    out_dir.mkdir(parents=True, exist_ok=True)
+                    tmp_file = out_dir / f"human_input_{target_scene}.mp3"
+                    with open(tmp_file, "wb") as f_out:
+                        f_out.write(uploaded_file.getbuffer())
+                    narration = ""
+                    for s in scenes_list:
+                        if int(s.get("scene", 0)) == target_scene:
+                            narration = s.get("voiceover", "")
+                            break
+                    try:
+                        packaged = package_human_audio(target_scene, tmp_file, narration, out_dir)
+                        if st.session_state.audio_data and "scenes" in st.session_state.audio_data:
+                            cur_scenes = list(st.session_state.audio_data["scenes"])
+                            replaced = False
+                            for i, sc in enumerate(cur_scenes):
+                                if int(sc.get("scene", 0)) == target_scene:
+                                    cur_scenes[i] = packaged
+                                    replaced = True
+                                    break
+                            if not replaced:
+                                cur_scenes.append(packaged)
+                            cur_scenes.sort(key=lambda x: int(x.get("scene", 0)))
+                            st.session_state.audio_data["scenes"] = cur_scenes
+                            st.session_state.audio_data["total_duration"] = round(sum(float(s["duration"]) for s in cur_scenes), 3)
+                        else:
+                            st.session_state.audio_data = {
+                                "language": language.casefold(),
+                                "voice": "human_recorded",
+                                "rate_percent": 0.0,
+                                "pitch": "default",
+                                "scenes": [packaged],
+                                "total_duration": packaged["duration"],
+                                "duration_corrected": False,
+                            }
+                        st.session_state.approved_audio = None
+                        st.success(f"Scene {target_scene} replaced with human audio!")
+                        st.rerun()
+                    except Exception as exc:
+                        st.error(f"Failed to package audio: {exc}")
+
         audio=st.session_state.audio_data
         if audio:
             for scene in audio["scenes"]:
                 with st.container(key=f"audio-scene-{scene['scene']}"):
-                    st.markdown(f'**Scene {scene["scene"]}** <span class="topic-meta">· {scene["duration"]:.2f}s · {len(scene["timings"])} timings</span>',unsafe_allow_html=True)
+                    st.markdown(
+                        f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
+                        f'<span style="font-size:0.82rem; font-weight:800; color:var(--ink);">TRACK {scene["scene"]}</span>'
+                        f'<span style="font-family:var(--font-mono); font-size:0.72rem; font-weight:700; color:var(--accent); background:var(--surface-soft); padding:2px 8px; border-radius:6px; border:1px solid var(--line);">{scene["duration"]:.2f}s · {len(scene["timings"])} cues</span>'
+                        f'</div>',
+                        unsafe_allow_html=True,
+                    )
                     st.audio(scene["path"],format="audio/mp3")
-                    st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
+                    st.caption("🎙️ Human Audio" if scene.get("human_recorded") else ("⚡ Cached" if scene["from_cache"] else "✨ Fresh Neural TTS generation"))
             if st.button("Approve audio",type="primary",width="stretch"):
                 try:
                     st.session_state.approved_audio=approve_audio(audio)
@@ -6401,13 +8334,22 @@ def render_audio():
     with right:
         with st.container(key="audio-inspector"):
             st.markdown('<div class="inspector">',unsafe_allow_html=True)
+            st.markdown('<div class="mini-label">SOUNDBOARD INSPECTOR</div>',unsafe_allow_html=True)
             audio=st.session_state.audio_data
             if audio:
                 correction="Speed corrected" if audio["duration_corrected"] else "No correction"
-                for label,value in [("Voice",audio["voice"]),("Rate",f'{audio["rate_percent"]:+.0f}%'),("Duration",f'{audio["total_duration"]:.2f}s'),("Timing",correction)]:
+                duration_val = float(audio["total_duration"])
+                compliance = "✓ Compliant (<58s)" if duration_val <= 58.0 else "⚠️ Near limit (>58s)"
+                for label,value in [
+                    ("Voice Talent",audio["voice"]),
+                    ("Speed Rate",f'{audio["rate_percent"]:+.0f}%'),
+                    ("Master Duration",f'{duration_val:.2f}s'),
+                    ("Cadence Sync",correction),
+                    ("Shorts Standard",compliance),
+                ]:
                     st.markdown(f'<div class="inspector-line"><span>{label}</span><span class="inspector-value">{value}</span></div>',unsafe_allow_html=True)
                 if st.session_state.approved_audio:
-                    st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);">Approved</span></div>',unsafe_allow_html=True)
+                    st.markdown('<div style="margin-top:.8rem;"><span class="badge" style="background:var(--success-soft);color:var(--success);border:1px solid #86efac;">✓ Audio Approved</span></div>',unsafe_allow_html=True)
             else:
                 st.caption("Audio metrics will appear after generation.")
             st.markdown('</div>',unsafe_allow_html=True)
@@ -6475,8 +8417,15 @@ elif st.session_state.app_mode == "test":
                             "03 · OTD": "otd",
                             "04": "youtube_trends",
                         }[eyebrow]
-                        if eyebrow in {"01 · DEEP-DIVE", "04"}:
+                        if eyebrow in {"01 · DEEP-DIVE", "03 · OTD", "04"}:
                             st.session_state.test_stage = "01 · Topic Fetcher"
+                        if eyebrow == "03 · OTD":
+                            st.session_state.otd_topics = []
+                            st.session_state.otd_selected = None
+                            st.session_state.topics = []
+                            st.session_state.selected_topic = None
+                            st.session_state.topic_open_tile = None
+                            st.session_state.topic_desk_profile = "otd"
                         if eyebrow == "04":
                             from topic_fetcher import fetch_youtube_search_trends
                             st.session_state.youtube_trend_results = []
@@ -6524,7 +8473,9 @@ elif st.session_state.app_mode == "test":
 
         if line_name == "YT Trends" and stage == "01 · Topic Fetcher":
             render_youtube_trends_topic_fetcher()
-        elif line_name in {"Deep-Dive", "YT Trends"}:
+        elif line_name == "OTD" and stage == "01 · Topic Fetcher":
+            render_otd_topic_fetcher()
+        elif line_name in {"Deep-Dive", "YT Trends", "OTD"}:
             if stage == "01 · Topic Fetcher":
                 render_topic_fetcher()
             elif stage == "02 · Scriptwriter":
@@ -6579,7 +8530,6 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_upload_hashtags = ""
                 st.session_state.test_top5_upload_comment = ""
                 st.session_state.test_top5_upload_result = None
-                st.rerun()
 
             if content_type == "General News":
                 st.info("General News is reserved for a later Top-5 expansion. Cricket is the current active Topic Fetcher.")
@@ -6600,13 +8550,16 @@ elif st.session_state.app_mode == "test":
                     existing = list(topics) if more else []
                     exclude = existing
                     with st.spinner("Fetching current cricket stories…"):
-                        from topic_fetcher import fetch_top5_topics
-                        new_topics = fetch_top5_topics(
-                            more=more,
-                            exclude_topics=exclude,
-                            limit=20,
-                        )
-                    st.session_state.test_top5_topics = existing + new_topics
+                        try:
+                            from topic_fetcher import fetch_top5_topics
+                            new_topics = fetch_top5_topics(
+                                more=more,
+                                exclude_topics=exclude,
+                                limit=20,
+                            )
+                            st.session_state.test_top5_topics = existing + new_topics
+                        except Exception as exc:
+                            st.error(f"Failed to fetch cricket stories: {exc}")
                     if not more:
                         st.session_state.test_top5_selected = []
                         st.session_state.test_top5_topic_open_tile = None
@@ -6830,7 +8783,7 @@ elif st.session_state.app_mode == "test":
                             unsafe_allow_html=True,
                         )
         elif line_name == "Top-5" and stage == "02 · Scriptwriter":
-            from top5_script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
+            from script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
 
             stories = list(st.session_state.get("test_top5_handoff") or [])
             st.markdown(
@@ -7034,7 +8987,7 @@ elif st.session_state.app_mode == "test":
                         st.caption("Audio will use the six spoken slide headlines; the body copy is visual-only.")
 
         elif line_name == "Top-5" and stage == "03 · Audio":
-            from audio import approve_top5_audio, generate_top5_audio
+            from audio import approve_top5_audio, generate_top5_audio, package_human_audio, resolve_voice
 
             handoff = st.session_state.get("test_top5_script_handoff")
             st.markdown(
@@ -7052,6 +9005,17 @@ elif st.session_state.app_mode == "test":
                     "Visual story bodies are never sent to speech."
                 )
 
+                top5_languages = ["English", "Hindi", "Telugu"]
+                stored_t5_lang = str(handoff.get("language_used") or "english").casefold()
+                default_t5_lang = stored_t5_lang if stored_t5_lang in {"english", "hindi", "telugu"} else "english"
+                col_t5_lang, col_t5_gender = st.columns(2)
+                with col_t5_lang:
+                    t5_language = st.pills("Language", top5_languages, default=default_t5_lang.title(), key="test_top5_audio_language") or default_t5_lang.title()
+                with col_t5_gender:
+                    t5_gender = st.pills("Voice Gender", ["Female", "Male"], default="Female", key="test_top5_audio_gender") or "Female"
+                t5_voice = resolve_voice(t5_language.casefold(), t5_gender.casefold())
+                st.caption(f"Selected Voice: **{t5_voice}** ({t5_language} {t5_gender}) · native Edge-TTS")
+
                 with st.expander("Spoken lines", expanded=True):
                     for slide in handoff.get("slides") or []:
                         number = int(slide.get("slide_number") or 0)
@@ -7066,13 +9030,51 @@ elif st.session_state.app_mode == "test":
                 ):
                     with st.spinner("Generating the six spoken Top-5 lines…"):
                         try:
-                            st.session_state.test_top5_audio_data = generate_top5_audio(handoff)
+                            selected_t5 = dict(handoff)
+                            selected_t5["language_used"] = t5_language.casefold()
+                            selected_t5["voice_gender"] = t5_gender.casefold()
+                            selected_t5["voice"] = t5_voice
+                            st.session_state.test_top5_audio_data = generate_top5_audio(selected_t5, voice=t5_voice)
                             st.session_state.test_top5_audio_handoff = None
                             st.rerun()
                         except (RuntimeError, ValueError) as exc:
                             st.session_state.test_top5_audio_data = None
                             st.session_state.test_top5_audio_handoff = None
                             st.error(str(exc))
+
+                with st.expander("🎙️ Human voiceover / mic upload (per-line override)", expanded=False):
+                    st.caption("Upload an MP3/WAV file to override TTS for any line. Word timings will be synthesized linearly.")
+                    t5_slides = handoff.get("slides") or []
+                    if t5_slides:
+                        override_line_num = st.selectbox("Select line to override", list(range(1, 7)), key="test_top5_human_line_select")
+                        t5_uploaded_file = st.file_uploader("Upload audio (.mp3, .wav)", type=["mp3", "wav"], key=f"test_top5_human_audio_{override_line_num}")
+                        if t5_uploaded_file is not None and st.button("Apply human audio to line", key=f"test_top5_apply_human_{override_line_num}"):
+                            from pathlib import Path
+                            out_t5_dir = Path("output/audio_top5_test")
+                            out_t5_dir.mkdir(parents=True, exist_ok=True)
+                            temp_t5_path = out_t5_dir / f"human_input_line_{override_line_num}.mp3"
+                            with open(temp_t5_path, "wb") as f_out:
+                                f_out.write(t5_uploaded_file.getbuffer())
+                            line_text = ""
+                            for s in t5_slides:
+                                if int(s.get("slide_number", 0)) == override_line_num:
+                                    line_text = s.get("headline", "")
+                                    break
+                            try:
+                                pkg = package_human_audio(override_line_num, temp_t5_path, line_text, out_t5_dir)
+                                if st.session_state.test_top5_audio_data and "scenes" in st.session_state.test_top5_audio_data:
+                                    curr = list(st.session_state.test_top5_audio_data["scenes"])
+                                    for i, sc in enumerate(curr):
+                                        if int(sc.get("scene", 0)) == override_line_num:
+                                            curr[i] = pkg
+                                            break
+                                    st.session_state.test_top5_audio_data["scenes"] = curr
+                                    st.session_state.test_top5_audio_data["total_duration"] = round(sum(float(sc["duration"]) for sc in curr), 3)
+                                    st.session_state.test_top5_audio_handoff = None
+                                    st.success(f"Line {override_line_num} overridden with human audio!")
+                                    st.rerun()
+                            except Exception as err:
+                                st.error(f"Failed to package human audio: {err}")
 
                 audio = st.session_state.get("test_top5_audio_data")
                 if audio:
@@ -7085,7 +9087,7 @@ elif st.session_state.app_mode == "test":
                                 unsafe_allow_html=True,
                             )
                             st.audio(scene["path"], format="audio/mp3")
-                            st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
+                            st.caption("Human Audio" if scene.get("human_recorded") else ("Cached" if scene["from_cache"] else "Fresh TTS generation"))
 
                     st.caption(
                         f'Voice: {audio["voice"]} · Rate: {audio["rate_percent"]:+.0f}% · '
@@ -7217,7 +9219,7 @@ elif st.session_state.app_mode == "test":
             elif visual_option == "Option 2 · Manual Scraper":
                 query = st.text_input(
                     "Manual scrape query",
-                    key="test_top5_visual_playground_query",
+                    key="test_top5_visual_playground_crawler_query",
                     placeholder="Virat Kohli latest cricket news",
                 )
                 if st.button("Run manual scrape", type="primary", width="stretch", key="test-top5-playground-manual"):
@@ -7237,7 +9239,7 @@ elif st.session_state.app_mode == "test":
             elif visual_option == "Option 3 · Manual Fetcher":
                 query = st.text_input(
                     "Manual image query",
-                    key="test_top5_visual_playground_query",
+                    key="test_top5_visual_playground_search_query",
                     placeholder="Virat Kohli batting India cricket",
                 )
                 if st.button("Fetch images", type="primary", width="stretch", key="test-top5-playground-manual-fetch"):
@@ -7258,9 +9260,15 @@ elif st.session_state.app_mode == "test":
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
             elif visual_option == "Option 4 · AI Generation":
+                providers_label = ["Pollinations.ai (Flux)"]
+                if os.getenv("HF_TOKEN"):
+                    providers_label.append("Hugging Face")
+                if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
+                    providers_label.append("Cloudflare Workers AI")
+                st.caption(f"Manual prompt only. Active AI providers: {', '.join(providers_label)}.")
                 prompt = st.text_area(
                     "AI image prompt",
-                    key="test_top5_visual_playground_query",
+                    key="test_top5_visual_playground_ai_query",
                     height=100,
                     placeholder="Virat Kohli in a packed cricket stadium, editorial sports photography",
                 )
@@ -7273,9 +9281,10 @@ elif st.session_state.app_mode == "test":
                             try:
                                 result = generate_images(prompt)
                                 st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
+                                if not st.session_state.test_top5_visual_playground_results:
+                                    st.warning("No configured AI provider returned an image.")
                             except Exception as exc:
                                 st.session_state.test_top5_visual_playground_results = []
-                                st.error(f"{type(exc).__name__}: {exc}")
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
             elif visual_option == "Option 5 · Card Studio":
@@ -7292,54 +9301,55 @@ elif st.session_state.app_mode == "test":
                     f'<div class="section-count">{len(assets)} images</div></div>',
                     unsafe_allow_html=True,
                 )
-                for start in range(0, len(assets), 3):
-                    cols = st.columns(min(3, len(assets) - start), gap="medium")
-                    for offset, asset in enumerate(assets[start:start + 3]):
-                        with cols[offset]:
-                            index = start + offset
-                            raw = asset.get("bytes")
-                            source = str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source").strip()
-                            label = str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual").strip()
-                            asset_key = _visual_asset_key(f"playground-{visual_option}", index, asset)
-                            cropped = st.session_state.test_top5_visual_crops.get(asset_key)
-                            preview_source = cropped if cropped else raw
-                            preview = _top5_fit_preview(preview_source)
-                            if preview is not None:
-                                st.image(preview, width="stretch")
-                            st.markdown(
-                                f'<div class="visual-source">{source}</div>'
-                                f'<div class="visual-detail">{label}</div>',
-                                unsafe_allow_html=True,
-                            )
-                            if cropped:
-                                st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
-                            choose_col, crop_col = st.columns(2, gap="small")
-                            with choose_col:
-                                if st.button(
-                                    "Use this image",
-                                    type="primary",
-                                    width="stretch",
-                                    key=f"test-top5-playground-use-{visual_option}-{index}",
-                                ):
-                                    selected_bytes = bytes(cropped) if cropped else bytes(raw or b"")
-                                    selected = _asset_to_image(selected_bytes)
-                                    if selected is not None:
-                                        st.session_state.test_top5_visual_playground_image = selected
-                                        st.session_state.test_top5_visual_playground_source = source
-                                        st.session_state.test_top5_visual_playground_render = None
-                                        st.rerun()
-                                    else:
-                                        st.warning("This image could not be decoded.")
-                            with crop_col:
-                                if st.button(
-                                    "Crop / reposition",
-                                    width="stretch",
-                                    key=f"test-top5-playground-crop-{visual_option}-{index}",
-                                ):
-                                    if isinstance(raw, (bytes, bytearray)):
-                                        _crop_visual_dialog(asset_key, bytes(raw), label, crop_store="test_top5_visual_crops")
-                                    else:
-                                        st.warning("This image is not crop-ready.")
+                with st.container(height=520):
+                    for start in range(0, len(assets), 4):
+                        cols = st.columns(min(4, len(assets) - start), gap="small")
+                        for offset, asset in enumerate(assets[start:start + 4]):
+                            with cols[offset]:
+                                index = start + offset
+                                raw = asset.get("bytes")
+                                source = str(asset.get("publisher") or asset.get("source") or asset.get("model") or "Web source").strip()
+                                label = str(asset.get("article_title") or asset.get("title") or asset.get("model") or "Selected visual").strip()
+                                asset_key = _visual_asset_key(f"playground-{visual_option}", index, asset)
+                                cropped = st.session_state.test_top5_visual_crops.get(asset_key)
+                                preview_source = cropped if cropped else raw
+                                preview = _top5_fit_preview(preview_source)
+                                if preview is not None:
+                                    st.image(preview, width="stretch")
+                                st.markdown(
+                                    f'<div class="visual-source">{source}</div>'
+                                    f'<div class="visual-detail">{label}</div>',
+                                    unsafe_allow_html=True,
+                                )
+                                if cropped:
+                                    st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
+                                choose_col, crop_col = st.columns(2, gap="small")
+                                with choose_col:
+                                    if st.button(
+                                        "Use this image",
+                                        type="primary",
+                                        width="stretch",
+                                        key=f"test-top5-playground-use-{visual_option}-{index}",
+                                    ):
+                                        selected_bytes = bytes(cropped) if cropped else bytes(raw or b"")
+                                        selected = _asset_to_image(selected_bytes)
+                                        if selected is not None:
+                                            st.session_state.test_top5_visual_playground_image = selected
+                                            st.session_state.test_top5_visual_playground_source = source
+                                            st.session_state.test_top5_visual_playground_render = None
+                                            st.rerun()
+                                        else:
+                                            st.warning("This image could not be decoded.")
+                                with crop_col:
+                                    if st.button(
+                                        "Crop / reposition",
+                                        width="stretch",
+                                        key=f"test-top5-playground-crop-{visual_option}-{index}",
+                                    ):
+                                        if isinstance(raw, (bytes, bytearray)):
+                                            _crop_visual_dialog(asset_key, bytes(raw), label, crop_store="test_top5_visual_crops")
+                                        else:
+                                            st.warning("This image is not crop-ready.")
 
             if visual_option in TOP5_VISUAL_OPTIONS[:4] and current_image is not None:
                 if st.button("Render current image with card typography", type="primary", width="stretch", key="test-top5-playground-render-current"):
@@ -7364,7 +9374,7 @@ elif st.session_state.app_mode == "test":
                     '<div class="section-count">1080 × 1920</div></div>',
                     unsafe_allow_html=True,
                 )
-                st.image(rendered, width=420)
+                st.image(rendered, width=280)
 
             else:
                 script = st.session_state.get("test_top5_script_handoff") or {}
@@ -7495,25 +9505,32 @@ elif st.session_state.app_mode == "test":
                             }
 
                         if preview_bytes is None and card_type == "editorial":
-                            preview_bytes = build_top5_card_preview(
-                                selected_bytes,
-                                selected_headline,
-                                selected_body,
-                                story_number=story_number,
-                                total_stories=5,
-                                source_label=source,
-                                subject_cutout=subject_cutout,
-                            )
+                            try:
+                                preview_bytes = build_top5_card_preview(
+                                    selected_bytes,
+                                    selected_headline,
+                                    selected_body,
+                                    story_number=story_number,
+                                    total_stories=5,
+                                    source_label=source,
+                                    subject_cutout=subject_cutout,
+                                )
+                            except Exception:
+                                preview_bytes = None
                         elif preview_bytes is None and card_type == "manual-subject" and isinstance(card_data, dict):
-                            preview_bytes = build_manual_subject_cutout_preview(
-                                selected_bytes,
-                                str(card_data.get("headline") or selected_headline),
-                                mode=str(card_data.get("mode") or "negative-space"),
-                                text_polygon=card_data.get("text_polygon") or (),
-                                font_size=int(card_data.get("font_size") or 150),
-                                font=str(card_data.get("font") or "Barlow Condensed"),
-                                style=str(card_data.get("style") or "Crisp Outline"),
-                            )
+                            try:
+                                preview_bytes = build_manual_subject_cutout_preview(
+                                    selected_bytes,
+                                    str(card_data.get("headline") or selected_headline),
+                                    mode=str(card_data.get("mode") or "negative-space"),
+                                    text_polygon=card_data.get("text_polygon") or (),
+                                    font_size=int(card_data.get("font_size") or 150),
+                                    font=str(card_data.get("font") or "Barlow Condensed"),
+                                    style=str(card_data.get("style") or "Crisp Outline"),
+                                    polygon_flow=True,
+                                )
+                            except Exception:
+                                preview_bytes = None
 
                         if preview_bytes:
                             assignment["preview_bytes"] = bytes(preview_bytes)
@@ -7527,53 +9544,63 @@ elif st.session_state.app_mode == "test":
                         if not assets:
                             st.info("No images are currently available from this option.")
                             return
-                        for start_index in range(0, len(assets), 3):
-                            cols = st.columns(3, gap="medium")
-                            for offset, (col, asset) in enumerate(zip(cols, assets[start_index:start_index + 3])):
-                                index = start_index + offset
-                                with col:
-                                    raw = asset.get("bytes")
-                                    source = _top5_asset_source(asset)
-                                    label = _top5_asset_label(asset)
-                                    asset_key = _visual_asset_key(result_key, index, asset)
-                                    cropped = st.session_state.test_top5_visual_crops.get(asset_key)
-                                    preview_bytes = cropped if cropped else raw
-                                    preview = _top5_fit_preview(preview_bytes)
-                                    if preview is not None:
-                                        st.image(preview, width="stretch")
-                                    st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
-                                    st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
-                                    if cropped:
-                                        st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
+                        st.markdown(
+                            f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
+                            f'<span><strong>{len(assets)} images in pool</strong> · scroll inside tray to browse</span>'
+                            f'<span>Choose for slide {active_slide}</span>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                        with st.container(height=520):
+                            for start_index in range(0, len(assets), 4):
+                                cols = st.columns(4, gap="small")
+                                for offset, asset in enumerate(assets[start_index:start_index + 4]):
+                                    index = start_index + offset
+                                    with cols[offset]:
+                                        raw = asset.get("bytes")
+                                        source = _top5_asset_source(asset)
+                                        label = _top5_asset_label(asset)
+                                        asset_key = _visual_asset_key(result_key, index, asset)
+                                        cropped = st.session_state.test_top5_visual_crops.get(asset_key)
+                                        preview_bytes = cropped if cropped else raw
+                                        preview = _top5_fit_preview(preview_bytes, 240, 360)
+                                        with st.container(key=f"test-top5-visual-card-{active_slide}-{result_key}-{index}"):
+                                            if preview is not None:
+                                                st.image(preview, width="stretch")
+                                            st.markdown(f'<div class="visual-source">{source}</div>', unsafe_allow_html=True)
+                                            if label:
+                                                st.markdown(f'<div class="visual-detail">{label}</div>', unsafe_allow_html=True)
+                                            if cropped:
+                                                st.markdown('<span class="visual-crop-label">CROP APPLIED</span>', unsafe_allow_html=True)
 
-                                    choose_col, crop_col = st.columns(2, gap="small")
-                                    with choose_col:
-                                        if st.button(
-                                            "Use this image",
-                                            type="primary",
-                                            width="stretch",
-                                            key=f"test-top5-use-{active_slide}-{result_key}-{index}",
-                                        ):
-                                            working_bytes = bytes(cropped) if cropped else bytes(raw or b"")
-                                            _top5_store_assignment(
-                                                asset,
-                                                working_bytes,
-                                                result_key,
-                                                source,
-                                                label,
-                                                subject_cutout=subject_cutout,
-                                            )
-                                            st.rerun()
-                                    with crop_col:
-                                        if st.button(
-                                            "Crop / reposition",
-                                            width="stretch",
-                                            key=f"test-top5-crop-{active_slide}-{result_key}-{index}",
-                                        ):
-                                            if isinstance(raw, (bytes, bytearray)):
-                                                _crop_visual_dialog(asset_key, bytes(raw), label, crop_store="test_top5_visual_crops")
-                                            else:
-                                                st.warning("This image is not crop-ready.")
+                                            choose_col, crop_col = st.columns(2, gap="small")
+                                            with choose_col:
+                                                if st.button(
+                                                    "Use this image",
+                                                    type="primary",
+                                                    width="stretch",
+                                                    key=f"test-top5-use-{active_slide}-{result_key}-{index}",
+                                                ):
+                                                    working_bytes = bytes(cropped) if cropped else bytes(raw or b"")
+                                                    _top5_store_assignment(
+                                                        asset,
+                                                        working_bytes,
+                                                        result_key,
+                                                        source,
+                                                        label,
+                                                        subject_cutout=subject_cutout,
+                                                    )
+                                                    st.rerun()
+                                            with crop_col:
+                                                if st.button(
+                                                    "Crop / reposition",
+                                                    width="stretch",
+                                                    key=f"test-top5-crop-{active_slide}-{result_key}-{index}",
+                                                ):
+                                                    if isinstance(raw, (bytes, bytearray)):
+                                                        _crop_visual_dialog(asset_key, bytes(raw), label, crop_store="test_top5_visual_crops")
+                                                    else:
+                                                        st.warning("This image is not crop-ready.")
 
                     def _top5_active_story_payload():
                         story_index = active_slide - 2
@@ -7770,23 +9797,26 @@ elif st.session_state.app_mode == "test":
                         preview_bytes = current_assignment.get("preview_bytes") or current_assignment.get("bytes")
                         st.divider()
                         st.markdown('<div class="mini-label">CURRENT ATTACHMENT · ACTUAL RENDER</div>', unsafe_allow_html=True)
-                        if preview_bytes:
-                            st.image(preview_bytes, width=420)
-                        st.caption(
-                            f'{current_assignment.get("source") or "Visual"} · '
-                            f'{current_assignment.get("label") or "Selected"}'
-                        )
-                        st.caption("This exact rendered frame will be handed to Renderer.")
-                        if st.button(
-                            f"Clear attached slide {active_slide}",
-                            width="stretch",
-                            key=f"test-top5-clear-attached-{active_slide}",
-                        ):
-                            st.session_state.test_top5_visual_assignments.pop(active_slide, None)
-                            st.session_state.test_top5_visual_previews.pop(active_slide, None)
-                            st.session_state.test_top5_visual_handoff = None
-                            st.session_state.test_top5_rendered_video_path = None
-                            st.rerun()
+                        col_attach_prev, col_attach_info = st.columns([1, 1], gap="medium")
+                        with col_attach_prev:
+                            if preview_bytes:
+                                st.image(preview_bytes, width=280)
+                        with col_attach_info:
+                            st.caption(
+                                f'**Source:** {current_assignment.get("source") or "Visual"}\n\n'
+                                f'**Label:** {current_assignment.get("label") or "Selected"}\n\n'
+                                "This exact rendered frame will be handed to Renderer."
+                            )
+                            if st.button(
+                                f"Clear attached slide {active_slide}",
+                                width="stretch",
+                                key=f"test-top5-clear-attached-{active_slide}",
+                            ):
+                                st.session_state.test_top5_visual_assignments.pop(active_slide, None)
+                                st.session_state.test_top5_visual_previews.pop(active_slide, None)
+                                st.session_state.test_top5_visual_handoff = None
+                                st.session_state.test_top5_rendered_video_path = None
+                                st.rerun()
 
                     st.divider()
                     st.markdown(

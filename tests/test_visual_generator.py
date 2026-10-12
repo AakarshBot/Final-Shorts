@@ -62,3 +62,17 @@ def test_generate_images_uses_a_fresh_seed_each_time(monkeypatch):
         ("player batting", 202),
     ]
     assert first["assets"][0]["hash"] != second["assets"][0]["hash"]
+
+
+def test_generate_images_includes_pollinations_by_default(monkeypatch):
+    monkeypatch.delenv("HF_TOKEN", raising=False)
+    monkeypatch.delenv("CLOUDFLARE_ACCOUNT_ID", raising=False)
+    monkeypatch.delenv("CLOUDFLARE_API_TOKEN", raising=False)
+    monkeypatch.setattr(
+        visual_generator,
+        "_pollinations",
+        lambda q, s: {"bytes": b"flux", "hash": "flux1", "source": "Pollinations.ai", "model": "Flux"},
+    )
+
+    result = visual_generator.generate_images("cricket match")
+    assert any(item["source"] == "Pollinations.ai" for item in result["assets"])

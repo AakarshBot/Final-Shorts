@@ -260,3 +260,82 @@ def test_apply_script_edits_keeps_contract():
     )
     assert edited["approved_for_audio"] is True
 
+
+def test_cricket_angle_schema_requires_exactly_three_options():
+    assert script_writer.ANGLE_SCHEMA["properties"]["angles"]["minItems"] == 3
+    assert script_writer.ANGLE_SCHEMA["properties"]["angles"]["maxItems"] == 3
+
+
+def test_validate_cricket_story_angles():
+    valid = {
+        "angles": [
+            {"title": "Injury Scare", "description": "Focus on the injury.", "evidence_basis": "Medical team assessment."},
+            {"title": "India Selection Impact", "description": "Focus on squad dynamics.", "evidence_basis": "Upcoming ODI series."},
+            {"title": "Chopra Reaction", "description": "Focus on Chopra's quote.", "evidence_basis": "Direct statement in research."},
+        ]
+    }
+    ok, err = script_writer._validate_cricket_story_angles(valid)
+    assert ok, err
+
+    bad = {"angles": valid["angles"][:2]}
+    ok, err = script_writer._validate_cricket_story_angles(bad)
+    assert not ok
+    assert "exactly 3" in err
+
+    duplicate = {
+        "angles": [
+            valid["angles"][0],
+            valid["angles"][0],
+            valid["angles"][2],
+        ]
+    }
+    ok, err = script_writer._validate_cricket_story_angles(duplicate)
+    assert not ok
+    assert "duplicate" in err
+
+
+def test_suggest_cricket_story_angles(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda story: "CRICKET RESEARCH EVIDENCE")
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt, story, schema, kwargs))
+        return {
+            "angles": [
+                {"title": "Injury Scare", "description": "Focus on the injury.", "evidence_basis": "Medical team assessment."},
+                {"title": "Selection Impact", "description": "Focus on squad dynamics.", "evidence_basis": "Upcoming ODI series."},
+                {"title": "What Chopra Said", "description": "Focus on Chopra's quote.", "evidence_basis": "Direct statement in research."},
+            ]
+        }
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.suggest_cricket_story_angles(Story(), language="english")
+
+    assert len(calls) == 1
+    assert calls[0][2] == "CRICKET RESEARCH EVIDENCE"
+    assert calls[0][3] is script_writer.ANGLE_SCHEMA
+    assert len(result["angles"]) == 3
+    assert result["angles"][0]["title"] == "Injury Scare"
+    assert result["source_evidence"] == "CRICKET RESEARCH EVIDENCE"
+
+
+def test_write_script_with_angle(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda story: "CRICKET STORY")
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append(prompt)
+        return valid_result()
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.write_script(
+        Story(),
+        language="english",
+        angle={"title": "Injury Scare", "description": "Focus on the injury."},
+    )
+
+    assert "SELECTED EDITORIAL ANGLE (AUTHORITATIVE)" in calls[0]
+    assert "Injury Scare: Focus on the injury." in calls[0]
+    assert result["story_angle"] == "Injury Scare: Focus on the injury."
+
+

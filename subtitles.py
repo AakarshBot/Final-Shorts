@@ -13,6 +13,7 @@ DASH_TRANSLATION = str.maketrans({
 MAX_WORDS_PER_CUE = 4
 MAX_CUE_SECONDS = 1.6
 STRONG_BREAK = re.compile(r"[.!?][\"'”’)]?$")
+PAUSE_BREAK = re.compile(r"[,;:\-–—][\"'”’)]?$")
 
 
 def _clean(value: Any) -> str:
@@ -52,13 +53,25 @@ def _group(words: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
     cues: list[list[dict[str, Any]]] = []
     current: list[dict[str, Any]] = []
 
-    for word in words:
+    for index, word in enumerate(words):
         current.append(word)
         duration = float(word["end"]) - float(current[0]["start"])
+
+        has_speech_pause = False
+        if index + 1 < len(words):
+            gap = float(words[index + 1]["start"]) - float(word["end"])
+            if gap >= 0.35:
+                has_speech_pause = True
+
+        is_strong_break = bool(STRONG_BREAK.search(str(word["text"])))
+        is_pause_break = len(current) >= 2 and bool(PAUSE_BREAK.search(str(word["text"])))
+
         if (
             len(current) >= MAX_WORDS_PER_CUE
             or duration >= MAX_CUE_SECONDS
-            or bool(STRONG_BREAK.search(str(word["text"])))
+            or is_strong_break
+            or is_pause_break
+            or (len(current) >= 2 and has_speech_pause)
         ):
             cues.append(current)
             current = []

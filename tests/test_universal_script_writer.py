@@ -1,6 +1,6 @@
 import pytest
 
-import universal_script_writer as writer
+import script_writer as writer
 
 
 def valid_result(scene_count=4):
@@ -193,14 +193,14 @@ def test_writer_honors_selected_editorial_angle(monkeypatch):
 
 
 def test_schema_allows_three_to_five_slides():
-    schema = writer.SCHEMA["properties"]["script"]
+    schema = writer.UNIVERSAL_SCHEMA["properties"]["script"]
     assert schema["minItems"] == 3
     assert schema["maxItems"] == 5
-    assert writer.SCHEMA["properties"]["quote_slide"]["maximum"] == 5
+    assert writer.UNIVERSAL_SCHEMA["properties"]["quote_slide"]["maximum"] == 5
 
 
 def test_prompt_contains_universal_hard_rules():
-    prompt = writer.SYSTEM_PROMPT
+    prompt = writer.UNIVERSAL_SYSTEM_PROMPT
     assert "3, 4 or 5 spoken slides" in prompt
     assert "Never return only 1 or 2 slides" in prompt
     assert "fewer than 14 words" in prompt

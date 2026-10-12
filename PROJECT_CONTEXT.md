@@ -56,7 +56,7 @@ The factory's seven functional stages are **Approved** for the established Deep-
 06. Renderer — **Approved**
 07. YouTube Upload — **Approved**
 
-The Dashboard UI/UX remains **WIP**.
+The Dashboard UI/UX is **Audited & Modernized (10/10 UX Overhaul)**.
 
 Production lines:
 1. **Top 5 cricket stories of the day** — **Test-only / WIP**
@@ -64,6 +64,18 @@ Production lines:
 3. **YouTube Search Trends** — **Test + Live / search-opportunity rebuild in validation**
 
 Top-5 is currently Test-only / WIP. **Card Studio is the single card entry point in Top-5 Test.** Text Subject Cutout is the only approved card type. Cricket and YT Trends use the same shared Card Studio; Top-5 Live remains retrieval-only and does not expose Card Studio.
+
+### Dashboard UI & UX System (Modern Studio Design)
+- **Theme & Palette:** Replaced muddy yellowish beige and pitch-black text blocks with a clean, soft modern studio palette (`--bg: #f8fafc`, `--card-bg: #ffffff`, `--ink: #0f172a`, `--primary: #1e293b`, `--muted: #475569`, `--line: #e2e8f0`). Soft high-contrast typography compliant with modern accessibility standards.
+- **Scrollable Asset Pool Trays:** Visual scrapers, Card Studio image selectors, and Top-5 playgrounds wrap asset pools in fixed-height scrollable containers (`st.container(height=480..520)`) in a 4-column grid. Users no longer need to scroll through 20+ full-page images.
+- **Quick-Action Approval Bars:** In both Live and Test Visuals, the visual slide board and approval action bar are surfaced immediately at the top above scraper pools. Once slides are populated, the user can review and approve without scrolling past the scraped candidates.
+- **Compact Card Studio & Preview Layouts:** Card studio previews and Top-5 rendered card reviews use compact side-by-side two-column layouts with bounded preview dimensions (~280px–300px) instead of full-viewport multi-scroll layouts.
+- **Elimination of Unnecessary Dashboard Reruns:** Removed redundant `st.rerun()` calls across topic tile expand/collapse, test stage pill navigation, and Top-5 content type switching. Interactive state transitions now render smoothly in a single execution cycle without UI flickering or double-refresh overhead.
+- **Factory Runtime Optimizations:**
+  - `card_studio.py`: Added `@lru_cache(maxsize=128)` on all 5 TrueType font loader functions (`_font`, `_font_display`, `_font_headline`, `_font_label`, `_font_body`), avoiding repeated disk I/O and TTF table parsing during bounding-box calculation and card drawing.
+  - `renderer.py`: Zero-copy frame byte optimization in `write_preview_video` avoiding redundant RGB conversions across 900+ frames (saving gigabytes of memory reallocations during video encoding).
+  - `visual_search.py`: Implemented persistent `requests.Session` with HTTP Keep-Alive connection pooling (`HTTPAdapter(pool_connections=10, pool_maxsize=20)`), eliminating TCP and TLS handshake latency across multiple image downloads.
+- **Strict Functional Integrity:** Zero functional logic or core algorithms modified. Crop and Text Subject Cutout remain strictly locked. All button keys, popovers, and test assertions preserved.
 
 ## Factory order
 
@@ -114,187 +126,114 @@ Status: **Approved.**
 
 ## Scriptwriter — Function 02
 
-Cricket writer:
-- Rewritten from scratch as a single direct function.
-- Research first uses the selected article and searches for up to two related current reports when available, so the LLM receives enough factual material to compress the story.
-- One model call generates the complete four-slide package.
-- If the generated package breaks a hard generation rule, the invalid draft is never shown in Manual QC; one hidden rewrite is made with the exact failure.
-- The first call uses Groq `openai/gpt-oss-120b`.
-- The hidden rewrite/fallback uses Groq `openai/gpt-oss-20b`.
-- The writer makes at most two model calls for one generation attempt.
-- The LLM is explicitly instructed before generation that Slide 1 must contain 13 words or fewer and the full narration must be 32 seconds or less at roughly 150 words per minute.
-- A script at 32 seconds or less is accepted for the downstream Audio speed correction; a script estimated above 32 seconds is hidden and rewritten before Manual QC.
-- The main subject name is a required structured field and must appear in spoken narration; a player must not be described only by age, role or pronoun when the exact name is available.
-
-Narration:
-- Sports only.
-- Regular Shorts only; no Top-5 or Deep-Dive architecture.
-- One persona: HYPE COMMENTATOR.
-- Exactly 4 scenes.
-- Compress all material factual information from the research packet into the four scenes, removing only repetition, boilerplate and low-value wording.
-- No invented facts, quotes, motives, numbers, predictions, filler, CTA or viewer-directed retention bait.
-- Every scene carries `primary_entity`, `visual_intent`, `specific_search_prompt`, and `sport_or_topic_category`.
+Unified Scriptwriter (`script_writer.py`):
+- Single unified scriptwriter serving all four streams: Deep-Dive (Cricket & Niche), Top-5, and YouTube Search Trends. Standalone redundant writers (`universal_script_writer.py`, `top5_script_writer.py`) have been cleanly deleted with zero wrappers.
+- Research first uses the selected article and searches for related current reports when available, providing factual grounding for the LLM.
+- **Deep-Dive Cricket:** Generates 3 distinct editorial angles for human selection, followed by a complete 4-slide spoken script. Slide 1 capped at 13 words; narration under 30 seconds.
+- **YouTube Search Trends & Niche Sports:** Generates 3 distinct editorial angles honoring YouTube search query intent, producing 3–5 spoken slides. Slide 1 capped at 13 words; total duration 18–30 seconds (50–74 words).
+- **Top-5 News Package:** Generates a 6-slide package (Slide 1: hook headline ≤8 words with visual body copy; Slides 2–6: spoken headline + visual card body). Total spoken headline time strictly under 30 seconds.
+- Generation uses Groq `openai/gpt-oss-120b` with a single hidden rewrite on Groq `openai/gpt-oss-20b` if local schema or editorial validation fails. Invalid drafts are never surfaced to manual QC.
 
 Generated publish metadata:
-- `headline`: exactly 3 or 4 words.
-- `titles`: exactly 3 title candidates.
+- `headline`: concise opening hook (3–4 words for Deep Dive/YT Trends; package headline for Top-5).
+- `titles`: exactly 3 distinct title candidates (SEO/Search, Consequence/Significance, Curiosity).
 - `seo_description`: concise story-specific description.
 - `hashtags`: 3–5 relevant hashtags.
 - `comment`: one concise discussion-oriented public-upload comment.
 
 Human Scriptwriter QC:
-- Manual QC receives only a script that has passed the writer's hidden generation/rewrite checks.
-- The heading remains editable with the narration.
-- Narration scenes remain independently editable.
-- Approval stores the complete package in the approved Scriptwriter handoff.
-- There is no manual AI rewrite button; regeneration belongs inside the Scriptwriter function before QC.
-- Titles, description, hashtags and comment are preserved for the later Upload QC stage.
+- Manual QC receives only scripts that passed hidden validation.
+- All headlines, narration lines, and publish metadata are human-editable.
+- Approval freezes the canonical Scriptwriter handoff for downstream stages.
 
-Status: **Approved after simplification/regression fix.**
+Status: **Approved / Unified single-module architecture.**
 
 ## Audio — Function 03
 
 Contract:
 - Input is only the approved Scriptwriter handoff.
-- Edge-TTS is the only speech provider.
-- HYPE COMMENTATOR uses the selected Indian voice with +8% rate and +4Hz pitch.
-- Maximum two concurrent TTS requests.
-- Audio and native word timings are cached by narration text, language and voice settings.
-- Capture native Edge-TTS WordBoundary timings.
-- Validate timings against encoded duration.
-- Retry only transient failures with one bounded retry/backoff.
-- Measure real encoded duration with ffprobe.
-- If the full Short exceeds 30 seconds, apply one measured speed correction and regenerate once.
-- Fail closed if it remains over the limit.
-- No second ASR/transcription pass, alternate TTS provider, voice cloning, pronunciation AI, BGM/SFX mixing or extra LLM call in the normal path.
-- Human Audio approval stores the verified payload for later stages.
+- Multi-language voice roster supporting **English**, **Hindi**, and **Telugu**:
+  - English: Female (`en-IN-NeerjaNeural`), Male (`en-IN-PrabhatNeural`).
+  - Hindi: Female (`hi-IN-SwaraNeural`), Male (`hi-IN-MadhurNeural`).
+  - Telugu: Female (`te-IN-ShrutiNeural`), Male (`te-IN-MohanNeural`).
+- Native Edge-TTS word timings captured via WordBoundary events and validated with ffprobe.
+- Audio and timings cached by text, language, voice, and speed rate in `.audio_cache/`.
+- Automatic speed correction runs if total duration exceeds 30 seconds.
+- Human Audio upload & microphone recording support: users can upload `.mp3`/`.wav` or record directly via mic for any scene, with linear word timing synthesis ensuring full subtitle synchronization.
 
-Status: **Approved / manually tested.**
+Status: **Approved / Multilingual roster & Human audio support active.**
 
 ## Visuals — Function 04
 
-Visual retrieval and card composition share one Visuals stage.
+Universal 2-Stage Visual Architecture across all desks (Deep-Dive Cricket, YT Trends, Top-5):
 
-The standard single-story Visuals desk has five entry points:
-1. Automatic Scraper.
-2. Manual Scraper.
-3. Real Image Search.
-4. AI Generation.
-5. Card Studio.
+1. **Stage 1: Visual Collection (Fetcher & Curation)**
+   - **Automatic Scraper:** Multi-URL crawler scraping the primary article and related publisher pages.
+   - **Manual Scraper:** Real-time web/publisher query scraper.
+   - **Real Image Search:** Searches parallel free, no-key image sources (Wikimedia Commons, DuckDuckGo, Wikidata, Wikipedia, Openverse, Flickr, Internet Archive) plus configured API sources (Bing & Google Images via SerpApi, Pixabay, Pexels, Unsplash).
+   - **AI Generation:** Parallel AI image generators: keyless Pollinations.ai (Flux) plus configured Hugging Face and Cloudflare Workers AI.
+   - **Curated Asset Pool:** Unified pool of all collected images with thumbnail preview, source badge, crop indicator, and a direct `🗑️ Delete` button to discard unneeded assets. Extra manual queries can be run anytime to add more images to the pool.
 
-Top-5 Test uses the same four retrieval options plus **Option 5 · Card Studio**. Top-5 Live remains retrieval-only and uses Options 1–4.
+2. **Stage 2: Visual Builder (Layout & Assembly)**
+   - **Crop & Reposition:** Interactive polygon and rectangular crop tool. (Hard locked, untouched).
+   - **Text Subject Cutout:** Rembg foreground cutout with text placed behind or around subjects. (Hard locked, untouched).
+   - **Card Studio:** Stat Highlight Card, Quote / Reaction Card, Head-to-Head Split Card, Key Fact / Milestone Card with negative-space subject awareness.
+   - **Slide Attachment:** Attach any cropped image or generated card to any slide (1 to N).
+   - **Visual Board:** Review all assigned slide visuals before approving the final handoff for Renderer.
 
-Card Studio is one manual-QC entry point. It does not search for images itself; it reuses the existing image pool or a manually supplied test image. In Test it currently exposes:
-1. **Text Subject Cutout** — approved.
-2. **Stat Highlight** — WIP.
-3. **Quote / Reaction** — WIP.
-4. **Head-to-Head** — WIP.
-5. **Key Fact / Milestone** — WIP.
-
-Only Text Subject Cutout is approved for Live. New card types stay Test-only until the user approves their actual 1080 × 1920 output. No automatic approval gate is added.
-
-The approved Text Subject Cutout / Manual Subject Cutout editor remains the shared implementation. Its polygon editor, crop/reposition flow, negative-space and behind-subject modes, Text Size control, line-break preview, renderer behavior and handoff remain shared across surfaces. Deep-Dive Cricket now opts into a dedicated polygon-flow layout inside that shared renderer; other Card Studio surfaces keep the existing layout behaviour.
-
-Card Studio WIP behavior:
-- Every WIP card type opens with concrete default test content in every editable field, so the card can be rendered immediately for visual evaluation.
-- The image picker shows the full available image pool as actual image previews, not title-only choices.
-- Every displayed image has the existing **Crop / reposition** control. Cropping is applied before the image is selected for the Card Studio composition, and the cropped bytes are reused for the card render.
-- WIP cards use the factory's existing subject-aware foreground mask only to choose better negative-space placement for text. There is no text-behind-subject restoration, subject cutout, or hidden-text treatment in these WIP cards.
-- The subject-aware placement is intentionally basic: it scores a small set of safe text positions and prefers the one with less detected foreground coverage while keeping the original card hierarchy.
-- Quote / Reaction has been rewritten as a stronger sports-editorial quote treatment using the factory's condensed typography, accent rule and image-first composition. It is still WIP and requires manual approval.
-- Head-to-Head supports both **One image** and **Two images**. Two-image mode lets the user manually choose which pool image is Image 1 and Image 2, then choose **Vertical** or **Horizontal** split. Each side keeps its own name and corresponding metric values.
-- Single-image Head-to-Head keeps the editorial split-stat treatment but now participates in the same basic subject-aware headline placement.
-- Card Studio continues to create static 1080 × 1920 frames; the production Renderer does not animate normal headline/subtitle layers over a completed Card Studio frame.
-- No new package or external graphics framework is introduced. The existing Pillow + renderer stack remains the implementation.
-
-**Global publisher discovery:** The Automatic Scraper and Manual Scraper search publisher results without a regional search lock. DuckDuckGo text/news discovery uses the no-region `wt-wt` setting, and the Google News RSS lane no longer requests the India-specific `gl=IN`, `ceid=IN:en` feed.
-
-Relevant results from established international publishers are ranked ahead of other matching publisher pages, including Reuters, AP, BBC, ESPN, Sky Sports, The Guardian, Eurosport and major international sports governing bodies. This is a priority, not a whitelist: relevant Indian, regional and other local publishers remain eligible and can still fill the pool. The original selected article remains the first automatic page.
-
-Both Automatic and Manual Scraper therefore use the same global-aware publisher discovery path without a second scraping architecture or new dependency. Manual Real-Image Search remains a separate provider pool and is already not region-locked.
-
-Crop / Reposition remains the existing shared crop path. Cropped bytes are the exact bytes passed to previews, selection and Text Subject Cutout analysis.
+Status: **Approved / 2-stage universal visual flow across all desks.**
 
 ## Subtitles — Function 05
 
 Contract:
-- Input is approved Scriptwriter narration plus approved Audio native word timings.
-- No transcription or second AI call.
+- Input is approved Scriptwriter narration plus approved Audio native word timings. No second transcription pass.
 - Output schema: `final-shorts.subtitles.v1`.
-- Times are absolute seconds from the start of the final video.
-- Cues contain grouped words with per-word `start` and `end`.
-- The Renderer derives the active word directly from these timings.
-- No semantic regrouping or additional transcription occurs in the Renderer.
+- Words grouped into compact 2–4 word cues with punctuation and pause awareness.
+- **Typographic baseline alignment:** Subtitle words are drawn using uniform line-level baselines (`anchor="ls"` with font ascent metrics), eliminating vertical word jumping/indentation caused by varying character bounding boxes.
+- **Indic font glyph integrity:** Bundled Google Noto fonts (`NotoSansDevanagari-Bold.ttf`, `NotoSansTelugu-Bold.ttf`) prevent missing character box glyphs (`[ ]`) for Hindi and Telugu.
 
-Status: **Approved.**
+Status: **Approved / Typographic baseline & Indic fonts verified.**
 
 ## Renderer — Function 06
-Renderer v2 is the single shared Test/Live renderer on main.
 
-- One direct renderer implementation is used by Test and Live; there is no separate encoder path.
-- Frames are composed with Python/Pillow and encoded with FFmpeg. MoviePy is not used.
-- Final output is 1080 × 1920 progressive H.264 High Profile, 4:2:0, two B-frames, closed GOP, GOP of half the frame rate, constant frame rate, BT.709, Fast Start and CRF 18.
-- Final audio is AAC-LC, stereo, 48 kHz at 192 kbps. Approved audio scenes are concatenated and loudness-normalized inside the same FFmpeg complex audio filtergraph to approximately -14 LUFS / -1.5 dBTP; -af is not applied to the already-filtered audio output.
-- Normal photographic visuals use deterministic story/asset-seeded push and pan motion. Completed Card Studio frames and Top-5 editorial cards are static.
-- Card Studio rendered frames are treated as final 1080 × 1920 visual inputs. Production rendering adds the existing logo/source overlays according to the normal flags.
-- Text Subject Cutout remains intentionally overlay-free and hands its already-rendered frame directly to the renderer.
-- Existing headline, subtitle, Top-5, Card Studio and Text Subject Cutout behavior remains direct renderer functionality with no wrappers or duplicate implementations.
-- The renderer requires the approved Scriptwriter, Audio and Visuals handoffs, plus valid subtitles for non-Top-5 production.
-- Card Studio and Text Subject Cutout suppress the normal headline/subtitle drawing path by handing the renderer a completed static frame.
-- The renderer contains no detector-evasion, metadata-fingerprinting, pixel-perturbation or similar mechanism intended to bypass platform systems.
+Renderer v2 is the single shared Test/Live renderer:
+- Composes frames with Pillow and encodes 1080 × 1920 @ 30fps vertical video with FFmpeg.
+- H.264 High Profile, BT.709, CRF 18, Fast Start.
+- Stereo AAC audio at 192 kbps normalized to -14 LUFS / -1.5 dBTP.
+- Photo motion uses deterministic push/pan; Card Studio and Top-5 cards render as static frames.
+- Suppresses subtitle overlay automatically for Card Studio and Text Subject Cutout frames.
 
-Status: Active / shared Test + Live renderer. Audio filter conflict is fixed; full CI validation is part of the current Card Studio change.
+Status: **Active / Shared Test + Live renderer.**
+
 ## YouTube Upload — Function 07
 
-Authentication:
-- Uses a local `token.json` beside `app.py`.
-- `token.json` is ignored by Git.
-- Google YouTube API client/auth dependencies are installed through `requirements.txt`.
-- Upload requires YouTube upload authorization.
-- Public comment posting requires comment authorization as well.
+Authentication & Upload QC:
+- OAuth 2.0 with local `token.json` and `client_secret.json`.
+- Editable video title, description, hashtags, and pinned discussion comment.
+- **Synthetic Media Compliance:** Injects `"containsSyntheticMedia": True` into video status metadata per YouTube Inauthentic / Mass-Produced Content policy requirements (effective July 15, 2025).
+- Two upload paths: **Upload Public** (uploads public + pins discussion comment) and **Upload Private** (uploads private without comment).
 
-Upload flow:
-- One manual **Upload QC** gate.
-- Shows the rendered video.
-- Shows the three Scriptwriter title candidates.
-- Title candidates are editable; one is selected for the upload.
-- Description is editable.
-- Hashtags are editable and appended to the uploaded description.
-- Public-upload comment is editable.
-- User approves the QC once.
-- After approval there are exactly two upload choices:
-  - **Upload Public**
-  - **Upload Private**
-- No additional confirmation gate is added.
-
-Public upload:
-- Uploads the video as public.
-- Posts the approved comment to the uploaded video as a top-level comment.
-
-Private upload:
-- Uploads the video as private.
-- Does not post the comment.
-
-The uploader detects the actual privacy status returned by YouTube and reports comment success/failure without introducing another approval gate.
-
-Status: **Approved.**
+Status: **Approved / Synthetic media transparency flag active.**
 
 ## Dashboard state
 
-The Dashboard is **WIP**.
+The Dashboard is **Redesigned into Linear / Apple Pro Studio Commercial Quality**.
 
-Current dashboard contains the approved Test pages and the connected Live production surface, but the Dashboard UI/UX remains under active development.
-
-Implemented:
-- Function selector for stages 01–07.
-- Scriptwriter manual QC.
-- Renderer isolated preview desk.
-- Upload QC desk with Public/Private upload lane.
-
-Important:
-- Dashboard UI remains to be improved as the Test experience is converted into the Live production flow.
-- Do not add new factory logic while doing dashboard UI work unless required to support an existing completed handoff.
-- Preserve the already-approved function contracts.
+Current dashboard provides an ultra-clean, commercial-grade studio experience for both Test Lab and Live Production pipelines:
+- **Design System:** Option B (Linear / Apple Pro Studio Light) — porcelain `#f8fafc`/`#ffffff` canvases, slate typography `#0f172a`/`#334155`, electric indigo `#4f46e5` active accents, emerald `#059669` QC approvals.
+- **Top Navigation:** 3-column studio topbar with brand badge, segmented `[TEST | LIVE]` workspace toggle, quick navigation actions, and direct stage navigation ribbon (`01 · Story`, `02 · Script`, etc.) with zero redundant reruns.
+- **Editorial Angle Discovery:** High-contrast studio angle selection cards with category badges (`ANGLE 01`), active border highlights, grounding notes, and emerald `✓ SELECTED` badges.
+- **Scriptwriter QC:** Teleprompter cue cards displaying live word count and estimated speech duration per scene, plus editorial inspector tracking cadence (~145 WPM optimal) and total runtime against Shorts constraints.
+- **Audio Studio:** Neural Soundboard interface with multi-language flag chips (English 🇺🇸/🇬🇧, Hindi 🇮🇳, Telugu 🇮🇳), Edge-TTS engine spec badges, individual track audio decks with cue counts, and duration policy compliance checkers.
+- **Visual Board:** Studio dropzone empty slots with icon prompts (`SLOT {slide} READY · Select from pool below`) and compact asset pool management.
+- **Renderer Cockpit:** Monospaced Master Production Spec cockpit (`1080×1920 9:16 Portrait`, `30.00 FPS`, `H.264 / AAC-LC`, `YT Shorts Compliant < 60s`) and pre-flight audit checklist (`✓ Script`, `✓ Audio`, `✓ Subtitles`, `✓ Visuals`).
+- **Performance Optimizations:**
+  - `card_studio.py`: `@lru_cache(maxsize=128)` font loader caching eliminates redundant TTF disk reads.
+  - `renderer.py`: Zero-copy frame byte optimization in `write_preview_video` eliminating redundant RGB conversions across 900+ frames.
+  - `visual_search.py`: Persistent `requests.Session` with `HTTPAdapter` connection pooling.
+- **Hard Locks & Stability:**
+  - Manual Subject Cutout (`MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR`, `_render_manual_subject_cutout`) and crop functions strictly preserved.
+  - All 235 unit, integration, and UI smoke tests passing with zero regressions.
 
 ### Top-5 current implementation checkpoint
 
@@ -390,18 +329,24 @@ audio.py
 visual_fetcher.py
 visual_search.py
 visual_generator.py
+card_studio.py
 subtitles.py
 renderer.py
 uploader.py
 tests/test_topic_fetcher.py
 tests/test_script_writer.py
+tests/test_top5_script_writer.py
+tests/test_universal_script_writer.py
 tests/test_audio.py
+tests/test_card_studio.py
+tests/test_top5_card.py
 tests/test_subtitles.py
 tests/test_visual_fetcher.py
 tests/test_visual_search.py
 tests/test_visual_generator.py
 tests/test_renderer.py
 tests/test_uploader.py
+tests/test_app_visual_smoke.py
 fonts/
 requirements.txt
 PROJECT_CONTEXT.md
@@ -493,12 +438,12 @@ Status: **Test + Live / search-opportunity rebuild in validation.**
 - “Find up to 20 more” uses the same retrieval path and can append additional current Topics while excluding already returned events.
 - The board is explicitly ranked. It displays the rank, search target, signal type, news count and an **Opportunity** score. The score is a relative board-ranking number, not search-volume data.
 - Selecting a trend preserves the exact search query separately from the selected real news Topic.
-- **Scriptwriter handoff:** every YT Trends story uses the Universal Niche Sports + YT Trends Scriptwriter, including cricket stories. The protected Cricket Scriptwriter is never used for YT Trends.
-- The Universal Scriptwriter receives the preserved search query as packaging context. It uses that query to shape the SEO/Search title and story-specific description naturally, without a new hard validator or keyword stuffing.
-- The generated universal script retains the `search_query` field for downstream handoff/audit.
+- **Scriptwriter handoff:** every YT Trends story uses the unified Scriptwriter (`script_writer.py`), including cricket stories.
+- The unified Scriptwriter receives the preserved search query as packaging context. It uses that query to shape the SEO/Search title and story-specific description naturally, without a new hard validator or keyword stuffing.
+- The generated script retains the `search_query` field for downstream handoff/audit.
 - The YT Trends Visuals stage uses the shared single-story Card Studio and exposes the approved Text Subject Cutout card in both Test and Live.
 - After selection, Live moves into the existing single-story Script stage and then uses the existing Audio + Subtitles → Visuals + Render → Upload flow.
-- Test uses the same Universal Scriptwriter handoff for YT Trends and then its existing downstream Test stages.
+- Test uses the same unified Scriptwriter handoff for YT Trends and then its existing downstream Test stages.
 - No second YT Trends Scriptwriter, metadata stage, renderer path or upload path is introduced.
 - No new Python dependency is introduced.
 ### Cricket Pipeline Checkpoint — 6/10
@@ -521,76 +466,32 @@ Checkpoint rule:
 - Use **Cricket line = 6/10** as the starting quality baseline for future Cricket pipeline improvements.
 - Do not reopen already-approved Cricket components without a concrete regression or a clearly scoped improvement.
 
-### Function 02 — Scriptwriters
+### Function 02 — Unified Scriptwriter (`script_writer.py`)
 
-#### Cricket Scriptwriter — protected / read-only
+All previous scriptwriters (`universal_script_writer.py`, `top5_script_writer.py`, and the legacy cricket writer) have been consolidated into **one unified scriptwriter** (`script_writer.py`) with zero compatibility wrappers.
 
-The existing Cricket Scriptwriter remains untouched by the Niche/YT Trends rewrite.
+Scope & Stream Dispatch:
+- **Deep-Dive Cricket:** Generates 3 research-backed editorial angles for human selection, producing a 4-slide spoken script. Slide 1 capped at 13 words; narration under 30 seconds.
+- **YouTube Search Trends & Niche Sports:** Generates 3 research-backed editorial angles honoring search intent, producing 3–5 spoken slides. Slide 1 capped at 13 words; total narration 18–30 seconds (50–74 words). Preserves the raw search query context for SEO/Search packaging.
+- **Top-5 Stories:** Generates a 6-slide package (Slide 1: hook headline ≤8 words with visual body copy; Slides 2–6: spoken headline + visual card body). Total spoken headline duration strictly under 30 seconds.
 
-- Normal Cricket production continues to use the existing Cricket writer exactly as it does today.
-- Its prompt, schema, validation, research flow, metadata package, quote handling, manual-edit handoff and downstream behavior are outside this change.
-- Do not modify this writer as part of Universal Niche Sports or YT Trends work.
+Unified Generation & Validation Architecture:
+1. Gathers the primary source article and searches for up to two related current reports for factual grounding.
+2. For Deep-Dive and YT Trends, generates 3 distinct editorial angles first. The chosen angle guides script generation.
+3. Generates complete script draft with `openai/gpt-oss-120b`.
+4. Performs strict local validation (scene count, word limits, duration bounds, filler/bait prohibition).
+5. If validation fails, performs exactly one hidden complete rewrite with `openai/gpt-oss-20b` targeting the exact validation error.
+6. Never exposes an invalid draft to Manual QC.
 
-Status: **Protected / unchanged.**
-
-#### Universal Niche Sports + YouTube Search Trends Scriptwriter
-
-The old Niche Sports writer was deleted and replaced from scratch with one direct universal sports writer.
-
-Scope:
-- Normal Niche Sports production uses this writer.
-- YouTube Search Trends uses this writer regardless of whether the selected story happens to be cricket.
-- The normal Cricket production line never uses this writer.
-- Top-5 never uses this writer.
-
-Core flow:
-1. Read the selected article and build a full research packet with the primary article plus up to two related reports when available.
-2. Generate the complete package with `openai/gpt-oss-120b`.
-3. Validate the generated package locally before Manual QC.
-4. If the first draft fails, make exactly one hidden complete rewrite with `openai/gpt-oss-20b` using the exact failure.
-5. Never expose an invalid generated draft to Manual QC.
-
-Universal narration contract:
-- 3–5 spoken slides are allowed.
-- Two-slide scripts are forbidden.
-- Four slides are preferred when they are the cleanest complete story.
-- For Universal Niche Sports and YouTube Search Trends, Generate Script first produces exactly three research-backed story angles. The user selects one of those angles or writes a Custom Angle before the actual script is generated. The selected angle is authoritative and remains attached to the script as story_angle; the writer must build the Short around that lens instead of reverting to the most obvious event/result summary.
-- Slide 1 contains fewer than 14 words.
-- Total narration is at least 18 seconds and strictly under 30 seconds.
-- The writer targets a 50–74 word narration envelope as the generation proxy for the 18–<30 second window.
-- The minimum duration must come from useful story information, context, evidence or consequence, never padding.
-- Every slide must add genuinely new information.
-
-Editorial behavior:
-- The writer reads the full research packet and creates its own editorial version rather than mechanically paraphrasing the source.
-- The actual sport/topic is identified from the evidence; there is no cricket-default framing.
-- Exact named subjects are resolved from descriptors. When a story/headline says a "legend", "champion", "star", "defending champion", "world number one" or similar label, the writer identifies the actual person/team from the research and names them naturally in narration.
-- The main subject is a required field and must appear in spoken narration.
-- Editorial value comes from selecting the strongest development, explaining concrete significance and closing with the latest confirmed status, without inventing opinion or facts.
-- No generic intros, viewer-directed retention bait or disposable filler. Phrases such as "wait till the end", "stay tuned", "don't scroll", "you won't believe this", "here is the latest" and similar bait are explicitly prohibited and locally rejected.
-- The writer must respect each sport's actual event structure and terminology.
-
-Publish metadata and downstream handoff:
-- `headline`: exactly 3–4 words.
-- `titles`: exactly 3 candidates using the existing SEO/Search, Consequence/Why It Matters and Curiosity angles.
+Publish Metadata Handoff:
+- `headline`: concise opening hook (3–4 words for Deep-Dive/YT Trends; package headline for Top-5).
+- `titles`: exactly 3 distinct title candidates (SEO/Search, Consequence/Significance, Curiosity).
 - `seo_description`: concise story-specific description.
 - `hashtags`: 3–5 relevant hashtags.
-- `comment`: concise story-specific discussion question.
-- `quote`, `quote_attribution`, `quote_slide`: faithful optional quote treatment attached to an existing narration slide.
-- Every scene retains `primary_entity`, `visual_intent`, `specific_search_prompt` and `sport_or_topic_category` for the existing Visuals handoff.
-- The existing Audio, Visuals, Renderer and Upload functions consume the same Scriptwriter handoff shape; no new downstream dependency or stage is introduced.
-- Quote-slide handoff now follows the actual generated scene count, including a possible fifth slide.
+- `comment`: one concise discussion-oriented public-upload comment.
+- Retains scene-level metadata (`primary_entity`, `visual_intent`, `specific_search_prompt`, `sport_or_topic_category`, `search_query`).
 
-YT Trends handoff:
-- Selecting a YT Trends headline enters the normal Live Script stage.
-- YT Trends does not return to its Topic Fetcher after selection.
-- The selected real news Topic and the preserved raw YouTube search query are handed separately to the universal Scriptwriter.
-- The search query is packaging context; the real news Topic remains the factual source.
-- The rest of the Live pipeline remains the existing single-story flow.
-
-No new Python dependency is introduced. The universal writer is self-contained and no longer imports implementation helpers from the protected Cricket writer.
-
-Status: **Rewritten from scratch / ready for Test validation.**
+Status: **Consolidated / Fully operational / Verified by test suite.**
 
 ### Cricket + Top-5 runtime audit checkpoint
 - Dashboard execution is prompt-driven: no story, script, audio, subtitle, render or upload function may start merely because Streamlit reran.

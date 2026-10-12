@@ -121,6 +121,96 @@ def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatc
     lefts = [placement[2] for placement in layout["placements"]]
     assert lefts[1] > lefts[0]
 
+
+def test_manual_subject_cutout_polygon_half_screen_vertical_alignment(monkeypatch):
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: font_path.read_bytes(),
+    )
+
+    # Vertical left half of the screen
+    polygon = ((0, 0), (540, 0), (540, 1920), (0, 1920))
+    data = renderer._manual_subject_cutout_layout_data(
+        "India dominate the final match today",
+        polygon,
+        120,
+        "Barlow Condensed",
+        "Crisp Outline",
+    )
+
+    assert data["layouts"]
+    top_layout = data["layouts"][0]
+    # Spans vertically down the half-screen column
+    assert len(top_layout["lines"]) >= 3
+    first_placement = top_layout["placements"][0]
+    assert first_placement[1] == 2  # Starts 2px inside top boundary
+    assert first_placement[2] == 2  # Starts 2px inside left boundary
+    for _line, line_top, left, bbox in top_layout["placements"]:
+        line_w = bbox[2] - bbox[0]
+        assert left == 2
+        assert left + line_w <= 538  # Stays inside right boundary of 540
+        assert line_top + (bbox[3] - bbox[1]) <= 1918  # Stays inside bottom boundary
+
+
+def test_manual_subject_cutout_polygon_bottom_half_vertical_bounds(monkeypatch):
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: font_path.read_bytes(),
+    )
+
+    # Bottom half of screen
+    polygon = ((0, 960), (1080, 960), (1080, 1920), (0, 1920))
+    data = renderer._manual_subject_cutout_layout_data(
+        "India win the cricket world cup",
+        polygon,
+        140,
+        "Barlow Condensed",
+        "Crisp Outline",
+    )
+
+    assert data["layouts"]
+    layout = data["layouts"][0]
+    assert layout["placements"][0][1] == 962  # Starts 2px inside top boundary of 960
+    assert layout["placements"][0][2] == 2    # Starts 2px inside left boundary
+    for _line, line_top, left, bbox in layout["placements"]:
+        line_w = bbox[2] - bbox[0]
+        assert left == 2
+        assert left + line_w <= 1078
+        assert line_top + (bbox[3] - bbox[1]) <= 1918
+
+
+def test_manual_subject_cutout_polygon_adapts_to_irregular_end_to_end_shape(monkeypatch):
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: font_path.read_bytes(),
+    )
+
+    # Triangle with tapered top
+    polygon = ((540, 100), (900, 1000), (180, 1000))
+    data = renderer._manual_subject_cutout_layout_data(
+        "Cricket win today",
+        polygon,
+        120,
+        "Barlow Condensed",
+        "Crisp Outline",
+    )
+
+    assert data["layouts"]
+    layout = data["layouts"][0]
+    for _line, line_top, left, bbox in layout["placements"]:
+        line_w = bbox[2] - bbox[0]
+        assert left >= 182
+        assert left + line_w <= 898
+        assert line_top >= 102
+        assert line_top + (bbox[3] - bbox[1]) <= 998
+
+
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
     assert renderer.HEADLINE_SECONDS == 1.35

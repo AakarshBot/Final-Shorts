@@ -13,6 +13,7 @@ import os
 import secrets
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any
+from urllib.parse import quote_plus
 
 import requests
 from PIL import Image, UnidentifiedImageError
@@ -96,7 +97,28 @@ def _cloudflare(query: str, seed: int) -> dict[str, Any] | None:
     }
 
 
+def _pollinations(query: str, seed: int) -> dict[str, Any] | None:
+    url = f"https://image.pollinations.ai/prompt/{quote_plus(query)}"
+    response = requests.get(
+        url,
+        params={"width": 1080, "height": 1920, "seed": seed, "nologo": "true"},
+        timeout=TIMEOUT,
+        headers={"User-Agent": "FinalShorts/1.0"},
+    )
+    response.raise_for_status()
+    data = response.content
+    if not _valid_image(data):
+        return None
+    return {
+        "bytes": data,
+        "hash": hashlib.sha256(data).hexdigest(),
+        "source": "Pollinations.ai",
+        "model": "Flux",
+    }
+
+
 PROVIDERS = (
+    ("Pollinations.ai", _pollinations),
     ("Hugging Face", _huggingface),
     ("Cloudflare Workers AI", _cloudflare),
 )
@@ -111,7 +133,9 @@ def generate_images(query: str) -> dict[str, Any]:
 
     configured = []
     for name, provider in PROVIDERS:
-        if name == "Hugging Face" and os.getenv("HF_TOKEN"):
+        if name == "Pollinations.ai":
+            configured.append((name, provider))
+        elif name == "Hugging Face" and os.getenv("HF_TOKEN"):
             configured.append((name, provider))
         elif name == "Cloudflare Workers AI" and os.getenv("CLOUDFLARE_ACCOUNT_ID") and os.getenv("CLOUDFLARE_API_TOKEN"):
             configured.append((name, provider))

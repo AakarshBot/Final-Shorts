@@ -23,11 +23,37 @@ TOP5_SCENE_COUNT = 6
 TOP5_MAX_TOTAL_DURATION_SECONDS = 30.0
 TOP5_TOTAL_CORRECTION_TARGET_SECONDS = 29.6
 
+VOICE_ROSTER = {
+    "english": {
+        "female": "en-IN-NeerjaNeural",
+        "male": "en-IN-PrabhatNeural",
+    },
+    "hindi": {
+        "female": "hi-IN-SwaraNeural",
+        "male": "hi-IN-MadhurNeural",
+    },
+    "telugu": {
+        "female": "te-IN-ShrutiNeural",
+        "male": "te-IN-MohanNeural",
+    },
+}
+
 VOICES = {
     "english": "en-IN-NeerjaNeural",
     "hindi": "hi-IN-SwaraNeural",
     "telugu": "te-IN-ShrutiNeural",
 }
+
+
+def resolve_voice(language: str, gender: str | None = None, voice: str | None = None) -> str:
+    if voice:
+        return voice
+    lang_key = str(language or "english").strip().casefold()
+    if gender and lang_key in VOICE_ROSTER:
+        gender_key = str(gender).strip().casefold()
+        if gender_key in VOICE_ROSTER[lang_key]:
+            return VOICE_ROSTER[lang_key][gender_key]
+    return VOICES.get(lang_key, VOICES["english"])
 
 BASE_RATE_PERCENT = 8.0
 PITCH = "+4Hz"
@@ -42,12 +68,13 @@ def _word_count(text: str) -> int:
     return len(re.findall(r"\S+", text))
 
 
-def _cache_key(text: str, language: str, rate_percent: float) -> str:
+def _cache_key(text: str, language: str, rate_percent: float, voice: str | None = None) -> str:
+    selected_voice = voice or VOICES[language]
     payload = json.dumps(
         {
             "text": text,
             "language": language,
-            "voice": VOICES[language],
+            "voice": selected_voice,
             "rate_percent": round(rate_percent, 2),
             "pitch": PITCH,
         },
@@ -147,11 +174,13 @@ async def _synthesise_once(
     language: str,
     rate_percent: float,
     path: Path,
+    voice: str | None = None,
 ) -> tuple[list[dict[str, Any]], float]:
     timings: list[dict[str, Any]] = []
+    selected_voice = voice or VOICES.get(language, VOICES["english"])
     communicate = edge_tts.Communicate(
         text,
-        VOICES[language],
+        selected_voice,
         rate=f"{rate_percent:+.0f}%",
         pitch=PITCH,
         boundary="WordBoundary",
@@ -183,8 +212,9 @@ async def _scene(
     rate_percent: float,
     output_dir: Path,
     semaphore: asyncio.Semaphore,
+    voice: str | None = None,
 ) -> dict[str, Any]:
-    key = _cache_key(text, language, rate_percent)
+    key = _cache_key(text, language, rate_percent, voice=voice)
     cache_audio = CACHE_DIR / f"{key}.mp3"
     cache_meta = CACHE_DIR / f"{key}.json"
     output_path = output_dir / f"voiceover_{scene_number}.mp3"
@@ -231,6 +261,7 @@ async def _scene(
                         language,
                         rate_percent,
                         temp_audio,
+                        voice=voice,
                     ),
                     timeout=45,
                 )
@@ -286,6 +317,7 @@ async def _generate_at_rate(
     language: str,
     rate_percent: float,
     output_dir: Path,
+    voice: str | None = None,
 ) -> list[dict[str, Any]]:
     semaphore = asyncio.Semaphore(MAX_CONCURRENCY)
     tasks = [
@@ -297,6 +329,7 @@ async def _generate_at_rate(
                 rate_percent,
                 output_dir,
                 semaphore,
+                voice=voice,
             )
         )
         for number, scene in enumerate(scenes, 1)
@@ -312,9 +345,48 @@ async def _generate_at_rate(
     return sorted(results, key=lambda item: item["scene"])
 
 
+def synthesize_linear_timings(text: str, duration: float) -> list[dict[str, Any]]:
+    """Synthesize uniform word timestamps across duration for human-recorded voiceovers."""
+    words = _clean_text(text).split()
+    if not words or duration <= 0:
+        return []
+    slot = duration / len(words)
+    return [
+        {"word": w, "start": round(i * slot, 3), "end": round((i + 1) * slot, 3)}
+        for i, w in enumerate(words)
+    ]
+
+
+def package_human_audio(
+    scene_number: int,
+    audio_path: str | Path,
+    narration_text: str,
+    output_dir: str | Path,
+) -> dict[str, Any]:
+    """Package an uploaded or mic-recorded human audio file into an audio scene."""
+    src = Path(audio_path)
+    if not src.exists() or src.stat().st_size <= 500:
+        raise ValueError("Invalid human audio file.")
+    out_dir = Path(output_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+    target = out_dir / f"voiceover_{scene_number}.mp3"
+    shutil.copy2(src, target)
+    duration = _probe_duration(target)
+    timings = synthesize_linear_timings(narration_text, duration)
+    return {
+        "scene": scene_number,
+        "path": str(target),
+        "duration": duration,
+        "timings": timings,
+        "from_cache": False,
+        "human_recorded": True,
+    }
+
+
 def generate_audio(
     approved_script: dict,
     output_dir: str | Path = "output/audio_test",
+    voice: str | None = None,
 ) -> dict[str, Any]:
     """Generate approved narration audio with native Edge-TTS word timings."""
     if (
@@ -333,6 +405,12 @@ def generate_audio(
     if language not in VOICES:
         raise ValueError(f"Unsupported audio language: {language}")
 
+    selected_voice = resolve_voice(
+        language,
+        gender=approved_script.get("voice_gender"),
+        voice=voice or approved_script.get("voice"),
+    )
+
     for index, scene in enumerate(scenes, 1):
         if not _clean_text(scene.get("voiceover")):
             raise ValueError(f"Scene {index} has no narration text.")
@@ -340,10 +418,17 @@ def generate_audio(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
+    def _call_rate(sc, lang, rate, out, vc):
+        try:
+            import inspect
+            if "voice" in inspect.signature(_generate_at_rate).parameters:
+                return asyncio.run(_generate_at_rate(sc, lang, rate, out, voice=vc))
+        except (TypeError, ValueError):
+            pass
+        return asyncio.run(_generate_at_rate(sc, lang, rate, out))
+
     rate_percent = BASE_RATE_PERCENT
-    results = asyncio.run(
-        _generate_at_rate(scenes, language, rate_percent, output_path)
-    )
+    results = _call_rate(scenes, language, rate_percent, output_path, selected_voice)
     total = round(sum(float(item["duration"]) for item in results), 3)
     corrected = False
 
@@ -353,9 +438,7 @@ def generate_audio(
             (1.0 + rate_percent / 100.0) * multiplier - 1.0
         ) * 100.0
         adjusted = min(100.0, max(rate_percent + 1.0, adjusted))
-        results = asyncio.run(
-            _generate_at_rate(scenes, language, adjusted, output_path)
-        )
+        results = _call_rate(scenes, language, adjusted, output_path, selected_voice)
         total = round(sum(float(item["duration"]) for item in results), 3)
         rate_percent = round(adjusted, 2)
         corrected = True
@@ -367,7 +450,7 @@ def generate_audio(
 
     return {
         "language": language,
-        "voice": VOICES[language],
+        "voice": selected_voice,
         "rate_percent": rate_percent,
         "pitch": PITCH,
         "scenes": results,
@@ -379,6 +462,7 @@ def generate_audio(
 def generate_top5_audio(
     approved_top5_script: dict[str, Any],
     output_dir: str | Path = "output/audio_top5_test",
+    voice: str | None = None,
 ) -> dict[str, Any]:
     """Generate one audio scene for each of the six approved Top-5 spoken headlines."""
     if not isinstance(approved_top5_script, dict):
@@ -404,11 +488,26 @@ def generate_top5_audio(
     output_path = Path(output_dir)
     output_path.mkdir(parents=True, exist_ok=True)
 
-    language = "english"
-    rate_percent = BASE_RATE_PERCENT
-    results = asyncio.run(
-        _generate_at_rate(scenes, language, rate_percent, output_path)
+    def _call_rate(sc, lang, rate, out, vc):
+        try:
+            import inspect
+            if "voice" in inspect.signature(_generate_at_rate).parameters:
+                return asyncio.run(_generate_at_rate(sc, lang, rate, out, voice=vc))
+        except (TypeError, ValueError):
+            pass
+        return asyncio.run(_generate_at_rate(sc, lang, rate, out))
+
+    language = str(approved_top5_script.get("language_used") or "english").strip().casefold()
+    if language not in VOICES:
+        language = "english"
+    selected_voice = resolve_voice(
+        language,
+        gender=approved_top5_script.get("voice_gender"),
+        voice=voice or approved_top5_script.get("voice"),
     )
+
+    rate_percent = BASE_RATE_PERCENT
+    results = _call_rate(scenes, language, rate_percent, output_path, selected_voice)
     corrected = False
 
     total_duration = sum(float(scene["duration"]) for scene in results)
@@ -419,9 +518,7 @@ def generate_top5_audio(
             (1.0 + rate_percent / 100.0) * multiplier - 1.0
         ) * 100.0
         adjusted = min(100.0, max(rate_percent + 1.0, adjusted))
-        results = asyncio.run(
-            _generate_at_rate(scenes, language, adjusted, output_path)
-        )
+        results = _call_rate(scenes, language, adjusted, output_path, selected_voice)
         total_duration = sum(float(scene["duration"]) for scene in results)
         max_duration = max(float(scene["duration"]) for scene in results)
         rate_percent = round(adjusted, 2)
@@ -437,7 +534,7 @@ def generate_top5_audio(
         "schema": "final-shorts.top5-audio.v1",
         "source_schema": "final-shorts.top5-script.v1",
         "language": language,
-        "voice": VOICES[language],
+        "voice": selected_voice,
         "rate_percent": rate_percent,
         "pitch": PITCH,
         "scenes": results,

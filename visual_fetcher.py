@@ -85,7 +85,8 @@ BAD_PATH_PARTS = {
 BAD_IMAGE_TERMS = {
     "logo", "icon", "favicon", "sprite", "tracking", "pixel", "avatar",
     "placeholder", "advert", "banner", "social-share", "share-image",
-    "default-image",
+    "default-image", "emoji", "spacer", "spinner", "loading", "button",
+    "arrow", "watermark", "advertisement",
 }
 ACTION_TERMS = {
     "action", "match", "game", "playing", "batting", "bowling", "fielding",
@@ -156,11 +157,13 @@ def _usable_url(value):
 
 
 def _manual_query_plan(query):
-    key = _clean(os.getenv("GROQ_API_KEY"), 300)
-    if not key:
-        return {"historical": False, "queries": [query]}
+    clean_q = _clean(query, 260)
+    if not clean_q:
+        return {"historical": False, "queries": []}
 
-    prompt = """You are a sports web-image search planner.
+    key = _clean(os.getenv("GROQ_API_KEY"), 300)
+    if key:
+        prompt = """You are a sports web-image search planner.
 Decide whether the query is name_only or contextual.
 
 name_only means the user supplied only an entity/person/team name.
@@ -175,55 +178,95 @@ Rules:
 - Queries should help find photographs on publisher/news pages.
 - Return JSON only.
 """
-    try:
-        response = requests.post(
-            GROQ_URL,
-            headers={
-                "Authorization": f"Bearer {key}",
-                "Content-Type": "application/json",
-            },
-            json={
-                "model": MANUAL_QUERY_MODEL,
-                "messages": [
-                    {"role": "system", "content": prompt},
-                    {"role": "user", "content": query},
-                ],
-                "response_format": {
-                    "type": "json_schema",
-                    "json_schema": {
-                        "name": "manual_visual_query_plan",
-                        "strict": True,
-                        "schema": MANUAL_QUERY_SCHEMA,
-                    },
+        try:
+            response = requests.post(
+                GROQ_URL,
+                headers={
+                    "Authorization": f"Bearer {key}",
+                    "Content-Type": "application/json",
                 },
-                "include_reasoning": False,
-                "reasoning_effort": "low",
-                "temperature": 0.2,
-                "max_completion_tokens": 220,
-            },
-            timeout=MANUAL_QUERY_TIMEOUT,
-        )
-        response.raise_for_status()
-        content = response.json()["choices"][0]["message"]["content"]
-        plan = content if isinstance(content, dict) else json.loads(content)
+                json={
+                    "model": MANUAL_QUERY_MODEL,
+                    "messages": [
+                        {"role": "system", "content": prompt},
+                        {"role": "user", "content": clean_q},
+                    ],
+                    "response_format": {
+                        "type": "json_schema",
+                        "json_schema": {
+                            "name": "manual_visual_query_plan",
+                            "strict": True,
+                            "schema": MANUAL_QUERY_SCHEMA,
+                        },
+                    },
+                    "include_reasoning": False,
+                    "reasoning_effort": "low",
+                    "temperature": 0.2,
+                    "max_completion_tokens": 220,
+                },
+                timeout=MANUAL_QUERY_TIMEOUT,
+            )
+            response.raise_for_status()
+            content = response.json()["choices"][0]["message"]["content"]
+            plan = content if isinstance(content, dict) else json.loads(content)
 
-        queries = []
-        seen = set()
-        for value in [query] + list(plan.get("queries") or []):
-            value = _clean(value, 260)
-            key = value.casefold()
-            if value and key not in seen:
-                queries.append(value)
-                seen.add(key)
-            if len(queries) >= 3:
-                break
+            queries = []
+            seen = set()
+            for value in [clean_q] + list(plan.get("queries") or []):
+                value = _clean(value, 260)
+                q_key = value.casefold()
+                if value and q_key not in seen:
+                    queries.append(value)
+                    seen.add(q_key)
+                if len(queries) >= 3:
+                    break
 
-        return {
-            "historical": bool(plan.get("historical")),
-            "queries": queries or [query],
-        }
-    except Exception:
-        return {"historical": False, "queries": [query]}
+            return {
+                "historical": bool(plan.get("historical")),
+                "queries": queries or [clean_q],
+            }
+        except Exception:
+            pass
+
+    # High-performance zero-cost local heuristic planner when Groq is unavailable:
+    tokens = _tokens(clean_q)
+    has_year = bool(re.search(r"\b(19\d\d|20[0-2]\d)\b", clean_q))
+    historical_keywords = {
+        "century", "hundred", "debut", "world cup", "champions trophy", "final",
+        "ashes", "retires", "retirement", "on this day", "historic", "record",
+        "milestone", "anniversary", "career", "young", "younger", "first",
+    }
+    is_historical = has_year or any(word in clean_q.casefold() for word in historical_keywords)
+    action_or_event = tokens & (ACTION_TERMS | historical_keywords | {"vs", "against", "trophy", "series"})
+    is_name_only = not action_or_event and len(tokens) <= 3 and not is_historical
+
+    if is_name_only:
+        return {"historical": False, "queries": [clean_q]}
+
+    variants = [clean_q]
+    core_tokens = [t for t in clean_q.split() if t.casefold() not in STOPWORDS]
+    if len(core_tokens) >= 2:
+        v2 = " ".join(core_tokens)
+        if v2.casefold() != clean_q.casefold():
+            variants.append(v2)
+    if not any(sport in clean_q.casefold() for sport in ("cricket", "match", "photo")):
+        variants.append(f"{clean_q} match")
+
+    seen_q = set()
+    deduped_q = []
+    for q in variants:
+        v_clean = _clean(q, 260)
+        v_key = v_clean.casefold()
+        if v_clean and v_key not in seen_q:
+            deduped_q.append(v_clean)
+            seen_q.add(v_key)
+        if len(deduped_q) >= 3:
+            break
+
+    return {
+        "historical": is_historical,
+        "queries": deduped_q or [clean_q],
+    }
 
 
 def build_queries(title, description="", entity=""):
@@ -656,11 +699,48 @@ def _collect_profile_pages(entity):
 
 
 def _extract_srcset(value):
-    return [
-        _clean(part, 1600).split(" ", 1)[0]
-        for part in str(value or "").split(",")
-        if _clean(part, 1600)
-    ]
+    items = []
+    for part in str(value or "").split(","):
+        cleaned = _clean(part, 1600)
+        if not cleaned:
+            continue
+        tokens = cleaned.split()
+        url = tokens[0]
+        weight = 0
+        if len(tokens) > 1:
+            desc = tokens[1].lower()
+            if desc.endswith("w") and desc[:-1].isdigit():
+                weight = int(desc[:-1])
+            elif desc.endswith("x"):
+                try:
+                    weight = int(float(desc[:-1]) * 1000)
+                except ValueError:
+                    weight = 0
+        items.append((weight, url))
+    if any(w > 0 for w, _ in items):
+        items.sort(key=lambda x: x[0], reverse=True)
+    return [url for _, url in items]
+
+
+def _unthumbnail_url(url: str) -> str:
+    """Strip CDN downscaling and thumbnail query params or path suffixes."""
+    try:
+        parsed = urlparse(_clean(url, 3000))
+        if not parsed.scheme or not parsed.netloc:
+            return ""
+        path = re.sub(r"-\d{2,4}x\d{2,4}(\.[a-zA-Z0-9]+)$", r"\1", parsed.path)
+        if parsed.query:
+            params = [
+                param
+                for param in parsed.query.split("&")
+                if not re.match(r"^(?:w|h|width|height|maxwidth|maxheight|resize|crop|quality|q)=\d+", param, re.IGNORECASE)
+            ]
+            new_query = "&".join(params)
+        else:
+            new_query = ""
+        return parsed._replace(path=path, query=new_query).geturl()
+    except Exception:
+        return ""
 
 
 def _absolute(value, base_url):
@@ -774,6 +854,7 @@ def _browser_script():
           dataLazySrcset: img.getAttribute('data-lazy-srcset') || '',
           dataLazySrc: img.getAttribute('data-lazy-src') || '',
           dataOriginal: img.getAttribute('data-original') || '',
+          dataHighRes: img.getAttribute('data-highres') || img.getAttribute('data-hi-res') || img.getAttribute('data-full-src') || img.getAttribute('data-large-file') || img.getAttribute('data-master') || img.getAttribute('data-src-large') || img.getAttribute('data-zoom-src') || '',
           alt: img.getAttribute('alt') || '',
           title: img.getAttribute('title') || '',
           width: img.naturalWidth || 0,
@@ -923,6 +1004,13 @@ async def _browser_page(context, request):
         def add(url, method, payload=None):
             absolute = _absolute(url, base_url)
             if absolute and not _bad_image_url(absolute):
+                unthumb = _unthumbnail_url(absolute)
+                if unthumb and unthumb.casefold() != absolute.casefold() and not _bad_image_url(unthumb):
+                    candidates.append({
+                        **(payload or {}),
+                        "url": unthumb,
+                        "method": f"{method}:highres",
+                    })
                 candidates.append({
                     **(payload or {}),
                     "url": absolute,
@@ -968,6 +1056,7 @@ async def _browser_page(context, request):
                 "in_figure": image.get("inFigure"),
             }
             for key, method in (
+                ("dataHighRes", "highres"),
                 ("currentSrc", "currentSrc"),
                 ("src", "article-img" if image.get("inArticle") else "img"),
                 ("dataSrc", "lazy-src"),
@@ -1154,6 +1243,11 @@ class _StaticImageParser(HTMLParser):
             "itemprop": data.get("itemprop"),
         }
         for key, method in (
+            ("data-highres", "static-highres"),
+            ("data-hi-res", "static-highres"),
+            ("data-full-src", "static-highres"),
+            ("data-large-file", "static-highres"),
+            ("data-master", "static-highres"),
             ("src", "static-img"),
             ("data-src", "static-lazy"),
             ("data-lazy-src", "static-lazy"),
@@ -1241,67 +1335,77 @@ def _static_page(request):
         url = _absolute(raw_url, base_url)
         if not url or _bad_image_url(url):
             continue
-        key = url.casefold()
-        if key in seen_urls:
-            continue
-        seen_urls.add(key)
-
-        try:
-            response = requests.get(
-                url,
-                timeout=SEARCH_TIMEOUT,
-                headers={
-                    **HEADERS,
-                    "Referer": base_url,
-                    "Accept": (
-                        "image/avif,image/webp,image/apng,image/svg+xml,"
-                        "image/*,*/*;q=0.8"
-                    ),
-                },
-            )
-            response.raise_for_status()
-            data = response.content
-        except requests.RequestException:
-            continue
-
-        if not _image_bytes_ok(data):
-            continue
-        digest = _visual_hash(data)
-        if digest in seen_hashes:
-            continue
-        seen_hashes.add(digest)
-
-        width, height = _image_dimensions(data)
-        context = " ".join(
-            str(payload.get(key) or "")
-            for key in ("alt", "title", "class", "itemprop")
+        unthumb = _unthumbnail_url(url)
+        target_urls = (
+            [unthumb, url]
+            if unthumb and unthumb.casefold() != url.casefold() and not _bad_image_url(unthumb)
+            else [url]
         )
-        assets.append({
-            "bytes": data,
-            "hash": digest,
-            "source_page_url": base_url,
-            "source_image_url": url,
-            "publisher": _clean(
-                parser.meta.get("og:site_name")
-                or request.get("publisher")
-                or urlparse(base_url).netloc.removeprefix("www."),
-                160,
-            ),
-            "article_title": _clean(
-                parser.meta.get("og:title")
-                or request.get("title")
-                or "",
-                600,
-            ),
-            "published_at": request.get("published_at", ""),
-            "query": request.get("query", ""),
-            "method": method,
-            "width": width,
-            "height": height,
-            "score": 10.0,
-            "action_score": len(_tokens(context) & ACTION_TERMS),
-            "profile_page": bool(request.get("profile")),
-        })
+        found_asset = False
+        for target_url in target_urls:
+            key = target_url.casefold()
+            if key in seen_urls:
+                continue
+            seen_urls.add(key)
+
+            try:
+                response = requests.get(
+                    target_url,
+                    timeout=SEARCH_TIMEOUT,
+                    headers={
+                        **HEADERS,
+                        "Referer": base_url,
+                        "Accept": (
+                            "image/avif,image/webp,image/apng,image/svg+xml,"
+                            "image/*,*/*;q=0.8"
+                        ),
+                    },
+                )
+                response.raise_for_status()
+                data = response.content
+            except requests.RequestException:
+                continue
+
+            if not _image_bytes_ok(data):
+                continue
+            digest = _visual_hash(data)
+            if digest in seen_hashes:
+                continue
+            seen_hashes.add(digest)
+
+            width, height = _image_dimensions(data)
+            context = " ".join(
+                str(payload.get(k) or "")
+                for k in ("alt", "title", "class", "itemprop")
+            )
+            assets.append({
+                "bytes": data,
+                "hash": digest,
+                "source_page_url": base_url,
+                "source_image_url": target_url,
+                "publisher": _clean(
+                    parser.meta.get("og:site_name")
+                    or request.get("publisher")
+                    or urlparse(base_url).netloc.removeprefix("www."),
+                    160,
+                ),
+                "article_title": _clean(
+                    parser.meta.get("og:title")
+                    or request.get("title")
+                    or "",
+                    600,
+                ),
+                "published_at": request.get("published_at", ""),
+                "query": request.get("query", ""),
+                "method": method,
+                "width": width,
+                "height": height,
+                "score": 10.0,
+                "action_score": len(_tokens(context) & ACTION_TERMS),
+                "profile_page": bool(request.get("profile")),
+            })
+            found_asset = True
+            break
         if len(assets) >= max_images:
             break
 

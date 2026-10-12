@@ -308,11 +308,6 @@ def test_yt_trends_live_exposes_shared_text_cutout_option_7():
 
 
 def test_top5_card_studio_uses_shared_editor():
-    asset = {
-        "bytes": _image_bytes(),
-        "source": "source-a",
-        "article_title": "Image A",
-    }
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "top_5"
@@ -567,3 +562,83 @@ def test_card_studio_shows_image_pool_crop_controls_and_default_fields():
     assert values["Hero value"] == "1,203"
     assert values["Unit"] == "RUNS"
     assert any(field.label == "Metric 1 label" and field.value == "Matches" for field in at.text_input)
+
+
+def test_card_studio_direct_attach_photo_to_slide():
+    assets = [
+        {"bytes": _image_bytes((40, 50, 60)), "source": "source-a", "article_title": "Image A"},
+    ]
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["visual_test_mode"] = "Option 5 · Card Studio"
+    at.session_state["test-standalone-card-studio-type"] = "Stat Highlight"
+    at.session_state["visual_result"] = {"assets": assets}
+    at.session_state["script_data"] = {
+        "headline": "India win again",
+        "script": [{"voiceover": "One."}] * 4,
+    }
+    at.run()
+
+    assert not at.exception, at.exception
+    # Click select image
+    select_btn = next((button for button in at.button if button.label == "Select image"), None)
+    if select_btn:
+        select_btn.click().run()
+    assert not at.exception, at.exception
+
+    # Check that direct attach button is present
+    direct_btn = next((button for button in at.button if "Attach to Slide" in button.label and "directly" in button.label), None)
+    assert direct_btn is not None, f"Expected direct attach button, found buttons: {[b.label for b in at.button]}"
+
+    # Click direct attach
+    direct_btn.click().run()
+    assert not at.exception, at.exception
+
+    # Verify visual assignment is created on slide 1 with direct photo
+    assignments = at.session_state.get("visual_assignments") or {}
+    assert 1 in assignments
+    assert assignments[1]["result_key"] == "card-studio-photo"
+    assert assignments[1]["source"] in {"source-a", "Automatic Scraper"}
+    assert len(assignments[1]["bytes"]) > 0
+
+
+def test_card_studio_cutout_direct_attach_photo_to_slide():
+    assets = [
+        {"bytes": _image_bytes((40, 50, 60)), "source": "source-a", "article_title": "Image A"},
+    ]
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["visual_test_mode"] = "Option 5 · Card Studio"
+    at.session_state["test-standalone-card-studio-type"] = "Text Subject Cutout"
+    at.session_state["visual_result"] = {"assets": assets}
+    at.session_state["script_data"] = {
+        "headline": "India win again",
+        "script": [{"voiceover": "One."}] * 4,
+    }
+    at.run()
+
+    assert not at.exception, at.exception
+    select_btn = next((button for button in at.button if button.label == "Select image"), None)
+    if select_btn:
+        select_btn.click().run()
+    assert not at.exception, at.exception
+
+    # Check that direct attach button is present
+    direct_btn = next((button for button in at.button if "Attach to Slide" in button.label and "directly" in button.label), None)
+    assert direct_btn is not None, f"Expected direct attach button, found buttons: {[b.label for b in at.button]}"
+
+    # Click direct attach
+    direct_btn.click().run()
+    assert not at.exception, at.exception
+
+    # Verify visual assignment is created on slide 1
+    assignments = at.session_state.get("visual_assignments") or {}
+    assert 1 in assignments
+    assert assignments[1]["result_key"] == "card-studio-photo"
+    assert assignments[1]["source"] in {"source-a", "Automatic Scraper"}
+    assert len(assignments[1]["bytes"]) > 0
+

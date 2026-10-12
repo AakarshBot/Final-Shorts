@@ -1,8 +1,7 @@
-from top5_script_writer import (
-    SLIDE_1_MAX_WORDS,
+from script_writer import (
     MAX_EVIDENCE_CHARS,
     _evidence_packet,
-    SCHEMA,
+    TOP5_SCHEMA as SCHEMA,
     estimate_speech_seconds,
     validate_top5_script,
 )
@@ -198,7 +197,7 @@ def test_evidence_packet_keeps_all_five_stories_within_payload_budget():
     assert all(f"===== STORY {index} =====" in packet for index in range(1, 6))
 
 def test_generate_top5_script_uses_one_package_call(monkeypatch):
-    import top5_script_writer
+    import script_writer as top5_script_writer
 
     calls = []
 
@@ -223,7 +222,7 @@ def test_generate_top5_script_uses_one_package_call(monkeypatch):
 
 def test_top5_request_retries_transient_groq_connection_errors(monkeypatch):
     import requests
-    import top5_script_writer
+    import script_writer as top5_script_writer
 
     class FakeResponse:
         def raise_for_status(self):

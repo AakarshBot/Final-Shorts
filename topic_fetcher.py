@@ -12,9 +12,9 @@ from email.utils import parsedate_to_datetime
 import html
 import json
 import re
+import time
 import xml.etree.ElementTree as ET
 from urllib.parse import urlparse
-from zoneinfo import ZoneInfo
 
 import requests
 from rapidfuzz import fuzz
@@ -61,7 +61,9 @@ YOUTUBE_TREND_NOISE_TERMS = {
     "score", "scores", "result", "results", "highlights", "highlight", "online",
     "full", "video", "videos", "channel", "channels", "official", "time",
     "schedule", "schedules", "fixture", "fixtures", "prediction", "predicted",
-    "lineup", "lineups",
+    "lineup", "lineups", "shorts", "short", "song", "songs", "kit", "drawing",
+    "status", "edit", "edits", "wala", "wali", "cardio", "drill", "drills",
+    "car", "cars", "ball", "balls", "bat", "bats", "jersey", "shoes",
 }
 YOUTUBE_TREND_GENERIC_TERMS = {
     "cricket", "football", "soccer", "tennis", "badminton", "basketball",
@@ -69,7 +71,6 @@ YOUTUBE_TREND_GENERIC_TERMS = {
     "wrestling", "volleyball", "kabaddi", "squash", "golf", "chess", "swimming",
     "cycling", "t20", "odi", "test", "sport", "sports",
 }
-LOCAL_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 
 CRICKET_QUERIES = {
@@ -160,6 +161,8 @@ CRICKET_TERMS = {
 CRICKET_COMPETITIONS = {
     "world cup", "champions trophy", "wpl", "ipl", "psl", "bbl", "cpl",
     "sa20", "ilt20", "mlc", "ashes", "test championship", "county championship",
+    "t20 world cup", "asia cup", "ranji trophy", "duleep trophy", "irani cup",
+    "syed mushtaq ali", "vijay hazare", "the hundred", "major league cricket",
 }
 NON_CRICKET_TERMS = {
     "football", "soccer", "tennis", "badminton", "squash", "athletics",
@@ -175,7 +178,14 @@ INDIA_ASIA_TERMS = {
     "rishabh pant", "kl rahul", "kuldeep yadav", "mohammed siraj", "arshdeep singh",
     "yashasvi jaiswal", "smriti mandhana", "babar azam", "shaheen afridi",
     "mohammad rizwan", "wanindu hasaranga", "kusal mendis", "pathum nissanka",
-    "matheesha pathirana", "shreyas iyer", "axar patel",
+    "matheesha pathirana", "shreyas iyer", "axar patel", "rinku singh",
+    "sarfaraz khan", "dhruv jurel", "nitish kumar reddy", "harshit rana",
+    "mayank yadav", "abhishek sharma", "tilak varma", "sanju samson",
+    "varun chakravarthy", "ravi bishnoi", "washington sundar", "akash deep",
+    "harmanpreet kaur", "jemimah rodrigues", "shefali verma", "deepti sharma",
+    "richa ghosh", "shreyanka patil", "naseem shah", "fakhar zaman",
+    "shakib al hasan", "mehidy hasan", "charith asalanka", "kamindu mendis",
+    "maheesh theekshana", "dunith wellalage",
 }
 EVENT_GROUPS = {
     "result": {"win", "wins", "won", "beat", "beaten", "defeat", "lost", "loss", "draw", "champion", "title", "medal", "upset"},
@@ -289,11 +299,20 @@ TEAM_ENTITIES = {
     "south africa", "new zealand", "west indies", "afghanistan", "ireland",
 }
 
+GLOBAL_PLAYER_TERMS = {
+    "travis head", "pat cummins", "mitchell starc", "josh hazlewood",
+    "steve smith", "marnus labuschagne", "cameron green", "rachin ravindra",
+    "kane williamson", "ben stokes", "joe root", "harry brook",
+    "gus atkinson", "mark wood", "rashid khan", "rahmanullah gurbaz",
+    "heinrich klaasen", "keshav maharaj", "kagiso rabada", "marco jansen",
+    "glenn maxwell", "david warner", "mitchell marsh",
+}
+
 
 @lru_cache(maxsize=4096)
 def _known_entities(text: str) -> set[str]:
     value = _clean(text).casefold()
-    known = INDIA_ASIA_TERMS | CRICKET_COMPETITIONS | TEAM_ENTITIES
+    known = INDIA_ASIA_TERMS | CRICKET_COMPETITIONS | TEAM_ENTITIES | GLOBAL_PLAYER_TERMS
     return {entity for entity in known if len(entity) > 3 and entity in value}
 
 
@@ -482,12 +501,22 @@ def _parse_rss(xml_text: str) -> list[Topic]:
             rows.append(Topic(title, source, _parse_date(item.findtext("pubDate") or ""), url, _clean(item.findtext("description") or "")))
     return rows
 
+_RSS_CACHE: dict[str, tuple[float, list[Topic]]] = {}
+_RSS_CACHE_TTL = 60.0
+
+
 def _fetch_google(
     query: str,
     timeout: float = TIMEOUT,
     *,
     geo: str | None = "IN",
 ) -> list[Topic]:
+    cache_key = f"{query}::{geo}"
+    now = time.time()
+    cached = _RSS_CACHE.get(cache_key)
+    if cached and now - cached[0] < _RSS_CACHE_TTL:
+        return cached[1]
+
     params = {"q": query}
     if geo == "IN":
         params.update({"hl": "en-IN", "gl": "IN", "ceid": "IN:en"})
@@ -496,14 +525,29 @@ def _fetch_google(
         params.update({"hl": "en-US", "gl": code, "ceid": f"{code}:en"})
     else:
         params.update({"hl": "en"})
-    response = requests.get(
-        GOOGLE_NEWS_URL,
-        params=params,
-        headers=HEADERS,
-        timeout=timeout,
-    )
-    response.raise_for_status()
-    return _parse_rss(response.text)
+
+    last_error = None
+    for attempt in range(2):
+        try:
+            response = requests.get(
+                GOOGLE_NEWS_URL,
+                params=params,
+                headers=HEADERS,
+                timeout=timeout,
+            )
+            response.raise_for_status()
+            rows = _parse_rss(response.text)
+            _RSS_CACHE[cache_key] = (now, rows)
+            return rows
+        except (requests.RequestException, ET.ParseError) as exc:
+            last_error = exc
+            if attempt == 0:
+                time.sleep(0.2)
+    if last_error:
+        if cached:
+            return cached[1]
+        raise last_error
+    return []
 
 def _fetch_gdelt(query: str) -> list[Topic]:
     response = requests.get(
@@ -539,18 +583,41 @@ def _decode_google_json(response_text: str) -> dict:
 
 
 def _youtube_autocomplete(keyword: str) -> list[str]:
-    response = requests.get(
-        YOUTUBE_AUTOCOMPLETE_URL,
-        params={"client": "youtube", "ds": "yt", "hl": "en", "q": _clean(keyword)},
-        headers=HEADERS,
-        timeout=TIMEOUT,
-    )
-    payload = response.json()
-    return [
-        _clean(item[0])
-        for item in (payload[1] if isinstance(payload, list) and len(payload) > 1 else [])
-        if isinstance(item, list) and item and _clean(item[0])
-    ]
+    clean_kw = _clean(keyword)
+    if not clean_kw:
+        return []
+    for client in ("chrome", "youtube", "firefox"):
+        try:
+            response = requests.get(
+                YOUTUBE_AUTOCOMPLETE_URL,
+                params={"client": client, "ds": "yt", "hl": "en", "q": clean_kw},
+                headers=HEADERS,
+                timeout=TIMEOUT,
+            )
+            try:
+                payload = response.json()
+            except (ValueError, TypeError, AttributeError):
+                text = getattr(response, "text", "").strip()
+                if text.startswith("window.google.ac.h("):
+                    text = text[len("window.google.ac.h("):].rstrip(");")
+                payload = json.loads(text)
+
+            if isinstance(payload, list) and len(payload) > 1 and isinstance(payload[1], list):
+                results = []
+                for item in payload[1]:
+                    if isinstance(item, str):
+                        clean_item = _clean(item)
+                    elif isinstance(item, list) and item and isinstance(item[0], str):
+                        clean_item = _clean(item[0])
+                    else:
+                        continue
+                    if clean_item and clean_item not in results:
+                        results.append(clean_item)
+                if results:
+                    return results
+        except (requests.RequestException, ValueError, TypeError):
+            continue
+    return []
 
 
 def _youtube_trend_queries(keyword: str) -> list[dict]:
@@ -567,53 +634,56 @@ def _youtube_trend_queries(keyword: str) -> list[dict]:
         "category": 0,
         "property": "youtube",
     }
-    explore = requests.get(
-        YOUTUBE_TRENDS_EXPLORE_URL,
-        params={"hl": language, "tz": "330", "req": json.dumps(request)},
-        headers=HEADERS,
-        timeout=TIMEOUT,
-    )
-    widgets = _decode_google_json(explore.text).get("widgets") or []
-    widget = next(
-        (item for item in widgets if "RELATED_QUERIES" in str(item.get("id") or "")),
-        None,
-    )
-    if not widget:
-        return []
-
-    related = requests.get(
-        YOUTUBE_TRENDS_RELATED_URL,
-        params={
-            "hl": language,
-            "tz": "330",
-            "req": json.dumps(widget["request"]),
-            "token": widget["token"],
-        },
-        headers=HEADERS,
-        timeout=TIMEOUT,
-    )
-    ranked = _decode_google_json(related.text).get("default", {}).get("rankedList") or []
     rows = []
-    for index, signal in enumerate(("Top", "Rising")):
-        items = ranked[index].get("rankedKeyword", []) if index < len(ranked) else []
-        for rank, item in enumerate(items, 1):
-            query = _clean(item.get("query"))
-            if not query:
-                continue
-            raw_value = item.get("value")
-            try:
-                value = float(raw_value)
-            except (TypeError, ValueError):
-                value = 100.0 if str(raw_value).casefold() == "breakout" else 0.0
-            rows.append({
-                "keyword": query,
-                "signal": signal,
-                "value": value,
-                "rank": rank,
-                "breakout": str(raw_value).casefold() == "breakout",
-                "seed": clean_keyword,
-                "geo": geo,
-            })
+    try:
+        explore = requests.get(
+            YOUTUBE_TRENDS_EXPLORE_URL,
+            params={"hl": language, "tz": "330", "req": json.dumps(request)},
+            headers=HEADERS,
+            timeout=TIMEOUT,
+        )
+        if getattr(explore, "status_code", 200) in (200, None):
+            widgets = _decode_google_json(explore.text).get("widgets") or []
+            widget = next(
+                (item for item in widgets if "RELATED_QUERIES" in str(item.get("id") or "")),
+                None,
+            )
+            if widget:
+                related = requests.get(
+                    YOUTUBE_TRENDS_RELATED_URL,
+                    params={
+                        "hl": language,
+                        "tz": "330",
+                        "req": json.dumps(widget["request"]),
+                        "token": widget["token"],
+                    },
+                    headers=HEADERS,
+                    timeout=TIMEOUT,
+                )
+                if getattr(related, "status_code", 200) in (200, None):
+                    ranked = _decode_google_json(related.text).get("default", {}).get("rankedList") or []
+                    for index, signal in enumerate(("Top", "Rising")):
+                        items = ranked[index].get("rankedKeyword", []) if index < len(ranked) else []
+                        for rank, item in enumerate(items, 1):
+                            query = _clean(item.get("query"))
+                            if not query:
+                                continue
+                            raw_value = item.get("value")
+                            try:
+                                value = float(raw_value)
+                            except (TypeError, ValueError):
+                                value = 100.0 if str(raw_value).casefold() == "breakout" else 0.0
+                            rows.append({
+                                "keyword": query,
+                                "signal": signal,
+                                "value": value,
+                                "rank": rank,
+                                "breakout": str(raw_value).casefold() == "breakout",
+                                "seed": clean_keyword,
+                                "geo": geo,
+                            })
+    except (requests.RequestException, ValueError, TypeError, KeyError):
+        pass
 
     try:
         suggestions = _youtube_autocomplete(keyword)
@@ -1132,82 +1202,332 @@ def fetch_top5_topics(
     return chosen[:limit]
 
 
+def fetch_otd_topics(
+    date: datetime | str | None = None,
+    sport: str = "all",
+    more: bool = False,
+    exclude_topics: list[Topic] | None = None,
+    limit: int = TARGET,
+    target_date: datetime | str | None = None,
+) -> list[Topic]:
+    """Fetch verified historical sports milestones and anniversaries for the calendar date."""
+    if limit <= 0:
+        return []
+
+    if date is None and target_date is not None:
+        date = target_date
+
+    if date is None:
+        target_date = datetime.now(timezone.utc)
+    elif isinstance(date, datetime):
+        target_date = date.astimezone(timezone.utc) if date.tzinfo else date.replace(tzinfo=timezone.utc)
+    elif hasattr(date, "year") and hasattr(date, "month") and hasattr(date, "day"):
+        target_date = datetime(date.year, date.month, date.day, tzinfo=timezone.utc)
+    elif isinstance(date, str):
+        target_date = None
+        for fmt in ("%Y-%m-%d", "%d-%m-%Y", "%B %d", "%b %d", "%m/%d"):
+            try:
+                dt = datetime.strptime(date.strip(), fmt)
+                year = dt.year if dt.year != 1900 else datetime.now(timezone.utc).year
+                target_date = datetime(year, dt.month, dt.day, tzinfo=timezone.utc)
+                break
+            except ValueError:
+                continue
+        if target_date is None:
+            target_date = datetime.now(timezone.utc)
+    else:
+        target_date = datetime.now(timezone.utc)
+
+    month_name = target_date.strftime("%B")
+    day = target_date.day
+    mm = f"{target_date.month:02d}"
+    dd = f"{day:02d}"
+
+    existing = list(exclude_topics or [])
+    seen_titles = {_clean(t.title).casefold() for t in existing}
+
+    candidates: list[Topic] = []
+
+    # Source 1: Wikipedia Cricket Anniversaries
+    wiki_url = f"https://en.wikipedia.org/wiki/Portal:Cricket/Anniversaries/{month_name}/{month_name}_{day}"
+    try:
+        resp = requests.get(wiki_url, headers=HEADERS, timeout=TIMEOUT)
+        if getattr(resp, "status_code", 200) in (200, None):
+            li_items = re.findall(r"<li[^>]*>(.*?)</li\s*>", resp.text, re.DOTALL)
+            for li_content in li_items:
+                clean_text = _clean(re.sub(r"<[^>]+>", "", li_content))
+                m = re.match(r"^['\"]*(\d{4})['\"]*\s*[-–—]\s*(.+)$", clean_text)
+                if m:
+                    y_str, clean_desc = m.groups()
+                    clean_desc = _clean(clean_desc)
+                    if len(clean_desc) >= 15:
+                        y = int(y_str)
+                        title = f"{y}: {clean_desc}"
+                        key = title.casefold()
+                    if key not in seen_titles:
+                        candidates.append(
+                            Topic(
+                                title=title,
+                                source="Wikipedia Cricket History",
+                                published_at=datetime(y, target_date.month, day, tzinfo=timezone.utc),
+                                url=wiki_url,
+                                description=clean_desc,
+                                score=10.0 + (y / 250.0),
+                                group_key=f"otd:cricket:{y}",
+                            )
+                        )
+                        seen_titles.add(key)
+    except Exception:
+        pass
+
+    # Source 2: OnThisDay Sports Archive
+    otd_url = f"https://www.onthisday.com/sport/events/{month_name.lower()}/{day}"
+    try:
+        resp = requests.get(otd_url, headers=HEADERS, timeout=TIMEOUT)
+        if getattr(resp, "status_code", 200) in (200, None):
+            items = re.findall(r"<li[^>]*class=[^>]*event[^>]*>(.*?)</li\s*>", resp.text, re.DOTALL)
+            for item_html in items:
+                clean_text = _clean(re.sub(r"<[^>]+>", "", item_html))
+                m = re.match(r"^(\d{4})\s+(.+)$", clean_text)
+                if m:
+                    y_str, desc = m.groups()
+                    y = int(y_str)
+                    title = f"{y}: {desc}"
+                    key = title.casefold()
+                    if key not in seen_titles:
+                        score = 8.0 + (y / 250.0)
+                        if any(w in desc.casefold() for w in ("world series", "world cup", "championship", "hat trick", "record", "olympic", "final")):
+                            score += 2.0
+                        candidates.append(
+                            Topic(
+                                title=title,
+                                source="OnThisDay Sports Archive",
+                                published_at=datetime(y, target_date.month, day, tzinfo=timezone.utc),
+                                url=otd_url,
+                                description=desc,
+                                score=score,
+                                group_key=f"otd:sports:{y}",
+                            )
+                        )
+                        seen_titles.add(key)
+    except Exception:
+        pass
+
+    # Source 3: Wikimedia REST API
+    wiki_api_url = f"https://en.wikipedia.org/api/rest_v1/feed/onthisday/all/{mm}/{dd}"
+    try:
+        resp = requests.get(wiki_api_url, headers=HEADERS, timeout=TIMEOUT)
+        if getattr(resp, "status_code", 200) in (200, None):
+            payload = resp.json()
+            events = (payload.get("selected") or []) + (payload.get("events") or [])
+            for ev in events:
+                text = _clean(ev.get("text") or "")
+                lower = text.casefold()
+                if any(w in lower for w in ("cricket", "world cup", "olympic", "championship", "tennis", "formula 1", "baseball", "football", "boxing", "golf", "marathon")):
+                    y = int(ev.get("year") or target_date.year)
+                    title = f"{y}: {text}"
+                    key = title.casefold()
+                    if key not in seen_titles:
+                        pages = ev.get("pages") or []
+                        page_url = pages[0].get("content_urls", {}).get("desktop", {}).get("page") if pages else wiki_api_url
+                        candidates.append(
+                            Topic(
+                                title=title,
+                                source="Wikimedia Historical Events",
+                                published_at=datetime(y, target_date.month, day, tzinfo=timezone.utc),
+                                url=page_url or wiki_api_url,
+                                description=text,
+                                score=7.0 + (y / 250.0),
+                                group_key=f"otd:wiki:{y}",
+                            )
+                        )
+                        seen_titles.add(key)
+    except Exception:
+        pass
+
+    sport_filter = str(sport or "all").casefold()
+    filtered = []
+    for topic in candidates:
+        is_cricket = (
+            "cricket" in topic.source.casefold()
+            or any(term in topic.description.casefold() for term in CRICKET_TERMS)
+            or any(term in topic.title.casefold() for term in CRICKET_TERMS)
+        )
+        if "cricket" in sport_filter and "other" not in sport_filter:
+            if is_cricket:
+                filtered.append(topic)
+        elif any(k in sport_filter for k in ("other", "niche", "non-cricket")):
+            if not is_cricket:
+                filtered.append(topic)
+        else:
+            filtered.append(topic)
+
+    filtered.sort(key=lambda t: t.score, reverse=True)
+    if more:
+        return filtered[limit: limit * 2] if len(filtered) > limit else filtered
+    return filtered[:limit]
+
+
+class TopicFetcher:
+    """Unified Topic Fetcher for Final-Shorts.
+
+    Serves all production lines and sports desks:
+    - Deep-Dive: Cricket India / Asia, Cricket Global, Niche Sports, Keyword search
+    - Top-5: Top 5 daily cricket stories
+    - YouTube Search Trends: YouTube search query opportunity discovery + 24h news validation
+    - On This Day (OTD): Calendar anniversary sports milestones and historical stories
+    """
+
+    @classmethod
+    def fetch(
+        cls,
+        profile: str = "cricket_india_asia",
+        more: bool = False,
+        exclude_topics: list[Topic] | None = None,
+        limit: int = TARGET,
+        keyword: str | None = None,
+        **kwargs,
+    ) -> list[Topic] | list[dict]:
+        if profile == "top_5":
+            return fetch_top5_topics(
+                more=more,
+                exclude_topics=exclude_topics,
+                limit=limit,
+            )
+        if profile == "youtube_trends":
+            q = keyword or kwargs.get("query")
+            if q:
+                return fetch_youtube_trend_topics(
+                    keyword=q,
+                    profile=kwargs.get("sub_profile", "cricket_india_asia"),
+                    more=more,
+                    exclude_topics=exclude_topics,
+                    limit=limit,
+                )
+            return fetch_youtube_search_trends(limit=limit)
+        if profile == "youtube_trend_topics":
+            return fetch_youtube_trend_topics(
+                keyword=keyword or kwargs.get("query") or kwargs.get("keyword", ""),
+                profile=kwargs.get("sub_profile", "cricket_india_asia"),
+                more=more,
+                exclude_topics=exclude_topics,
+                limit=limit,
+            )
+        if profile in {"otd", "on_this_day"}:
+            return fetch_otd_topics(
+                date=kwargs.get("date") or kwargs.get("target_date"),
+                sport=kwargs.get("sport", "all"),
+                more=more,
+                exclude_topics=exclude_topics,
+                limit=limit,
+            )
+        if profile not in {"cricket_india_asia", "cricket_global", "niche_sports"}:
+            raise ValueError(f"Unknown profile: {profile}")
+
+        return cls._fetch_deep_dive(
+            profile=profile,
+            more=more,
+            exclude_topics=exclude_topics,
+            limit=limit,
+            keyword=keyword,
+        )
+
+    @classmethod
+    def _fetch_deep_dive(
+        cls,
+        profile: str = "cricket_india_asia",
+        more: bool = False,
+        exclude_topics: list[Topic] | None = None,
+        limit: int = TARGET,
+        keyword: str | None = None,
+    ) -> list[Topic]:
+        if limit <= 0:
+            return []
+        existing = list(exclude_topics or [])
+        seen_urls = {
+            _canonical_url(member.url)
+            for topic in existing
+            for member in (topic.group_members or (topic,))
+        }
+        selection_existing = existing if more and not keyword else []
+
+        if keyword:
+            clean_keyword = _clean(keyword).replace('"', " ")
+            queries = [] if not clean_keyword else [
+                query.format(keyword=clean_keyword) for query in KEYWORD_QUERIES
+            ]
+        elif profile == "niche_sports":
+            queries = [
+                '(tennis OR badminton OR squash OR "table tennis") when:3d',
+                '(F1 OR "Formula 1" OR MotoGP OR motorsport) when:3d',
+                '(athletics OR swimming OR cycling OR golf) when:3d',
+                '(boxing OR wrestling OR hockey OR kabaddi OR basketball OR chess) when:3d',
+            ]
+        else:
+            queries = list(MORE_QUERIES[profile] if more else CRICKET_QUERIES[profile])
+
+        rows = []
+        with ThreadPoolExecutor(max_workers=min(MAX_GOOGLE_WORKERS, max(1, len(queries)))) as pool:
+            futures = [pool.submit(_fetch_google, query) for query in queries]
+            for future in as_completed(futures):
+                try:
+                    rows.extend(future.result())
+                except (requests.RequestException, ET.ParseError, ValueError):
+                    continue
+
+        prepared = _prepare(rows, seen_urls, profile=profile)
+        chosen = _select(prepared, limit, seen_urls, existing=selection_existing, profile=profile)
+
+        if len(chosen) < limit and profile != "niche_sports":
+            try:
+                if keyword:
+                    gdelt_query = f'"{_clean(keyword)}" cricket'
+                elif profile == "cricket_global":
+                    gdelt_query = (
+                        '(cricket record milestone rivalry controversy comeback upset '
+                        'breakout women domestic associate board)'
+                    )
+                else:
+                    gdelt_query = (
+                        '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone '
+                        'rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
+                    )
+
+                fallback_rows = _prepare(
+                    _fetch_gdelt(gdelt_query),
+                    seen_urls | {_canonical_url(topic.url) for topic in chosen},
+                    profile=profile,
+                )
+                chosen.extend(
+                    _select(
+                        fallback_rows,
+                        limit - len(chosen),
+                        seen_urls | {_canonical_url(topic.url) for topic in chosen},
+                        existing=selection_existing + chosen,
+                        profile=profile,
+                    )
+                )
+            except (requests.RequestException, ET.ParseError, ValueError):
+                pass
+
+        return chosen[:limit]
+
+    fetch_topics = fetch
+
+
 def fetch_topics(
     profile: str = "cricket_india_asia",
     more: bool = False,
     exclude_topics: list[Topic] | None = None,
     limit: int = TARGET,
     keyword: str | None = None,
-) -> list[Topic]:
-    if profile not in {"cricket_india_asia", "cricket_global", "niche_sports"}:
-        raise ValueError(f"Unknown profile: {profile}")
-    if limit <= 0:
-        return []
-    existing = list(exclude_topics or [])
-    seen_urls = {
-        _canonical_url(member.url)
-        for topic in existing
-        for member in (topic.group_members or (topic,))
-    }
-    selection_existing = existing if more and not keyword else []
-
-    if keyword:
-        clean_keyword = _clean(keyword).replace('"', " ")
-        queries = [] if not clean_keyword else [
-            query.format(keyword=clean_keyword) for query in KEYWORD_QUERIES
-        ]
-    elif profile == "niche_sports":
-        queries = [
-            '(tennis OR badminton OR squash OR "table tennis") when:3d',
-            '(F1 OR "Formula 1" OR MotoGP OR motorsport) when:3d',
-            '(athletics OR swimming OR cycling OR golf) when:3d',
-            '(boxing OR wrestling OR hockey OR kabaddi OR basketball OR chess) when:3d',
-        ]
-    else:
-        queries = list(MORE_QUERIES[profile] if more else CRICKET_QUERIES[profile])
-
-    rows = []
-    with ThreadPoolExecutor(max_workers=min(MAX_GOOGLE_WORKERS, max(1, len(queries)))) as pool:
-        futures = [pool.submit(_fetch_google, query) for query in queries]
-        for future in as_completed(futures):
-            try:
-                rows.extend(future.result())
-            except (requests.RequestException, ET.ParseError, ValueError):
-                continue
-
-    prepared = _prepare(rows, seen_urls, profile=profile)
-    chosen = _select(prepared, limit, seen_urls, existing=selection_existing, profile=profile)
-
-    if len(chosen) < limit and profile != "niche_sports":
-        try:
-            if keyword:
-                gdelt_query = f'"{_clean(keyword)}" cricket'
-            elif profile == "cricket_global":
-                gdelt_query = (
-                    '(cricket record milestone rivalry controversy comeback upset '
-                    'breakout women domestic associate board)'
-                )
-            else:
-                gdelt_query = (
-                    '(cricket India Pakistan "Sri Lanka" Bangladesh record milestone '
-                    'rivalry controversy comeback upset breakout women domestic associate BCCI ICC)'
-                )
-
-            fallback_rows = _prepare(
-                _fetch_gdelt(gdelt_query),
-                seen_urls | {_canonical_url(topic.url) for topic in chosen},
-                profile=profile,
-            )
-            chosen.extend(
-                _select(
-                    fallback_rows,
-                    limit - len(chosen),
-                    seen_urls | {_canonical_url(topic.url) for topic in chosen},
-                    existing=selection_existing + chosen,
-                    profile=profile,
-                )
-            )
-        except (requests.RequestException, ET.ParseError, ValueError):
-            pass
-
-    return chosen[:limit]
+    **kwargs,
+) -> list[Topic] | list[dict]:
+    return TopicFetcher.fetch(
+        profile=profile,
+        more=more,
+        exclude_topics=exclude_topics,
+        limit=limit,
+        keyword=keyword,
+        **kwargs,
+    )

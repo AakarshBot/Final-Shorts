@@ -162,6 +162,7 @@ def upload_video(
         },
         "status": {
             "privacyStatus": privacy,
+            "containsSyntheticMedia": True,
         },
     }
 
