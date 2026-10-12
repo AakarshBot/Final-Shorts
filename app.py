@@ -6705,6 +6705,195 @@ def render_longform_test():
 
 
 def render_topic_fetcher():
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">01 · STORY DESK</div>'
+        '<div class="canvas-title">Story desk</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    desk = st.pills(
+        "Desk",
+        list(profiles),
+        default="Cricket India / Asia",
+        key="topic_desk",
+        label_visibility="collapsed",
+    ) or "Cricket India / Asia"
+    previous_desk = st.session_state.get("topic_desk_profile")
+    if previous_desk and previous_desk != profiles[desk]:
+        for key, value in {
+            "topics": [], "topic_keyword": "", "selected_topic": None, "topic_open_tile": None, "script_data": None, "approved_script": None,
+            "audio_data": None, "approved_audio": None, "subtitle_data": None, "approved_subtitles": None,
+            "visual_result": None, "visual_loaded_story": None, "renderer_previews": None,
+            "rendered_video_path": None, "upload_qc_approved": False, "upload_result": None,
+            "upload_qc": None, "manual_visual_result": None, "real_image_result": None,
+            "ai_image_result": None, "visual_crops": {},
+        }.items():
+            st.session_state[key] = value
+    st.session_state.topic_desk_profile = profiles[desk]
+
+    profile = profiles[desk]
+    with st.container(key="topic-toolbar"):
+        a, b, cnt = st.columns([1, .72, 1.6], gap="small")
+        with a:
+            fetch = st.button("Fetch current stories", type="primary", width="stretch")
+        with b:
+            more = st.button("Find 20 more", width="stretch")
+        with cnt:
+            topics = st.session_state.topics
+            headline_count = sum(
+                len(topic.group_members) if topic.group_members else 1
+                for topic in topics
+            )
+            st.markdown(
+                f'<div style="text-align:right;padding:.65rem .15rem;"><span class="badge">{len(topics)} tiles · {headline_count} headlines</span></div>',
+                unsafe_allow_html=True,
+            )
+
+    keyword_search = False
+    if profile in {"cricket_india_asia", "cricket_global"}:
+        search_col, button_col = st.columns([3, 1], gap="small")
+        with search_col:
+            keyword = st.text_input(
+                "Search by player, team, event or keyword",
+                placeholder="e.g. Babar Azam, Asia Cup, record",
+                key="topic_keyword",
+                label_visibility="collapsed",
+            ).strip()
+        with button_col:
+            keyword_search = st.button(
+                "Search keyword",
+                width="stretch",
+                key="topic-keyword-search",
+            )
+    else:
+        keyword = ""
+
+    if fetch or more or keyword_search:
+        if keyword_search and not keyword:
+            st.warning("Enter a keyword first.")
+        else:
+            with st.spinner(
+                "Searching targeted cricket stories…" if keyword_search
+                else "Fetching current sports stories…"
+            ):
+                existing_topics = list(st.session_state.topics)
+                from topic_fetcher import fetch_topics
+                new_topics = fetch_topics(
+                    profile,
+                    more=more and not keyword_search,
+                    exclude_topics=existing_topics,
+                    limit=20,
+                    keyword=keyword if keyword_search else None,
+                )
+                if keyword_search:
+                    keyword_members = tuple(
+                        member
+                        for topic in new_topics
+                        for member in (topic.group_members or (topic,))
+                    )
+                    if keyword_members:
+                        keyword_tile = replace(
+                            keyword_members[0],
+                            group_key=f"keyword:{keyword}",
+                            group_members=keyword_members,
+                        )
+                        st.session_state.topics = existing_topics + [keyword_tile]
+                    else:
+                        st.session_state.topics = existing_topics
+                elif more:
+                    st.session_state.topics = existing_topics + new_topics
+                else:
+                    st.session_state.topics = new_topics
+
+            st.session_state.selected_topic = None
+            st.session_state.topic_open_tile = None
+            st.session_state.script_data = None
+            st.session_state.approved_script = None
+            st.session_state.audio_data = None
+            st.session_state.approved_audio = None
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
+            st.session_state.visual_result = None
+            st.session_state.visual_loaded_story = None
+            st.session_state.visual_deleted = set()
+            st.session_state.visual_assignments = {}
+            st.session_state.approved_visuals = None
+            st.session_state.visuals_approved = False
+
+    topics = st.session_state.topics
+    if not topics:
+        st.markdown(
+            '<div class="empty-state"><div class="empty-state-title">No stories loaded</div><div class="empty-state-copy">Fetch the current story pool to start.</div></div>',
+            unsafe_allow_html=True,
+        )
+        return
+
+    selection = _render_topic_tiles(
+        topics,
+        st.session_state.selected_topic,
+        columns=3,
+        open_state_key="topic_open_tile",
+        key_prefix="",
+    )
+    if selection:
+        index, member, members = selection
+        st.session_state.topics[index] = replace(
+            member,
+            group_key=topics[index].group_key,
+            group_members=members,
+        )
+        st.session_state.selected_topic = index
+        st.session_state.topic_open_tile = None
+        st.session_state.test_stage = "02 · Scriptwriter"
+        st.session_state.test_pipeline_notice = {
+            "confirmed": "Story confirmed",
+            "next": "Moving to Script.",
+        }
+        st.session_state.script_data = None
+        st.session_state.approved_script = None
+        st.session_state.audio_data = None
+        st.session_state.approved_audio = None
+        st.session_state.subtitle_data = None
+        st.session_state.approved_subtitles = None
+        st.session_state.renderer_previews = None
+        st.session_state.rendered_video_path = None
+        st.session_state.upload_qc_approved = False
+        st.session_state.upload_result = None
+        st.session_state.upload_qc = None
+        st.session_state.upload_title_options = []
+        st.session_state.upload_title_choice = 0
+        st.session_state.upload_description = ""
+        st.session_state.upload_hashtags = ""
+        st.session_state.upload_comment = ""
+        st.session_state.manual_visual_result = None
+        st.session_state.real_image_result = None
+        st.session_state.ai_image_result = None
+        st.session_state.visual_result = None
+        st.session_state.visual_loaded_story = None
+        st.session_state.visual_crops = {}
+        st.session_state.visual_deleted = set()
+        st.session_state.visual_assignments = {}
+        st.session_state.approved_visuals = None
+        st.session_state.visuals_approved = False
+        st.rerun()
+
+    if st.session_state.selected_topic is not None:
+        index = st.session_state.selected_topic
+        if 0 <= index < len(topics):
+            topic = topics[index]
+            with st.container(key="selected-story-card"):
+                left, right = st.columns([1.7, .45], gap="medium")
+                with left:
+                    st.markdown('<div class="eyebrow">SELECTED</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="selected-story-title">{topic.title}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b}</div>', unsafe_allow_html=True)
+                    if topic.description:
+                        with st.expander("Story details", expanded=False):
+                            st.write(topic.description)
+                with right:
+                    if topic.url:
+                        st.link_button("Source ↗", topic.url, width="stretch")
+
 
 def render_otd_topic_fetcher():
     from datetime import date as dt_date
