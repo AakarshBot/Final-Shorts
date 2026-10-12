@@ -547,15 +547,19 @@ When changing either Function 01 or Function 02, preserve the direct architectur
 
 ### Dashboard and next steps
 - The launcher now asks **Shorts / Long-form** first, then **Test / Live**. The established Shorts branch continues through its original Test/Live functions; Long-form Test is isolated behind its own format state.
-- Current implementation checkpoint: **Long-form Topic Fetcher (`longform_topic_fetcher.py`), 16:9 Card Studio (`longform_cards.py`), Scriptwriter (`longform_script_writer.py`), Automated Visual Matcher (`longform_visuals.py`), and Audio Engine (`longform_audio.py`) implemented and tested; current WIP, Test-only**.
+- Current implementation checkpoint: **Complete Long-form 7-Stage Documentary Desk (`longform_topic_fetcher.py`, `longform_cards.py`, `longform_script_writer.py`, `longform_visuals.py`, `longform_audio.py`, `longform_subtitles.py`, `longform_renderer.py`, `longform_uploader.py`) fully implemented and tested; current WIP, Test-only**.
 - Long-form Topic Fetcher is approved for cricket deep dives with 14-day lookback, multi-report evidence clustering, and depth signal ranking.
 - Added `longform_cards.py` as an independent 16:9 widescreen (1920×1080) visual card engine (Stat, Quote, Head-to-Head, Milestone, Chapter, Timeline).
 - Added `longform_script_writer.py`: 6-Act documentary scriptwriter producing ~1,150 words across ~22 scenes at natural broadcast pace (~145 WPM). Emits scene-by-scene voiceovers, explicit visual intent, entity tagging, card specifications, and YouTube chapter timestamps (`00:00 - Introduction\n...`).
 - Added `longform_visuals.py`: 100% automated visual matching and collection engine. Queries open sources, filters low-res assets, enforces entity token verification, matches high-res portraits to cards, assigns action shots to scenes, and provides zero-cost Flux AI fallbacks. Zero manual visual QC required.
 - Added `longform_audio.py`: Powered by `ChatterboxTurboTTS` voice-cloning (conditioned on `audio_reference.wav` or built-in neural voice). Employs 6-act temperature pacing (`0.88` Hook, `0.80` Body, `0.85` Climax), atmospheric act pauses (0.8s), breath gaps (0.15s), master waveform peak normalization (`0.94`), and linear word-level timestamp synthesis.
-- Upgraded `audio.py` for Shorts (regular + Top-5): Integrated `ChatterboxTurboTTS` with slide-level temperature modulation, `<30s` duration enforcement with `librosa.effects.time_stretch`, and linear word-level timestamp synthesis. Both Chatterbox Turbo and Edge-TTS Neural are available, with Chatterbox Turbo as the primary option.
-- Updated `app.py` with Long-form Test navigation across `01 · Topic Fetcher`, `02 · Scriptwriter`, `03 · Visuals`, and `04 · Audio`.
-- Updated `requirements.txt` and `.github/workflows/test.yml` with Chatterbox dependencies (`chatterbox-tts>=0.1.7`, `torchaudio>=2.5`, `librosa>=0.10`) and compile checks.
-- 283 full factory tests passing (including 33 Long-form unit and smoke tests). Zero regressions on established Shorts lines.
-- Next step: Run the factory test and proceed to Stage 05 (Subtitles) for Long-form. Shorts stays protected.
+- Added `longform_subtitles.py`: Stage 05 broadcast lower-third subtitle engine (5–8 words per phrase) and cinematic Act chapter title billboards.
+- Added `longform_renderer.py`: Stage 06 16:9 widescreen (1920×1080 30FPS) broadcast documentary renderer combining cards, Ken Burns photos, Act billboards, lower-third subtitles, and master voice narration with adaptive sound design.
+- Added `longform_uploader.py`: Stage 07 YouTube metadata and upload engine formatting structured chapter timestamps, research bibliography citations, and private review gate.
+- Upgraded `script_writer.py` for Shorts: Banned formulaic AI opener clichés and canned transition boilerplate (`"The move follows"`, `"Now, all eyes turn to"`, etc.), mandating 4 transformative editorial narrative archetypes (Forensic Tactical Breakdown, Untold Precedent, High-Stakes Debate, Statistical Anomaly) to eliminate repetitious content flags.
+- Upgraded `audio.py` for Shorts: Integrated `ChatterboxTurboTTS` with slide-level temperature modulation, `<30s` duration enforcement with `librosa.effects.time_stretch`, and linear word-level timestamp synthesis. Both Chatterbox Turbo and Edge-TTS Neural are available, with Chatterbox Turbo as the primary option.
+- Updated `app.py` with all 7 Long-form stages (`01 · Topic Fetcher` through `07 · Upload QC`).
+- Updated `requirements.txt` and `.github/workflows/test.yml` with Chatterbox dependencies and compile checks across all 19 factory modules.
+- **295 full factory tests passing** (including 45 Long-form tests across all 7 stages). Zero regressions on established Shorts lines.
+- Next step: Run the interactive test of the complete Long-form desk and Shorts line in the factory UI. Shorts stays protected.
 

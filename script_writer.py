@@ -277,25 +277,15 @@ FOUR SLIDES — 20-30s BROADCAST NEWS ARTICLE
 - As a generation target, keep the complete narration between 50 and 70 spoken words (~20 to 28 seconds).
 - Do not pad the script to hit a word count.
 
-NARRATIVE FLOW & BROADCAST STRUCTURE:
-Do NOT write four disconnected, isolated bullet points.
-This is ONE complete, continuous 20–30 second broadcast news article broken across four spoken cuts.
-When spoken aloud in sequence, the narration MUST flow seamlessly with connective transitions:
-- Slide 1: THE LEAD / HOOK (Must be 13 words or fewer).
-  Drop the viewer straight into the breaking development or provocative question with the exact subject and action immediately named.
-- Slide 2: THE TURN / CAUSE (14–18 words).
-  Directly continue the thought from Slide 1 with narrative causality. Explain HOW or WHY it happened using natural broadcast connectives (e.g., "The move follows...", "Officials confirmed that...", "In a commanding display...", "The breakthrough arrived after...").
-- Slide 3: THE DRAMA / STAKES / PROOF (14–20 words).
-  Escalate the story with the numbers, quote, or critical consequences (e.g., "With the series on the line...", "That performance shatters the mark...", "Insiders revealed that...").
-- Slide 4: THE KICKER / IMPACT (12–18 words).
-  Deliver a definitive, punchy broadcast kicker that resolves the news piece with forward-looking momentum (e.g., "Now, all eyes turn to...", "The stage is set for...", "With days to go, the pressure has never been higher.").
-
-STYLE
-- Sharp, energetic cricket desk voice.
-- Write for the ear: short clean sentences, active voice, concrete wording.
-- Let the facts create the momentum.
-- No generic introductions, CTA, viewer commands, fake suspense or empty hype.
-- No article-reading tone.
+ANTI-REPETITION & EDITORIAL AUTHENTICITY (CRITICAL):
+YouTube strictly flags repetitive template scripts as inauthentic content. To ensure authentic, original journalism:
+- NEVER use generic AI transition clichés (e.g. "The move follows", "Officials confirmed that", "With the series on the line", "Now, all eyes turn to", "The stage is set", "Only time will tell", "In a shocking turn of events").
+- Vary narrative momentum dynamically using one of these authentic editorial approaches:
+  1. The Forensic Tactical Breakdown: Focus directly on the strategic flaw, masterstroke, or pitch condition that decided the event.
+  2. The Untold Precedent / Contrast: Compare today's occurrence with a historic parallel or past controversy that completely reframes the narrative.
+  3. The High-Stakes Debate: Foreground the selection dispute, dressing room tension, or polarizing tactical decision.
+  4. The Statistical Anomaly: Highlight the rarity of the metric and what standard scorecards hide.
+- Write with varied, human conversational cadence: use sharp contrasts, active verbs, and natural pauses. Never sound like a robotic news wire summary.
 
 VIRAL PACKAGING SUITE
 - `headline`: exactly 3 or 4 words. This is the On-Screen Scroll-Stopper Billboard pinned to Slide 1. Make it an intense, curiosity-inducing hook (e.g. "33-BALL DUCK HEROIC?", "TACTICAL MASTERCLASS?", "WORST RECORD BROKEN").
@@ -307,7 +297,7 @@ VIRAL PACKAGING SUITE
 - Put the most important words first; avoid generic filler such as "latest update", "breaking news", "big update" or "sports update".
 - `seo_description`: concise and story-specific summary optimized for YouTube Shorts algorithm.
 - `hashtags`: 3–5 relevant story-specific hashtags including player, team, and tournament.
-- `comment`: one provocative, high-engagement pinned question designed to ignite debate in the comments (e.g., "Was this gritty heroism or a complete tactical disaster? Drop your verdict below 👇").
+- `comment`: one provocative, high-engagement pinned question designed to ignite debate in the comments. Tailor it specifically to the real tactical or ethical dilemma in the story without using canned bot phrases.
 - `quote`: the strongest meaningful direct quote from the research, copied faithfully, when one materially adds to the story. Return an empty string when there is no worthwhile quote.
 - `quote_attribution`: the exact speaker/source of `quote`, or an empty string when there is no quote.
 - `quote_slide`: the existing slide number (1–4) where the quote most naturally supports the narration, or 0 when there is no quote. Do not create an extra slide for a quote.

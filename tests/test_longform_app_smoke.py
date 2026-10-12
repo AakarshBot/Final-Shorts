@@ -122,3 +122,55 @@ def test_longform_test_audio_navigation():
     labels = [button.label for button in at.button]
     assert "Synthesize Full Narration" in labels
 
+
+def test_longform_test_subtitles_navigation():
+    at = _run_app({
+        "app_mode": "test",
+        "factory_format": "long_form",
+        "longform_test_stage": "05 · Subtitles",
+        "longform_approved_script": {"title": "BCCI Names Bumrah Captain", "scenes": []},
+        "longform_approved_audio": {"total_duration": 10.0, "scenes": [{"scene": 1}]},
+    })
+
+    assert not at.exception, at.exception
+    labels = [button.label for button in at.button]
+    assert "Generate Broadcast Subtitles" in labels
+
+
+def test_longform_test_renderer_navigation(tmp_path):
+    fake_master = tmp_path / "master.wav"
+    fake_master.write_bytes(b"RIFF" + b"x" * 2000)
+
+    at = _run_app({
+        "app_mode": "test",
+        "factory_format": "long_form",
+        "longform_test_stage": "06 · Renderer",
+        "longform_approved_script": {"title": "BCCI Names Bumrah Captain", "scenes": []},
+        "longform_approved_visuals": {"scenes_visuals": [{"scene_number": 1}]},
+        "longform_approved_audio": {"master_path": str(fake_master), "total_duration": 10.0, "scenes": [{"scene": 1}]},
+        "longform_approved_subtitles": {"cues": [{"cue_index": 1}]},
+    })
+
+    assert not at.exception, at.exception
+    labels = [button.label for button in at.button]
+    assert "Render 16:9 Documentary Video" in labels
+
+
+def test_longform_test_upload_qc_navigation(tmp_path):
+    fake_video = tmp_path / "doc.mp4"
+    fake_video.write_bytes(b"RIFF" + b"x" * 2000)
+
+    at = _run_app({
+        "app_mode": "test",
+        "factory_format": "long_form",
+        "longform_test_stage": "07 · Upload QC",
+        "longform_approved_topic": {"title": "BCCI Names Bumrah Captain", "url": "https://espncricinfo.com"},
+        "longform_approved_script": {"title": "BCCI Names Bumrah Captain", "titles": ["Title 1"]},
+        "longform_approved_video": str(fake_video),
+    })
+
+    assert not at.exception, at.exception
+    labels = [button.label for button in at.button]
+    assert "Upload Documentary to YouTube" in labels
+
+

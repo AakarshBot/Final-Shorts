@@ -3552,7 +3552,7 @@ def _render_app_sidebar():
             )
             selected = st.pills(
                 "Long-form stages",
-                ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Visuals", "04 · Audio"],
+                ["01 · Topic Fetcher", "02 · Scriptwriter", "03 · Visuals", "04 · Audio", "05 · Subtitles", "06 · Renderer", "07 · Upload QC"],
                 default=st.session_state.longform_test_stage,
                 key="longform-test-stage-switcher",
                 label_visibility="collapsed",
@@ -6945,14 +6945,207 @@ def render_longform_audio():
         if st.button("Approve Audio for Long-form", type="primary", width="stretch", key="longform-approve-audio"):
             from longform_audio import LongformAudioEngine
             st.session_state.longform_approved_audio = LongformAudioEngine.approve_audio(audio_data)
+            st.session_state.longform_test_stage = "05 · Subtitles"
             st.rerun()
     with app_col2:
         if st.session_state.get("longform_approved_audio"):
             st.success("✓ Audio Approved")
 
 
+def render_longform_subtitles():
+    approved_script = st.session_state.get("longform_approved_script")
+    approved_audio = st.session_state.get("longform_approved_audio")
+    if not approved_script or not approved_audio:
+        st.info("Approve the Scriptwriter (02) and Audio (04) stages first.")
+        return
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">05 · LONG-FORM SUBTITLES · BROADCAST LOWER-THIRDS</div>'
+        '<div class="canvas-title">Documentary Subtitles & Act Billboards</div>'
+        '<div class="canvas-copy">Generates clean 16:9 lower-third subtitles (Netflix/BBC style) and cinematic Act chapter billboards.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    with st.container(key="longform-subs-toolbar"):
+        col_btn, col_info = st.columns([1, 2])
+        with col_btn:
+            if st.button("Generate Broadcast Subtitles", type="primary", width="stretch", key="longform-gen-subs"):
+                with st.spinner("Aligning word timings and building broadcast lower-third cues..."):
+                    try:
+                        from longform_subtitles import LongformSubtitleEngine
+                        subs = LongformSubtitleEngine.generate(approved_script, approved_audio)
+                        st.session_state.longform_subtitles_data = subs
+                        st.session_state.longform_subtitles_error = ""
+                        st.rerun()
+                    except Exception as exc:
+                        st.session_state.longform_subtitles_error = str(exc)
+        with col_info:
+            st.caption("Groups speech into natural human reading phrases (5–8 words) and adds chapter title overlays.")
+
+    if st.session_state.get("longform_subtitles_error"):
+        st.error(st.session_state.longform_subtitles_error)
+
+    sub_data = st.session_state.get("longform_subtitles_data")
+    if not sub_data:
+        return
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Subtitle Cues", sub_data.get("cue_count", 0))
+    m2.metric("Act Billboards", sub_data.get("acts_count", 0))
+    m3.metric("Style", "Lower-Third Broadcast")
+    m4.metric("Format", "16:9 Widescreen")
+
+    with st.expander("📺 Cinematic Act Title Billboards", expanded=True):
+        for bb in sub_data.get("act_billboards", []):
+            st.markdown(f"**ACT {bb.get('act_number'):02d}:** `{bb.get('title')}` (Timestamp: {bb.get('start_time')}s)")
+
+    with st.expander("📝 Lower-Third Subtitle Cue Preview (First 20 Phrases)", expanded=False):
+        cues_preview = sub_data.get("cues", [])[:20]
+        for c in cues_preview:
+            st.text(f"[{c.get('start')}s - {c.get('end')}s] {c.get('text')}")
+
+    st.markdown("---")
+    app_col1, app_col2 = st.columns([2, 1])
+    with app_col1:
+        if st.button("Approve Subtitles for Long-form", type="primary", width="stretch", key="longform-approve-subs"):
+            from longform_subtitles import LongformSubtitleEngine
+            st.session_state.longform_approved_subtitles = LongformSubtitleEngine.approve(sub_data)
+            st.session_state.longform_test_stage = "06 · Renderer"
+            st.rerun()
+    with app_col2:
+        if st.session_state.get("longform_approved_subtitles"):
+            st.success("✓ Subtitles Approved")
+
+
+def render_longform_renderer():
+    approved_script = st.session_state.get("longform_approved_script")
+    approved_audio = st.session_state.get("longform_approved_audio")
+    approved_visuals = st.session_state.get("longform_approved_visuals")
+    approved_subs = st.session_state.get("longform_approved_subtitles")
+
+    missing = []
+    if not approved_script: missing.append("02 Scriptwriter")
+    if not approved_visuals: missing.append("03 Visuals")
+    if not approved_audio: missing.append("04 Audio")
+    if not approved_subs: missing.append("05 Subtitles")
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">06 · LONG-FORM RENDERER · 16:9 WIDESCREEN ENGINE</div>'
+        '<div class="canvas-title">Broadcast Documentary Rendering</div>'
+        '<div class="canvas-copy">Assembles 1920×1080 30FPS video essay combining broadcast cards, Ken Burns photos, Act title billboards, lower-third subtitles, and master narration.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    if missing:
+        st.warning(f"Complete and approve earlier stages first. Missing: {', '.join(missing)}")
+        return
+
+    col_cfg1, col_cfg2 = st.columns(2)
+    with col_cfg1:
+        render_mode = st.pills("Render Mode", ["Fast Preview Clip (15s)", "Full Documentary (~8 Min)"], default="Fast Preview Clip (15s)", key="lf_render_mode") or "Fast Preview Clip (15s)"
+    with col_cfg2:
+        audio_profile = st.pills("Audio Profile", ["Clean Studio Master (Loudnorm)", "Dynamic Soundscape Bed"], default="Clean Studio Master (Loudnorm)", key="lf_audio_profile") or "Clean Studio Master (Loudnorm)"
+
+    with st.container(key="longform-render-toolbar"):
+        if st.button("Render 16:9 Documentary Video", type="primary", width="stretch", key="longform-run-render"):
+            max_sec = 15.0 if "Preview" in render_mode else None
+            out_file = Path("output/longform_rendered/documentary_master.mp4")
+            with st.spinner("Rendering 1920×1080 30FPS broadcast documentary video..."):
+                try:
+                    from longform_renderer import LongformRenderer
+                    rendered = LongformRenderer.render_video(
+                        approved_script=approved_script,
+                        approved_audio=approved_audio,
+                        approved_visuals=approved_visuals,
+                        subtitle_data=approved_subs,
+                        output_path=out_file,
+                        max_duration_seconds=max_sec,
+                    )
+                    st.session_state.longform_rendered_video = str(rendered)
+                    st.session_state.longform_render_error = ""
+                    st.rerun()
+                except Exception as exc:
+                    st.session_state.longform_render_error = str(exc)
+
+    if st.session_state.get("longform_render_error"):
+        st.error(st.session_state.longform_render_error)
+
+    vid_path = st.session_state.get("longform_rendered_video")
+    if vid_path and Path(vid_path).exists():
+        st.markdown("### Master 16:9 Video Player")
+        st.video(vid_path)
+
+        st.markdown("---")
+        app_col1, app_col2 = st.columns([2, 1])
+        with app_col1:
+            if st.button("Approve Video for Long-form", type="primary", width="stretch", key="longform-approve-video"):
+                st.session_state.longform_approved_video = vid_path
+                st.session_state.longform_test_stage = "07 · Upload QC"
+                st.rerun()
+        with app_col2:
+            if st.session_state.get("longform_approved_video"):
+                st.success("✓ Video Approved")
+
+
+def render_longform_upload_qc():
+    approved_script = st.session_state.get("longform_approved_script")
+    approved_topic = st.session_state.get("longform_approved_topic")
+    approved_video = st.session_state.get("longform_approved_video")
+
+    if not approved_script or not approved_topic or not approved_video:
+        st.info("Render and approve the documentary video (06) first.")
+        return
+
+    from longform_uploader import LongformUploader
+    package = LongformUploader.prepare_package(approved_script, approved_topic, approved_video)
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">07 · YOUTUBE DOCUMENTARY PUBLISH PACKAGE</div>'
+        '<div class="canvas-title">Metadata Packaging & Upload Review</div>'
+        '<div class="canvas-copy">Monetization-compliant packaging: timestamped chapters, research bibliography, and private review gate.</div></div></div>',
+        unsafe_allow_html=True,
+    )
+
+    left, right = st.columns([1.1, 0.9], gap="large")
+    with left:
+        st.markdown("### Video Metadata Package")
+        selected_title = st.selectbox("Video Title Candidate", package.get("title_candidates") or [package.get("title")], key="lf_upload_title")
+        desc_text = st.text_area("YouTube Description (with Chapters & Sources)", package.get("description", ""), height=240, key="lf_upload_desc")
+        pinned_c = st.text_input("Pinned Discussion Prompt", package.get("pinned_comment", ""), key="lf_upload_comment")
+
+        privacy = st.pills("Upload Privacy Status", ["private", "unlisted", "public"], default="private", key="lf_privacy_status") or "private"
+
+        if st.button("Upload Documentary to YouTube", type="primary", width="stretch", key="longform-upload-btn"):
+            upload_pkg = dict(package)
+            upload_pkg["title"] = selected_title
+            upload_pkg["description"] = desc_text
+            upload_pkg["pinned_comment"] = pinned_c
+            with st.spinner("Connecting to YouTube API and uploading broadcast documentary..."):
+                try:
+                    res = LongformUploader.upload_to_youtube(upload_pkg, privacy_status=privacy)
+                    st.session_state.longform_upload_result = res
+                    st.session_state.longform_upload_error = ""
+                    st.rerun()
+                except Exception as exc:
+                    st.session_state.longform_upload_error = str(exc)
+
+        if st.session_state.get("longform_upload_error"):
+            st.error(st.session_state.longform_upload_error)
+
+        if st.session_state.get("longform_upload_result"):
+            up = st.session_state.longform_upload_result
+            st.success(f"✓ Uploaded successfully! Video ID: `{up.get('video_id')}` (Status: {up.get('privacy_status')})")
+            if up.get("video_url"):
+                st.markdown(f"[Watch on YouTube]({up.get('video_url')})")
+
+    with right:
+        st.markdown("### Master Video Verification")
+        st.video(approved_video)
+        st.caption(f"File size: {round(Path(approved_video).stat().st_size / (1024*1024), 2)} MB · Resolution: 1920×1080 (16:9)")
+
+
 def render_longform_test():
-    stage_names = ["Topic Fetcher", "Scriptwriter", "Visuals", "Audio"]
+    stage_names = ["Topic Fetcher", "Scriptwriter", "Visuals", "Audio", "Subtitles", "Renderer", "Upload QC"]
     stage_idx = 0
     if st.session_state.longform_test_stage == "02 · Scriptwriter":
         stage_idx = 1
@@ -6960,6 +7153,12 @@ def render_longform_test():
         stage_idx = 2
     elif st.session_state.longform_test_stage == "04 · Audio":
         stage_idx = 3
+    elif st.session_state.longform_test_stage == "05 · Subtitles":
+        stage_idx = 4
+    elif st.session_state.longform_test_stage == "06 · Renderer":
+        stage_idx = 5
+    elif st.session_state.longform_test_stage == "07 · Upload QC":
+        stage_idx = 6
     _render_pipeline_progress(stage_names, stage_idx)
 
     if st.session_state.longform_test_stage == "01 · Topic Fetcher":
@@ -6970,6 +7169,12 @@ def render_longform_test():
         render_longform_visuals()
     elif st.session_state.longform_test_stage == "04 · Audio":
         render_longform_audio()
+    elif st.session_state.longform_test_stage == "05 · Subtitles":
+        render_longform_subtitles()
+    elif st.session_state.longform_test_stage == "06 · Renderer":
+        render_longform_renderer()
+    elif st.session_state.longform_test_stage == "07 · Upload QC":
+        render_longform_upload_qc()
 
 
 def render_otd_topic_fetcher():
