@@ -95,7 +95,7 @@ def test_generation_prompts_cover_validator_requirements():
     universal = script_writer.UNIVERSAL_SYSTEM_PROMPT
     top5 = script_writer.TOP5_SYSTEM_PROMPT
 
-    assert "each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category" in cricket
+    assert "Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category" in cricket
     assert "a non-empty 3–4-word opening headline" in cricket
     assert "at least one relevant hashtag" in cricket
     assert "quote_attribution and quote_slide from 1–4" in cricket
