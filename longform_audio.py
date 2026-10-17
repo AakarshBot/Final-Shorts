@@ -82,8 +82,11 @@ class LongformAudioEngine:
         if actual_ref:
             try:
                 model.prepare_conditionals(str(actual_ref), exaggeration=0.5)
-            except Exception:
-                actual_ref = None
+            except Exception as exc:
+                raise RuntimeError(
+                    f"Chatterbox could not use the voice reference file '{actual_ref}': {exc}. "
+                    "Replace the file or remove it to use Chatterbox's built-in voice."
+                ) from exc
 
         waves = []
         scene_paths = []
