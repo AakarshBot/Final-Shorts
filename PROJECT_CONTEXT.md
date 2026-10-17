@@ -127,26 +127,27 @@ Status: **Approved.**
 ## Scriptwriter — Function 02
 
 Unified Scriptwriter (`script_writer.py`):
-- Single unified scriptwriter serving all four streams: Deep-Dive (Cricket & Niche), Top-5, and YouTube Search Trends. Standalone redundant writers (`universal_script_writer.py`, `top5_script_writer.py`) have been cleanly deleted with zero wrappers.
-- Research first uses the selected article and searches for related current reports when available, providing factual grounding for the LLM.
-- **Deep-Dive Cricket:** Generates 3 distinct editorial angles for human selection, followed by a complete 4-slide spoken script. Slide 1 capped at 13 words; narration under 30 seconds.
-- **YouTube Search Trends & Niche Sports:** Generates 3 distinct editorial angles honoring YouTube search query intent, producing 3–5 spoken slides. Slide 1 capped at 13 words; total duration 18–30 seconds (50–74 words).
-- **Top-5 News Package:** Generates a 6-slide package (Slide 1: hook headline ≤8 words with visual body copy; Slides 2–6: spoken headline + visual card body). Total spoken headline time strictly under 30 seconds.
-- Generation uses Groq `openai/gpt-oss-120b` with a single hidden rewrite on Groq `openai/gpt-oss-20b` if local schema or editorial validation fails. Invalid drafts are never surfaced to manual QC.
+- One shared module serves Deep-Dive Cricket, Top-5, YouTube Search Trends, Niche Sports, and On This Day; do not add parallel writers or wrapper layers.
+- Research starts with the selected article and adds related reports when available to ground facts and clarify current status.
+- Deep-Dive Cricket: three editorial angles for human selection, then exactly four spoken slides. Slide 1 is at most 13 words; total narration targets 50–70 words and under 30 seconds.
+- YouTube Search Trends, Niche Sports, and On This Day: three editorial angles for selection, then 3–5 connected spoken slides, 50–74 words overall and under 30 seconds, with a subject-named lead and complete per-slide visual metadata.
+- Top-5: six slides; Slide 1 is a package label plus visual-only roundup copy, Slides 2–6 correspond to the five selected stories in order, and the six spoken headlines target less than 30 seconds.
+- The generation prompts explicitly list the content, packaging, quote, visual-handoff, and shape requirements enforced by generation validators. Generation may use one hidden recovery/rewrite for a failed draft; failed generated output is not sent to Manual QC.
+- Do not post-process a generated 14-word lead by silently trimming it. The writer must produce a compliant lead or use the existing generation recovery path.
 
 Generated publish metadata:
-- `headline`: concise opening hook (3–4 words for Deep Dive/YT Trends; package headline for Top-5).
+- `headline`: concise opening hook (3–4 words for Deep Dive/YT Trends; Top-5 package label for Top-5).
 - `titles`: exactly 3 distinct title candidates (SEO/Search, Consequence/Significance, Curiosity).
 - `seo_description`: concise story-specific description.
-- `hashtags`: 3–5 relevant hashtags.
+- `hashtags`: story-specific, valid hashtag values.
 - `comment`: one concise discussion-oriented public-upload comment.
 
 Human Scriptwriter QC:
-- Manual QC receives only scripts that passed hidden validation.
-- All headlines, narration lines, and publish metadata are human-editable.
-- Approval freezes the canonical Scriptwriter handoff for downstream stages.
+- Human approval is not blocked by editorial/script validators. All editable narration and opening headlines can be approved as entered; Top-5 headline/body edits and metadata are also handed off without re-validating the human-edited content.
+- The generation validators remain active before Manual QC and continue to trigger a hidden rewrite/recovery for malformed AI drafts. They must never be reused as post-edit approval gates.
+- The single-script handoff retains only a structural integrity check that the edited narration count matches the generated scene count. No editorial word-count, headline, subject-name, filler, hashtag, quote, or metadata rule rejects human approval.
 
-Status: **Approved / Unified single-module architecture.**
+Status: **Unified architecture retained; generation checks moved fully upstream of human approval.**
 
 ## Audio — Function 03
 
@@ -156,8 +157,8 @@ Contract:
   - English: Female (`en-IN-NeerjaNeural`), Male (`en-IN-PrabhatNeural`).
   - Hindi: Female (`hi-IN-SwaraNeural`), Male (`hi-IN-MadhurNeural`).
   - Telugu: Female (`te-IN-ShrutiNeural`), Male (`te-IN-MohanNeural`).
-- Native Edge-TTS word timings captured via WordBoundary events and validated with ffprobe.
-- Audio and timings cached by text, language, voice, and speed rate in `.audio_cache/`.
+- Native Edge-TTS word timings are captured via WordBoundary events and validated with ffprobe; the existing cache remains keyed by text, language, voice, and speed.
+- The Edge-TTS dependency floor is `edge-tts>=7.3.1,<8` to include the October 2026 upstream fix for Microsoft speech-service token-format changes that caused WebSocket 403 failures. Updating `requirements.txt` does not update an already-installed local package; install/upgrade the existing requirements and restart the running app to load the fixed version.
 - Automatic speed correction runs if total duration exceeds 30 seconds.
 - Human Audio upload & microphone recording support: users can upload `.mp3`/`.wav` or record directly via mic for any scene, with linear word timing synthesis ensuring full subtitle synchronization.
 
@@ -217,23 +218,14 @@ Status: **Approved / Synthetic media transparency flag active.**
 
 ## Dashboard state
 
-The Dashboard is **Redesigned into Linear / Apple Pro Studio Commercial Quality**.
+The dashboard uses a **professional light studio theme** across Test and Live: porcelain `#f5f7fb` canvas, white work surfaces, slate `#0f172a` typography, subtle neutral borders/shadows, and restrained indigo action/selection accents. Streamlit's existing light theme is kept; `app.py` CSS must not override it with a dark application shell or dark form fields.
 
-Current dashboard provides an ultra-clean, commercial-grade studio experience for both Test Lab and Live Production pipelines:
-- **Design System:** Option B (Linear / Apple Pro Studio Light) — porcelain `#f8fafc`/`#ffffff` canvases, slate typography `#0f172a`/`#334155`, electric indigo `#4f46e5` active accents, emerald `#059669` QC approvals.
-- **Top Navigation:** 3-column studio topbar with brand badge, segmented `[TEST | LIVE]` workspace toggle, quick navigation actions, and direct stage navigation ribbon (`01 · Story`, `02 · Script`, etc.) with zero redundant reruns.
-- **Editorial Angle Discovery:** High-contrast studio angle selection cards with category badges (`ANGLE 01`), active border highlights, grounding notes, and emerald `✓ SELECTED` badges.
-- **Scriptwriter QC:** Teleprompter cue cards displaying live word count and estimated speech duration per scene, plus editorial inspector tracking cadence (~145 WPM optimal) and total runtime against Shorts constraints.
-- **Audio Studio:** Neural Soundboard interface with multi-language flag chips (English 🇺🇸/🇬🇧, Hindi 🇮🇳, Telugu 🇮🇳), Edge-TTS engine spec badges, individual track audio decks with cue counts, and duration policy compliance checkers.
-- **Visual Board:** Studio dropzone empty slots with icon prompts (`SLOT {slide} READY · Select from pool below`) and compact asset pool management.
-- **Renderer Cockpit:** Monospaced Master Production Spec cockpit (`1080×1920 9:16 Portrait`, `30.00 FPS`, `H.264 / AAC-LC`, `YT Shorts Compliant < 60s`) and pre-flight audit checklist (`✓ Script`, `✓ Audio`, `✓ Subtitles`, `✓ Visuals`).
-- **Performance Optimizations:**
-  - `card_studio.py`: `@lru_cache(maxsize=128)` font loader caching eliminates redundant TTF disk reads.
-  - `renderer.py`: Zero-copy frame byte optimization in `write_preview_video` eliminating redundant RGB conversions across 900+ frames.
-  - `visual_search.py`: Persistent `requests.Session` with `HTTPAdapter` connection pooling.
-- **Hard Locks & Stability:**
-  - Manual Subject Cutout (`MANUAL_SUBJECT_CUTOUT_POLYGON_EDITOR`, `_render_manual_subject_cutout`) and crop functions strictly preserved.
-  - All 235 unit, integration, and UI smoke tests passing with zero regressions.
+- **Navigation:** Existing three-column workspace bar, TEST/LIVE switch, direct stage navigation, and pipeline progress remain behaviorally unchanged.
+- **Editorial review:** Story-angle cards, Scriptwriter editor, teleprompter, packaging cards, comments, and status panels use readable light surfaces and slate text. The phone/video mock-up intentionally stays dark because it represents the actual Short preview, not the dashboard chrome.
+- **Audio Studio:** Existing multilingual voice roster, Edge-TTS controls, track preview, timing validation, cache, and manual audio options remain intact; the dependency floor fix is documented in Audio — Function 03.
+- **Visual Board and Renderer:** Existing visual selection, crop/reposition, polygon subject cutout, Card Studio, frame generation, and renderer contracts are out of scope and must remain unchanged.
+- **Quality gate:** The latest main-branch CI was successful on 12 October 2026. The branch implementing these changes must pass the full compile and pytest workflow before merge; do not claim an old test count as the current result.
+- **Hard locks:** Keep the shared Manual Subject Cutout editor/renderer and crop paths untouched. No unrelated stage, visual-generation option, upload route, or Long-form behavior is included in this patch.
 
 ### Top-5 current implementation checkpoint
 
@@ -536,6 +528,6 @@ When changing either Function 01 or Function 02, preserve the direct architectur
 - Audio synthesizes full ~8-minute documentary narration using `ChatterboxTurboTTS` (voice conditioned or built-in neural voice).
 - Renderer outputs 1920×1080 30FPS 16:9 widescreen broadcast master documentary with dynamic audio muxing and sidechain ducking.
 - Upload packages full YouTube metadata including structured chapter timestamps, research bibliography citations, and pinned discussion prompts.
-- **297 full factory tests passing** (100% pass rate across all modules, formats, and desks). Zero regressions on established Shorts lines.
+- Full factory CI is the acceptance check across all modules, formats, and desks; confirm the current passing count from the workflow run rather than relying on a historical hard-coded total. Zero regressions are required on established Shorts lines.
 - Next step: Run end-to-end documentary production in Live or Test mode.
 

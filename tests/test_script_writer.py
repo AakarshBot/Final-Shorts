@@ -90,6 +90,21 @@ def test_prompt_contains_three_title_angles():
     assert "Curiosity" in prompt
 
 
+def test_generation_prompts_cover_validator_requirements():
+    cricket = script_writer.SYSTEM_PROMPT
+    universal = script_writer.UNIVERSAL_SYSTEM_PROMPT
+    top5 = script_writer.TOP5_SYSTEM_PROMPT
+
+    assert "each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category" in cricket
+    assert "a non-empty 3–4-word opening headline" in cricket
+    assert "at least one relevant hashtag" in cricket
+    assert "quote_attribution and quote_slide from 1–4" in cricket
+    assert "3–5 hashtags each beginning with # and containing no spaces" in universal
+    assert "quote, quote_attribution, and quote_slide must agree" in universal
+    assert "story_index is slide_number minus one" in top5
+    assert "SATISFY EVERY EXISTING TOP-5 GENERATION CHECK" in top5
+
+
 
 def test_validator_rejects_slide_one_over_13_words():
     result = valid_result(
@@ -145,6 +160,35 @@ def test_apply_script_edits_allows_disabled_headline():
     assert edited["headline"] == ""
     assert edited["approved_for_audio"] is True
 
+
+
+@pytest.mark.parametrize(
+    "apply_edits",
+    [script_writer.apply_script_edits, script_writer.apply_universal_script_edits],
+)
+def test_manual_edits_are_not_rejected_by_editorial_validation(apply_edits):
+    result = valid_result()
+    edited_voiceovers = [
+        "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England",
+        "The player was struck during training and returned after treatment.",
+        "The team is assessing him before the next ODI.",
+        "His availability will depend on the next medical assessment.",
+    ]
+    edited_voiceovers = [
+        voiceover.replace("Shubman Gill", "the player").replace("Gill", "the player")
+        for voiceover in edited_voiceovers
+    ]
+
+    approved = apply_edits(
+        result,
+        edited_voiceovers,
+        headline="A much longer human-written headline is acceptable",
+    )
+
+    assert approved["approved_for_audio"] is True
+    assert approved["headline"] == "A much longer human-written headline is acceptable"
+    assert approved["script"][0]["voiceover"] == edited_voiceovers[0]
+    assert "Shubman Gill" not in " ".join(scene["voiceover"] for scene in approved["script"])
 
 
 def test_valid_script_passes():

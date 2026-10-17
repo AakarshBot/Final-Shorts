@@ -310,6 +310,15 @@ Every slide must include useful metadata matching the narrated fact:
 - specific_search_prompt
 - sport_or_topic_category
 
+GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSON
+- Return exactly four non-empty spoken slides. Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
+- Keep Slide 1 to 13 words or fewer; never rely on an automatic post-generation trim.
+- Name the non-empty subject_name exactly in the spoken narration.
+- Include a non-empty 3–4-word opening headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
+- Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the four slides.
+- quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–4 when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
+- Make every field complete in the first JSON returned. Before output, check the actual field values, not only the JSON shape.
+
 FINAL SELF-CHECK
 Before returning JSON, silently verify:
 1. Exactly four slides.
@@ -424,18 +433,13 @@ The narration must never contain viewer-directed bait or disposable filler such 
 Do not ask the viewer a generic question merely to force curiosity.
 Curiosity must come from a real information gap created by the facts.
 
-STORY FLOW — 20-30s CONTINUOUS BROADCAST ARTICLE
-Do NOT write disconnected, isolated bullet points.
-You are writing ONE unified 20–30 second broadcast news article broken across spoken visual cuts.
-When spoken in sequence, the narration MUST flow seamlessly with connective transitions:
-1. HOOK / LEAD (< 14 words) — the strongest specific fact or breaking development. Name the subject immediately.
-2. DEVELOPMENT / THE TURN (14–18 words) — connects narratively to Slide 1 explaining how or why it happened with causal connectives ("The move follows...", "Officials confirmed that...", "In a commanding display...", "The breakthrough arrived after...").
-3. CONTEXT / STAKES / PROOF (14–20 words) — the minimum context and numbers needed to understand why the event matters ("With the championship on the line...", "That performance seals...", "Insiders report that...").
-4. KICKER / IMPACT / STATUS (12–18 words) — the latest confirmed outcome and a punchy forward-looking conclusion ("Now, all eyes turn to...", "The stage is set for...", "With days to go, the pressure has never been higher.").
-For five slides, split context or consequence only when each extra slide carries a separate useful fact.
-For three slides, combine context and consequence when that produces a cleaner story.
-Never repeat the headline as narration. Never repeat the same fact across slides.
-Silently read your slides aloud in sequence: it must sound like ONE continuous, cohesive 25-second spoken news article.
+STORY FLOW — ONE CONNECTED 18–30s BROADCAST ARTICLE
+- Write one cohesive news article split across spoken cuts, not disconnected bullet points.
+- Let the facts determine the transitions and slide structure. Use natural connective wording grounded in actual chronology, cause, context, or consequence; never use a fixed template or any phrase forbidden by NO FILLER OR RETENTION BAIT.
+- Slide 1: lead with the strongest specific development, name the subject when supported, and stay under 14 words.
+- Later slides: add the next useful fact, evidence, background, or consequence. Each slide must contribute new information without repeating a fact or mechanically restating the headline.
+- Use 3–5 slides as the story warrants, preferably four when that is the clearest structure. Do not force fixed per-slide word ranges.
+- Read the cuts in sequence: they must sound natural, flow into one continuous article, and stay within 50–74 total spoken words and under 30 seconds without padding.
 
 PUBLISH METADATA
 - headline: exactly 3 or 4 words. It should identify the actual story, not use empty phrases.
@@ -469,6 +473,15 @@ Prefer identifiable people, teams, venues, cars, events, trophies, equipment or 
 Search prompts must be specific and usable by the Visual Fetcher.
 Never use vague prompts such as "dramatic sports moment".
 Do not invent a visual moment unsupported by the research.
+
+GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSON
+- Return 3–5 non-empty spoken slides, each with non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
+- Keep Slide 1 to 13 words or fewer, and the total narration between 50 and 74 spoken words. Aim for 52–68 words when the evidence supports it; never pad.
+- subject_name must be non-empty and the exact name must appear naturally in the spoken narration.
+- Do not use any listed filler or retention-bait phrase, including “what happens next remains to be seen”.
+- Return a non-empty 3–4-word headline, exactly three non-empty title candidates, a non-empty SEO description, 3–5 hashtags each beginning with # and containing no spaces, and a non-empty public comment.
+- quote, quote_attribution, and quote_slide must agree: if a quote is present, give its source attribution and a valid existing slide number; otherwise return empty quote and attribution with quote_slide 0. Never invent or alter a quotation.
+- Complete every required value in the generated JSON. Do not expect manual QC to repair omitted required fields.
 
 FINAL SELF-CHECK
 Before returning JSON, silently verify:
@@ -578,7 +591,16 @@ SLIDE STRUCTURE
 - `seo_description`: concise and story-specific, covering the Top-5 package without inventing a common theme.
 - `hashtags`: generate 3–5 relevant story/package-specific hashtags. Include the main teams, players, events, competitions or developments when suitable. Avoid generic growth tags such as #viral, #fyp or #trending unless directly relevant.
 - `comment`: one concise discussion-oriented public comment grounded in the selected stories. Do not invent facts or ask a generic engagement question disconnected from the package.
-- Return JSON only.
+- GENERATION CHECKLIST — SATISFY EVERY EXISTING TOP-5 GENERATION CHECK BEFORE RETURNING JSON
+- Return exactly six complete slide objects in this order. Set slide_number to 1–6 and story_index to 0–5 respectively (story_index is slide_number minus one).
+- Every headline must be non-empty. Every slide must have non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
+- All six spoken headlines together must be under 30 seconds at 150 words per minute; aim for 26–28 seconds, not the limit.
+- Never use synthetic or audience-facing filler in any headline, including “changing the conversation”, “change the way people see”, “everyone is talking about”, “the cricket world is buzzing”, “sending shockwaves”, “shocking the cricket world”, “game changer”, “big talking point”, “what you need to know”, “here’s what happened”, “in a major update”, or “this could change everything”.
+- Slide 1 must be eight words or fewer and clearly include “Top-5” or “Top 5”, “Cricket”, and “News”, “Headline(s)”, “Story/Stories”, or “Roundup”. It is only the package label, must not be identical to a story headline on Slides 2–6, and must have non-empty visual-only roundup body copy.
+- Slide 1 must not use viewer-directed filler, including “fans/viewers need to, have to, or got to see/watch/know”, “right now”, “don’t miss”, “can’t miss”, “must-see/watch/know”, “worth seeing/watching”, “here’s why”, “find out”, “make you see the game/cricket differently”, “change the way you see the game/cricket”, “will/could/can change the game/world/cricket”, “changing the world/game”, or “see the game/cricket differently”.
+- Slides 2–6 must report the five selected stories in the supplied order. Return a non-empty SEO description, 3–5 single-token hashtags (each begins with # and has no spaces), and a non-empty public comment. Every title/body fact must be supported by that story’s evidence. Later visual-only body copy may be empty when it adds no useful context.
+
+Return JSON only.
 """
 
 DESK_PROMPTS = {
@@ -740,20 +762,6 @@ def _normalize_profile(profile: str | None) -> str:
     return "cricket_india_asia"
 
 
-def _trim_slide_one_if_needed(voiceover: str) -> str:
-    cleaned = _clean(voiceover)
-    words = cleaned.split()
-    if len(words) <= 13:
-        return cleaned
-    if len(words) == 14:
-        first_clean = re.sub(r"[^\w]", "", words[0]).lower()
-        if first_clean in {
-            "now", "recently", "officially", "meanwhile", "today", "reportedly",
-            "just", "fresh", "latest", "breaking", "plus", "also", "and", "so"
-        }:
-            trimmed = " ".join(words[1:])
-            return trimmed[:1].upper() + trimmed[1:]
-    return cleaned
 
 
 def evaluate_flow(script: dict) -> dict:
@@ -1355,11 +1363,6 @@ def write_script(
         result = None
         first_reason = f"{type(first_error).__name__}: {first_error}"
     else:
-        scenes = (result or {}).get("script") or []
-        if scenes and isinstance(scenes[0], dict):
-            vo1 = str(scenes[0].get("voiceover") or "").strip()
-            if _words(vo1) == 14:
-                scenes[0]["voiceover"] = _trim_slide_one_if_needed(vo1)
         valid, reason = validate_cricket_script(result)
         if valid:
             return _finish_result(
@@ -1391,12 +1394,6 @@ def write_script(
             + f"{first_reason} | {type(second_error).__name__}: {second_error}"
         ) from second_error
 
-    scenes = (rewritten or {}).get("script") or []
-    if scenes and isinstance(scenes[0], dict):
-        vo1 = str(scenes[0].get("voiceover") or "").strip()
-        if _words(vo1) == 14:
-            scenes[0]["voiceover"] = _trim_slide_one_if_needed(vo1)
-
     valid, reason = validate_cricket_script(rewritten)
     if not valid:
         raise RuntimeError("Script generation failed after one hidden rewrite: " + reason)
@@ -1421,9 +1418,6 @@ def _apply_edits_helper(
     script: dict,
     voiceovers: list[str],
     headline: str | None = None,
-    validator=None,
-    *,
-    validate: bool = True,
 ) -> dict:
     result = json.loads(json.dumps(script, ensure_ascii=False))
     scenes = result.get("script") or []
@@ -1433,10 +1427,6 @@ def _apply_edits_helper(
         scene["voiceover"] = _clean(voiceover)
     if headline is not None:
         result["headline"] = _clean(headline)
-    if validate and validator:
-        valid, reason = validator(result, headline_required=False)
-        if not valid:
-            raise ValueError(f"Edited script failed local validation: {reason}")
     result["human_script_edited"] = any(
         _clean(scene.get("voiceover")) != _clean(original.get("voiceover"))
         for scene, original in zip(scenes, script.get("script", []))
@@ -1445,8 +1435,8 @@ def _apply_edits_helper(
     return result
 
 
-def apply_script_edits(script: dict, voiceovers: list[str], headline: str | None = None, *, validate: bool = True) -> dict:
-    return _apply_edits_helper(script, voiceovers, headline, validator=validate_cricket_script, validate=validate)
+def apply_script_edits(script: dict, voiceovers: list[str], headline: str | None = None) -> dict:
+    return _apply_edits_helper(script, voiceovers, headline=headline)
 
 
 # ---------------------------------------------------------------------------
@@ -1686,12 +1676,6 @@ def write_universal_script(
             if angle_text:
                 result["story_angle"] = angle_text
 
-            scenes = (result or {}).get("script") or []
-            if scenes and isinstance(scenes[0], dict):
-                vo1 = str(scenes[0].get("voiceover") or "").strip()
-                if _words(vo1) == 14:
-                    scenes[0]["voiceover"] = _trim_slide_one_if_needed(vo1)
-
             valid, reason = validate_universal_script(result)
             if valid:
                 return _finish_result(
@@ -1724,10 +1708,8 @@ def apply_universal_script_edits(
     script: dict,
     voiceovers: list[str],
     headline: str | None = None,
-    *,
-    validate: bool = True,
 ) -> dict:
-    return _apply_edits_helper(script, voiceovers, headline, validator=validate_universal_script, validate=validate)
+    return _apply_edits_helper(script, voiceovers, headline=headline)
 
 
 # ---------------------------------------------------------------------------
@@ -1970,13 +1952,12 @@ class ScriptWriter:
         voiceovers: list[str],
         headline: str | None = None,
         profile: str = "cricket_india_asia",
-        validate: bool = True,
     ) -> dict:
         norm = _normalize_profile(profile)
         if norm in {"cricket_india_asia", "cricket_global"}:
-            return apply_script_edits(script, voiceovers, headline=headline, validate=validate)
+            return apply_script_edits(script, voiceovers, headline=headline)
         else:
-            return apply_universal_script_edits(script, voiceovers, headline=headline, validate=validate)
+            return apply_universal_script_edits(script, voiceovers, headline=headline)
 
     @classmethod
     def evaluate_flow(cls, script: dict) -> dict:

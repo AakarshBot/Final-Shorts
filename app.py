@@ -245,33 +245,36 @@ st.markdown("""
 @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap');
 
 :root {
-  --bg: #07080c;
-  --surface: #0e111a;
-  --surface-raised: #141824;
-  --surface-soft: #181d2c;
-  --surface-active: #22283d;
-  --ink: #f8fafc;
-  --ink-secondary: #cbd5e1;
-  --muted: #94a3b8;
-  --subtle: #64748b;
-  --line: rgba(255, 255, 255, 0.08);
-  --line-strong: rgba(255, 255, 255, 0.16);
-  --primary: #6366f1;
-  --primary-hover: #4f46e5;
-  --accent: #38bdf8;
-  --accent-soft: rgba(56, 189, 248, 0.12);
-  --accent-hover: #0284c7;
-  --success: #10b981;
-  --success-soft: rgba(16, 185, 129, 0.12);
-  --warning: #f59e0b;
-  --warning-soft: rgba(245, 158, 11, 0.12);
-  --danger: #ef4444;
-  --danger-soft: rgba(239, 68, 68, 0.12);
-  --focus: #6366f1;
-  --shadow-xs: 0 1px 2px 0 rgba(0, 0, 0, 0.4);
-  --shadow-sm: 0 2px 6px 0 rgba(0, 0, 0, 0.5);
-  --shadow: 0 4px 14px -1px rgba(0, 0, 0, 0.6);
-  --shadow-hover: 0 8px 24px -2px rgba(0, 0, 0, 0.7);
+  --bg: #f5f7fb;
+  --surface: #ffffff;
+  --surface-raised: #ffffff;
+  --surface-soft: #f1f5f9;
+  --surface-active: #eef2ff;
+  --card-bg: #ffffff;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --ink: #0f172a;
+  --ink-secondary: #334155;
+  --muted: #64748b;
+  --subtle: #94a3b8;
+  --line: rgba(15, 23, 42, 0.08);
+  --line-strong: rgba(15, 23, 42, 0.14);
+  --primary: #4f46e5;
+  --primary-hover: #4338ca;
+  --accent: #2563eb;
+  --accent-soft: rgba(37, 99, 235, 0.10);
+  --accent-hover: #1d4ed8;
+  --success: #059669;
+  --success-soft: rgba(5, 150, 105, 0.10);
+  --warning: #b45309;
+  --warning-soft: rgba(180, 83, 9, 0.10);
+  --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, 0.10);
+  --focus: #4f46e5;
+  --shadow-xs: 0 1px 2px 0 rgba(15, 23, 42, 0.04);
+  --shadow-sm: 0 2px 6px 0 rgba(15, 23, 42, 0.06);
+  --shadow: 0 4px 14px -1px rgba(15, 23, 42, 0.08);
+  --shadow-hover: 0 8px 24px -2px rgba(15, 23, 42, 0.12);
   --font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --font-mono: 'JetBrains Mono', monospace;
 }
@@ -327,7 +330,7 @@ button {
   color: var(--ink)!important;
   font-weight: 700!important;
   font-size: 0.875rem!important;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4)!important;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.05)!important;
   letter-spacing: -0.01em;
 }
 
@@ -343,8 +346,8 @@ button {
   transform: translateY(-1.5px);
   border-color: rgba(99, 102, 241, 0.6)!important;
   background: var(--surface-active)!important;
-  box-shadow: 0 6px 18px rgba(99, 102, 241, 0.2)!important;
-  color: #ffffff!important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.12)!important;
+  color: var(--ink)!important;
 }
 
 [data-testid="stButton"] > button:active,
@@ -360,7 +363,7 @@ button {
   border: 1px solid rgba(129, 140, 248, 0.5)!important;
   color: #ffffff!important;
   font-weight: 800!important;
-  box-shadow: 0 4px 18px rgba(99, 102, 241, 0.35)!important;
+  box-shadow: 0 2px 8px rgba(79, 70, 229, 0.16)!important;
 }
 
 [data-testid="stButton"] > button[kind="primary"] *,
@@ -376,7 +379,7 @@ button {
 [data-testid="stFormSubmitButton"] > button[data-testid="baseButton-primary"]:hover {
   background: linear-gradient(135deg, #4f46e5 0%, #4338ca 100%)!important;
   border-color: #818cf8!important;
-  box-shadow: 0 6px 24px rgba(99, 102, 241, 0.5)!important;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.22)!important;
   transform: translateY(-1.5px);
 }
 
@@ -394,11 +397,11 @@ button {
 [data-testid="stTextInput"] input,
 [data-testid="stTextArea"] textarea,
 [data-testid="stSelectbox"] [role="combobox"] {
-  background: #090b12!important;
-  color: #ffffff!important;
-  border: 1px solid rgba(255, 255, 255, 0.12)!important;
+  background: var(--surface)!important;
+  color: var(--ink)!important;
+  border: 1px solid var(--line-strong)!important;
   border-radius: 12px!important;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.4)!important;
+  box-shadow: var(--shadow-xs)!important;
   font-size: 0.875rem!important;
   transition: all 0.15s ease;
 }
@@ -413,7 +416,7 @@ button {
 [data-testid="stTextArea"] textarea:focus,
 [data-testid="stSelectbox"] [role="combobox"]:focus {
   border-color: var(--focus)!important;
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.28), inset 0 2px 4px rgba(0, 0, 0, 0.4)!important;
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.12)!important;
 }
 
 /* Pills & Segmented Controls */
@@ -438,7 +441,7 @@ button {
 }
 
 [data-testid="stPills"] button:hover {
-  color: #ffffff!important;
+  color: var(--ink)!important;
   border-color: var(--line-strong)!important;
   background: var(--surface-soft)!important;
   transform: none;
@@ -1220,16 +1223,16 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
 
 /* Studio 2.0 Topic Radar & Story Discovery */
 .radar-banner {
-  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
   border-radius: 16px;
   padding: 16px 20px;
   margin-bottom: 20px;
-  color: #ffffff;
+  color: var(--ink);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.12);
+  box-shadow: var(--shadow-sm);
 }
 .radar-chip {
   display: inline-flex;
@@ -1240,8 +1243,9 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
   font-size: 0.72rem;
   font-weight: 750;
   letter-spacing: 0.03em;
-  background: rgba(255, 255, 255, 0.1);
-  color: #e2e8f0;
+  background: var(--surface-soft);
+  color: var(--ink-secondary);
+  border: 1px solid var(--line);
 }
 .radar-topic-card {
   background: var(--surface);
@@ -1268,15 +1272,16 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
 
 /* Studio 2.0 Broadcast Prompter Deck */
 .prompter-flow-bar {
-  background: linear-gradient(90deg, #0f172a 0%, #1e1b4b 100%);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
   border-radius: 14px;
   padding: 14px 18px;
   margin-bottom: 18px;
-  color: #ffffff;
+  color: var(--ink);
   display: flex;
   justify-content: space-between;
   align-items: center;
-  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.18);
+  box-shadow: var(--shadow-sm);
 }
 .cue-card-header {
   display: flex;
@@ -1323,19 +1328,19 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
   font-weight: 800;
 }
 .teleprompter-article-view {
-  background: #0f172a;
-  border: 1px solid #334155;
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
   border-radius: 14px;
   padding: 18px 20px;
-  color: #f8fafc;
+  color: var(--ink);
   font-size: 0.95rem;
   line-height: 1.6;
   letter-spacing: -0.01em;
   margin-top: 12px;
-  box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--shadow-xs);
 }
 .teleprompter-article-view strong {
-  color: #38bdf8;
+  color: var(--primary);
   font-weight: 800;
 }
 .teleprompter-cue-separator {
@@ -1362,26 +1367,26 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
   justify-content: space-between;
   min-height: 190px;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  box-shadow: var(--shadow-sm);
 }
 .angle-bento-card:hover {
   transform: translateY(-2px);
   border-color: rgba(99, 102, 241, 0.5);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6);
+  box-shadow: var(--shadow);
 }
 .angle-bento-card.active-angle {
-  border: 2px solid #6366f1;
-  background: linear-gradient(180deg, #121524 0%, #0e111a 100%);
-  box-shadow: 0 0 24px rgba(99, 102, 241, 0.25), 0 4px 14px rgba(0, 0, 0, 0.5);
+  border: 2px solid var(--primary);
+  background: var(--surface-active);
+  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.10);
 }
 .angle-pill-debate {
   font-size: 0.62rem;
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: rgba(245, 158, 11, 0.15);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.3);
+  background: #fffbeb;
+  color: #92400e;
+  border: 1px solid #fde68a;
   padding: 3px 8px;
   border-radius: 999px;
 }
@@ -1390,9 +1395,9 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: rgba(56, 189, 248, 0.15);
-  color: #38bdf8;
-  border: 1px solid rgba(56, 189, 248, 0.3);
+  background: #eff6ff;
+  color: #1d4ed8;
+  border: 1px solid #bfdbfe;
   padding: 3px 8px;
   border-radius: 999px;
 }
@@ -1401,26 +1406,26 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
   font-weight: 850;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  background: rgba(168, 85, 247, 0.15);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.3);
+  background: #f5f3ff;
+  color: #6d28d9;
+  border: 1px solid #ddd6fe;
   padding: 3px 8px;
   border-radius: 999px;
 }
 
 /* Custom Prompt Terminal */
 .custom-prompt-terminal {
-  background: #090b14;
-  border: 1px solid rgba(99, 102, 241, 0.3);
+  background: var(--surface-raised);
+  border: 1px solid var(--line);
   border-radius: 16px;
   padding: 20px;
   margin-top: 14px;
   margin-bottom: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-sm);
 }
 .custom-prompt-terminal.active-terminal {
-  border: 2px solid #38bdf8;
-  box-shadow: 0 0 24px rgba(56, 189, 248, 0.25);
+  border: 2px solid var(--primary);
+  box-shadow: 0 2px 10px rgba(79, 70, 229, 0.10);
 }
 
 /* 9:16 Interactive Mobile Phone Simulator */
@@ -1545,12 +1550,12 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
 .packaging-tile-text {
   font-size: 0.85rem;
   font-weight: 750;
-  color: #ffffff;
+  color: var(--ink);
   line-height: 1.3;
 }
 .comment-bait-container {
-  background: linear-gradient(135deg, #131728 0%, #0c0f1c 100%);
-  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
   border-radius: 12px;
   padding: 14px;
   margin-top: 10px;
@@ -2731,7 +2736,7 @@ def _render_card_studio(
         if not entries:
             if split_view:
                 st.markdown(
-                    '<div style="background:var(--card-bg, #1a1e26);border:1px dashed var(--border, #3a4252);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
+                    '<div style="background:var(--card-bg, #ffffff);border:1px dashed var(--border, #e2e8f0);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
                     '<div style="font-size:1.8rem;margin-bottom:8px;">🔍</div>'
                     '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">NO IMAGES FETCHED YET</div>'
                     '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 0 0;line-height:1.4;">'
@@ -2754,7 +2759,7 @@ def _render_card_studio(
                 st.session_state["card_studio_selected_asset_key"] = entries[0][0]
             else:
                 st.markdown(
-                    '<div style="background:var(--card-bg, #1a1e26);border:1px dashed var(--border, #3a4252);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
+                    '<div style="background:var(--card-bg, #ffffff);border:1px dashed var(--border, #e2e8f0);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
                     '<div style="font-size:1.8rem;margin-bottom:8px;">👉</div>'
                     '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">AWAITING IMAGE SELECTION</div>'
                     '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 16px 0;line-height:1.4;">'
@@ -2857,7 +2862,7 @@ def _render_card_studio(
         if not entries:
             if split_view:
                 st.markdown(
-                    '<div style="background:var(--card-bg, #1a1e26);border:1px dashed var(--border, #3a4252);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
+                    '<div style="background:var(--card-bg, #ffffff);border:1px dashed var(--border, #e2e8f0);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
                     '<div style="font-size:1.8rem;margin-bottom:8px;">🔍</div>'
                     '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">NO IMAGES FETCHED YET</div>'
                     '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 0 0;line-height:1.4;">'
@@ -2880,7 +2885,7 @@ def _render_card_studio(
                 st.session_state["card_studio_selected_asset_key"] = entries[0][0]
             else:
                 st.markdown(
-                    '<div style="background:var(--card-bg, #1a1e26);border:1px dashed var(--border, #3a4252);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
+                    '<div style="background:var(--card-bg, #ffffff);border:1px dashed var(--border, #e2e8f0);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
                     '<div style="font-size:1.8rem;margin-bottom:8px;">👉</div>'
                     '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">AWAITING IMAGE SELECTION</div>'
                     '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 16px 0;line-height:1.4;">'
@@ -3987,10 +3992,10 @@ def _render_universal_angle_picker(
                 f'<span class="{badge_class}">{badge_title}</span>'
                 f'{selected_badge}'
                 f'</div>'
-                f'<div style="font-size:1rem; font-weight:800; color:#ffffff; line-height:1.25; margin-bottom:6px;">{title}</div>'
-                f'<div style="font-size:0.78rem; color:#94a3b8; line-height:1.4; margin-bottom:8px;">{description}</div>'
+                f'<div style="font-size:1rem; font-weight:800; color:var(--ink); line-height:1.25; margin-bottom:6px;">{title}</div>'
+                f'<div style="font-size:0.78rem; color:var(--muted); line-height:1.4; margin-bottom:8px;">{description}</div>'
                 f'</div>'
-                f'<div style="font-size:0.68rem; color:#64748b; border-top:1px solid rgba(255,255,255,0.06); padding-top:8px;"><strong>Grounding:</strong> {evidence}</div>'
+                f'<div style="font-size:0.68rem; color:var(--muted); border-top:1px solid var(--line); padding-top:8px;"><strong>Grounding:</strong> {evidence}</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -4009,17 +4014,17 @@ def _render_universal_angle_picker(
     terminal_active = bool(custom_val)
     terminal_class = "active-terminal" if terminal_active else ""
     armed_badge = (
-        '<span style="font-size:0.68rem; font-weight:800; color:#38bdf8; background:rgba(56,189,248,0.15); border:1px solid rgba(56,189,248,0.3); padding:2px 8px; border-radius:999px;">● ARMED (OVERRIDES CARDS)</span>'
+        '<span style="font-size:0.68rem; font-weight:800; color:var(--primary); background:var(--accent-soft); border:1px solid var(--line-strong); padding:2px 8px; border-radius:999px;">● ARMED (OVERRIDES CARDS)</span>'
         if terminal_active
         else ""
     )
     st.markdown(
         f'<div class="custom-prompt-terminal {terminal_class}">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">'
-        f'<div style="font-size:0.75rem; font-weight:850; letter-spacing:0.1em; color:#38bdf8; text-transform:uppercase;">✨ FREEFORM CREATOR PROMPT & MANUAL ANGLE</div>'
+        f'<div style="font-size:0.75rem; font-weight:850; letter-spacing:0.1em; color:var(--primary); text-transform:uppercase;">✨ FREEFORM CREATOR PROMPT & MANUAL ANGLE</div>'
         f'{armed_badge}'
         f'</div>'
-        f'<div style="font-size:0.78rem; color:#94a3b8; line-height:1.4; margin-bottom:12px;">'
+        f'<div style="font-size:0.78rem; color:var(--muted); line-height:1.4; margin-bottom:12px;">'
         f'Type any viral angle, controversy, or debate (e.g. <em>"Is a 33-ball duck better than a golden duck in Test cricket?"</em>). The AI will research facts to back up this lens and compose the Short around it.'
         f'</div>'
         f'</div>',
@@ -4983,8 +4988,8 @@ def _render_packaging_deck_and_phone(
             f'<span style="font-size:0.65rem; font-weight:850; letter-spacing:0.08em; color:#38bdf8; text-transform:uppercase;">💬 PINNED COMMENT DEBATE BAIT</span>'
             f'<span style="font-size:0.6rem; color:#10b981; font-weight:800;">ALGORITHM DRIVER</span>'
             f'</div>'
-            f'<div style="font-size:0.82rem; color:#ffffff; font-weight:600; line-height:1.35;">{comment}</div>'
-            f'<div style="font-size:0.65rem; color:#94a3b8; margin-top:4px;">Pins automatically as the 1st comment to trigger viewer arguments.</div>'
+            f'<div style="font-size:0.82rem; color:var(--ink); font-weight:600; line-height:1.35;">{comment}</div>'
+            f'<div style="font-size:0.65rem; color:var(--muted); margin-top:4px;">Pins automatically as the 1st comment to trigger viewer arguments.</div>'
             f'</div>',
             unsafe_allow_html=True,
         )
@@ -5122,10 +5127,10 @@ def _render_live_script():
         st.markdown(
             f'<div class="prompter-flow-bar">'
             f'<div>'
-            f'<span class="badge" style="background:rgba(255,255,255,0.15); color:#fff; border:0; margin-right:8px;">{delivery_p}</span>'
+            f'<span class="badge" style="background:var(--surface-soft); color:var(--ink-secondary); border:1px solid var(--line); margin-right:8px;">{delivery_p}</span>'
             f'<span style="font-size:0.8rem; font-weight:800; letter-spacing:0.02em;">⚡ Broadcast Flow: {flow_score}/10</span>'
             f'</div>'
-            f'<div style="font-size:0.75rem; font-weight:750; color:#cbd5e1;">'
+            f'<div style="font-size:0.75rem; font-weight:750; color:var(--muted);">'
             f'{total_words_live} words · ~{est_seconds_live}s runtime (Lead: {s1_words_live}w)'
             f'</div>'
             f'</div>',
@@ -5232,13 +5237,13 @@ def _render_live_script():
         st.markdown('</div>', unsafe_allow_html=True)
 
         st.markdown('<div class="teleprompter-article-view">', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.1em; color:#38bdf8; text-transform:uppercase; margin-bottom:8px;">CONTINUOUS SPOKEN BROADCAST ARTICLE</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.1em; color:var(--primary); text-transform:uppercase; margin-bottom:8px;">CONTINUOUS SPOKEN BROADCAST ARTICLE</div>', unsafe_allow_html=True)
         article_parts = []
         for s_idx, sc in enumerate(script.get("script", []), 1):
             vo_text = st.session_state.get(f"live-script-scene-{story_id}-{s_idx}", sc.get("voiceover", "")).strip()
             if vo_text:
                 if s_idx == 1:
-                    article_parts.append(f'<span style="color:#facc15; font-weight:800;">[LEAD]</span> {vo_text}')
+                    article_parts.append(f'<span style="color:var(--primary); font-weight:800;">[LEAD]</span> {vo_text}')
                 else:
                     article_parts.append(f'<span class="teleprompter-cue-separator">▸</span> {vo_text}')
         if article_parts:
@@ -5432,7 +5437,7 @@ def render_live_top5():
     from concurrent.futures import ThreadPoolExecutor
 
     from renderer import build_top5_card_preview
-    from script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
+    from script_writer import estimate_speech_seconds, generate_top5_script
 
     stages = [
         "01 · Top-5 Topics",
@@ -5693,30 +5698,26 @@ def render_live_top5():
                 "hashtags": list(result.get("hashtags") or []),
                 "comment": str(result.get("comment") or "").strip(),
             }
-            valid, reason = validate_top5_script(edited, stories)
-            if not valid:
-                st.error(f"Edited Top-5 script failed validation: {reason}")
-            else:
-                handoff = {
-                    "schema": "final-shorts.top5-script.v1",
-                    "slides": edited["slides"],
-                    "seo_description": edited["seo_description"],
-                    "hashtags": edited["hashtags"],
-                    "comment": edited["comment"],
-                    "stories": stories,
-                    "provider_used": result.get("provider_used"),
-                    "approved_for_audio": True,
-                }
-                st.session_state.live_top5_script_handoff = handoff
-                st.session_state.live_approved_script = handoff
-                st.session_state.live_top5_audio_data = None
-                st.session_state.live_top5_audio_handoff = None
-                st.session_state.live_stage = "03 · Audio"
-                st.session_state.live_pipeline_notice = {
-                    "confirmed": "Top-5 Script QC confirmed",
-                    "next": "Moving to Audio.",
-                }
-                st.rerun()
+            handoff = {
+                "schema": "final-shorts.top5-script.v1",
+                "slides": edited["slides"],
+                "seo_description": edited["seo_description"],
+                "hashtags": edited["hashtags"],
+                "comment": edited["comment"],
+                "stories": stories,
+                "provider_used": result.get("provider_used"),
+                "approved_for_audio": True,
+            }
+            st.session_state.live_top5_script_handoff = handoff
+            st.session_state.live_approved_script = handoff
+            st.session_state.live_top5_audio_data = None
+            st.session_state.live_top5_audio_handoff = None
+            st.session_state.live_stage = "03 · Audio"
+            st.session_state.live_pipeline_notice = {
+                "confirmed": "Top-5 Script QC confirmed",
+                "next": "Moving to Audio.",
+            }
+            st.rerun()
         return
 
     if stage == "03 · Audio":
@@ -7555,9 +7556,9 @@ def render_topic_fetcher():
     st.markdown(
         f'<div class="radar-banner">'
         f'<div>'
-        f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#38bdf8;">01 · STORY RADAR & DISCOVERY</div>'
-        f'<div style="font-size:1.45rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:#ffffff;">{icon} {cur_desk}</div>'
-        f'<div style="font-size:0.8rem; color:#94a3b8;">Autonomous multi-source story discovery and cluster deduplication.</div>'
+        f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--primary);">01 · STORY RADAR & DISCOVERY</div>'
+        f'<div style="font-size:1.45rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:var(--ink);">{icon} {cur_desk}</div>'
+        f'<div style="font-size:0.8rem; color:var(--muted);">Autonomous multi-source story discovery and cluster deduplication.</div>'
         f'</div>'
         f'<div class="radar-chip">⚡ 72H LOOKBACK · ZERO COST</div>'
         f'</div>',
@@ -7766,13 +7767,13 @@ def render_scriptwriter():
     headline_text_key = f"test-script-headline-{story_key}"
 
     st.markdown(
-        f'<div class="radar-banner" style="background:linear-gradient(135deg, #090d16 0%, #1e1b4b 100%);">'
+        f'<div class="radar-banner">'
         f'<div>'
-        f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:#818cf8;">02 · BROADCAST PROMPTER & SCRIPT STUDIO</div>'
-        f'<div style="font-size:1.35rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:#ffffff;">{topic.title}</div>'
-        f'<div style="font-size:0.78rem; color:#94a3b8;">Continuous 20–30s broadcast news article · First slide &lt; 14 words</div>'
+        f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--primary);">02 · BROADCAST PROMPTER & SCRIPT STUDIO</div>'
+        f'<div style="font-size:1.35rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:var(--ink);">{topic.title}</div>'
+        f'<div style="font-size:0.78rem; color:var(--muted);">Continuous 20–30s broadcast news article · First slide &lt; 14 words</div>'
         f'</div>'
-        f'<div class="radar-chip" style="background:rgba(99, 102, 241, 0.2); border:1px solid rgba(99, 102, 241, 0.4); color:#c7d2fe;">PRO STUDIO ENGINE</div>'
+        f'<div class="radar-chip">PRO STUDIO ENGINE</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -7902,10 +7903,10 @@ def render_scriptwriter():
             st.markdown(
                 f'<div class="prompter-flow-bar">'
                 f'<div>'
-                f'<span class="badge" style="background:rgba(255,255,255,0.15); color:#fff; border:0; margin-right:8px;">{delivery_p}</span>'
+                f'<span class="badge" style="background:var(--surface-soft); color:var(--ink-secondary); border:1px solid var(--line); margin-right:8px;">{delivery_p}</span>'
                 f'<span style="font-size:0.8rem; font-weight:800; letter-spacing:0.02em;">⚡ Broadcast Flow: {flow_score}/10</span>'
                 f'</div>'
-                f'<div style="font-size:0.75rem; font-weight:750; color:#cbd5e1;">'
+                f'<div style="font-size:0.75rem; font-weight:750; color:var(--muted);">'
                 f'{total_words_live} words · ~{est_seconds_live}s runtime (Lead: {s1_words_live}w)'
                 f'</div>'
                 f'</div>',
@@ -8023,13 +8024,13 @@ def render_scriptwriter():
         st.markdown('</div>',unsafe_allow_html=True)
 
         st.markdown('<div class="teleprompter-article-view">', unsafe_allow_html=True)
-        st.markdown('<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.1em; color:#38bdf8; text-transform:uppercase; margin-bottom:8px;">CONTINUOUS SPOKEN BROADCAST ARTICLE</div>', unsafe_allow_html=True)
+        st.markdown('<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.1em; color:var(--primary); text-transform:uppercase; margin-bottom:8px;">CONTINUOUS SPOKEN BROADCAST ARTICLE</div>', unsafe_allow_html=True)
         article_parts = []
         for s_idx, sc in enumerate(script.get("script", []), 1):
             vo_text = st.session_state.get(f"script-slide-{story_key}-{s_idx}", sc.get("voiceover", "")).strip()
             if vo_text:
                 if s_idx == 1:
-                    article_parts.append(f'<span style="color:#facc15; font-weight:800;">[LEAD]</span> {vo_text}')
+                    article_parts.append(f'<span style="color:var(--primary); font-weight:800;">[LEAD]</span> {vo_text}')
                 else:
                     article_parts.append(f'<span class="teleprompter-cue-separator">▸</span> {vo_text}')
         if article_parts:
@@ -9533,7 +9534,7 @@ elif st.session_state.app_mode == "test":
                             unsafe_allow_html=True,
                         )
         elif line_name == "Top-5" and stage == "02 · Scriptwriter":
-            from script_writer import estimate_speech_seconds, generate_top5_script, validate_top5_script
+            from script_writer import estimate_speech_seconds, generate_top5_script
 
             stories = list(st.session_state.get("test_top5_handoff") or [])
             st.markdown(
@@ -9696,41 +9697,37 @@ elif st.session_state.app_mode == "test":
                                 "test-top5-script-comment", ""
                             ).strip(),
                         }
-                        valid, reason = validate_top5_script(edited, stories)
-                        if not valid:
-                            st.error(f"Edited Top-5 script failed validation: {reason}")
-                        else:
-                            st.session_state.test_top5_audio_data = None
-                            st.session_state.test_top5_audio_handoff = None
-                            st.session_state.test_top5_visual_results = {}
-                            st.session_state.test_top5_visual_selected = {}
-                            st.session_state.test_top5_visual_previews = {}
-                            st.session_state.test_top5_visual_assignments = {}
-                            st.session_state.test_top5_manual_subject_cutouts = {}
-                            st.session_state.test_top5_visual_handoff = None
-                            st.session_state.test_top5_rendered_video_path = None
-                            st.session_state.test_top5_upload_qc_approved = False
-                            st.session_state.test_top5_upload_qc = None
-                            st.session_state.test_top5_upload_description = ""
-                            st.session_state.test_top5_upload_hashtags = ""
-                            st.session_state.test_top5_upload_comment = ""
-                            st.session_state.test_top5_upload_result = None
-                            st.session_state.test_stage = "03 · Audio"
-                            st.session_state.test_pipeline_notice = {
-                                "confirmed": "Top-5 Script QC confirmed",
-                                "next": "Moving to Audio.",
-                            }
-                            st.session_state.test_top5_script_handoff = {
-                                "schema": "final-shorts.top5-script.v1",
-                                "slides": edited["slides"],
-                                "seo_description": edited["seo_description"],
-                                "hashtags": edited["hashtags"],
-                                "comment": edited["comment"],
-                                "stories": stories,
-                                "provider_used": result.get("provider_used"),
-                                "approved_for_audio": True,
-                            }
-                            st.rerun()
+                        st.session_state.test_top5_audio_data = None
+                        st.session_state.test_top5_audio_handoff = None
+                        st.session_state.test_top5_visual_results = {}
+                        st.session_state.test_top5_visual_selected = {}
+                        st.session_state.test_top5_visual_previews = {}
+                        st.session_state.test_top5_visual_assignments = {}
+                        st.session_state.test_top5_manual_subject_cutouts = {}
+                        st.session_state.test_top5_visual_handoff = None
+                        st.session_state.test_top5_rendered_video_path = None
+                        st.session_state.test_top5_upload_qc_approved = False
+                        st.session_state.test_top5_upload_qc = None
+                        st.session_state.test_top5_upload_description = ""
+                        st.session_state.test_top5_upload_hashtags = ""
+                        st.session_state.test_top5_upload_comment = ""
+                        st.session_state.test_top5_upload_result = None
+                        st.session_state.test_stage = "03 · Audio"
+                        st.session_state.test_pipeline_notice = {
+                            "confirmed": "Top-5 Script QC confirmed",
+                            "next": "Moving to Audio.",
+                        }
+                        st.session_state.test_top5_script_handoff = {
+                            "schema": "final-shorts.top5-script.v1",
+                            "slides": edited["slides"],
+                            "seo_description": edited["seo_description"],
+                            "hashtags": edited["hashtags"],
+                            "comment": edited["comment"],
+                            "stories": stories,
+                            "provider_used": result.get("provider_used"),
+                            "approved_for_audio": True,
+                        }
+                        st.rerun()
 
                     if st.session_state.get("test_top5_script_handoff"):
                         st.success("Top-5 Scriptwriter approved. The six-slide package is ready for the next stage.")
