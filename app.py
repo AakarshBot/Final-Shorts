@@ -2738,8 +2738,8 @@ def _render_card_studio(
                 st.markdown(
                     '<div style="background:var(--card-bg, #ffffff);border:1px dashed var(--border, #e2e8f0);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
                     '<div style="font-size:1.8rem;margin-bottom:8px;">🔍</div>'
-                    '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">NO IMAGES FETCHED YET</div>'
-                    '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 0 0;line-height:1.4;">'
+                    '<div style="font-weight:700;font-size:0.95rem;color:var(--ink, #0f172a);letter-spacing:0.02em;">NO IMAGES FETCHED YET</div>'
+                    '<div style="font-size:0.82rem;color:var(--muted, #64748b);margin:6px 0 0 0;line-height:1.4;">'
                     'Use <strong>Visual Fetcher</strong> on the right pane to search or scrape images. Once images appear, click <strong>"Select for Card Studio ➜"</strong> to start styling cards.'
                     '</div></div>',
                     unsafe_allow_html=True,
@@ -2761,8 +2761,8 @@ def _render_card_studio(
                 st.markdown(
                     '<div style="background:var(--card-bg, #ffffff);border:1px dashed var(--border, #e2e8f0);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
                     '<div style="font-size:1.8rem;margin-bottom:8px;">👉</div>'
-                    '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">AWAITING IMAGE SELECTION</div>'
-                    '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 16px 0;line-height:1.4;">'
+                    '<div style="font-weight:700;font-size:0.95rem;color:var(--ink, #0f172a);letter-spacing:0.02em;">AWAITING IMAGE SELECTION</div>'
+                    '<div style="font-size:0.82rem;color:var(--muted, #64748b);margin:6px 0 16px 0;line-height:1.4;">'
                     'Select an image from the <strong>Visual Fetcher</strong> on the right pane (click <strong>"Select for Card Studio ➜"</strong>) to transfer it here and begin designing cards.'
                     '</div></div>',
                     unsafe_allow_html=True,
@@ -2864,8 +2864,8 @@ def _render_card_studio(
                 st.markdown(
                     '<div style="background:var(--card-bg, #ffffff);border:1px dashed var(--border, #e2e8f0);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
                     '<div style="font-size:1.8rem;margin-bottom:8px;">🔍</div>'
-                    '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">NO IMAGES FETCHED YET</div>'
-                    '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 0 0;line-height:1.4;">'
+                    '<div style="font-weight:700;font-size:0.95rem;color:var(--ink, #0f172a);letter-spacing:0.02em;">NO IMAGES FETCHED YET</div>'
+                    '<div style="font-size:0.82rem;color:var(--muted, #64748b);margin:6px 0 0 0;line-height:1.4;">'
                     'Use <strong>Visual Fetcher</strong> on the right pane to search or scrape images. Once images appear, click <strong>"Select for Card Studio ➜"</strong> to start styling cards.'
                     '</div></div>',
                     unsafe_allow_html=True,
@@ -2887,8 +2887,8 @@ def _render_card_studio(
                 st.markdown(
                     '<div style="background:var(--card-bg, #ffffff);border:1px dashed var(--border, #e2e8f0);border-radius:12px;padding:28px 20px;text-align:center;margin:1rem 0;">'
                     '<div style="font-size:1.8rem;margin-bottom:8px;">👉</div>'
-                    '<div style="font-weight:700;font-size:0.95rem;color:var(--text-main, #f1f5f9);letter-spacing:0.02em;">AWAITING IMAGE SELECTION</div>'
-                    '<div style="font-size:0.82rem;color:var(--text-muted, #94a3b8);margin:6px 0 16px 0;line-height:1.4;">'
+                    '<div style="font-weight:700;font-size:0.95rem;color:var(--ink, #0f172a);letter-spacing:0.02em;">AWAITING IMAGE SELECTION</div>'
+                    '<div style="font-size:0.82rem;color:var(--muted, #64748b);margin:6px 0 16px 0;line-height:1.4;">'
                     'Select an image from the <strong>Visual Fetcher</strong> on the right pane (click <strong>"Select for Card Studio ➜"</strong>) to transfer it here and begin designing cards.'
                     '</div></div>',
                     unsafe_allow_html=True,
@@ -4962,9 +4962,9 @@ def _render_packaging_deck_and_phone(
     if titles:
         st.markdown('<div class="mini-label" style="margin-top:16px; margin-bottom:8px;">VIRAL PACKAGING SUITE (3 ARCHETYPES)</div>', unsafe_allow_html=True)
         title_meta = [
-            ("🔍 SEARCH / SEO INTENT", "#38bdf8", "Captures YouTube Search & Explore algorithm"),
-            ("⚡ HIGH-STAKES DEBATE", "#f59e0b", "Drives hundreds of comments arguing in thread"),
-            ("👁️ CURIOSITY GAP", "#c084fc", "Irresistible open loop that boosts watch time"),
+            ("🔍 SEARCH / SEO INTENT", "#0369a1", "Captures YouTube Search & Explore algorithm"),
+            ("⚡ HIGH-STAKES DEBATE", "#92400e", "Drives hundreds of comments arguing in thread"),
+            ("👁️ CURIOSITY GAP", "#6d28d9", "Irresistible open loop that boosts watch time"),
         ]
         for t_idx, title_cand in enumerate(titles[:3]):
             tag, color, desc = title_meta[t_idx % len(title_meta)]
@@ -4985,7 +4985,7 @@ def _render_packaging_deck_and_phone(
         st.markdown(
             f'<div class="comment-bait-container">'
             f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
-            f'<span style="font-size:0.65rem; font-weight:850; letter-spacing:0.08em; color:#38bdf8; text-transform:uppercase;">💬 PINNED COMMENT DEBATE BAIT</span>'
+            f'<span style="font-size:0.65rem; font-weight:850; letter-spacing:0.08em; color:var(--primary); text-transform:uppercase;">💬 PINNED COMMENT DEBATE BAIT</span>'
             f'<span style="font-size:0.6rem; color:#10b981; font-weight:800;">ALGORITHM DRIVER</span>'
             f'</div>'
             f'<div style="font-size:0.82rem; color:var(--ink); font-weight:600; line-height:1.35;">{comment}</div>'
