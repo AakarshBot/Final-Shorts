@@ -10,13 +10,13 @@ ROOT = Path(__file__).resolve().parents[1]
 def test_dashboard_has_no_timed_refresh_or_polling():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     refresh_patterns = (
-        r"\\bst_autorefresh\\b",
-        r"\\brun_every\\s*=",
-        r"\\bsetInterval\\s*\\(",
-        r"\\bsetTimeout\\s*\\(",
-        r"\\bthreading\\.Timer\\s*\\(",
-        r"\\btime\\.sleep\\s*\\(",
-        r"\\basyncio\\.sleep\\s*\\(",
+        r"\bst_autorefresh\b",
+        r"\brun_every\s*=",
+        r"\bsetInterval\s*\(",
+        r"\bsetTimeout\s*\(",
+        r"\bthreading\.Timer\s*\(",
+        r"\btime\.sleep\s*\(",
+        r"\basyncio\.sleep\s*\(",
     )
     for pattern in refresh_patterns:
         assert re.search(pattern, app_source) is None, f"Unexpected dashboard timer/polling: {pattern}"
