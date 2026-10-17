@@ -101,7 +101,7 @@ def test_generation_prompts_cover_validator_requirements():
     assert "quote_attribution and quote_slide from 1–4" in cricket
     assert "3–5 hashtags each beginning with # and containing no spaces" in universal
     assert "quote, quote_attribution, and quote_slide must agree" in universal
-    assert "story_index is slide_number minus one" in top5
+    assert "story_index equals slide_number minus one" in top5
     assert "SATISFY EVERY EXISTING TOP-5 GENERATION CHECK" in top5
     assert "set to change cricket" in top5
     assert "not only Slide 1" in top5
