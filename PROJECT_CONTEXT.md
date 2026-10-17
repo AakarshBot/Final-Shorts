@@ -72,10 +72,14 @@ Top-5 is currently Test-only / WIP. **Card Studio is the single card entry point
 - **Compact Card Studio & Preview Layouts:** Card studio previews and Top-5 rendered card reviews use compact side-by-side two-column layouts with bounded preview dimensions (~280px–300px) instead of full-viewport multi-scroll layouts.
 - **Elimination of Unnecessary Dashboard Reruns:** Removed redundant `st.rerun()` calls across topic tile expand/collapse, test stage pill navigation, and Top-5 content type switching. Interactive state transitions now render smoothly in a single execution cycle without UI flickering or double-refresh overhead.
 - **Factory Runtime Optimizations:**
-  - `card_studio.py`: Added `@lru_cache(maxsize=128)` on all 5 TrueType font loader functions (`_font`, `_font_display`, `_font_headline`, `_font_label`, `_font_body`), avoiding repeated disk I/O and TTF table parsing during bounding-box calculation and card drawing.
-  - `renderer.py`: Zero-copy frame byte optimization in `write_preview_video` avoiding redundant RGB conversions across 900+ frames (saving gigabytes of memory reallocations during video encoding).
-  - `visual_search.py`: Implemented persistent `requests.Session` with HTTP Keep-Alive connection pooling (`HTTPAdapter(pool_connections=10, pool_maxsize=20)`), eliminating TCP and TLS handshake latency across multiple image downloads.
-- **Strict Functional Integrity:** Zero functional logic or core algorithms modified. Crop and Text Subject Cutout remain strictly locked. All button keys, popovers, and test assertions preserved.
+  - card_studio.py: Cached TrueType font loaders avoid repeated disk I/O and TTF table parsing.
+  - renderer.py: Zero-copy frame-byte handling avoids redundant RGB conversions during video preview encoding; polygon text layout reuses cached geometry and skips line-break combinations that cannot fit the available polygon height.
+  - visual_search.py: Persistent requests.Session with HTTP Keep-Alive pooling reduces repeated connection setup.
+  - app.py: Crop canvas is bounded to 1600 pixels wide, cropper updates are committed on confirmation instead of recomputed on every pointer movement, image-validity checks and JPEG previews are cached, and unchanged source images are not decoded again on every crop-widget rerun.
+  - tests/test_runtime_performance.py: Regression checks cover crop settings/cache behavior, polygon layout, and forbidden refresh/polling patterns.
+- **No timer/polling refreshes:** Do not add st_autorefresh, run_every, intervals, time.sleep, or asyncio.sleep polling to the dashboard. Event-driven st.rerun() calls remain only where controls explicitly change stages or handoffs.
+- **Strict Functional Integrity:** Subject Cutout and polygon text placement remain behaviorally unchanged; the optimizations target redundant work, not the approved rendering result. Preserve Shorts Test/Live boundaries.
+- **Current verification:** GitHub Actions run #1210 on commit 675dad13dba177b83ec25fc25d131677c7881106 passed dependency installation, Python compilation, and the full test suite: 310 passed, 1 skipped, with 1 non-blocking Pillow deprecation warning in 156.30 seconds. Tests cover Chatterbox default routing, stack imports, reference-conditioning errors, language guards, and runtime optimizations. CI does not load the real model weights or generate actual speech. Next: merge the reviewed change, sync the local checkout, and perform one supervised local Live audio/render smoke test before any public upload.
 
 ## Factory order
 
@@ -152,17 +156,19 @@ Status: **Unified architecture retained; generation checks moved fully upstream 
 ## Audio — Function 03
 
 Contract:
-- Input is only the approved Scriptwriter handoff.
-- Multi-language voice roster supporting **English**, **Hindi**, and **Telugu**:
-  - English: Female (`en-IN-NeerjaNeural`), Male (`en-IN-PrabhatNeural`).
-  - Hindi: Female (`hi-IN-SwaraNeural`), Male (`hi-IN-MadhurNeural`).
-  - Telugu: Female (`te-IN-ShrutiNeural`), Male (`te-IN-MohanNeural`).
-- Native Edge-TTS word timings are captured via WordBoundary events and validated with ffprobe; the existing cache remains keyed by text, language, voice, and speed.
-- The Edge-TTS dependency floor is `edge-tts>=7.3.1,<8` to include the October 2026 upstream fix for Microsoft speech-service token-format changes that caused WebSocket 403 failures. Updating `requirements.txt` does not update an already-installed local package; install/upgrade the existing requirements and restart the running app to load the fixed version.
-- Automatic speed correction runs if total duration exceeds 30 seconds.
-- Human Audio upload & microphone recording support: users can upload `.mp3`/`.wav` or record directly via mic for any scene, with linear word timing synthesis ensuring full subtitle synchronization.
+- Default automated engine: Chatterbox Turbo for standard Shorts Test, standard Shorts Live, Top-5 Test, Top-5 Live, and Long-form audio. The shared Shorts generators default to Chatterbox even when callers omit an engine.
+- Edge-TTS is explicit-only: Test and Live expose an engine selector that defaults to Chatterbox. Edge-TTS is used only when the user selects it; never silently fall back from a failed Chatterbox model or reference.
+- Chatterbox Turbo is English-only. The UI blocks Turbo generation for Hindi/Telugu selections and directs the user to choose Edge-TTS instead. Long-form is validated against the same Turbo language limit.
+- The optional audio_reference.wav is read from the repository root or the AUDIO_REFERENCE environment path. If it is absent, Chatterbox uses its built-in voice. If a present reference fails conditioning, report the error rather than silently switching voices. The root file is gitignored and must remain local-only.
+- Chatterbox writes WAV files; audio previews choose the MIME type from the actual file extension. Edge-TTS writes MP3 with validated WordBoundary timings. Both handoffs must satisfy the 30-second approval ceiling.
+- Edge-TTS voice roster supports English, Hindi, and Telugu:
+  - English: Female (en-IN-NeerjaNeural), Male (en-IN-PrabhatNeural).
+  - Hindi: Female (hi-IN-SwaraNeural), Male (hi-IN-MadhurNeural).
+  - Telugu: Female (te-IN-ShrutiNeural), Male (te-IN-MohanNeural).
+- The Edge-TTS dependency floor is edge-tts>=7.3.1,<8 to include the October 2026 upstream fix for Microsoft speech-service token-format changes that caused WebSocket 403 failures.
+- Human Audio upload & microphone recording remain available as intentional manual overrides, with linear word timing synthesis for subtitle synchronization.
 
-Status: **Approved / Multilingual roster & Human audio support active.**
+Status: Chatterbox-default routing implemented; CI and a local generated-audio smoke test are required before treating the current commit as fully verified.
 
 ## Visuals — Function 04
 
@@ -291,7 +297,14 @@ State/render behavior:
 
 Status: **Approved card type. Keep this implementation shared between Test and Live.**
 
-Fragment audit: Manual Subject Cutout remains the only `@st.fragment` in `app.py`. Its rendered-state-dependent handoff controls live inside the fragment. The crop editors remain self-contained dialogs.
+Fragment and runtime-performance audit (2026-10-18):
+- Manual Subject Cutout remains the only `@st.fragment` in `app.py`; no `run_every` timer is configured. Fragment reruns are caused by direct widget interaction, not a timed refresh.
+- The dashboard has no `st_autorefresh`, interval timer, or polling loop. `.streamlit/config.toml` keeps `fileWatcherType = "none"` and `runOnSave = false`. Explicit `st.rerun()` calls are reserved for user-triggered navigation, approval, attachment, and stage transitions; do not remove them indiscriminately.
+- Crop/reposition uses a canvas capped at 1600 px wide and `st_cropper(realtime_update=False)`. Double-click confirms the crop so dragging does not continually send a new crop value and rebuild a full-resolution blurred canvas.
+- Visual-pool image validation and resized JPEG thumbnail bytes use bounded Streamlit data caches. This avoids decoding and resizing every source image on every ordinary rerun.
+- The selected cutout image is decoded to build the polygon editor payload only when its source digest changes. The source image remains unchanged; the crop and final renderer continue to use the established 9:16 handoff.
+- Manual Subject Cutout layout geometry is cached for repeated, ordinary headlines (10 words or fewer). Long headlines are left uncached to avoid retaining large combinatorial layout results in memory. Layout search now enumerates only line-break combinations within the polygon's vertical capacity, instead of iterating every bitmask that could never fit.
+- Keep Render Now and Preview all valid line-break options explicit. Do not re-render the final frame merely because the headline, polygon, font, style, or size widget changed.
 
 ### Production-line development rule
 ### Production-line development rule

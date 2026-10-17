@@ -1940,6 +1940,16 @@ def _asset_to_image(value):
     return None
 
 
+@st.cache_data(max_entries=256, show_spinner=False)
+def _is_valid_image_payload(value: bytes) -> bool:
+    try:
+        with Image.open(BytesIO(value)) as image:
+            image.verify()
+    except (OSError, ValueError, SyntaxError):
+        return False
+    return True
+
+
 def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
     aspect = 9 / 16
     width = min(image.width, max(1, int(image.height * aspect)))
@@ -1977,23 +1987,46 @@ def _crop_visual_dialog(
 
     st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
-    st.caption("9:16 frame · drag the frame to reposition it, or drag a corner outward to zoom out and reveal more of the original. Any exposed area uses a blurred extension of the same image.")
+    st.caption(
+        "9:16 frame · drag to reposition or resize the crop. Double-click to confirm the crop selection. "
+        "Zooming out reveals a blurred extension of the same image."
+    )
 
     from streamlit_cropper import st_cropper
 
+    # The cropper's frontend scales its input for display. Keep the backing canvas
+    # near delivery resolution too, so large source photos do not trigger a costly
+    # full-resolution blur and image payload on each dialog interaction.
     canvas_width = max(image.width, int(round(image.height * 9 / 16)))
     canvas_height = int(round(canvas_width * 16 / 9))
-    background = ImageOps.fit(
-        image.convert("RGB"),
-        (canvas_width, canvas_height),
-        method=Image.Resampling.LANCZOS,
-    ).filter(ImageFilter.GaussianBlur(radius=max(18, canvas_width // 55)))
-    canvas = background.copy()
-    offset_x = (canvas_width - image.width) // 2
-    offset_y = (canvas_height - image.height) // 2
-    canvas.paste(image.convert("RGB"), (offset_x, offset_y))
+    max_canvas_width = 1600
+    scale = min(1.0, max_canvas_width / canvas_width)
+    scaled_canvas_width = max(1, int(round(canvas_width * scale)))
+    scaled_canvas_height = max(1, int(round(canvas_height * scale)))
 
-    default = _largest_9x16_crop_coords(image)
+    rgb_image = image.convert("RGB")
+    if scale < 1.0:
+        working_image = rgb_image.resize(
+            (
+                max(1, int(round(rgb_image.width * scale))),
+                max(1, int(round(rgb_image.height * scale))),
+            ),
+            Image.Resampling.LANCZOS,
+        )
+    else:
+        working_image = rgb_image
+
+    background = ImageOps.fit(
+        working_image,
+        (scaled_canvas_width, scaled_canvas_height),
+        method=Image.Resampling.LANCZOS,
+    ).filter(ImageFilter.GaussianBlur(radius=max(18, scaled_canvas_width // 55)))
+    canvas = background.copy()
+    offset_x = (scaled_canvas_width - working_image.width) // 2
+    offset_y = (scaled_canvas_height - working_image.height) // 2
+    canvas.paste(working_image, (offset_x, offset_y))
+
+    default = _largest_9x16_crop_coords(working_image)
     default_coords = (
         offset_x + default[0],
         offset_x + default[1],
@@ -2004,7 +2037,7 @@ def _crop_visual_dialog(
     store = st.session_state.setdefault(crop_store, {})
     cropped = st_cropper(
         canvas,
-        realtime_update=True,
+        realtime_update=False,
         default_coords=default_coords,
         box_color="#4F46E5",
         aspect_ratio=(9, 16),
@@ -2332,13 +2365,12 @@ def _render_manual_subject_cutout(
     if len(polygon_points) < 3:
         polygon_points = list(default_polygon)
 
-    source_image = _asset_to_image(working_bytes)
-    if source_image is None:
-        st.error("The selected image could not be opened.")
-        return
-
-    if state["editor_image_digest"] != source_digest:
-        preview_image = source_image.convert("RGB").resize((360, 640), Image.Resampling.LANCZOS)
+    if state["editor_image_digest"] != source_digest or not state.get("editor_image_data"):
+        source_image = _asset_to_image(working_bytes)
+        if source_image is None:
+            st.error("The selected image could not be opened.")
+            return
+        preview_image = source_image.resize((360, 640), Image.Resampling.LANCZOS)
         image_buffer = BytesIO()
         preview_image.save(image_buffer, format="JPEG", quality=82, optimize=True)
         state["editor_image_digest"] = source_digest
@@ -2639,7 +2671,7 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             if asset_key in deleted:
                 continue
             raw = crop_store.get(asset_key) or asset.get("bytes")
-            if not isinstance(raw, (bytes, bytearray)) or _asset_to_image(raw) is None:
+            if not isinstance(raw, (bytes, bytearray)) or not _is_valid_image_payload(bytes(raw)):
                 continue
             entries.append((asset_key, index, asset, bytes(raw), source_name))
     return entries
@@ -4175,9 +4207,15 @@ def _live_generate_audio_and_subtitles():
     from audio import approve_audio, generate_audio
     from subtitles import generate_subtitles
 
+    selected_engine = (
+        "edge"
+        if st.session_state.get("live_audio_engine_choice_v2") == "Edge-TTS Neural"
+        else "chatterbox"
+    )
     audio = generate_audio(
         approved_script,
         output_dir="output/live/audio",
+        engine=selected_engine,
     )
     approved_audio = approve_audio(audio)
     subtitles = generate_subtitles(approved_script, approved_audio)
@@ -4187,8 +4225,8 @@ def _live_generate_audio_and_subtitles():
     st.session_state.live_subtitle_data = subtitles
 
 
-def _fit_visual_preview(value, width=360, height=640):
-    from PIL import Image
+@st.cache_data(max_entries=128, show_spinner=False)
+def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | None:
     image = _asset_to_image(value)
     if image is None:
         return None
@@ -4204,7 +4242,30 @@ def _fit_visual_preview(value, width=360, height=640):
         top = (image.height - crop_height) // 2
         image = image.crop((0, top, image.width, top + crop_height))
 
-    return image.resize((width, height), Image.Resampling.LANCZOS)
+    preview = image.resize((width, height), Image.Resampling.LANCZOS)
+    buffer = BytesIO()
+    preview.save(buffer, format="JPEG", quality=84, optimize=True)
+    return buffer.getvalue()
+
+
+def _fit_visual_preview(value, width=360, height=640):
+    if isinstance(value, Image.Image):
+        image = value.convert("RGB")
+        target_ratio = width / height
+        current_ratio = image.width / image.height
+        if current_ratio > target_ratio:
+            crop_width = max(1, int(image.height * target_ratio))
+            left = (image.width - crop_width) // 2
+            image = image.crop((left, 0, left + crop_width, image.height))
+        elif current_ratio < target_ratio:
+            crop_height = max(1, int(image.width / target_ratio))
+            top = (image.height - crop_height) // 2
+            image = image.crop((0, top, image.width, top + crop_height))
+        return image.resize((width, height), Image.Resampling.LANCZOS)
+
+    if not isinstance(value, (bytes, bytearray)):
+        return None
+    return _fit_visual_preview_bytes(bytes(value), int(width), int(height))
 
 
 def _delete_visual_asset(result_key: str, index: int, asset: dict, live: bool = False):
@@ -5728,6 +5789,13 @@ def render_live_top5():
             return
         audio = st.session_state.live_top5_audio_data
         if not isinstance(audio, dict):
+            live_top5_engine_choice = st.pills(
+                "Voice Engine",
+                ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
+                default="Chatterbox Turbo (Voice Cloning)",
+                key="live_top5_audio_engine_choice_v2",
+            ) or "Chatterbox Turbo (Voice Cloning)"
+            is_live_top5_chatterbox = "Chatterbox" in live_top5_engine_choice
             if st.button(
                 "Generate Top-5 Audio",
                 type="primary",
@@ -5736,7 +5804,11 @@ def render_live_top5():
             ):
                 try:
                     with st.spinner("Generating the six spoken Top-5 lines…"):
-                        audio = generate_top5_audio(handoff, output_dir="output/live/top5_audio")
+                        audio = generate_top5_audio(
+                            handoff,
+                            output_dir="output/live/top5_audio",
+                            engine="chatterbox" if is_live_top5_chatterbox else "edge",
+                        )
                     st.session_state.live_top5_audio_data = audio
                 except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
@@ -5750,7 +5822,10 @@ def render_live_top5():
                     f'**Line {scene["scene"]}** <span class="topic-meta">· {scene["duration"]:.2f}s · {len(scene["timings"])} timings</span>',
                     unsafe_allow_html=True,
                 )
-                st.audio(scene["path"], format="audio/mp3")
+                st.audio(
+                    scene["path"],
+                    format="audio/wav" if str(scene["path"]).lower().endswith(".wav") else "audio/mp3",
+                )
                 st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
         st.caption(
             f'Voice: {audio.get("voice") or "HYPE COMMENTATOR"} · Rate: {audio.get("rate_percent", 0):+.0f}% · Total: {audio.get("total_duration", 0):.2f}s'
@@ -6493,6 +6568,16 @@ def render_live_dashboard():
         if not isinstance(script, dict):
             st.warning("Approve the Scriptwriter before generating Audio.")
             return
+        live_audio_engine_choice = st.pills(
+            "Voice Engine",
+            ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
+            default="Chatterbox Turbo (Voice Cloning)",
+            key="live_audio_engine_choice_v2",
+        ) or "Chatterbox Turbo (Voice Cloning)"
+        live_language = str(script.get("language_used") or "english").strip().casefold()
+        is_live_chatterbox = "Chatterbox" in live_audio_engine_choice
+        if is_live_chatterbox and live_language not in {"english", "en"}:
+            st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
         if not isinstance(st.session_state.live_approved_audio, dict) or not isinstance(st.session_state.live_subtitle_data, dict):
             if st.session_state.live_handoff_error:
                 st.error(st.session_state.live_handoff_error)
@@ -6501,6 +6586,7 @@ def render_live_dashboard():
                 type="primary",
                 width="stretch",
                 key="live-generate-handoffs-stage",
+                disabled=is_live_chatterbox and live_language not in {"english", "en"},
             ):
                 st.session_state.live_handoff_error = ""
                 st.session_state.live_approved_audio = None
@@ -8926,7 +9012,7 @@ def render_upload_qc():
         st.rerun()
 
 def render_audio():
-    from audio import approve_audio, generate_audio, package_human_audio, resolve_voice
+    from audio import AUDIO_REFERENCE, approve_audio, generate_audio, package_human_audio, resolve_voice
 
     script=st.session_state.approved_script
     if not script:
@@ -8948,7 +9034,7 @@ def render_audio():
             "Voice Engine",
             ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
             default="Chatterbox Turbo (Voice Cloning)",
-            key="audio_engine_choice",
+            key="audio_engine_choice_v2",
         ) or "Chatterbox Turbo (Voice Cloning)"
         col_l, col_g = st.columns(2)
         with col_l:
@@ -8956,11 +9042,14 @@ def render_audio():
         with col_g:
             gender=st.pills("Voice Gender",["Female","Male"],default="Female",key="audio_gender") or "Female"
         selected_voice = resolve_voice(language.casefold(), gender.casefold())
+        is_cb = "Chatterbox" in engine_choice
         flag = "🇺🇸 / 🇬🇧" if language == "English" else "🇮🇳"
+        if is_cb and language != "English":
+            st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
 
         if "Chatterbox" in engine_choice:
             from pathlib import Path
-            has_ref = Path("audio_reference.wav").is_file()
+            has_ref = AUDIO_REFERENCE.is_file()
             ref_info = "audio_reference.wav conditioned" if has_ref else "Built-in neural voice"
             st.markdown(
                 f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 12px 0;">'
@@ -8986,11 +9075,15 @@ def render_audio():
                 unsafe_allow_html=True,
             )
 
-        if st.button("Generate audio",type="primary",width="stretch"):
+        if st.button(
+            "Generate audio",
+            type="primary",
+            width="stretch",
+            disabled=is_cb and language != "English",
+        ):
             selected=dict(script)
             selected["language_used"]=language.casefold()
             selected["voice_gender"]=gender.casefold()
-            is_cb = "Chatterbox" in engine_choice
             selected["voice"]="chatterbox" if is_cb else selected_voice
             selected["voice_engine"]="chatterbox" if is_cb else "edge"
             with st.spinner("Generating voiceover…"):
@@ -9067,7 +9160,10 @@ def render_audio():
                         f'</div>',
                         unsafe_allow_html=True,
                     )
-                    st.audio(scene["path"],format="audio/mp3")
+                    st.audio(
+                        scene["path"],
+                        format="audio/wav" if str(scene["path"]).lower().endswith(".wav") else "audio/mp3",
+                    )
                     st.caption("🎙️ Human Audio" if scene.get("human_recorded") else ("⚡ Cached" if scene["from_cache"] else "✨ Fresh Neural TTS generation"))
             if st.button("Approve audio",type="primary",width="stretch"):
                 try:
@@ -9755,13 +9851,25 @@ elif st.session_state.app_mode == "test":
                 top5_languages = ["English", "Hindi", "Telugu"]
                 stored_t5_lang = str(handoff.get("language_used") or "english").casefold()
                 default_t5_lang = stored_t5_lang if stored_t5_lang in {"english", "hindi", "telugu"} else "english"
+                t5_engine_choice = st.pills(
+                    "Voice Engine",
+                    ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
+                    default="Chatterbox Turbo (Voice Cloning)",
+                    key="test_top5_audio_engine_choice_v2",
+                ) or "Chatterbox Turbo (Voice Cloning)"
                 col_t5_lang, col_t5_gender = st.columns(2)
                 with col_t5_lang:
                     t5_language = st.pills("Language", top5_languages, default=default_t5_lang.title(), key="test_top5_audio_language") or default_t5_lang.title()
                 with col_t5_gender:
                     t5_gender = st.pills("Voice Gender", ["Female", "Male"], default="Female", key="test_top5_audio_gender") or "Female"
-                t5_voice = resolve_voice(t5_language.casefold(), t5_gender.casefold())
-                st.caption(f"Selected Voice: **{t5_voice}** ({t5_language} {t5_gender}) · native Edge-TTS")
+                is_t5_chatterbox = "Chatterbox" in t5_engine_choice
+                t5_voice = "chatterbox" if is_t5_chatterbox else resolve_voice(t5_language.casefold(), t5_gender.casefold())
+                if is_t5_chatterbox:
+                    st.caption("Selected Voice: **Chatterbox Turbo** · default factory engine")
+                    if t5_language != "English":
+                        st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
+                else:
+                    st.caption(f"Selected Voice: **{t5_voice}** ({t5_language} {t5_gender}) · native Edge-TTS")
 
                 with st.expander("Spoken lines", expanded=True):
                     for slide in handoff.get("slides") or []:
@@ -9774,6 +9882,7 @@ elif st.session_state.app_mode == "test":
                     type="primary",
                     width="stretch",
                     key="test-top5-audio-generate",
+                    disabled=is_t5_chatterbox and t5_language != "English",
                 ):
                     with st.spinner("Generating the six spoken Top-5 lines…"):
                         try:
@@ -9781,7 +9890,12 @@ elif st.session_state.app_mode == "test":
                             selected_t5["language_used"] = t5_language.casefold()
                             selected_t5["voice_gender"] = t5_gender.casefold()
                             selected_t5["voice"] = t5_voice
-                            st.session_state.test_top5_audio_data = generate_top5_audio(selected_t5, voice=t5_voice)
+                            selected_t5["voice_engine"] = "chatterbox" if is_t5_chatterbox else "edge"
+                            st.session_state.test_top5_audio_data = generate_top5_audio(
+                                selected_t5,
+                                voice=t5_voice,
+                                engine="chatterbox" if is_t5_chatterbox else "edge",
+                            )
                             st.session_state.test_top5_audio_handoff = None
                             st.rerun()
                         except (RuntimeError, ValueError) as exc:
@@ -9833,7 +9947,10 @@ elif st.session_state.app_mode == "test":
                                 f'{len(scene["timings"])} timings</span>',
                                 unsafe_allow_html=True,
                             )
-                            st.audio(scene["path"], format="audio/mp3")
+                            st.audio(
+                    scene["path"],
+                    format="audio/wav" if str(scene["path"]).lower().endswith(".wav") else "audio/mp3",
+                )
                             st.caption("Human Audio" if scene.get("human_recorded") else ("Cached" if scene["from_cache"] else "Fresh TTS generation"))
 
                     st.caption(

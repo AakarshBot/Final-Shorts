@@ -30,6 +30,70 @@ def approved_top5_script():
     }
 
 
+def test_chatterbox_turbo_stack_imports_without_loading_weights():
+    import torch
+    import torchaudio
+    from chatterbox.tts_turbo import ChatterboxTurboTTS
+
+    assert torch is not None
+    assert torchaudio is not None
+    assert callable(ChatterboxTurboTTS.from_pretrained)
+
+
+def test_chatterbox_reference_conditioning_failure_is_reported(monkeypatch, tmp_path):
+    import audio
+
+    class FakeChatterbox:
+        def prepare_conditionals(self, reference_path, exaggeration=0.5):
+            raise ValueError("invalid voice reference")
+
+    reference = tmp_path / "audio_reference.wav"
+    reference.write_bytes(b"not a real wav, deliberately rejected by fake model")
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda: FakeChatterbox())
+
+    with pytest.raises(RuntimeError, match="could not use the voice reference file"):
+        audio.generate_chatterbox_audio(
+            approved_script(),
+            output_dir=tmp_path / "generated",
+            reference=reference,
+        )
+
+
+def test_audio_defaults_to_chatterbox(monkeypatch, tmp_path):
+    import audio
+
+    calls = []
+
+    def fake_chatterbox(script, **kwargs):
+        calls.append((script, kwargs))
+        return {"model": "Chatterbox-Turbo", "total_duration": 2.0}
+
+    monkeypatch.setattr(audio, "generate_chatterbox_audio", fake_chatterbox)
+    result = generate_audio(approved_script(), tmp_path)
+
+    assert result["model"] == "Chatterbox-Turbo"
+    assert calls[0][1]["output_dir"] == tmp_path
+    assert calls[0][1]["run_number"] == 1
+
+
+def test_top5_audio_defaults_to_chatterbox(monkeypatch, tmp_path):
+    import audio
+
+    calls = []
+
+    def fake_chatterbox(script, **kwargs):
+        calls.append((script, kwargs))
+        return {"schema": "final-shorts.top5-audio.v1", "model": "Chatterbox-Turbo"}
+
+    handoff = approved_top5_script()
+    monkeypatch.setattr(audio, "generate_chatterbox_audio", fake_chatterbox)
+    result = generate_top5_audio(handoff, tmp_path)
+
+    assert result["schema"] == "final-shorts.top5-audio.v1"
+    assert calls[0][0] is handoff
+    assert calls[0][1]["output_dir"] == tmp_path
+
+
 def test_audio_requires_approved_script():
     with pytest.raises(ValueError, match="approved Scriptwriter handoff"):
         generate_audio({"script": [{"voiceover": "Hello world."}]})
@@ -50,7 +114,7 @@ def test_audio_uses_edge_word_boundaries(monkeypatch, tmp_path):
 
     monkeypatch.setattr(audio.edge_tts, "Communicate", FakeCommunicate)
     monkeypatch.setattr(audio, "_probe_duration", lambda path: 1.0)
-    result = generate_audio(approved_script(), tmp_path)
+    result = generate_audio(approved_script(), tmp_path, engine="edge")
 
     assert result["total_duration"] == 2.0
     assert result["scenes"][0]["timings"][0]["word"] == "India"
@@ -75,7 +139,7 @@ def test_top5_audio_uses_six_spoken_headlines_only(monkeypatch, tmp_path):
         ]
 
     monkeypatch.setattr(audio, "_generate_at_rate", fake_generate)
-    result = generate_top5_audio(approved_top5_script(), tmp_path)
+    result = generate_top5_audio(approved_top5_script(), tmp_path, engine="edge")
 
     assert len(captured) == 1
     assert len(captured[0]) == 6
@@ -108,7 +172,7 @@ def test_top5_audio_corrects_total_duration(monkeypatch, tmp_path):
         ]
 
     monkeypatch.setattr(audio, "_generate_at_rate", fake_generate)
-    result = generate_top5_audio(approved_top5_script(), tmp_path)
+    result = generate_top5_audio(approved_top5_script(), tmp_path, engine="edge")
 
     assert result["duration_corrected"] is True
     assert len(rates) == 2
@@ -120,7 +184,7 @@ def test_top5_audio_requires_exactly_six_slides(monkeypatch, tmp_path):
     script = approved_top5_script()
     script["slides"] = script["slides"][:5]
     with pytest.raises(ValueError, match="exactly six spoken slides"):
-        generate_top5_audio(script, tmp_path)
+        generate_top5_audio(script, tmp_path, engine="edge")
 
 
 def test_top5_audio_approval_requires_six_valid_scenes_and_allows_one_long_line(tmp_path):
@@ -167,8 +231,8 @@ def test_audio_cache_avoids_second_tts_call(monkeypatch, tmp_path):
     monkeypatch.setattr(audio, "CACHE_DIR", tmp_path / "cache")
     out = tmp_path / "out"
 
-    first = generate_audio(approved_script(), out)
-    second = generate_audio(approved_script(), out)
+    first = generate_audio(approved_script(), out, engine="edge")
+    second = generate_audio(approved_script(), out, engine="edge")
 
     assert first["scenes"][0]["from_cache"] is False
     assert second["scenes"][0]["from_cache"] is True
@@ -194,7 +258,7 @@ def test_audio_retries_transient_failure_once(monkeypatch, tmp_path):
     monkeypatch.setattr(audio.edge_tts, "Communicate", FakeCommunicate)
     monkeypatch.setattr(audio, "_probe_duration", lambda path: 1.0)
     monkeypatch.setattr(audio, "CACHE_DIR", tmp_path / "cache")
-    result = generate_audio(approved_script(), tmp_path)
+    result = generate_audio(approved_script(), tmp_path, engine="edge")
 
     assert result["total_duration"] == 2.0
     assert len(attempts) == 3
@@ -226,7 +290,7 @@ def test_audio_speed_correction_runs_once_when_over_limit(monkeypatch, tmp_path)
         ]
 
     monkeypatch.setattr(audio, "_generate_at_rate", fake_generate)
-    result = generate_audio(approved_script(), tmp_path)
+    result = generate_audio(approved_script(), tmp_path, engine="edge")
 
     assert result["duration_corrected"] is True
     assert rates[0] == 8.0

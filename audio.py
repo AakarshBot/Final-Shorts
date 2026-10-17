@@ -407,6 +407,11 @@ def generate_chatterbox_audio(
 ) -> dict[str, Any]:
     """Generates Shorts narration using Chatterbox Turbo TTS with voice cloning and linear timings."""
     if isinstance(version_or_slides, dict):
+        language = str(version_or_slides.get("language_used") or "english").strip().casefold()
+        if language not in {"english", "en"}:
+            raise ValueError(
+                "Chatterbox Turbo supports English only. Select Edge-TTS for Hindi or Telugu narration."
+            )
         slides = version_or_slides.get("slides") or version_or_slides.get("script") or []
     else:
         slides = list(version_or_slides or [])
@@ -433,8 +438,11 @@ def generate_chatterbox_audio(
     if actual_ref:
         try:
             model.prepare_conditionals(str(actual_ref), exaggeration=0.5)
-        except Exception:
-            actual_ref = None
+        except Exception as exc:
+            raise RuntimeError(
+                f"Chatterbox could not use the voice reference file '{actual_ref}': {exc}. "
+                "Replace the file or remove it to use Chatterbox's built-in voice."
+            ) from exc
 
     waves = []
     paths = []
@@ -480,7 +488,7 @@ def generate_chatterbox_audio(
             raise RuntimeError("Audio is over 30 seconds and librosa time-stretch failed.") from exc
 
     final_duration = sum(w.shape[-1] / model.sr for w in waves) + max(0, len(waves) - 1) * 0.08
-    if final_duration > 30.5:
+    if final_duration > 30.0:
         raise RuntimeError("The generated narration is too long to fit the 30-second Short even with slight speed adjustment.")
 
     for number, (wav, slide) in enumerate(zip(waves, slides), 1):
@@ -533,6 +541,29 @@ def generate_chatterbox_audio(
     return res
 
 
+def _use_chatterbox_engine(engine: str | None, voice: str | None, handoff: dict[str, Any]) -> bool:
+    """Select Chatterbox by default; use Edge-TTS only when explicitly requested."""
+    selected = engine if engine is not None else handoff.get("voice_engine")
+    chatterbox_names = {
+        "chatterbox",
+        "chatterbox-turbo",
+        "chatterbox turbo",
+        "chatterbox turbo (voice cloning)",
+        "clone",
+    }
+    edge_names = {"edge", "edge-tts", "edge tts", "edge-tts neural"}
+    if selected is not None:
+        name = str(selected).strip().casefold()
+        if name in chatterbox_names:
+            return True
+        if name in edge_names:
+            return False
+        raise ValueError(f"Unsupported audio engine: {selected}")
+    if voice:
+        return str(voice).strip().casefold() in chatterbox_names
+    return True
+
+
 def generate_audio(
     approved_script: dict,
     output_dir: str | Path = "output/audio_test",
@@ -551,11 +582,7 @@ def generate_audio(
     if not isinstance(scenes, list) or not scenes:
         raise ValueError("Approved script contains no scenes.")
 
-    is_chatterbox = (
-        engine == "chatterbox"
-        or (voice and str(voice).lower() in ("chatterbox", "chatterbox-turbo", "chatterbox turbo", "clone"))
-        or approved_script.get("voice_engine") == "chatterbox"
-    )
+    is_chatterbox = _use_chatterbox_engine(engine, voice, approved_script)
     if is_chatterbox:
         return generate_chatterbox_audio(
             approved_script,
@@ -636,11 +663,7 @@ def generate_top5_audio(
     if approved_top5_script.get("schema") != "final-shorts.top5-script.v1":
         raise ValueError("Top-5 Audio requires the approved Top-5 Scriptwriter handoff.")
 
-    is_chatterbox = (
-        engine == "chatterbox"
-        or (voice and str(voice).lower() in ("chatterbox", "chatterbox-turbo", "chatterbox turbo", "clone"))
-        or approved_top5_script.get("voice_engine") == "chatterbox"
-    )
+    is_chatterbox = _use_chatterbox_engine(engine, voice, approved_top5_script)
     if is_chatterbox:
         return generate_chatterbox_audio(
             approved_top5_script,
