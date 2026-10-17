@@ -117,3 +117,27 @@ def test_manual_subject_cutout_reuses_layout_geometry(monkeypatch):
     assert calls == 1
     assert first is second
     renderer._manual_subject_cutout_layout_data_cached.cache_clear()
+
+
+def test_live_rendered_video_path_survives_upload_qc_reruns():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+
+    # Live render output paths are anchored to app.py's repository folder,
+    # and the same absolute path is kept in session state for Upload QC.
+    assert app_source.count(
+        'Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"'
+    ) == 2
+    assert (
+        'Path(__file__).resolve().parent / "output" / "live" / "top5" / f"{key}.mp4"'
+        in app_source
+    )
+    assert app_source.count(
+        "st.session_state.live_rendered_video_path = str(output.resolve())"
+    ) == 3
+
+    upload_start = app_source.index("def _render_live_upload():")
+    upload_end = app_source.index("def render_live_top5():", upload_start)
+    upload_source = app_source[upload_start:upload_end]
+    assert 'stored_video_path = st.session_state.get("live_rendered_video_path")' in upload_source
+    assert "if video_path is not None and not video_path.is_absolute():" in upload_source
+    assert "video_path.stat().st_size <= 0" in upload_source
