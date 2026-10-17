@@ -297,7 +297,7 @@ Fragment and runtime-performance audit (2026-10-18):
 - Crop/reposition uses a canvas capped at 1600 px wide and `st_cropper(realtime_update=False)`. Double-click confirms the crop so dragging does not continually send a new crop value and rebuild a full-resolution blurred canvas.
 - Visual-pool image validation and resized JPEG thumbnail bytes use bounded Streamlit data caches. This avoids decoding and resizing every source image on every ordinary rerun.
 - The selected cutout image is decoded to build the polygon editor payload only when its source digest changes. The source image remains unchanged; the crop and final renderer continue to use the established 9:16 handoff.
-- Manual Subject Cutout layout geometry is cached for repeated, ordinary headlines (10 words or fewer). Long headlines are left uncached to avoid retaining large combinatorial layout results in memory.
+- Manual Subject Cutout layout geometry is cached for repeated, ordinary headlines (10 words or fewer). Long headlines are left uncached to avoid retaining large combinatorial layout results in memory. Layout search now enumerates only line-break combinations within the polygon's vertical capacity, instead of iterating every bitmask that could never fit.
 - Keep Render Now and Preview all valid line-break options explicit. Do not re-render the final frame merely because the headline, polygon, font, style, or size widget changed.
 
 ### Production-line development rule
