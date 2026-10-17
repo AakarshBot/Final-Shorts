@@ -8,3 +8,4 @@ output/
 token.json
 client_secret.json
 .venv/
+audio_reference.wav
