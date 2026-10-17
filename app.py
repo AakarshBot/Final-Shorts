@@ -4210,6 +4210,7 @@ def _live_generate_audio_and_subtitles():
     audio = generate_audio(
         approved_script,
         output_dir="output/live/audio",
+        engine="chatterbox",
     )
     approved_audio = approve_audio(audio)
     subtitles = generate_subtitles(approved_script, approved_audio)
@@ -5791,7 +5792,11 @@ def render_live_top5():
             ):
                 try:
                     with st.spinner("Generating the six spoken Top-5 lines…"):
-                        audio = generate_top5_audio(handoff, output_dir="output/live/top5_audio")
+                        audio = generate_top5_audio(
+                            handoff,
+                            output_dir="output/live/top5_audio",
+                            engine="chatterbox",
+                        )
                     st.session_state.live_top5_audio_data = audio
                 except (RuntimeError, ValueError) as exc:
                     st.error(str(exc))
@@ -5805,7 +5810,10 @@ def render_live_top5():
                     f'**Line {scene["scene"]}** <span class="topic-meta">· {scene["duration"]:.2f}s · {len(scene["timings"])} timings</span>',
                     unsafe_allow_html=True,
                 )
-                st.audio(scene["path"], format="audio/mp3")
+                st.audio(
+                    scene["path"],
+                    format="audio/wav" if str(scene["path"]).lower().endswith(".wav") else "audio/mp3",
+                )
                 st.caption("Cached" if scene["from_cache"] else "Fresh TTS generation")
         st.caption(
             f'Voice: {audio.get("voice") or "HYPE COMMENTATOR"} · Rate: {audio.get("rate_percent", 0):+.0f}% · Total: {audio.get("total_duration", 0):.2f}s'
@@ -8981,7 +8989,7 @@ def render_upload_qc():
         st.rerun()
 
 def render_audio():
-    from audio import approve_audio, generate_audio, package_human_audio, resolve_voice
+    from audio import AUDIO_REFERENCE, approve_audio, generate_audio, package_human_audio, resolve_voice
 
     script=st.session_state.approved_script
     if not script:
@@ -9003,7 +9011,7 @@ def render_audio():
             "Voice Engine",
             ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
             default="Chatterbox Turbo (Voice Cloning)",
-            key="audio_engine_choice",
+            key="audio_engine_choice_v2",
         ) or "Chatterbox Turbo (Voice Cloning)"
         col_l, col_g = st.columns(2)
         with col_l:
@@ -9011,11 +9019,14 @@ def render_audio():
         with col_g:
             gender=st.pills("Voice Gender",["Female","Male"],default="Female",key="audio_gender") or "Female"
         selected_voice = resolve_voice(language.casefold(), gender.casefold())
+        is_cb = "Chatterbox" in engine_choice
         flag = "🇺🇸 / 🇬🇧" if language == "English" else "🇮🇳"
+        if is_cb and language != "English":
+            st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
 
         if "Chatterbox" in engine_choice:
             from pathlib import Path
-            has_ref = Path("audio_reference.wav").is_file()
+            has_ref = AUDIO_REFERENCE.is_file()
             ref_info = "audio_reference.wav conditioned" if has_ref else "Built-in neural voice"
             st.markdown(
                 f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 12px 0;">'
@@ -9041,11 +9052,15 @@ def render_audio():
                 unsafe_allow_html=True,
             )
 
-        if st.button("Generate audio",type="primary",width="stretch"):
+        if st.button(
+            "Generate audio",
+            type="primary",
+            width="stretch",
+            disabled=is_cb and language != "English",
+        ):
             selected=dict(script)
             selected["language_used"]=language.casefold()
             selected["voice_gender"]=gender.casefold()
-            is_cb = "Chatterbox" in engine_choice
             selected["voice"]="chatterbox" if is_cb else selected_voice
             selected["voice_engine"]="chatterbox" if is_cb else "edge"
             with st.spinner("Generating voiceover…"):
@@ -9122,7 +9137,10 @@ def render_audio():
                         f'</div>',
                         unsafe_allow_html=True,
                     )
-                    st.audio(scene["path"],format="audio/mp3")
+                    st.audio(
+                        scene["path"],
+                        format="audio/wav" if str(scene["path"]).lower().endswith(".wav") else "audio/mp3",
+                    )
                     st.caption("🎙️ Human Audio" if scene.get("human_recorded") else ("⚡ Cached" if scene["from_cache"] else "✨ Fresh Neural TTS generation"))
             if st.button("Approve audio",type="primary",width="stretch"):
                 try:
@@ -9810,13 +9828,25 @@ elif st.session_state.app_mode == "test":
                 top5_languages = ["English", "Hindi", "Telugu"]
                 stored_t5_lang = str(handoff.get("language_used") or "english").casefold()
                 default_t5_lang = stored_t5_lang if stored_t5_lang in {"english", "hindi", "telugu"} else "english"
+                t5_engine_choice = st.pills(
+                    "Voice Engine",
+                    ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
+                    default="Chatterbox Turbo (Voice Cloning)",
+                    key="test_top5_audio_engine_choice_v2",
+                ) or "Chatterbox Turbo (Voice Cloning)"
                 col_t5_lang, col_t5_gender = st.columns(2)
                 with col_t5_lang:
                     t5_language = st.pills("Language", top5_languages, default=default_t5_lang.title(), key="test_top5_audio_language") or default_t5_lang.title()
                 with col_t5_gender:
                     t5_gender = st.pills("Voice Gender", ["Female", "Male"], default="Female", key="test_top5_audio_gender") or "Female"
-                t5_voice = resolve_voice(t5_language.casefold(), t5_gender.casefold())
-                st.caption(f"Selected Voice: **{t5_voice}** ({t5_language} {t5_gender}) · native Edge-TTS")
+                is_t5_chatterbox = "Chatterbox" in t5_engine_choice
+                t5_voice = "chatterbox" if is_t5_chatterbox else resolve_voice(t5_language.casefold(), t5_gender.casefold())
+                if is_t5_chatterbox:
+                    st.caption("Selected Voice: **Chatterbox Turbo** · default factory engine")
+                    if t5_language != "English":
+                        st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
+                else:
+                    st.caption(f"Selected Voice: **{t5_voice}** ({t5_language} {t5_gender}) · native Edge-TTS")
 
                 with st.expander("Spoken lines", expanded=True):
                     for slide in handoff.get("slides") or []:
@@ -9829,6 +9859,7 @@ elif st.session_state.app_mode == "test":
                     type="primary",
                     width="stretch",
                     key="test-top5-audio-generate",
+                    disabled=is_t5_chatterbox and t5_language != "English",
                 ):
                     with st.spinner("Generating the six spoken Top-5 lines…"):
                         try:
@@ -9836,7 +9867,12 @@ elif st.session_state.app_mode == "test":
                             selected_t5["language_used"] = t5_language.casefold()
                             selected_t5["voice_gender"] = t5_gender.casefold()
                             selected_t5["voice"] = t5_voice
-                            st.session_state.test_top5_audio_data = generate_top5_audio(selected_t5, voice=t5_voice)
+                            selected_t5["voice_engine"] = "chatterbox" if is_t5_chatterbox else "edge"
+                            st.session_state.test_top5_audio_data = generate_top5_audio(
+                                selected_t5,
+                                voice=t5_voice,
+                                engine="chatterbox" if is_t5_chatterbox else "edge",
+                            )
                             st.session_state.test_top5_audio_handoff = None
                             st.rerun()
                         except (RuntimeError, ValueError) as exc:
@@ -9888,7 +9924,10 @@ elif st.session_state.app_mode == "test":
                                 f'{len(scene["timings"])} timings</span>',
                                 unsafe_allow_html=True,
                             )
-                            st.audio(scene["path"], format="audio/mp3")
+                            st.audio(
+                    scene["path"],
+                    format="audio/wav" if str(scene["path"]).lower().endswith(".wav") else "audio/mp3",
+                )
                             st.caption("Human Audio" if scene.get("human_recorded") else ("Cached" if scene["from_cache"] else "Fresh TTS generation"))
 
                     st.caption(
