@@ -103,6 +103,9 @@ def test_generation_prompts_cover_validator_requirements():
     assert "quote, quote_attribution, and quote_slide must agree" in universal
     assert "story_index is slide_number minus one" in top5
     assert "SATISFY EVERY EXISTING TOP-5 GENERATION CHECK" in top5
+    assert "set to change cricket" in top5
+    assert "not only Slide 1" in top5
+    assert "need to see/watch/know" in top5
 
 
 
