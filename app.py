@@ -1940,6 +1940,16 @@ def _asset_to_image(value):
     return None
 
 
+@st.cache_data(max_entries=256, show_spinner=False)
+def _is_valid_image_payload(value: bytes) -> bool:
+    try:
+        with Image.open(BytesIO(value)) as image:
+            image.verify()
+    except (OSError, ValueError, SyntaxError):
+        return False
+    return True
+
+
 def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
     aspect = 9 / 16
     width = min(image.width, max(1, int(image.height * aspect)))
@@ -1977,23 +1987,46 @@ def _crop_visual_dialog(
 
     st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
-    st.caption("9:16 frame · drag the frame to reposition it, or drag a corner outward to zoom out and reveal more of the original. Any exposed area uses a blurred extension of the same image.")
+    st.caption(
+        "9:16 frame · drag to reposition or resize the crop. Double-click to confirm the crop selection. "
+        "Zooming out reveals a blurred extension of the same image."
+    )
 
     from streamlit_cropper import st_cropper
 
+    # The cropper's frontend scales its input for display. Keep the backing canvas
+    # near delivery resolution too, so large source photos do not trigger a costly
+    # full-resolution blur and image payload on each dialog interaction.
     canvas_width = max(image.width, int(round(image.height * 9 / 16)))
     canvas_height = int(round(canvas_width * 16 / 9))
-    background = ImageOps.fit(
-        image.convert("RGB"),
-        (canvas_width, canvas_height),
-        method=Image.Resampling.LANCZOS,
-    ).filter(ImageFilter.GaussianBlur(radius=max(18, canvas_width // 55)))
-    canvas = background.copy()
-    offset_x = (canvas_width - image.width) // 2
-    offset_y = (canvas_height - image.height) // 2
-    canvas.paste(image.convert("RGB"), (offset_x, offset_y))
+    max_canvas_width = 1600
+    scale = min(1.0, max_canvas_width / canvas_width)
+    scaled_canvas_width = max(1, int(round(canvas_width * scale)))
+    scaled_canvas_height = max(1, int(round(canvas_height * scale)))
 
-    default = _largest_9x16_crop_coords(image)
+    rgb_image = image.convert("RGB")
+    if scale < 1.0:
+        working_image = rgb_image.resize(
+            (
+                max(1, int(round(rgb_image.width * scale))),
+                max(1, int(round(rgb_image.height * scale))),
+            ),
+            Image.Resampling.LANCZOS,
+        )
+    else:
+        working_image = rgb_image
+
+    background = ImageOps.fit(
+        working_image,
+        (scaled_canvas_width, scaled_canvas_height),
+        method=Image.Resampling.LANCZOS,
+    ).filter(ImageFilter.GaussianBlur(radius=max(18, scaled_canvas_width // 55)))
+    canvas = background.copy()
+    offset_x = (scaled_canvas_width - working_image.width) // 2
+    offset_y = (scaled_canvas_height - working_image.height) // 2
+    canvas.paste(working_image, (offset_x, offset_y))
+
+    default = _largest_9x16_crop_coords(working_image)
     default_coords = (
         offset_x + default[0],
         offset_x + default[1],
@@ -2004,7 +2037,7 @@ def _crop_visual_dialog(
     store = st.session_state.setdefault(crop_store, {})
     cropped = st_cropper(
         canvas,
-        realtime_update=True,
+        realtime_update=False,
         default_coords=default_coords,
         box_color="#4F46E5",
         aspect_ratio=(9, 16),
@@ -2332,13 +2365,12 @@ def _render_manual_subject_cutout(
     if len(polygon_points) < 3:
         polygon_points = list(default_polygon)
 
-    source_image = _asset_to_image(working_bytes)
-    if source_image is None:
-        st.error("The selected image could not be opened.")
-        return
-
-    if state["editor_image_digest"] != source_digest:
-        preview_image = source_image.convert("RGB").resize((360, 640), Image.Resampling.LANCZOS)
+    if state["editor_image_digest"] != source_digest or not state.get("editor_image_data"):
+        source_image = _asset_to_image(working_bytes)
+        if source_image is None:
+            st.error("The selected image could not be opened.")
+            return
+        preview_image = source_image.resize((360, 640), Image.Resampling.LANCZOS)
         image_buffer = BytesIO()
         preview_image.save(image_buffer, format="JPEG", quality=82, optimize=True)
         state["editor_image_digest"] = source_digest
@@ -2639,7 +2671,7 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             if asset_key in deleted:
                 continue
             raw = crop_store.get(asset_key) or asset.get("bytes")
-            if not isinstance(raw, (bytes, bytearray)) or _asset_to_image(raw) is None:
+            if not isinstance(raw, (bytes, bytearray)) or not _is_valid_image_payload(bytes(raw)):
                 continue
             entries.append((asset_key, index, asset, bytes(raw), source_name))
     return entries
@@ -4187,8 +4219,8 @@ def _live_generate_audio_and_subtitles():
     st.session_state.live_subtitle_data = subtitles
 
 
-def _fit_visual_preview(value, width=360, height=640):
-    from PIL import Image
+@st.cache_data(max_entries=128, show_spinner=False)
+def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | None:
     image = _asset_to_image(value)
     if image is None:
         return None
@@ -4204,7 +4236,37 @@ def _fit_visual_preview(value, width=360, height=640):
         top = (image.height - crop_height) // 2
         image = image.crop((0, top, image.width, top + crop_height))
 
-    return image.resize((width, height), Image.Resampling.LANCZOS)
+    preview = image.resize((width, height), Image.Resampling.LANCZOS)
+    buffer = BytesIO()
+    preview.save(buffer, format="JPEG", quality=84, optimize=True)
+    return buffer.getvalue()
+
+
+def _fit_visual_preview(value, width=360, height=640):
+    if isinstance(value, Image.Image):
+        image = value.convert("RGB")
+        target_ratio = width / height
+        current_ratio = image.width / image.height
+        if current_ratio > target_ratio:
+            crop_width = max(1, int(image.height * target_ratio))
+            left = (image.width - crop_width) // 2
+            image = image.crop((left, 0, left + crop_width, image.height))
+        elif current_ratio < target_ratio:
+            crop_height = max(1, int(image.width / target_ratio))
+            top = (image.height - crop_height) // 2
+            image = image.crop((0, top, image.width, top + crop_height))
+        return image.resize((width, height), Image.Resampling.LANCZOS)
+
+    if not isinstance(value, (bytes, bytearray)):
+        return None
+    preview_bytes = _fit_visual_preview_bytes(bytes(value), int(width), int(height))
+    if not preview_bytes:
+        return None
+    try:
+        with Image.open(BytesIO(preview_bytes)) as image:
+            return image.convert("RGB")
+    except (OSError, ValueError):
+        return None
 
 
 def _delete_visual_asset(result_key: str, index: int, asset: dict, live: bool = False):
