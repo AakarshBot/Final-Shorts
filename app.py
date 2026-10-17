@@ -4259,14 +4259,7 @@ def _fit_visual_preview(value, width=360, height=640):
 
     if not isinstance(value, (bytes, bytearray)):
         return None
-    preview_bytes = _fit_visual_preview_bytes(bytes(value), int(width), int(height))
-    if not preview_bytes:
-        return None
-    try:
-        with Image.open(BytesIO(preview_bytes)) as image:
-            return image.convert("RGB")
-    except (OSError, ValueError):
-        return None
+    return _fit_visual_preview_bytes(bytes(value), int(width), int(height))
 
 
 def _delete_visual_asset(result_key: str, index: int, asset: dict, live: bool = False):
