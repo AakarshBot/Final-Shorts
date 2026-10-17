@@ -498,9 +498,9 @@ Status: **Consolidated / Fully operational / Verified by test suite.**
 
 ### Test baseline after cleanup
 
-- Python compile check passed.
-- The earlier **113-test** baseline predates the subsequent Top-5 work and is no longer an authoritative acceptance count.
-- Current acceptance is the full test suite for the active branch plus the actual Test dashboard path.
+- The merged `main` commit `2b313ba` passed GitHub Actions run `39069420313`: Python compilation succeeded and the full suite reported **299 passed, 1 skipped**. One Pillow deprecation warning was non-blocking.
+- Edge-TTS `7.3.1` is confirmed installed in the user's standard Python 3.11 environment; do not ask for a repeat installation.
+- Remote CI is not a substitute for the first Windows runtime smoke test. Confirm the local checkout matches `main`, enter a low-risk Live Scriptwriter → Audio path, approve a reviewed test script, and verify the downstream handoff before any upload/publication.
 - Manual Subject Cutout regression coverage now covers the shared renderer API, both composition modes, nine fonts/styles, polygon-only rendering, overlay-free production handoff, exact left-edge anchoring, vertical polygon-flow indentation for Deep-Dive Cricket and YT Trends, Top-5 Test Card Studio standalone and per-slide Test paths, Cricket Test + Live Card Studio, and YT Trends Test/Live Card Studio. AppTest bypasses the browser-only inline polygon editor registration through Streamlit's global.appTest flag while exercising the same Python state/render path.
 - Text Subject Cutout must remain a single shared implementation across Card Studio surfaces. Top-5 Live remains deferred until Top-5 Test is approved.
 
