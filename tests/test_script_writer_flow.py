@@ -61,9 +61,10 @@ def test_scriptwriter_rewrites_overlong_lead_instead_of_trimming(monkeypatch):
 
     monkeypatch.setattr(writer, "_research_story", lambda story: "RESEARCH EVIDENCE")
     calls = []
+    other_scenes = [scene["voiceover"] for scene in sample_script()["script"][1:]]
     drafts = [
-        sample_script([vo_14, *sample_script()["script"][1:]]),
-        sample_script([vo_13, *sample_script()["script"][1:]]),
+        sample_script([vo_14, *other_scenes]),
+        sample_script([vo_13, *other_scenes]),
     ]
 
     def fake_request(model, instruction, source, **kwargs):
