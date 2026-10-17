@@ -79,7 +79,7 @@ Top-5 is currently Test-only / WIP. **Card Studio is the single card entry point
   - tests/test_runtime_performance.py: Regression checks cover crop settings/cache behavior, polygon layout, and forbidden refresh/polling patterns.
 - **No timer/polling refreshes:** Do not add st_autorefresh, run_every, intervals, time.sleep, or asyncio.sleep polling to the dashboard. Event-driven st.rerun() calls remain only where controls explicitly change stages or handoffs.
 - **Strict Functional Integrity:** Subject Cutout and polygon text placement remain behaviorally unchanged; the optimizations target redundant work, not the approved rendering result. Preserve Shorts Test/Live boundaries.
-- **Current verification:** The runtime branch previously passed the full suite with 304 passed and 1 skipped. Chatterbox-default routing and the latest Live engine controls have been added since that run; final CI validation is pending on the latest source commit.
+- **Current verification:** GitHub Actions run #1210 on commit 675dad13dba177b83ec25fc25d131677c7881106 passed dependency installation, Python compilation, and the full test suite: 310 passed, 1 skipped, with 1 non-blocking Pillow deprecation warning in 156.30 seconds. Tests cover Chatterbox default routing, stack imports, reference-conditioning errors, language guards, and runtime optimizations. CI does not load the real model weights or generate actual speech. Next: merge the reviewed change, sync the local checkout, and perform one supervised local Live audio/render smoke test before any public upload.
 
 ## Factory order
 
