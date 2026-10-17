@@ -407,6 +407,11 @@ def generate_chatterbox_audio(
 ) -> dict[str, Any]:
     """Generates Shorts narration using Chatterbox Turbo TTS with voice cloning and linear timings."""
     if isinstance(version_or_slides, dict):
+        language = str(version_or_slides.get("language_used") or "english").strip().casefold()
+        if language not in {"english", "en"}:
+            raise ValueError(
+                "Chatterbox Turbo supports English only. Select Edge-TTS for Hindi or Telugu narration."
+            )
         slides = version_or_slides.get("slides") or version_or_slides.get("script") or []
     else:
         slides = list(version_or_slides or [])
