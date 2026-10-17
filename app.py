@@ -4894,7 +4894,7 @@ def _render_live_visuals(slide_count: int):
                     st.session_state.live_selected_topic
                 ]
                 story_id = _live_story_key(story)
-                output = Path("output/live") / f"{story_id}.mp4"
+                output = Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"
                 try:
                     with st.spinner("Rendering the final Short…"):
                         from renderer import render_production_video
@@ -4910,7 +4910,7 @@ def _render_live_visuals(slide_count: int):
                                 st.session_state.live_approved_script.get("headline_overlay_enabled", False)
                             ),
                         )
-                    st.session_state.live_rendered_video_path = str(output)
+                    st.session_state.live_rendered_video_path = str(output.resolve())
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
                     st.session_state.live_stage = "05 · Upload"
@@ -4944,7 +4944,7 @@ def _render_live_visuals(slide_count: int):
                     st.session_state.live_selected_topic
                 ]
                 story_id = _live_story_key(story)
-                output = Path("output/live") / f"{story_id}.mp4"
+                output = Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"
                 try:
                     with st.spinner("Rendering the final Short…"):
                         from renderer import render_production_video
@@ -4964,7 +4964,7 @@ def _render_live_visuals(slide_count: int):
                             ),
                             source_label=story.source or "SPORTS DESK",
                         )
-                    st.session_state.live_rendered_video_path = str(output)
+                    st.session_state.live_rendered_video_path = str(output.resolve())
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
                     st.session_state.live_stage = "05 · Upload"
@@ -5339,6 +5339,11 @@ def _render_live_script():
 
 def _render_live_upload():
     is_top5 = st.session_state.live_production_line == "top_5"
+    stored_video_path = st.session_state.get("live_rendered_video_path")
+    video_path = Path(stored_video_path) if stored_video_path else None
+    if video_path is not None and not video_path.is_absolute():
+        video_path = Path(__file__).resolve().parent / video_path
+
     if is_top5:
         script = st.session_state.live_top5_script_handoff
         slides = list(script.get("slides") or []) if isinstance(script, dict) else []
@@ -5346,10 +5351,8 @@ def _render_live_upload():
         if not isinstance(script, dict) or len(slides) != 6 or not title:
             st.info("Approve the Top-5 Scriptwriter result first.")
             return
-        video_path = Path(st.session_state.live_rendered_video_path)
         story_id = "top5"
     else:
-        video_path = Path(st.session_state.live_rendered_video_path)
         script = st.session_state.live_approved_script
         story = st.session_state.live_topics[st.session_state.live_selected_topic]
         story_id = _live_story_key(story)
@@ -5360,8 +5363,12 @@ def _render_live_upload():
         '<div class="section-count">one approval</div>',
         unsafe_allow_html=True,
     )
-    if not video_path.is_file():
-        st.info("The rendered video is not available yet.")
+    if video_path is None:
+        st.error("Renderer did not hand a video path to Upload QC.")
+        return
+    if not video_path.is_file() or video_path.stat().st_size <= 0:
+        st.error(f"The rendered video cannot be found or is empty: {video_path}")
+        st.caption("The factory expects the rendered file inside the Final-Shorts output folder. Return to Renderer and retry if needed.")
         return
     st.video(str(video_path), width=520)
 
@@ -6164,7 +6171,7 @@ def render_live_top5():
             key = hashlib.sha1(
                 "|".join(str(item.get("url") or item.get("title") or "") for item in script.get("stories") or []).encode("utf-8")
             ).hexdigest()[:12]
-            output = Path("output/live/top5") / f"{key}.mp4"
+            output = Path(__file__).resolve().parent / "output" / "live" / "top5" / f"{key}.mp4"
             try:
                 output.parent.mkdir(parents=True, exist_ok=True)
                 with st.spinner("Rendering the final Top-5 Short…"):
@@ -6173,7 +6180,7 @@ def render_live_top5():
                         output_path=output,
                         headline_enabled=False,
                     )
-                st.session_state.live_rendered_video_path = str(output)
+                st.session_state.live_rendered_video_path = str(output.resolve())
                 st.rerun()
             except (RuntimeError, ValueError, OSError) as exc:
                 st.error(str(exc))

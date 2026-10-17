@@ -305,6 +305,8 @@ Fragment and runtime-performance audit (2026-10-18):
 - The selected cutout image is decoded to build the polygon editor payload only when its source digest changes. The source image remains unchanged; the crop and final renderer continue to use the established 9:16 handoff.
 - Manual Subject Cutout layout geometry is cached for repeated, ordinary headlines (10 words or fewer). Long headlines are left uncached to avoid retaining large combinatorial layout results in memory. Layout search now enumerates only line-break combinations within the polygon's vertical capacity, instead of iterating every bitmask that could never fit.
 - Keep Render Now and Preview all valid line-break options explicit. Do not re-render the final frame merely because the headline, polygon, font, style, or size widget changed.
+- **Live render-to-Upload QC path repair (2026-10-18):** Standard Live and Top-5 render outputs are anchored to the repository root; the session stores resolved absolute paths; Upload QC resolves older relative session paths against the repository root and reports the missing/empty file path if the handoff fails. A focused regression test checks both Live render path variants and the QC check. This repair does not change rendering, visual fetching, audio generation, or upload behaviour.
+- **Validation checkpoint:** The focused path repair is pending the new branch's CI result; CI does not replace a local Windows smoke test before any public upload.
 
 ### Production-line development rule
 ### Production-line development rule
