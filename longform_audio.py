@@ -52,6 +52,10 @@ class LongformAudioEngine:
         reference_audio: Path | str | None = None,
         output_dir: Path | str | None = None,
     ) -> dict[str, Any]:
+        language = str(script_data.get("language_used") or script_data.get("language") or "english").strip().casefold()
+        if language not in {"english", "en"}:
+            raise ValueError("Long-form Chatterbox Turbo currently supports English narration only.")
+
         scenes = list(script_data.get("scenes") or [])
         if not scenes:
             raise ValueError("The approved Long-form script contains no scenes.")
