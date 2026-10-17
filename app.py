@@ -4207,10 +4207,15 @@ def _live_generate_audio_and_subtitles():
     from audio import approve_audio, generate_audio
     from subtitles import generate_subtitles
 
+    selected_engine = (
+        "edge"
+        if st.session_state.get("live_audio_engine_choice_v2") == "Edge-TTS Neural"
+        else "chatterbox"
+    )
     audio = generate_audio(
         approved_script,
         output_dir="output/live/audio",
-        engine="chatterbox",
+        engine=selected_engine,
     )
     approved_audio = approve_audio(audio)
     subtitles = generate_subtitles(approved_script, approved_audio)
@@ -5784,6 +5789,13 @@ def render_live_top5():
             return
         audio = st.session_state.live_top5_audio_data
         if not isinstance(audio, dict):
+            live_top5_engine_choice = st.pills(
+                "Voice Engine",
+                ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
+                default="Chatterbox Turbo (Voice Cloning)",
+                key="live_top5_audio_engine_choice_v2",
+            ) or "Chatterbox Turbo (Voice Cloning)"
+            is_live_top5_chatterbox = "Chatterbox" in live_top5_engine_choice
             if st.button(
                 "Generate Top-5 Audio",
                 type="primary",
@@ -5795,7 +5807,7 @@ def render_live_top5():
                         audio = generate_top5_audio(
                             handoff,
                             output_dir="output/live/top5_audio",
-                            engine="chatterbox",
+                            engine="chatterbox" if is_live_top5_chatterbox else "edge",
                         )
                     st.session_state.live_top5_audio_data = audio
                 except (RuntimeError, ValueError) as exc:
@@ -6556,6 +6568,16 @@ def render_live_dashboard():
         if not isinstance(script, dict):
             st.warning("Approve the Scriptwriter before generating Audio.")
             return
+        live_audio_engine_choice = st.pills(
+            "Voice Engine",
+            ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
+            default="Chatterbox Turbo (Voice Cloning)",
+            key="live_audio_engine_choice_v2",
+        ) or "Chatterbox Turbo (Voice Cloning)"
+        live_language = str(script.get("language_used") or "english").strip().casefold()
+        is_live_chatterbox = "Chatterbox" in live_audio_engine_choice
+        if is_live_chatterbox and live_language not in {"english", "en"}:
+            st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
         if not isinstance(st.session_state.live_approved_audio, dict) or not isinstance(st.session_state.live_subtitle_data, dict):
             if st.session_state.live_handoff_error:
                 st.error(st.session_state.live_handoff_error)
@@ -6564,6 +6586,7 @@ def render_live_dashboard():
                 type="primary",
                 width="stretch",
                 key="live-generate-handoffs-stage",
+                disabled=is_live_chatterbox and live_language not in {"english", "en"},
             ):
                 st.session_state.live_handoff_error = ""
                 st.session_state.live_approved_audio = None
