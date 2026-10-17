@@ -483,7 +483,7 @@ def generate_chatterbox_audio(
             raise RuntimeError("Audio is over 30 seconds and librosa time-stretch failed.") from exc
 
     final_duration = sum(w.shape[-1] / model.sr for w in waves) + max(0, len(waves) - 1) * 0.08
-    if final_duration > 30.5:
+    if final_duration > 30.0:
         raise RuntimeError("The generated narration is too long to fit the 30-second Short even with slight speed adjustment.")
 
     for number, (wav, slide) in enumerate(zip(waves, slides), 1):
