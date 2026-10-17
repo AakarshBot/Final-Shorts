@@ -1,6 +1,6 @@
 import pytest
 import script_writer as writer
-from script_writer import ScriptWriter, evaluate_flow, _trim_slide_one_if_needed
+from script_writer import ScriptWriter, evaluate_flow
 
 
 def sample_script(scenes_text=None):
@@ -53,18 +53,31 @@ def test_evaluate_flow_measures_broadcast_flow():
     assert flow["transitions_count"] >= 2
 
 
-def test_smart_trim_slide_one_trims_fourteen_words():
-    # 14 words starting with "Now,"
+def test_scriptwriter_rewrites_overlong_lead_instead_of_trimming(monkeypatch):
     vo_14 = "Now, Rohit Sharma has officially been ruled out of the Mumbai Test with injury."
-    assert writer._words(vo_14) == 14
-    trimmed = _trim_slide_one_if_needed(vo_14)
-    assert writer._words(trimmed) == 13
-    assert trimmed.startswith("Rohit Sharma")
-
-    # 13 words remains untouched
     vo_13 = "Rohit Sharma has officially been ruled out of the Mumbai Test with injury."
+    assert writer._words(vo_14) == 14
     assert writer._words(vo_13) == 13
-    assert _trim_slide_one_if_needed(vo_13) == vo_13
+
+    monkeypatch.setattr(writer, "_research_story", lambda story: "RESEARCH EVIDENCE")
+    calls = []
+    other_scenes = [scene["voiceover"] for scene in sample_script()["script"][1:]]
+    drafts = [
+        sample_script([vo_14, *other_scenes]),
+        sample_script([vo_13, *other_scenes]),
+    ]
+
+    def fake_request(model, instruction, source, **kwargs):
+        calls.append((model, instruction, source))
+        return drafts.pop(0)
+
+    monkeypatch.setattr(writer, "_request", fake_request)
+    result = ScriptWriter.write({"title": "Rohit Sharma injury"})
+
+    assert len(calls) == 2
+    assert "Slide 1 to 13 words or fewer" in calls[0][1]
+    assert "Failure to fix: Slide 1 must contain fewer than 14 words." in calls[1][1]
+    assert result["script"][0]["voiceover"] == vo_13
 
 
 def test_scriptwriter_dispatches_to_cricket_desks(monkeypatch):
