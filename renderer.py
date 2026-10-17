@@ -775,7 +775,7 @@ def _manual_subject_font_bytes(font_name: str) -> bytes:
 
 
 
-def _manual_subject_cutout_layout_data(
+def _manual_subject_cutout_layout_data_uncached(
     headline: str,
     polygon,
     font_size: int,
@@ -1020,6 +1020,76 @@ def _manual_subject_cutout_layout_data(
         "stroke_width": stroke_width,
         "layouts": layouts,
     }
+
+
+@lru_cache(maxsize=32)
+def _manual_subject_cutout_layout_data_cached(
+    headline: str,
+    polygon: tuple[tuple[int, int], ...],
+    font_size: int,
+    font_name: str,
+    style: str,
+    polygon_flow: bool,
+    font_signature: str,
+):
+    # Geometry is independent of the source photo. Keep a small cache for ordinary
+    # Short headlines so Preview Options and Render Now can reuse the same layout.
+    return _manual_subject_cutout_layout_data_uncached(
+        headline,
+        polygon,
+        font_size,
+        font_name,
+        style,
+        polygon_flow,
+    )
+
+
+def _manual_subject_cutout_layout_data(
+    headline: str,
+    polygon,
+    font_size: int,
+    font_name: str,
+    style: str,
+    polygon_flow: bool = True,
+):
+    clean_headline = " ".join(str(headline or "").split()).upper()
+    if not clean_headline or not isinstance(polygon, (list, tuple)) or len(polygon) < 3:
+        return _manual_subject_cutout_layout_data_uncached(
+            headline, polygon, font_size, font_name, style, polygon_flow
+        )
+
+    try:
+        polygon_key = tuple((int(point[0]), int(point[1])) for point in polygon)
+        size_key = int(font_size or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
+    except (TypeError, ValueError, IndexError):
+        return _manual_subject_cutout_layout_data_uncached(
+            headline, polygon, font_size, font_name, style, polygon_flow
+        )
+
+    # The line-break search has exponential complexity in word count. Keep long
+    # headlines out of the cache so a single large layout cannot retain excessive RAM.
+    if len(clean_headline.split()) > 10:
+        return _manual_subject_cutout_layout_data_uncached(
+            headline, polygon, font_size, font_name, style, polygon_flow
+        )
+
+    font_key = str(font_name or "").strip()
+    style_key = str(style or "").strip()
+    if font_key not in MANUAL_SUBJECT_FONT_OPTIONS or style_key not in MANUAL_SUBJECT_STYLE_OPTIONS:
+        return _manual_subject_cutout_layout_data_uncached(
+            headline, polygon, font_size, font_name, style, polygon_flow
+        )
+
+    font_signature = hashlib.sha1(_manual_subject_font_bytes(font_key)).hexdigest()
+    return _manual_subject_cutout_layout_data_cached(
+        clean_headline,
+        polygon_key,
+        size_key,
+        font_key,
+        style_key,
+        bool(polygon_flow),
+        font_signature,
+    )
 
 
 def _draw_manual_subject_cutout_frame(
