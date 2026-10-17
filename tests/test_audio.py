@@ -30,6 +30,35 @@ def approved_top5_script():
     }
 
 
+def test_chatterbox_turbo_stack_imports_without_loading_weights():
+    import torch
+    import torchaudio
+    from chatterbox.tts_turbo import ChatterboxTurboTTS
+
+    assert torch is not None
+    assert torchaudio is not None
+    assert callable(ChatterboxTurboTTS.from_pretrained)
+
+
+def test_chatterbox_reference_conditioning_failure_is_reported(monkeypatch, tmp_path):
+    import audio
+
+    class FakeChatterbox:
+        def prepare_conditionals(self, reference_path, exaggeration=0.5):
+            raise ValueError("invalid voice reference")
+
+    reference = tmp_path / "audio_reference.wav"
+    reference.write_bytes(b"not a real wav, deliberately rejected by fake model")
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda: FakeChatterbox())
+
+    with pytest.raises(RuntimeError, match="could not use the voice reference file"):
+        audio.generate_chatterbox_audio(
+            approved_script(),
+            output_dir=tmp_path / "generated",
+            reference=reference,
+        )
+
+
 def test_audio_defaults_to_chatterbox(monkeypatch, tmp_path):
     import audio
 
