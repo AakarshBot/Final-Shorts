@@ -37,6 +37,33 @@ def test_longform_audio_requires_voiceover():
         })
 
 
+def test_longform_audio_rejects_unsupported_chatterbox_language():
+    with pytest.raises(ValueError, match="English narration only"):
+        LongformAudioEngine.generate({
+            "language": "hindi",
+            "scenes": [{"scene_number": 1, "voiceover": "यह एक परीक्षण है।"}],
+        })
+
+
+def test_longform_audio_reference_conditioning_failure_is_reported(monkeypatch, tmp_path):
+    import longform_audio
+
+    class FakeChatterbox:
+        def prepare_conditionals(self, ref_path, exaggeration=0.5):
+            raise ValueError("invalid voice reference")
+
+    reference = tmp_path / "audio_reference.wav"
+    reference.write_bytes(b"not a real wav, deliberately rejected by fake model")
+    monkeypatch.setattr(longform_audio, "get_chatterbox_model", lambda: FakeChatterbox())
+
+    with pytest.raises(RuntimeError, match="could not use the voice reference file"):
+        LongformAudioEngine.generate(
+            sample_script(),
+            reference_audio=reference,
+            output_dir=tmp_path / "generated",
+        )
+
+
 def test_longform_audio_generates_with_mock_model(monkeypatch, tmp_path):
     import longform_audio
 
