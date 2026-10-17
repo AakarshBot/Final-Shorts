@@ -9,6 +9,7 @@ import math
 import shutil
 import subprocess
 from functools import lru_cache
+from itertools import combinations
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
 
@@ -926,7 +927,21 @@ def _manual_subject_cutout_layout_data_uncached(
     )
     line_height = max(1, line_box[3] - line_box[1])
 
-    for mask in range(1 << max(0, len(words) - 1)):
+    max_line_count = min(
+        len(words),
+        max(
+            0,
+            (box_height - 4 + TOP5_EDITORIAL_HEADLINE_LINE_GAP)
+            // (line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP),
+        ),
+    )
+    split_masks = (
+        sum(1 << (position - 1) for position in split_positions)
+        for line_count in range(1, max_line_count + 1)
+        for split_positions in combinations(range(1, len(words)), line_count - 1)
+    )
+
+    for mask in split_masks:
         breaks = [
             index + 1
             for index in range(len(words) - 1)
