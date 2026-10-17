@@ -291,7 +291,14 @@ State/render behavior:
 
 Status: **Approved card type. Keep this implementation shared between Test and Live.**
 
-Fragment audit: Manual Subject Cutout remains the only `@st.fragment` in `app.py`. Its rendered-state-dependent handoff controls live inside the fragment. The crop editors remain self-contained dialogs.
+Fragment and runtime-performance audit (2026-10-18):
+- Manual Subject Cutout remains the only `@st.fragment` in `app.py`; no `run_every` timer is configured. Fragment reruns are caused by direct widget interaction, not a timed refresh.
+- The dashboard has no `st_autorefresh`, interval timer, or polling loop. `.streamlit/config.toml` keeps `fileWatcherType = "none"` and `runOnSave = false`. Explicit `st.rerun()` calls are reserved for user-triggered navigation, approval, attachment, and stage transitions; do not remove them indiscriminately.
+- Crop/reposition uses a canvas capped at 1600 px wide and `st_cropper(realtime_update=False)`. Double-click confirms the crop so dragging does not continually send a new crop value and rebuild a full-resolution blurred canvas.
+- Visual-pool image validation and resized JPEG thumbnail bytes use bounded Streamlit data caches. This avoids decoding and resizing every source image on every ordinary rerun.
+- The selected cutout image is decoded to build the polygon editor payload only when its source digest changes. The source image remains unchanged; the crop and final renderer continue to use the established 9:16 handoff.
+- Manual Subject Cutout layout geometry is cached for repeated, ordinary headlines (10 words or fewer). Long headlines are left uncached to avoid retaining large combinatorial layout results in memory.
+- Keep Render Now and Preview all valid line-break options explicit. Do not re-render the final frame merely because the headline, polygon, font, style, or size widget changed.
 
 ### Production-line development rule
 ### Production-line development rule
