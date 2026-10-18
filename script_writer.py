@@ -1164,7 +1164,7 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
 
     def add_if_textual_value(path: str, value) -> None:
         text = str(value or "").strip()
-        if text and re.search(r"[A-Za-z\\u0900-\\u097F\\u0C00-\\u0C7F]", text):
+        if text and any(char.isalpha() for char in text):
             add(path, text)
 
     add("eyebrow", data.get("eyebrow"))
