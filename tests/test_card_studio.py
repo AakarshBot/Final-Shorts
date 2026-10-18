@@ -93,12 +93,18 @@ def test_head_to_head_supports_two_images_with_manual_split_direction():
     data = card_studio.card_data_for_type("Head-to-Head")
     data["image_mode"] = "Two images"
 
+    left_mask = Image.new("L", (900, 1600), 0)
+    right_mask = Image.new("L", (900, 1600), 0)
+    ImageDraw.Draw(left_mask).ellipse((500, 180, 850, 950), fill=255)
+    ImageDraw.Draw(right_mask).ellipse((70, 200, 390, 980), fill=255)
+
     for direction in ("Vertical", "Horizontal"):
         data["split_direction"] = direction
         output = card_studio.render_card(
             "Head-to-Head",
             (left, right),
             data,
+            subject_mask=(left_mask, right_mask),
         )
         with Image.open(BytesIO(output)) as image:
             assert image.size == (1080, 1920)
@@ -155,4 +161,26 @@ def test_dynamic_text_side_moves_away_from_subject():
 
     assert card_studio._choose_text_side(image, right_subject) == "left"
     assert card_studio._choose_text_side(image, left_subject) == "right"
+
+
+def test_all_non_cutout_cards_render_with_subject_masks():
+    source = _image_bytes(size=(900, 1600))
+    mask = Image.new("L", (900, 1600), 0)
+    ImageDraw.Draw(mask).ellipse((500, 180, 850, 950), fill=255)
+
+    for card_type in (
+        "Stat Highlight",
+        "Quote / Reaction",
+        "Head-to-Head",
+        "Key Fact / Milestone",
+    ):
+        output = card_studio.render_card(
+            card_type,
+            source,
+            card_studio.card_data_for_type(card_type),
+            subject_mask=mask,
+        )
+        with Image.open(BytesIO(output)) as image:
+            assert image.size == (1080, 1920)
+            assert image.format == "PNG"
 
