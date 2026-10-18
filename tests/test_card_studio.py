@@ -116,6 +116,7 @@ def test_changed_composition_invalidates_a_stale_rendered_preview():
     state = {
         "card-result": {
             "bytes": b"old-render",
+            "type": "Quote / Reaction",
             "data": {
                 "layout_position": "Left half",
                 "contrast_treatment": "Soft gradient",
@@ -126,6 +127,7 @@ def test_changed_composition_invalidates_a_stale_rendered_preview():
     changed = card_studio.invalidate_card_studio_result_for_composition(
         state,
         "card-result",
+        "Quote / Reaction",
         "Bottom half",
         "Soft gradient",
     )
