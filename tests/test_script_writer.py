@@ -638,6 +638,117 @@ def test_groq_400_body_is_preserved_for_schema_debugging(monkeypatch):
     assert caught.value.status_code == 400
 
 
+def test_groq_json_validate_failed_retries_once_in_json_object_mode(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    captured = []
+
+    class FakeResponse:
+        def __init__(self, status_code, payload):
+            self.status_code = status_code
+            self.headers = {}
+            self._payload = payload
+            self.text = json.dumps(payload)
+
+        def json(self):
+            return self._payload
+
+    responses = [
+        FakeResponse(
+            400,
+            {
+                "error": {
+                    "message": "Failed to generate JSON. Please adjust your prompt.",
+                    "type": "invalid_request_error",
+                    "code": "json_validate_failed",
+                    "failed_generation": {"reason": "constrained output generation failed"},
+                }
+            },
+        ),
+        FakeResponse(200, {"choices": [{"message": {"content": json.dumps(valid_result())}}]}),
+    ]
+
+    def fake_post(_url, *, json, **_kwargs):
+        captured.append(json)
+        return responses.pop(0)
+
+    monkeypatch.setattr(script_writer.requests, "post", fake_post)
+    result = script_writer._request(
+        "openai/gpt-oss-20b",
+        "Generate a cricket script. Return only JSON matching the supplied schema.",
+        "FULL STORY",
+        schema=script_writer.CRICKET_SCHEMA,
+        schema_name="cricket_shorts_script",
+    )
+
+    assert result == valid_result()
+    assert len(captured) == 2
+    assert captured[0]["response_format"]["type"] == "json_schema"
+    assert captured[0]["response_format"]["json_schema"]["strict"] is True
+    assert captured[1]["response_format"] == {"type": "json_object"}
+    assert "JSON OUTPUT CONTRACT" in captured[1]["messages"][1]["content"]
+    assert '"subject_name"' in captured[1]["messages"][1]["content"]
+
+
+def test_groq_http_error_preserves_failed_generation_detail():
+    class FakeResponse:
+        status_code = 400
+        headers = {}
+
+        def json(self):
+            return {
+                "error": {
+                    "message": "Failed to generate JSON.",
+                    "type": "invalid_request_error",
+                    "code": "json_validate_failed",
+                    "failed_generation": {"reason": "constrained generation stopped"},
+                }
+            }
+
+    error = script_writer._groq_http_error(FakeResponse())
+    assert error.status_code == 400
+    assert "json_validate_failed" in str(error)
+    assert "failed_generation" in str(error)
+    assert "constrained generation stopped" in str(error)
+
+
+def test_subject_validation_gives_specific_english_name_to_rewrite():
+    result = valid_result("He faces a fresh injury scare before India's ODI.")
+    valid, reason = script_writer.validate_cricket_script(result, language="english")
+
+    assert not valid
+    assert "Shubman Gill" in reason
+    assert "verbatim" in reason
+
+
+def test_hindi_subject_validation_requests_consistent_native_script():
+    result = valid_result("शुभमन गिल की फिटनेस पर नई चिंता है।")
+    valid, reason = script_writer.validate_cricket_script(result, language="hindi")
+
+    assert not valid
+    assert "Devanagari/Telugu spelling" in reason
+    assert "voiceover" in reason
+
+
+def test_writer_rewrite_prompt_carries_subject_name_rule(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+    bad = valid_result("He faces a fresh injury scare before India's ODI.")
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt, kwargs))
+        if len(calls) == 1:
+            return bad
+        assert "Shubman Gill" in prompt
+        assert "same script and spelling" in prompt
+        return valid_result()
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.write_script(Story(), language="english")
+
+    assert len(calls) == 2
+    assert result["provider_used"] == "openai/gpt-oss-20b"
+
+
 def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatch):
     calls = []
     monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")

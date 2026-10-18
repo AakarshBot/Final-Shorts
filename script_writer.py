@@ -78,6 +78,13 @@ def _groq_http_error(response: requests.Response) -> GroqAPIError:
         if isinstance(error, dict):
             detail = _clean(error.get("message"))
             code = _clean(error.get("code") or error.get("type"))
+            failed_generation = error.get("failed_generation")
+            if failed_generation:
+                if not isinstance(failed_generation, str):
+                    failed_generation = json.dumps(failed_generation, ensure_ascii=False)
+                failed_generation = _clean(failed_generation)[:500]
+                if failed_generation:
+                    detail = (detail + " | failed_generation: " + failed_generation).strip(" |")
         elif isinstance(error, str):
             detail = _clean(error)
         if not detail:
@@ -308,7 +315,7 @@ Do not replace facts with generic empty hype.
 
 NAMING THE SUBJECT
 - Identify the exact main player/person/team in `subject_name`.
-- The exact `subject_name` must appear in the spoken narration.
+- The exact subject name must appear verbatim in a spoken voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
 - Never describe the main player only as "the 35-year-old", "the player", "the batter", "the bowler", "the captain", or with a pronoun when the exact name is available.
 - For a story about a specific player, name that player in the first two slides whenever the evidence supports the name.
 
@@ -357,7 +364,7 @@ Every slide must include useful metadata matching the narrated fact:
 GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSON
 - Return 3–5 non-empty spoken slides. Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
 - For English, keep Slide 1 to 13 words or fewer; for Hindi/Telugu, keep the lead concise and let the measured 5.2-second audio check enforce the limit.
-- Name the non-empty subject_name exactly in the spoken narration.
+- Keep subject_name non-empty, in the same script/spelling used by the voiceover, and present verbatim in at least one spoken voiceover.
 - Include a non-empty, crisp dashboard-only headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
 - Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the generated slides.
 - quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–5, never greater than the generated slide count, when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
@@ -436,7 +443,7 @@ Do not force a fixed event template. A transfer, injury, retirement, qualifying 
 
 NAMING PEOPLE AND ENTITIES
 - Identify the exact main subject in subject_name.
-- The exact subject_name must appear naturally in the spoken narration.
+- The exact subject name must appear verbatim in a spoken voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
 - If the source or headline uses a descriptor such as "legend", "champion", "star", "former champion", "defending champion" or "world number one", resolve that descriptor to the actual named person or team from the story before writing.
 - Never make the viewer guess who a descriptor refers to when the research identifies the person.
 - Prefer the exact name early when the identity is central to the story.
@@ -521,7 +528,7 @@ Do not invent a visual moment unsupported by the research.
 GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSON
 - Return 3–5 non-empty spoken slides, each with non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
 - For English, keep Slide 1 to 13 words or fewer. For Hindi/Telugu, keep Slide 1 concise for a maximum measured audio duration of 5.2 seconds. Keep total narration between 50 and 74 spoken words; aim for 52–68 words when the evidence supports it, never padding.
-- subject_name must be non-empty and the exact name must appear naturally in the spoken narration.
+- subject_name must be non-empty, in the same script/spelling used by the voiceover, and present verbatim in at least one spoken voiceover.
 - Do not use any listed filler or retention-bait phrase, including “what happens next remains to be seen”.
 - Return a non-empty, crisp dashboard-only headline (no word-count limit), exactly three non-empty title candidates, a non-empty SEO description, 3–5 hashtags each beginning with # and containing no spaces, and a non-empty public comment.
 - quote, quote_attribution, and quote_slide must agree: if a quote is present, give its source attribution and a valid existing slide number; otherwise return empty quote and attribution with quote_slide 0. Never invent or alter a quotation.
@@ -1114,6 +1121,7 @@ def _request(
     *,
     schema_name: str | None = None,
     max_completion_tokens: int | None = None,
+    json_object_mode: bool = False,
 ) -> dict:
     key = _clean(os.getenv("GROQ_API_KEY"))
     if not key:
@@ -1154,6 +1162,22 @@ def _request(
         )
     user_payload += "RESEARCH PACKET:\n" + story
     provider_schema = _groq_strict_schema(active_schema)
+    if json_object_mode:
+        user_payload += (
+            "\n\nJSON OUTPUT CONTRACT — return only one JSON object, with no Markdown. "
+            "Follow this schema shape exactly; local validation will check the result:\n"
+            + json.dumps(provider_schema, ensure_ascii=False, separators=(",", ":"))
+        )
+        response_format = {"type": "json_object"}
+    else:
+        response_format = {
+            "type": "json_schema",
+            "json_schema": {
+                "name": active_schema_name,
+                "strict": True,
+                "schema": provider_schema,
+            },
+        }
 
     for attempt in range(3):
         try:
@@ -1166,14 +1190,7 @@ def _request(
                         {"role": "system", "content": prompt},
                         {"role": "user", "content": user_payload},
                     ],
-                    "response_format": {
-                        "type": "json_schema",
-                        "json_schema": {
-                            "name": active_schema_name,
-                            "strict": True,
-                            "schema": provider_schema,
-                        },
-                    },
+                    "response_format": response_format,
                     "include_reasoning": False,
                     "reasoning_effort": "low",
                     "temperature": 0.35,
@@ -1188,7 +1205,26 @@ def _request(
             time.sleep(2 ** attempt)
 
     if response.status_code >= 400:
-        raise _groq_http_error(response)
+        error = _groq_http_error(response)
+        if (
+            not json_object_mode
+            and error.status_code == 400
+            and "json_validate_failed" in str(error).casefold()
+        ):
+            # Groq can reject a strict structured-generation attempt even when
+            # the request schema itself is valid. Retry that specific failure
+            # once in JSON Object Mode, then let the caller's local validator
+            # decide whether the returned object is usable.
+            return _request(
+                model,
+                prompt,
+                story,
+                schema=schema,
+                schema_name=schema_name,
+                max_completion_tokens=tokens,
+                json_object_mode=True,
+            )
+        raise error
     content = response.json()["choices"][0]["message"]["content"]
     if isinstance(content, dict):
         return content
@@ -1449,7 +1485,18 @@ def validate_cricket_script(
     narration = _normalise(" ".join(_clean(scene.get("voiceover")) for scene in scenes))
     subject_normalised = _normalise(subject)
     if subject_normalised and subject_normalised not in narration:
-        return False, "The main subject is not named in the spoken narration."
+        if language_key in {"hindi", "telugu", "hi", "te"}:
+            return (
+                False,
+                "The main subject is not named verbatim in the spoken narration. "
+                "Set subject_name to the same Devanagari/Telugu spelling used in a voiceover, "
+                "and include that exact spelling in the voiceover.",
+            )
+        return (
+            False,
+            f"The main subject is not named in the spoken narration. "
+            f"Include the exact subject_name value verbatim: {subject!r}.",
+        )
 
     headline = _clean(result.get("headline"))
     if headline_required and not headline:
@@ -1629,6 +1676,9 @@ def write_script(
         + "\n\nHIDDEN REWRITE\n"
         "The first draft is NOT being shown to the human reviewer. Rewrite the complete 3–5-slide script now, using the story's natural structure. "
         "Keep every important factual detail from the research packet, but fix the exact failure below. "
+        "Treat subject-name mismatches precisely: subject_name must use the same script and spelling "
+        "as the name in a spoken voiceover, and that value must appear in the voiceover itself. "
+        "For Hindi/Telugu, use the native script consistently; do not fix this only in titles or metadata. "
         "Do not explain the rewrite. Return only the complete JSON package.\n"
         f"Failure to fix: {first_reason}\n"
     )
@@ -1736,7 +1786,18 @@ def validate_universal_script(
 
     subject_normalised = _normalise(subject)
     if subject_normalised and subject_normalised not in narration_normalised:
-        return False, "The main subject is not named in the spoken narration."
+        if language_key in {"hindi", "telugu", "hi", "te"}:
+            return (
+                False,
+                "The main subject is not named verbatim in the spoken narration. "
+                "Set subject_name to the same Devanagari/Telugu spelling used in a voiceover, "
+                "and include that exact spelling in the voiceover.",
+            )
+        return (
+            False,
+            f"The main subject is not named in the spoken narration. "
+            f"Include the exact subject_name value verbatim: {subject!r}.",
+        )
 
     headline = _clean(result.get("headline"))
     if headline_required and not headline:
