@@ -92,6 +92,35 @@ def test_longform_audio_generates_with_mock_model(monkeypatch, tmp_path):
     assert result["total_duration"] > 0
 
 
+def test_longform_serious_story_keeps_clear_temperature_in_opening_act(monkeypatch, tmp_path):
+    import longform_audio
+
+    class FakeChatterbox:
+        sr = 24000
+
+        def __init__(self):
+            self.temperatures = []
+
+        def generate(self, text, temperature=0.8):
+            self.temperatures.append(temperature)
+            return torch.zeros((int(self.sr * 0.5),))
+
+    model = FakeChatterbox()
+    monkeypatch.setattr(longform_audio, "get_chatterbox_model", lambda: model)
+    script = {
+        "title": "Injury Update",
+        "scenes": [{
+            "scene_number": 1,
+            "act_number": 1,
+            "voiceover": "A fatal injury has ended his season.",
+        }],
+    }
+
+    LongformAudioEngine.generate(script, output_dir=tmp_path)
+
+    assert model.temperatures == [0.80]
+
+
 def test_longform_audio_approve(tmp_path):
     master_file = tmp_path / "longform_master.wav"
     master_file.write_bytes(b"RIFF" + b"x" * 2000)
