@@ -1135,6 +1135,140 @@ def _request(
         raise ValueError(f"Provider returned invalid JSON: {content}") from exc
 
 
+def translate_card_copy(card_type: str, data: dict, target_language: str) -> dict:
+    """Translate only human-facing card copy; preserve names and all numeric/stat data."""
+    from copy import deepcopy
+
+    language = str(target_language or "english").strip().casefold()
+    language = {"en": "english", "hi": "hindi", "te": "telugu"}.get(language, language)
+    language_names = {
+        "english": "English (Latin script)",
+        "hindi": "natural Hindi in Devanagari script",
+        "telugu": "natural Telugu in Telugu script",
+    }
+    if language not in language_names:
+        raise ValueError(f"Unsupported card-copy language: {target_language}")
+    if language == "english":
+        result = deepcopy(data)
+        result["language"] = language
+        return result
+
+    card_type = " ".join(str(card_type or "").split())
+    result = deepcopy(data)
+    paths: list[tuple[str, str]] = []
+
+    def add(path: str, value) -> None:
+        text = str(value or "").strip()
+        if text:
+            paths.append((path, text))
+
+    add("eyebrow", data.get("eyebrow"))
+    if card_type == "Stat Highlight":
+        add("headline", data.get("headline"))
+        add("unit", data.get("unit"))
+        for index, metric in enumerate(data.get("metrics") or []):
+            add(f"metrics.{index}.label", (metric or {}).get("label"))
+    elif card_type == "Quote / Reaction":
+        add("quote", data.get("quote"))
+        add("attribution", data.get("attribution"))
+        add("context", data.get("context"))
+    elif card_type == "Head-to-Head":
+        add("headline", data.get("headline"))
+        for index, metric in enumerate(data.get("metrics") or []):
+            add(f"metrics.{index}", metric)
+    elif card_type == "Key Fact / Milestone":
+        add("label", data.get("label"))
+        add("context", data.get("context"))
+    else:
+        raise ValueError(f"Card-copy translation is not supported for '{card_type}'.")
+
+    if not paths:
+        result["language"] = language
+        return result
+
+    field_map = {
+        f"copy_{index:02d}": {"path": path, "text": text}
+        for index, (path, text) in enumerate(paths, 1)
+    }
+    payload = {key: item["text"] for key, item in field_map.items()}
+    schema = {
+        "type": "object",
+        "properties": {key: {"type": "string"} for key in field_map},
+        "required": list(field_map),
+        "additionalProperties": False,
+    }
+    prompt = (
+        "Translate the supplied JSON values into "
+        + language_names[language]
+        + " for text displayed on a sports editorial card. Return only the required JSON object. "
+        "Translate every supplied value naturally and concisely; do not explain your work. "
+        "Preserve proper names, player/team/competition names and their spelling. "
+        "Do not add or remove facts. This request contains only copy fields: statistics, score values, "
+        "dates, numeric values and player/team name fields are intentionally excluded and must remain untouched. "
+        "A quoted sentence may be translated for the target-language card, but preserve its exact meaning. "
+        "Keep output values suitable for a compact vertical sports card."
+    )
+    errors = []
+    translated = None
+    for model in MODELS:
+        try:
+            candidate = _request(
+                model,
+                prompt,
+                json.dumps(payload, ensure_ascii=False),
+                schema=schema,
+                schema_name="card_copy_translation",
+                max_completion_tokens=1000,
+            )
+            if not isinstance(candidate, dict) or any(
+                not isinstance(candidate.get(key), str) or not candidate[key].strip()
+                for key in field_map
+            ):
+                raise ValueError("The translation provider returned incomplete card copy.")
+            translated = candidate
+            break
+        except Exception as exc:
+            errors.append(f"{model}: {type(exc).__name__}: {exc}")
+    if translated is None:
+        raise RuntimeError("Card-copy translation failed: " + " | ".join(errors))
+
+    def set_path(target: dict, path: str, value: str) -> None:
+        parts = path.split(".")
+        current = target
+        for part in parts[:-1]:
+            current = current[int(part)] if isinstance(current, list) else current[part]
+        final = parts[-1]
+        if isinstance(current, list):
+            current[int(final)] = value
+        else:
+            current[final] = value
+
+    old_metrics = list(data.get("metrics") or []) if card_type == "Head-to-Head" else []
+    new_metric_labels = []
+    for key, item in field_map.items():
+        value = translated[key].strip()
+        set_path(result, item["path"], value)
+        if card_type == "Head-to-Head" and item["path"].startswith("metrics."):
+            new_metric_labels.append(value)
+
+    if card_type == "Head-to-Head" and new_metric_labels:
+        for side in ("left", "right"):
+            side_data = result.get(side) or {}
+            old_values = dict((data.get(side) or {}).get("values") or {})
+            remapped = {}
+            for old_label, new_label in zip(old_metrics, result.get("metrics") or []):
+                if old_label in old_values:
+                    remapped[new_label] = old_values[old_label]
+            for key, value in old_values.items():
+                if key not in old_metrics:
+                    remapped[key] = value
+            side_data["values"] = remapped
+            result[side] = side_data
+
+    result["language"] = language
+    return result
+
+
 def _validate_cricket_story_angles(result: dict) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no angle object."
