@@ -3380,9 +3380,9 @@ def _render_card_studio(
     from card_studio import invalidate_card_studio_result_for_composition
 
     if invalidate_card_studio_result_for_composition(
-        st.session_state, result_key, layout_position, contrast_treatment
+        st.session_state, result_key, card_type, layout_position, contrast_treatment
     ):
-        st.info("Composition changed. Render the card again to update its preview before attaching it.")
+        st.info("Card type or composition changed. Render the card again before attaching it.")
 
     if st.button("Render card", type="primary", width="stretch", key=f"{state_id}-render", help="Generate and render card"):
         with st.spinner("Rendering editorial card…"):
