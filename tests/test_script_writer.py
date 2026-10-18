@@ -71,16 +71,46 @@ def test_prompt_contains_generation_rules():
     assert "Do not create an extra slide for a quote" in script_writer.SYSTEM_PROMPT
 
 
-def test_schema_requires_four_slides_and_subject():
-    assert script_writer.CRICKET_SCHEMA["properties"]["script"]["minItems"] == 4
-    assert script_writer.CRICKET_SCHEMA["properties"]["script"]["maxItems"] == 4
+def test_schema_allows_three_to_five_slides_and_subject():
+    assert script_writer.CRICKET_SCHEMA["properties"]["script"]["minItems"] == 3
+    assert script_writer.CRICKET_SCHEMA["properties"]["script"]["maxItems"] == 5
     assert "subject_name" in script_writer.CRICKET_SCHEMA["required"]
     assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["minItems"] == 3
     assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["maxItems"] == 3
     assert script_writer.CRICKET_SCHEMA["properties"]["quote"]["type"] == "string"
     assert script_writer.CRICKET_SCHEMA["properties"]["quote_attribution"]["type"] == "string"
     assert script_writer.CRICKET_SCHEMA["properties"]["quote_slide"]["minimum"] == 0
-    assert script_writer.CRICKET_SCHEMA["properties"]["quote_slide"]["maximum"] == 4
+    assert script_writer.CRICKET_SCHEMA["properties"]["quote_slide"]["maximum"] == 5
+
+
+@pytest.mark.parametrize("slide_count", [3, 4, 5])
+def test_cricket_validator_accepts_three_to_five_slides(slide_count):
+    result = valid_result()
+    if slide_count < 4:
+        result["script"] = result["script"][:slide_count]
+    elif slide_count > 4:
+        result["script"].append(
+            {
+                **result["script"][-1],
+                "voiceover": "Shubman Gill's next medical assessment will determine his availability.",
+            }
+        )
+
+    valid, reason = script_writer.validate_cricket_script(result)
+    assert valid, reason
+
+
+@pytest.mark.parametrize("slide_count", [2, 6])
+def test_cricket_validator_rejects_slide_counts_outside_three_to_five(slide_count):
+    result = valid_result()
+    if slide_count < 3:
+        result["script"] = result["script"][:slide_count]
+    else:
+        result["script"].extend([dict(result["script"][-1]), dict(result["script"][-1])])
+
+    valid, reason = script_writer.validate_cricket_script(result)
+    assert not valid
+    assert "3–5" in reason
 
 
 def test_prompt_contains_three_title_angles():
@@ -98,7 +128,7 @@ def test_generation_prompts_cover_validator_requirements():
     assert "Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category" in cricket
     assert "a non-empty 3–4-word opening headline" in cricket
     assert "at least one relevant hashtag" in cricket
-    assert "quote_attribution and quote_slide from 1–4" in cricket
+    assert "quote_attribution and quote_slide from 1–5" in cricket
     assert "3–5 hashtags each beginning with # and containing no spaces" in universal
     assert "quote, quote_attribution, and quote_slide must agree" in universal
     assert "story_index equals slide_number minus one" in top5
