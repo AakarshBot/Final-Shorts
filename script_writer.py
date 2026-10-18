@@ -1089,6 +1089,23 @@ def _research_story(story) -> str:
     return "\n\n".join(sections)[:MAX_SOURCE_CHARS]
 
 
+def _groq_strict_schema(schema):
+    """Strip array-length keywords not documented in Groq's strict schema subset.
+
+    Exact array lengths remain enforced by the local Scriptwriter validators; this
+    only avoids sending undocumented minItems/maxItems keywords to the provider.
+    """
+    if isinstance(schema, dict):
+        return {
+            key: _groq_strict_schema(value)
+            for key, value in schema.items()
+            if key not in {"minItems", "maxItems"}
+        }
+    if isinstance(schema, list):
+        return [_groq_strict_schema(value) for value in schema]
+    return schema
+
+
 def _request(
     model: str,
     prompt: str,
@@ -1136,6 +1153,7 @@ def _request(
             f"in the research packet below, but frame the narration, hook, debate, and pacing entirely through this lens.\n\n"
         )
     user_payload += "RESEARCH PACKET:\n" + story
+    provider_schema = _groq_strict_schema(active_schema)
 
     for attempt in range(3):
         try:
@@ -1153,7 +1171,7 @@ def _request(
                         "json_schema": {
                             "name": active_schema_name,
                             "strict": True,
-                            "schema": active_schema,
+                            "schema": provider_schema,
                         },
                     },
                     "include_reasoning": False,
