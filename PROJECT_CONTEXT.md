@@ -237,7 +237,7 @@ The dashboard uses a **professional light studio theme** across Test and Live: p
 - **Editorial review:** Story-angle cards, Scriptwriter editor, teleprompter, packaging cards, comments, and status panels use readable light surfaces and slate text. The phone/video mock-up intentionally stays dark because it represents the actual Short preview, not the dashboard chrome.
 - **Audio Studio:** Existing multilingual voice roster, Edge-TTS controls, track preview, timing validation, cache, and manual audio options remain intact; the dependency floor fix is documented in Audio — Function 03.
 - **Visual Board and Renderer:** Existing visual selection, crop/reposition, polygon subject cutout, Card Studio, and Top-5 card rendering remain unchanged. Standard Shorts Renderer no longer accepts or draws the root-level dashboard headline.
-- **Quality gate:** The latest main-branch CI was successful on 12 October 2026. The branch implementing these changes must pass the full compile and pytest workflow before merge; do not claim an old test count as the current result.
+- **Quality gate:** The previous main revision passed 339 tests with 1 skipped. This headline/lead-rule branch must pass its own full compile and pytest workflow before merge; do not treat the prior run as validation of these changes.
 - **Hard locks:** Keep the shared Manual Subject Cutout editor/renderer and crop paths untouched. No unrelated stage, visual-generation option, upload route, or Long-form behavior is included in this patch.
 
 ### Top-5 current implementation checkpoint
