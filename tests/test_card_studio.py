@@ -128,3 +128,31 @@ def test_card_studio_keeps_subject_cutout_on_shared_editor():
 def test_card_type_lists_match_approval_scope():
     assert "Text Subject Cutout" in card_studio.TEST_CARD_TYPES
     assert card_studio.LIVE_CARD_TYPES == ("Text Subject Cutout",)
+
+
+def test_subject_mask_uses_the_same_centre_crop_as_the_photo():
+    image = Image.new("RGB", (1000, 1000), (80, 90, 100))
+    mask = Image.new("L", (1000, 1000), 0)
+    ImageDraw.Draw(mask).rectangle((300, 200, 450, 800), fill=255)
+
+    covered, aligned = card_studio._cover_with_mask(image, mask)
+
+    assert covered.size == (1080, 1920)
+    assert aligned is not None
+    assert aligned.size == covered.size
+    bbox = aligned.point(lambda value: 255 if value >= 96 else 0).getbbox()
+    assert bbox is not None
+    assert 130 <= bbox[0] <= 180
+    assert 400 <= bbox[2] <= 470
+
+
+def test_dynamic_text_side_moves_away_from_subject():
+    image = Image.new("RGB", (1080, 1920), (90, 90, 90))
+    right_subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(right_subject).rectangle((700, 260, 1020, 1400), fill=255)
+    left_subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(left_subject).rectangle((90, 260, 350, 1400), fill=255)
+
+    assert card_studio._choose_text_side(image, right_subject) == "left"
+    assert card_studio._choose_text_side(image, left_subject) == "right"
+
