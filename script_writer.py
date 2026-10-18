@@ -312,7 +312,7 @@ Every slide must include useful metadata matching the narrated fact:
 
 GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSON
 - Return 3–5 non-empty spoken slides. Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
-- Keep Slide 1 to 13 words or fewer; never rely on an automatic post-generation trim.
+- For English, keep Slide 1 to 13 words or fewer; for Hindi/Telugu, keep the lead concise and let the measured 5.2-second audio check enforce the limit.
 - Name the non-empty subject_name exactly in the spoken narration.
 - Include a non-empty, crisp dashboard-only headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
 - Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the generated slides.
@@ -322,7 +322,7 @@ GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSO
 FINAL SELF-CHECK
 Before returning JSON, silently verify:
 1. Return 3–5 slides, preferring four only when it best fits the story.
-2. Slide 1 is 13 words or fewer.
+2. For English, Slide 1 is 13 words or fewer; for Hindi/Telugu, the generated first-scene audio fits within 5.2 seconds.
 3. The main subject is named in the narration.
 4. All important factual information is compressed across the generated slides.
 5. No unsupported claim has been added.
@@ -487,7 +487,7 @@ FINAL SELF-CHECK
 Before returning JSON, silently verify:
 1. The story is understandable without the article.
 2. There are 3–5 slides, preferably 4.
-3. Slide 1 has fewer than 14 words.
+3. For English, Slide 1 has fewer than 14 words; for Hindi/Telugu, the generated first-scene audio fits within 5.2 seconds.
 4. Total narration is 50–74 words.
 5. The exact main subject name appears in the narration.
 6. No filler or retention-bait phrase appears.
@@ -638,7 +638,7 @@ EDITORIAL DESK: ON THIS DAY (HISTORICAL SPORTS MILESTONES)
 - Editorial Focus: The historic calendar anniversary, the incredible milestone, and why it changed sports history.
 - Tone & Vocabulary: Epic, monumental, narrative throwback celebrating iconic sports history.
 - 4-Beat Historical Arc:
-  * Slide 1: THE ANNIVERSARY HOOK (< 14 words): "On this day in [Year], [Subject] achieved one of the most iconic feats in history."
+  * Slide 1: THE ANNIVERSARY HOOK: "On this day in [Year], [Subject] achieved one of the most iconic feats in history." Keep it under 14 words in English; in Hindi/Telugu, keep it concise enough to fit within 5.2 seconds of measured narration.
   * Slide 2: THE ADVERSITY / DRAMA: The hostile atmosphere, the impossible odds, or the desperate match situation.
   * Slide 3: THE HISTORIC FEAT: The unforgettable numbers, the record shattered, or the clutch climax.
   * Slide 4: THE ENDURING LEGACY: Why that milestone redefined the sport and echoes decades later.
