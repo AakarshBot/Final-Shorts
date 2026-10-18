@@ -35,6 +35,9 @@ def test_crop_dialog_uses_bounded_canvas_and_explicit_crop_confirmation():
     assert "max_canvas_width = 1600" in crop_source
     assert "realtime_update=False" in crop_source
     assert "Double-click to confirm the crop selection." in crop_source
+    assert "invalidate_card_result: bool = False" in crop_source
+    assert "invalidate_card_studio_results_for_source(" in crop_source
+    assert "invalidate_card_result=True" in app_source
 
 
 def test_visual_pool_work_uses_cached_validation_and_thumbnails():
