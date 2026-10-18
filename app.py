@@ -5236,6 +5236,26 @@ def _render_live_script():
     )
 
     if not isinstance(script, dict):
+        if st.session_state.get("live_production_line") != "top_5":
+            stored_language = str(st.session_state.get("live_script_language") or "english").casefold()
+            language_default = stored_language.title() if stored_language in {"english", "hindi", "telugu"} else "English"
+            selected_language = st.pills(
+                "Script language",
+                ["English", "Hindi", "Telugu"],
+                default=language_default,
+                key="live-script-language-choice",
+                help="Choose the narration and story-angle language before generating the script.",
+            ) or language_default
+            selected_language_key = selected_language.strip().casefold()
+            if selected_language_key != stored_language:
+                st.session_state.live_script_language = selected_language_key
+                st.session_state.live_universal_angles = None
+                st.session_state.live_universal_angle_source = None
+                st.session_state.live_universal_angle_selected = 0
+                st.session_state.live_universal_angle_custom = ""
+                st.session_state.live_universal_angle_story_key = None
+                st.session_state.live_script_error = ""
+                st.caption("Language changed. Generate fresh story angles in the selected language.")
         angles = st.session_state.get("live_universal_angles")
         if not angles:
             if st.button(
