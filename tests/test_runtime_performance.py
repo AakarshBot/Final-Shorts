@@ -38,7 +38,7 @@ def test_crop_dialog_uses_bounded_canvas_and_explicit_crop_confirmation():
     assert "Double-click to confirm the crop selection." in crop_source
     assert "The preview follows your selection" in crop_source
     assert "def _prepare_crop_dialog_canvas(" in app_source
-    assert "@st.cache_data(max_entries=24, show_spinner=False)" in app_source
+    assert "@st.cache_data(max_entries=4, show_spinner=False)" in app_source
     assert "invalidate_card_studio_results_for_source(" in crop_source
     assert "card_selector=True" in app_source
 
