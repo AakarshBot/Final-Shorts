@@ -184,11 +184,11 @@ Universal 2-Stage Visual Architecture across all desks (Deep-Dive Cricket, YT Tr
 2. **Stage 2: Visual Builder (Layout & Assembly)**
    - **Crop & Reposition:** Interactive polygon and rectangular crop tool. (Hard locked, untouched).
    - **Text Subject Cutout:** Rembg foreground cutout with text placed behind or around subjects. (Hard locked, untouched).
-   - **Card Studio:** Stat Highlight Card, Quote / Reaction Card, Head-to-Head Split Card, Key Fact / Milestone Card with negative-space subject awareness.
+   - **Card Studio:** Four non-cutout Test cards (Stat Highlight, Quote / Reaction, Head-to-Head, Key Fact / Milestone) use a photo-led sports-editorial system: restrained ink/paper/signal-accent palette, expressive display type, clear type hierarchy, thin rules instead of decorative glass panels/3D effects, and composition-specific layouts. Subject placement uses the existing BiRefNet mask when available; image and mask receive the same crop/resize transform. If segmentation is unavailable, image texture supplies a fallback layout without blocking Manual QC. No new dependencies.
    - **Slide Attachment:** Attach any cropped image or generated card to any slide (1 to N).
    - **Visual Board:** Review all assigned slide visuals before approving the final handoff for Renderer.
 
-Status: **Approved / 2-stage universal visual flow across all desks.**
+Status: **Visual collection and board flow remain approved. Non-cutout Card Studio designs are Test-only / awaiting visual QC. Text Subject Cutout, crop/reposition, and polygon placement remain hard locked and unchanged; Live continues to expose Text Subject Cutout only until the user approves any other card type.**
 
 ## Subtitles — Function 05
 
