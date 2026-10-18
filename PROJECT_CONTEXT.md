@@ -31,7 +31,7 @@ Test is a modular laboratory; Live is the approved production line.
 
 - Topic selection hands the selected story's URL and story payload to the relevant function.
 - Test Scriptwriter can generate a script, and Manual QC can edit and approve it. The Scriptwriter handoff is the canonical package for every later function that needs script data.
-- The Scriptwriter Test view should expose the complete editorial handoff: opening headline when enabled, quote/attribution when available, and the slide scripts. For Top-5, this means each slide's spoken headline plus its visual-only body copy.
+- Test and Live Scriptwriter views expose the root-level opening headline as editable dashboard-only metadata, with no word or character cap; it is never rendered into the standard Short. Quote/attribution and spoken slides remain part of the handoff. For Top-5, each slide's spoken headline and visual-only body copy remain unchanged.
 - Audio consumes the Scriptwriter handoff and returns audio/timing data. Test lets the user listen and approve it.
 - Visuals are a modular function. Automatic scraping starts from the selected story URL, while manual scraper/search/AI options can be run independently. Manual inputs may deliberately bypass upstream approvals when the visual function does not actually require that approval.
 - Test Visuals uses the same slide-board interaction as Live: script context above each slide, per-slide visual attachment, crop/reposition, and an explicit approved visual handoff. Standard Cricket production uses four visual slides; Top-5 remains a separate six-slide workflow.
@@ -133,14 +133,14 @@ Status: **Approved.**
 Unified Scriptwriter (`script_writer.py`):
 - One shared module serves Deep-Dive Cricket, Top-5, YouTube Search Trends, Niche Sports, and On This Day; do not add parallel writers or wrapper layers.
 - Research starts with the selected article and adds related reports when available to ground facts and clarify current status.
-- Deep-Dive Cricket: three editorial angles for human selection, then 3–5 spoken slides, preferring four when the story fits naturally. Slide 1 is at most 13 words; total narration targets 50–70 words and under 30 seconds.
-- YouTube Search Trends, Niche Sports, and On This Day: three editorial angles for selection, then 3–5 connected spoken slides, 50–74 words overall and under 30 seconds, with a subject-named lead and complete per-slide visual metadata.
+- Deep-Dive Cricket: three editorial angles for human selection, then 3–5 spoken slides, preferring four when the story fits naturally. English Slide 1 is at most 13 words; Hindi/Telugu Slide 1 is validated by measured first-scene audio duration (maximum 5.2 seconds). Total narration targets 50–70 words and under 30 seconds.
+- YouTube Search Trends, Niche Sports, and On This Day: three editorial angles for selection, then 3–5 connected spoken slides, 50–74 words overall and under 30 seconds, with a subject-named lead and complete per-slide visual metadata. English Slide 1 stays under 14 words; Hindi/Telugu use the 5.2-second measured-audio limit.
 - Top-5: six slides; Slide 1 is a package label plus visual-only roundup copy, Slides 2–6 correspond to the five selected stories in order, and the six spoken headlines target less than 30 seconds.
 - The generation prompts explicitly list the content, packaging, quote, visual-handoff, and shape requirements enforced by generation validators. Generation may use one hidden recovery/rewrite for a failed draft; failed generated output is not sent to Manual QC.
-- Do not post-process a generated 14-word lead by silently trimming it. The writer must produce a compliant lead or use the existing generation recovery path.
+- Do not post-process an English lead of 14 words or more by silently trimming it. The writer must produce a compliant lead or use the existing recovery path. Hindi/Telugu first-slide length is gated by measured audio duration, not word-token count.
 
 Generated publish metadata:
-- `headline`: concise opening hook (3–4 words for Deep Dive/YT Trends; Top-5 package label for Top-5).
+- Standard non-Top-5 `headline`: crisp, story-specific dashboard display metadata with no word-count/character limit. It is not spoken and must never be included in the rendered Short. Top-5 retains its independent six-slide package/card headline rules.
 - `titles`: exactly 3 distinct title candidates (SEO/Search, Consequence/Significance, Curiosity).
 - `seo_description`: concise story-specific description.
 - `hashtags`: story-specific, valid hashtag values.
@@ -158,7 +158,7 @@ Status: **Unified architecture retained; generation checks moved fully upstream 
 Contract:
 - Default automated engine: Chatterbox Turbo for standard Shorts Test, standard Shorts Live, Top-5 Test, Top-5 Live, and Long-form audio. The shared Shorts generators default to Chatterbox even when callers omit an engine.
 - Edge-TTS is explicit-only: Test and Live expose an engine selector that defaults to Chatterbox. Edge-TTS is used only when the user selects it; never silently fall back from a failed Chatterbox model or reference.
-- Chatterbox Turbo is English-only. The UI blocks Turbo generation for Hindi/Telugu selections and directs the user to choose Edge-TTS instead. Long-form is validated against the same Turbo language limit.
+- Chatterbox Turbo is English-only. The UI blocks Turbo generation for Hindi/Telugu selections and directs the user to choose Edge-TTS instead. Long-form is validated against the same Turbo language limit. For standard Hindi/Telugu Shorts, measured first-scene audio must be no longer than 5.2 seconds during generation and Audio approval; this replaces only the Scriptwriter word-count gate for that lead. English retains the existing ≤13-word rule.
 - Three local Chatterbox reference choices are available before audio generation in standard Shorts Test/Live, Top-5 Test/Live, and Long-form Test/Live: Voice 1 uses `audio_reference.wav` (or the configured `AUDIO_REFERENCE` path), Voice 2 uses `audio_reference_2.wav`, and Voice 3 uses `audio_reference_3.wav`. The two extra files must be dropped into the factory root locally. All three reference paths are gitignored and must never be committed. The UI shows missing-file status and blocks generation until the chosen reference exists. Calls without an explicitly selected voice retain the existing optional built-in-voice fallback. A present but invalid reference must report an error rather than silently switching voices.
 - Chatterbox writes WAV files; audio previews choose the MIME type from the actual file extension. Edge-TTS writes MP3 with validated WordBoundary timings. Both handoffs must satisfy the 30-second approval ceiling.
 - Edge-TTS voice roster supports English, Hindi, and Telugu:
@@ -215,6 +215,7 @@ Renderer v2 is the single shared Test/Live renderer:
 - Stereo AAC audio at 192 kbps normalized to -14 LUFS / -1.5 dBTP.
 - Photo motion uses deterministic push/pan; Card Studio and Top-5 cards render as static frames.
 - Suppresses subtitle overlay automatically for Card Studio and Text Subject Cutout frames.
+- Does not render the standard root-level Scriptwriter headline. That field is dashboard-only metadata; editorial card text and Top-5's six-slide card/headline flow remain separate.
 
 Status: **Active / Shared Test + Live renderer.**
 
@@ -235,7 +236,7 @@ The dashboard uses a **professional light studio theme** across Test and Live: p
 - **Navigation:** Existing three-column workspace bar, TEST/LIVE switch, direct stage navigation, and pipeline progress remain behaviorally unchanged.
 - **Editorial review:** Story-angle cards, Scriptwriter editor, teleprompter, packaging cards, comments, and status panels use readable light surfaces and slate text. The phone/video mock-up intentionally stays dark because it represents the actual Short preview, not the dashboard chrome.
 - **Audio Studio:** Existing multilingual voice roster, Edge-TTS controls, track preview, timing validation, cache, and manual audio options remain intact; the dependency floor fix is documented in Audio — Function 03.
-- **Visual Board and Renderer:** Existing visual selection, crop/reposition, polygon subject cutout, Card Studio, frame generation, and renderer contracts are out of scope and must remain unchanged.
+- **Visual Board and Renderer:** Existing visual selection, crop/reposition, polygon subject cutout, Card Studio, and Top-5 card rendering remain unchanged. Standard Shorts Renderer no longer accepts or draws the root-level dashboard headline.
 - **Quality gate:** The latest main-branch CI was successful on 12 October 2026. The branch implementing these changes must pass the full compile and pytest workflow before merge; do not claim an old test count as the current result.
 - **Hard locks:** Keep the shared Manual Subject Cutout editor/renderer and crop paths untouched. No unrelated stage, visual-generation option, upload route, or Long-form behavior is included in this patch.
 
@@ -379,12 +380,11 @@ output/
 ## Important recent fixes
 
 - Renderer preview regression fixed: opening preview now uses `PREVIEW_SUBTITLE_DATA` instead of an undefined `subtitle_data`.
-- Scriptwriter now generates the strict 3–4 word renderer heading.
-- Renderer consumes the approved Scriptwriter heading.
+- The root-level Scriptwriter headline is crisp dashboard-only metadata with no word-count limit; it is disconnected from standard Shorts rendering.
 - Scriptwriter now generates hashtags and the public-upload comment in the same generation call.
 - YouTube Upload QC was added with editable publish metadata and Public/Private upload lanes.
 - Renderer text layout was corrected to use stroke-aware, screen-safe measurements so headline and subtitle characters do not clip at the canvas edges.
-- Renderer headline wrapping now supports longer headlines across up to three lines.
+- Historical root-headline overlay/wrapping is no longer used by the standard Shorts renderer; editable headlines inside Text Subject Cutout/editorial cards remain on their separate visual paths.
 
 ## Current baseline
 
@@ -484,8 +484,8 @@ Checkpoint rule:
 All previous scriptwriters (`universal_script_writer.py`, `top5_script_writer.py`, and the legacy cricket writer) have been consolidated into **one unified scriptwriter** (`script_writer.py`) with zero compatibility wrappers.
 
 Scope & Stream Dispatch:
-- **Deep-Dive Cricket:** Generates 3 research-backed editorial angles for human selection, producing 3–5 spoken slides, preferring four only when the story fits naturally. Slide 1 capped at 13 words; narration remains 50–70 words and under 30 seconds.
-- **YouTube Search Trends & Niche Sports:** Generates 3 research-backed editorial angles honoring search intent, producing 3–5 spoken slides. Slide 1 capped at 13 words; total narration 18–30 seconds (50–74 words). Preserves the raw search query context for SEO/Search packaging.
+- **Deep-Dive Cricket:** Generates 3 research-backed editorial angles for human selection, producing 3–5 spoken slides, preferring four only when the story fits naturally. English Slide 1 capped at 13 words; Hindi/Telugu first-scene audio must measure ≤5.2 seconds. Narration remains 50–70 words and under 30 seconds.
+- **YouTube Search Trends & Niche Sports:** Generates 3 research-backed editorial angles honoring search intent, producing 3–5 spoken slides. English Slide 1 capped at 13 words; Hindi/Telugu first-scene audio must measure ≤5.2 seconds; total narration 18–30 seconds (50–74 words). Preserves the raw search query context for SEO/Search packaging.
 - **Top-5 Stories:** Generates a 6-slide package (Slide 1: hook headline ≤8 words with visual body copy; Slides 2–6: spoken headline + visual card body). Total spoken headline duration strictly under 30 seconds.
 
 Unified Generation & Validation Architecture:
@@ -497,7 +497,7 @@ Unified Generation & Validation Architecture:
 6. Never exposes an invalid draft to Manual QC.
 
 Publish Metadata Handoff:
-- `headline`: concise opening hook (3–4 words for Deep-Dive/YT Trends; package headline for Top-5).
+- Standard non-Top-5 `headline`: crisp dashboard-only metadata with no word-count limit; never attached to the Short. Top-5's six-slide package headlines and cards remain unchanged.
 - `titles`: exactly 3 distinct title candidates (SEO/Search, Consequence/Significance, Curiosity).
 - `seo_description`: concise story-specific description.
 - `hashtags`: 3–5 relevant hashtags.
