@@ -1382,6 +1382,11 @@ def test_indic_renderer_font_paths_use_bundled_noto_and_raqm(language, sample, f
     assert top5_font.layout_engine == ImageFont.Layout.RAQM
     assert top5_font.getmask(sample).getbbox() is not None
 
+    top5_body_font = renderer._top5_body_font(36, language)
+    assert Path(top5_body_font.path).name == font_name
+    assert top5_body_font.layout_engine == ImageFont.Layout.RAQM
+    assert top5_body_font.getmask(sample).getbbox() is not None
+
     subtitle_font, _line_lengths, _measurements, _heights, _total = (
         renderer._subtitle_render_geometry_cached(tuple(sample.split()), language)
     )
