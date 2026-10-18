@@ -691,3 +691,35 @@ def test_hindi_live_card_studio_exposes_translation_and_hindi_starter_copy():
     assert values["Eyebrow"] == "करियर के आँकड़े"
     assert values["Headline"] == "रनों की शानदार पारी"
     assert values["Unit"] == "रन"
+
+
+
+def test_live_scriptwriter_can_select_hindi_before_generating_angles():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "deep_dive"
+    at.session_state["live_desk"] = "cricket"
+    at.session_state["live_cricket_profile"] = "cricket_india_asia"
+    at.session_state["live_topics_profile"] = "cricket_india_asia"
+    at.session_state["live_topics"] = [Topic(
+        title="Test Hindi story",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/hindi-story",
+    )]
+    at.session_state["live_selected_topic"] = 0
+    at.session_state["live_stage"] = "02 · Script"
+    at.session_state["live_script_language"] = "english"
+    at.session_state["live_script_data"] = None
+    at.session_state["live_universal_angles"] = None
+    at.run()
+
+    assert not at.exception, at.exception
+    language = next(pill for pill in at.pills if pill.label == "Script language")
+    assert language.value == "English"
+    language.set_value("Hindi").run()
+
+    assert not at.exception, at.exception
+    assert at.session_state["live_script_language"] == "hindi"
+    assert at.session_state["live_universal_angles"] is None
+    assert any(button.label == "Generate Script" for button in at.button)
