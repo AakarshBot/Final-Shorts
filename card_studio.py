@@ -20,7 +20,7 @@ SAFE_LEFT = 76
 SAFE_TOP = 190
 SAFE_RIGHT = 864
 SAFE_BOTTOM = 1460
-CONTENT_WIDTH = 670
+CONTENT_WIDTH = 520
 
 # Editorial palette: photo, ink, paper, and one restrained signal accent.
 INK = (12, 15, 19)
@@ -315,15 +315,22 @@ def _choose_text_side(image: Image.Image, mask: Image.Image | None) -> str:
 
 
 def _side_gradient(image: Image.Image, side: str) -> Image.Image:
-    """Darken only the text side and fade back into the photograph."""
+    """Protect the selected text column and fade the contrast bed into the image."""
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
     draw = ImageDraw.Draw(overlay)
+    full_distance = (
+        SAFE_LEFT + CONTENT_WIDTH
+        if side == "left"
+        else WIDTH - SAFE_RIGHT + CONTENT_WIDTH
+    )
+    fade_end = min(WIDTH, full_distance + 300)
+    fade_span = max(1, fade_end - full_distance)
     for x in range(WIDTH):
         distance = x if side == "left" else WIDTH - 1 - x
-        if distance <= 650:
+        if distance <= full_distance:
             alpha = 224
-        elif distance < 1000:
-            alpha = int(224 * (1000 - distance) / 350)
+        elif distance < fade_end:
+            alpha = int(224 * (fade_end - distance) / fade_span)
         else:
             alpha = 0
         if alpha:
