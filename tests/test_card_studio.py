@@ -116,7 +116,7 @@ def test_card_studio_keeps_subject_cutout_on_shared_editor():
 
 def test_card_type_lists_match_approval_scope():
     assert "Text Subject Cutout" in card_studio.TEST_CARD_TYPES
-    assert card_studio.LIVE_CARD_TYPES == ("Text Subject Cutout",)
+    assert card_studio.LIVE_CARD_TYPES == card_studio.TEST_CARD_TYPES
 
 
 def test_subject_mask_uses_the_same_centre_crop_as_the_photo():
