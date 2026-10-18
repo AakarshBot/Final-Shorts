@@ -61,16 +61,18 @@ class CardStudioError(ValueError):
 def invalidate_card_studio_result_for_composition(
     session_state,
     result_key: str,
+    card_type: str,
     layout_position: str,
     contrast_treatment: str,
 ) -> bool:
-    """Clear a rendered preview when the user changes how the source photo is composed."""
+    """Clear a rendered preview when its card type or photo composition has changed."""
     result = session_state.get(result_key)
     if not isinstance(result, dict) or result.get("bytes") is None:
         return False
     previous = result.get("data") or {}
     if (
-        previous.get("layout_position", CARD_LAYOUT_POSITIONS[0]) != layout_position
+        result.get("type") != card_type
+        or previous.get("layout_position", CARD_LAYOUT_POSITIONS[0]) != layout_position
         or previous.get("contrast_treatment", CARD_CONTRAST_TREATMENTS[0]) != contrast_treatment
     ):
         session_state[result_key] = None
