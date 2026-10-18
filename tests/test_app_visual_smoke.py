@@ -746,7 +746,7 @@ def test_test_scriptwriter_headline_is_dashboard_only_and_unlimited():
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
     at.session_state["test_production_line"] = "deep_dive"
-    at.session_state["test_stage"] = "02 · Script"
+    at.session_state["test_stage"] = "02 · Scriptwriter"
     at.session_state["topics"] = [Topic(
         title="Shubman Gill injury update",
         source="Test Source",
