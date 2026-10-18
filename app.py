@@ -2898,6 +2898,44 @@ def _render_card_studio(
     if card_language not in {"english", "hindi", "telugu"}:
         card_language = "english"
 
+    def value_key(field):
+        shared_fields = {"layout-position", "contrast-treatment", "image-mode", "split-direction"}
+        language_suffix = (
+            f"-{card_language}"
+            if card_language in {"hindi", "telugu"} and field not in shared_fields
+            else ""
+        )
+        return (
+            f"{state_id}-{card_type.lower().replace(' ', '-').replace('/', '-').replace('&', 'and')}"
+            f"-{field}{language_suffix}"
+        )
+
+    pending_translation_key = f"{state_id}-pending-copy-translation"
+    pending_translation = st.session_state.get(pending_translation_key)
+    if (
+        isinstance(pending_translation, dict)
+        and pending_translation.get("card_type") == card_type
+        and pending_translation.get("language") == card_language
+    ):
+        translated_data = pending_translation.get("data") or {}
+        if card_type == "Stat Highlight":
+            for field in ("eyebrow", "headline", "unit"):
+                st.session_state[value_key(field)] = translated_data.get(field, "")
+            for index, metric in enumerate(translated_data.get("metrics") or [], 1):
+                st.session_state[value_key(f"metric-{index}-label")] = metric.get("label", "")
+        elif card_type == "Quote / Reaction":
+            for field in ("eyebrow", "quote", "attribution", "context"):
+                st.session_state[value_key(field)] = translated_data.get(field, "")
+        elif card_type == "Head-to-Head":
+            for field in ("eyebrow", "headline"):
+                st.session_state[value_key(field)] = translated_data.get(field, "")
+            for index, metric in enumerate(translated_data.get("metrics") or [], 1):
+                st.session_state[value_key(f"metric-{index}-label")] = metric
+        elif card_type == "Key Fact / Milestone":
+            for field in ("eyebrow", "label", "context"):
+                st.session_state[value_key(field)] = translated_data.get(field, "")
+        del st.session_state[pending_translation_key]
+
     defaults = card_data_for_type(card_type, language=card_language)
 
     if top5 and active_slide is None:
@@ -3193,18 +3231,6 @@ def _render_card_studio(
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-    def value_key(field):
-        shared_fields = {"layout-position", "contrast-treatment", "image-mode", "split-direction"}
-        language_suffix = (
-            f"-{card_language}"
-            if card_language in {"hindi", "telugu"} and field not in shared_fields
-            else ""
-        )
-        return (
-            f"{state_id}-{card_type.lower().replace(' ', '-').replace('/', '-').replace('&', 'and')}"
-            f"-{field}{language_suffix}"
-        )
-
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">COMPOSITION</div>'
         '<div class="section-title">Choose how this card uses the photo</div></div></div>',
@@ -3422,22 +3448,11 @@ def _render_card_studio(
                 from script_writer import translate_card_copy
 
                 translated_data = translate_card_copy(card_type, data, card_language)
-                if card_type == "Stat Highlight":
-                    for field in ("eyebrow", "headline", "unit"):
-                        st.session_state[value_key(field)] = translated_data.get(field, "")
-                    for index, metric in enumerate(translated_data.get("metrics") or [], 1):
-                        st.session_state[value_key(f"metric-{index}-label")] = metric.get("label", "")
-                elif card_type == "Quote / Reaction":
-                    for field in ("eyebrow", "quote", "attribution", "context"):
-                        st.session_state[value_key(field)] = translated_data.get(field, "")
-                elif card_type == "Head-to-Head":
-                    for field in ("eyebrow", "headline"):
-                        st.session_state[value_key(field)] = translated_data.get(field, "")
-                    for index, metric in enumerate(translated_data.get("metrics") or [], 1):
-                        st.session_state[value_key(f"metric-{index}-label")] = metric
-                elif card_type == "Key Fact / Milestone":
-                    for field in ("eyebrow", "label", "context"):
-                        st.session_state[value_key(field)] = translated_data.get(field, "")
+                st.session_state[f"{state_id}-pending-copy-translation"] = {
+                    "card_type": card_type,
+                    "language": card_language,
+                    "data": translated_data,
+                }
                 st.session_state[f"{state_id}-result"] = None
                 st.session_state[f"{state_id}-translation-notice"] = (
                     f"Card copy translated to {language_action_name}. Review all fields before rendering."
