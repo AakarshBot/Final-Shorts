@@ -1547,24 +1547,51 @@ def write_script(
             + "\nBuild the whole narration around this lens. Explore the debate, comparison, or insight posed by this angle using the context and cricket knowledge. Do not replace it with the obvious event/result summary."
         )
 
+    def finish(result: dict, model: str) -> dict:
+        return _finish_result(
+            result,
+            story,
+            source,
+            model,
+            language_key,
+            angle_text=angle_text,
+            delivery_profile=DESK_PROFILES.get(norm_profile, "SUBCONTINENTAL CRICKET DESK"),
+            desk_profile=norm_profile,
+        )
+
+    def fresh_backup(first_error: Exception) -> dict:
+        try:
+            backup = _request(MODELS[1], instruction, source)
+        except Exception as second_error:
+            raise RuntimeError(
+                "Script generation failed before a valid draft was available. "
+                f"Primary request: {first_error} | Fresh backup request: {second_error}. "
+                "No hidden rewrite was attempted because the primary request did not produce a draft."
+            ) from second_error
+        backup_valid, backup_reason = validate_cricket_script(backup, language=language_key)
+        if not backup_valid:
+            raise RuntimeError(
+                "The backup model returned an invalid script after the primary request failed: "
+                + backup_reason
+            )
+        return finish(backup, MODELS[1])
+
     try:
         result = _request(MODELS[0], instruction, source)
+    except GroqAPIError as first_error:
+        if first_error.status_code != 429:
+            raise RuntimeError(
+                "Groq rejected the Scriptwriter request before generating a draft. "
+                "This is a provider/request error, not a script-validation failure: "
+                + str(first_error)
+            ) from first_error
+        return fresh_backup(first_error)
     except Exception as first_error:
-        result = None
-        first_reason = f"{type(first_error).__name__}: {first_error}"
+        return fresh_backup(first_error)
     else:
         valid, reason = validate_cricket_script(result, language=language_key)
         if valid:
-            return _finish_result(
-                result,
-                story,
-                source,
-                MODELS[0],
-                language_key,
-                angle_text=angle_text,
-                delivery_profile=DESK_PROFILES.get(norm_profile, "SUBCONTINENTAL CRICKET DESK"),
-                desk_profile=norm_profile,
-            )
+            return finish(result, MODELS[0])
         first_reason = reason
 
     rewrite_instruction = (
@@ -1588,16 +1615,7 @@ def write_script(
     if not valid:
         raise RuntimeError("Script generation failed after one hidden rewrite: " + reason)
 
-    return _finish_result(
-        rewritten,
-        story,
-        source,
-        MODELS[1],
-        language_key,
-        angle_text=angle_text,
-        delivery_profile=DESK_PROFILES.get(norm_profile, "SUBCONTINENTAL CRICKET DESK"),
-        desk_profile=norm_profile,
-    )
+    return finish(rewritten, MODELS[1])
 
 
 def generate_cricket_script(*args, **kwargs) -> dict:
