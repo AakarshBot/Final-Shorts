@@ -1,3 +1,5 @@
+import json
+
 import pytest
 
 import script_writer
@@ -60,6 +62,83 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
             },
         ],
     }
+
+
+def test_translate_card_copy_translates_visible_copy_and_preserves_stats(monkeypatch):
+    data = {
+        "language": "english",
+        "eyebrow": "CAREER STAT",
+        "headline": "A huge scoring run",
+        "value": "1,203",
+        "unit": "RUNS",
+        "metrics": [
+            {"label": "Matches", "value": "38"},
+            {"label": "Average", "value": "46.27"},
+        ],
+    }
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        payload = json.loads(story)
+        assert "natural Hindi in Devanagari script" in prompt
+        assert schema["required"] == list(payload)
+        return {
+            key: {
+                "CAREER STAT": "करियर आँकड़े",
+                "A huge scoring run": "रनों की शानदार पारी",
+                "RUNS": "रन",
+                "Matches": "मैच",
+                "Average": "औसत",
+            }[value]
+            for key, value in payload.items()
+        }
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.translate_card_copy("Stat Highlight", data, "hindi")
+
+    assert result["language"] == "hindi"
+    assert result["eyebrow"] == "करियर आँकड़े"
+    assert result["headline"] == "रनों की शानदार पारी"
+    assert result["unit"] == "रन"
+    assert result["value"] == "1,203"
+    assert result["metrics"] == [
+        {"label": "मैच", "value": "38"},
+        {"label": "औसत", "value": "46.27"},
+    ]
+
+
+def test_translate_card_copy_remaps_head_to_head_metric_keys(monkeypatch):
+    data = {
+        "language": "english",
+        "eyebrow": "HEAD TO HEAD",
+        "headline": "Who has the edge?",
+        "left": {"name": "Virat Kohli", "values": {"Runs": "100", "Average": "50"}},
+        "right": {"name": "Joe Root", "values": {"Runs": "90", "Average": "45"}},
+        "metrics": ["Runs", "Average"],
+    }
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        payload = json.loads(story)
+        translate = {
+            "HEAD TO HEAD": "आमने-सामने",
+            "Who has the edge?": "किसका पलड़ा भारी?",
+            "Runs": "रन",
+            "Average": "औसत",
+        }
+        return {key: translate[value] for key, value in payload.items()}
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.translate_card_copy("Head-to-Head", data, "hindi")
+
+    assert result["metrics"] == ["रन", "औसत"]
+    assert result["left"]["values"] == {"रन": "100", "औसत": "50"}
+    assert result["right"]["values"] == {"रन": "90", "औसत": "45"}
+    assert result["left"]["name"] == "Virat Kohli"
+    assert result["right"]["name"] == "Joe Root"
+
+
+def test_translate_card_copy_rejects_text_subject_cutout():
+    with pytest.raises(ValueError, match="not supported"):
+        script_writer.translate_card_copy("Text Subject Cutout", {}, "hindi")
 
 
 def test_prompt_contains_generation_rules():
