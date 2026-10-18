@@ -104,3 +104,29 @@ def test_longform_audio_approve(tmp_path):
 
     approved = LongformAudioEngine.approve_audio(audio_data)
     assert approved["approved_for_assembly"] is True
+
+
+def test_longform_audio_reuses_exact_output_without_regenerating(monkeypatch, tmp_path):
+    import longform_audio
+
+    class FakeChatterbox:
+        sr = 24000
+
+        def __init__(self):
+            self.conds = "builtin"
+            self.generated = 0
+
+        def generate(self, text, temperature=0.8):
+            self.generated += 1
+            return torch.zeros((int(self.sr * 0.5),))
+
+    fake = FakeChatterbox()
+    monkeypatch.setattr(longform_audio, "get_chatterbox_model", lambda: fake)
+
+    first = LongformAudioEngine.generate(sample_script(), output_dir=tmp_path)
+    second = LongformAudioEngine.generate(sample_script(), output_dir=tmp_path)
+
+    assert first["from_cache"] is False
+    assert second["from_cache"] is True
+    assert first["master_path"] == second["master_path"]
+    assert fake.generated == 2
