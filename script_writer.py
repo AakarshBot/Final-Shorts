@@ -50,6 +50,50 @@ MAX_WORDS = 74
 MIN_SCENES = 3
 MAX_SCENES = 5
 
+
+class GroqAPIError(RuntimeError):
+    """A Groq HTTP error with provider detail and retry metadata."""
+
+    def __init__(self, status_code: int, message: str, retry_after: str | None = None):
+        self.status_code = int(status_code)
+        self.retry_after = str(retry_after or "").strip() or None
+        detail = f"Groq API HTTP {self.status_code}: {message}"
+        if self.retry_after:
+            detail += f" (Retry-After: {self.retry_after})"
+        super().__init__(detail)
+
+
+def _groq_http_error(response: requests.Response) -> GroqAPIError:
+    status = int(response.status_code)
+    retry_after = response.headers.get("Retry-After")
+    detail = ""
+    code = ""
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = None
+
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            detail = _clean(error.get("message"))
+            code = _clean(error.get("code") or error.get("type"))
+        elif isinstance(error, str):
+            detail = _clean(error)
+        if not detail:
+            detail = _clean(payload.get("message"))
+    if not detail:
+        detail = _clean(getattr(response, "text", ""))[:700]
+    if not detail:
+        detail = "The provider returned no error detail."
+    if code:
+        detail = f"{code}: {detail}"
+    if status == 429:
+        detail = "Rate limit reached. " + detail
+    elif status == 400:
+        detail = "The provider rejected the request. " + detail
+    return GroqAPIError(status, detail, retry_after)
+
 LANGUAGE_INSTRUCTIONS = {
     "english": "Write all narration and publish metadata in punchy, natural spoken English.",
     "hindi": "Write all narration and publish metadata in natural spoken Hindi using Devanagari script.",
@@ -1045,6 +1089,23 @@ def _research_story(story) -> str:
     return "\n\n".join(sections)[:MAX_SOURCE_CHARS]
 
 
+def _groq_strict_schema(schema):
+    """Strip array-length keywords not documented in Groq's strict schema subset.
+
+    Exact array lengths remain enforced by the local Scriptwriter validators; this
+    only avoids sending undocumented minItems/maxItems keywords to the provider.
+    """
+    if isinstance(schema, dict):
+        return {
+            key: _groq_strict_schema(value)
+            for key, value in schema.items()
+            if key not in {"minItems", "maxItems"}
+        }
+    if isinstance(schema, list):
+        return [_groq_strict_schema(value) for value in schema]
+    return schema
+
+
 def _request(
     model: str,
     prompt: str,
@@ -1092,6 +1153,7 @@ def _request(
             f"in the research packet below, but frame the narration, hook, debate, and pacing entirely through this lens.\n\n"
         )
     user_payload += "RESEARCH PACKET:\n" + story
+    provider_schema = _groq_strict_schema(active_schema)
 
     for attempt in range(3):
         try:
@@ -1109,7 +1171,7 @@ def _request(
                         "json_schema": {
                             "name": active_schema_name,
                             "strict": True,
-                            "schema": active_schema,
+                            "schema": provider_schema,
                         },
                     },
                     "include_reasoning": False,
@@ -1125,7 +1187,8 @@ def _request(
                 raise
             time.sleep(2 ** attempt)
 
-    response.raise_for_status()
+    if response.status_code >= 400:
+        raise _groq_http_error(response)
     content = response.json()["choices"][0]["message"]["content"]
     if isinstance(content, dict):
         return content
@@ -1234,6 +1297,12 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
                 raise ValueError("The translation provider returned incomplete card copy.")
             translated = candidate
             break
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError(
+                    "Groq rejected the card-copy translation request: " + str(exc)
+                ) from exc
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
     if translated is None:
@@ -1341,6 +1410,12 @@ def suggest_cricket_story_angles(
                     res["search_query"] = search_query
                 return res
             errors.append(f"{model}: {reason}")
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError(
+                    "Groq rejected the cricket story-angle request: " + str(exc)
+                ) from exc
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
 
@@ -1502,24 +1577,51 @@ def write_script(
             + "\nBuild the whole narration around this lens. Explore the debate, comparison, or insight posed by this angle using the context and cricket knowledge. Do not replace it with the obvious event/result summary."
         )
 
+    def finish(result: dict, model: str) -> dict:
+        return _finish_result(
+            result,
+            story,
+            source,
+            model,
+            language_key,
+            angle_text=angle_text,
+            delivery_profile=DESK_PROFILES.get(norm_profile, "SUBCONTINENTAL CRICKET DESK"),
+            desk_profile=norm_profile,
+        )
+
+    def fresh_backup(first_error: Exception) -> dict:
+        try:
+            backup = _request(MODELS[1], instruction, source)
+        except Exception as second_error:
+            raise RuntimeError(
+                "Script generation failed before a valid draft was available. "
+                f"Primary request: {first_error} | Fresh backup request: {second_error}. "
+                "No hidden rewrite was attempted because the primary request did not produce a draft."
+            ) from second_error
+        backup_valid, backup_reason = validate_cricket_script(backup, language=language_key)
+        if not backup_valid:
+            raise RuntimeError(
+                "The backup model returned an invalid script after the primary request failed: "
+                + backup_reason
+            )
+        return finish(backup, MODELS[1])
+
     try:
         result = _request(MODELS[0], instruction, source)
+    except GroqAPIError as first_error:
+        if 400 <= first_error.status_code < 500 and first_error.status_code != 429:
+            raise RuntimeError(
+                "Groq rejected the Scriptwriter request before generating a draft. "
+                "This is a provider/request error, not a script-validation failure: "
+                + str(first_error)
+            ) from first_error
+        return fresh_backup(first_error)
     except Exception as first_error:
-        result = None
-        first_reason = f"{type(first_error).__name__}: {first_error}"
+        return fresh_backup(first_error)
     else:
         valid, reason = validate_cricket_script(result, language=language_key)
         if valid:
-            return _finish_result(
-                result,
-                story,
-                source,
-                MODELS[0],
-                language_key,
-                angle_text=angle_text,
-                delivery_profile=DESK_PROFILES.get(norm_profile, "SUBCONTINENTAL CRICKET DESK"),
-                desk_profile=norm_profile,
-            )
+            return finish(result, MODELS[0])
         first_reason = reason
 
     rewrite_instruction = (
@@ -1543,16 +1645,7 @@ def write_script(
     if not valid:
         raise RuntimeError("Script generation failed after one hidden rewrite: " + reason)
 
-    return _finish_result(
-        rewritten,
-        story,
-        source,
-        MODELS[1],
-        language_key,
-        angle_text=angle_text,
-        delivery_profile=DESK_PROFILES.get(norm_profile, "SUBCONTINENTAL CRICKET DESK"),
-        desk_profile=norm_profile,
-    )
+    return finish(rewritten, MODELS[1])
 
 
 def generate_cricket_script(*args, **kwargs) -> dict:
@@ -1752,6 +1845,12 @@ def suggest_universal_story_angles(
                     "provider_used": model,
                 }
             errors.append(f"{model}: {reason}")
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError(
+                    "Groq rejected the universal story-angle request: " + str(exc)
+                ) from exc
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
 
@@ -1805,46 +1904,56 @@ def write_universal_script(
         )
 
     errors = []
-    for attempt, model in enumerate(MODELS):
+    recovery_reason = ""
+    for model in MODELS:
+        model_instruction = instruction
+        if recovery_reason:
+            model_instruction += (
+                "\nRECOVERY:\n"
+                "The previous draft was rejected by local validation. "
+                "Rewrite the complete package now. Fix the exact failure below "
+                "while preserving every other hard rule and all supported facts. "
+                "Return only the complete JSON package.\n"
+                f"Validation failure: {recovery_reason}"
+            )
         try:
-            model_instruction = instruction
-            if attempt:
-                model_instruction += (
-                    "\nRECOVERY:\n"
-                    "The previous draft was rejected by local validation. "
-                    "Rewrite the complete package now. Fix the exact failure below "
-                    "while preserving every other hard rule and all supported facts. "
-                    "Return only the complete JSON package.\n"
-                    f"Validation failure: {errors[-1]}"
-                )
             result = _request(model, model_instruction, source)
-            if angle_text:
-                result["story_angle"] = angle_text
-
-            valid, reason = validate_universal_script(result, language=language_key)
-            if valid:
-                return _finish_result(
-                    result,
-                    story,
-                    source,
-                    model,
-                    language_key,
-                    angle_text=angle_text,
-                    search_query=search_query,
-                    delivery_profile=(
-                        "UNIVERSAL SPORTS"
-                        if norm_profile in {"niche_sports", "universal"}
-                        else DESK_PROFILES.get(norm_profile, "UNIVERSAL SPORTS")
-                    ),
-                    desk_profile=norm_profile,
-                )
-            errors.append(reason)
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError(
+                    "Groq rejected the universal Scriptwriter request; no recovery prompt was sent: "
+                    + str(exc)
+                ) from exc
+            continue
         except Exception as exc:
-            errors.append(f"{type(exc).__name__}: {exc}")
+            errors.append(f"{model}: {type(exc).__name__}: {exc}")
+            continue
+
+        if angle_text:
+            result["story_angle"] = angle_text
+        valid, reason = validate_universal_script(result, language=language_key)
+        if valid:
+            return _finish_result(
+                result,
+                story,
+                source,
+                model,
+                language_key,
+                angle_text=angle_text,
+                search_query=search_query,
+                delivery_profile=(
+                    "UNIVERSAL SPORTS"
+                    if norm_profile in {"niche_sports", "universal"}
+                    else DESK_PROFILES.get(norm_profile, "UNIVERSAL SPORTS")
+                ),
+                desk_profile=norm_profile,
+            )
+        recovery_reason = reason
+        errors.append(f"{model}: {reason}")
 
     raise RuntimeError(
-        "Universal sports script generation failed after one hidden rewrite: "
-        + " | ".join(errors)
+        "Universal sports script generation failed: " + " | ".join(errors)
     )
 
 
@@ -1999,25 +2108,31 @@ def generate_top5_script(stories: list[dict]) -> dict:
             )
         try:
             result = _request(model, instruction, evidence)
-            valid, reason = validate_top5_script(result, stories)
-            if valid:
-                result["provider_used"] = model
-                result["delivery_profile"] = "TOP-5 CRICKET EDITOR"
-                result["stories"] = [
-                    {
-                        "title": _story_value(story, "title"),
-                        "url": _story_value(story, "url"),
-                        "source": _story_value(story, "source"),
-                        "published_at": _story_value(story, "published_at"),
-                    }
-                    for story in stories
-                ]
-                return result
-            recovery_reason = reason
-            errors.append(f"{model}: {reason}")
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError("Groq rejected the Top-5 Scriptwriter request: " + str(exc)) from exc
+            continue
         except Exception as exc:
-            recovery_reason = f"{type(exc).__name__}: {exc}"
-            errors.append(f"{model}: {recovery_reason}")
+            errors.append(f"{model}: {type(exc).__name__}: {exc}")
+            continue
+
+        valid, reason = validate_top5_script(result, stories)
+        if valid:
+            result["provider_used"] = model
+            result["delivery_profile"] = "TOP-5 CRICKET EDITOR"
+            result["stories"] = [
+                {
+                    "title": _story_value(story, "title"),
+                    "url": _story_value(story, "url"),
+                    "source": _story_value(story, "source"),
+                    "published_at": _story_value(story, "published_at"),
+                }
+                for story in stories
+            ]
+            return result
+        recovery_reason = reason
+        errors.append(f"{model}: {reason}")
 
     raise RuntimeError("Top-5 script generation failed: " + " | ".join(errors))
 

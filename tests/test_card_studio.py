@@ -1,7 +1,8 @@
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+import pytest
+from PIL import Image, ImageDraw, ImageFont, features
 
 import card_studio
 
@@ -286,10 +287,34 @@ def test_localized_card_starter_copy_and_native_script_rendering():
                 assert image.size == (1080, 1920)
                 assert image.format == "PNG"
 
-        script_sample = "हिंदी कार्ड" if language == "hindi" else "తెలుగు కార్డు"
+        script_sample = "हिंदी कार्ड क्षेत्र की उपलब्धि" if language == "hindi" else "తెలుగు కార్డు ప్రత్యేకమైన క్రీడ"
         font = card_studio._font_for_text(script_sample, 28, card_studio._font_headline)
         assert Path(font.path).name == font_name
+        assert font.layout_engine == ImageFont.Layout.RAQM
+        for complex_text in (
+            ("क्षेत्र", "क्रीड़ा नहीं"),
+            ("తెలుగు", "ప్రత్యేకమైన క్రీడాకారుడు"),
+        ):
+            for sample in complex_text:
+                selected = card_studio._font_for_text(sample, 36, card_studio._font_headline)
+                assert selected.layout_engine == ImageFont.Layout.RAQM
+                assert selected.getmask(sample).getbbox() is not None
 
+
+
+@pytest.mark.parametrize(
+    ("language", "text"),
+    [
+        ("hindi", "भारत के क्रिकेट खिलाड़ी"),
+        ("telugu", "భారత క్రికెట్ ఆటగాళ్లు"),
+    ],
+)
+def test_localized_cards_fail_closed_without_raqm(monkeypatch, language, text):
+    monkeypatch.setattr(card_studio.features, "check_feature", lambda _feature: False)
+    with pytest.raises(card_studio.CardStudioError, match="RAQM shaping engine"):
+        card_studio._localized_font.cache_clear()
+        card_studio._font_for_text(text, 32, card_studio._font_headline)
+    card_studio._localized_font.cache_clear()
 
 def test_changing_card_language_invalidates_the_old_render():
     state = {

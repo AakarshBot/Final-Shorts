@@ -4,7 +4,7 @@ import pytest
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageChops, ImageDraw
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 import renderer
 
@@ -1357,3 +1357,72 @@ def test_final_renderer_quality_contract():
         '"-movflags", "+faststart"',
     ):
         assert setting in source
+
+
+@pytest.mark.parametrize(
+    ("language", "sample", "font_name"),
+    [
+        ("hindi", "क्षेत्र की उपलब्धि", "NotoSansDevanagari-Bold.ttf"),
+        ("telugu", "ప్రత్యేకమైన క్రీడాకారుడు", "NotoSansTelugu-Bold.ttf"),
+    ],
+)
+def test_indic_renderer_font_paths_use_bundled_noto_and_raqm(language, sample, font_name):
+    if not renderer.features.check_feature("raqm"):
+        with pytest.raises(RuntimeError, match="RAQM text-shaping engine"):
+            renderer._headline_font_stack(96, language)
+        return
+
+    font = renderer._headline_font_stack(96, language)[0]
+    assert Path(font.path).name == font_name
+    assert font.layout_engine == ImageFont.Layout.RAQM
+    assert font.getmask(sample).getbbox() is not None
+
+    top5_font = renderer._top5_headline_font_stack(72, language)[0]
+    assert Path(top5_font.path).name == font_name
+    assert top5_font.layout_engine == ImageFont.Layout.RAQM
+    assert top5_font.getmask(sample).getbbox() is not None
+
+    top5_body_font = renderer._top5_body_font(36, language)
+    assert Path(top5_body_font.path).name == font_name
+    assert top5_body_font.layout_engine == ImageFont.Layout.RAQM
+    assert top5_body_font.getmask(sample).getbbox() is not None
+
+    subtitle_font, _line_lengths, _measurements, _heights, _total = (
+        renderer._subtitle_render_geometry_cached(tuple(sample.split()), language)
+    )
+    assert Path(subtitle_font.path).name == font_name
+    assert subtitle_font.layout_engine == ImageFont.Layout.RAQM
+    assert subtitle_font.getmask(sample).getbbox() is not None
+
+
+@pytest.mark.parametrize(
+    ("sample", "font_name"),
+    [
+        ("क्षेत्र की उपलब्धि", "NotoSansDevanagari-Bold.ttf"),
+        ("ప్రత్యేకమైన క్రీడాకారుడు", "NotoSansTelugu-Bold.ttf"),
+    ],
+)
+def test_text_subject_cutout_uses_script_specific_noto_font(sample, font_name):
+    if not renderer.features.check_feature("raqm"):
+        with pytest.raises(RuntimeError, match="RAQM text-shaping engine"):
+            renderer._manual_subject_cutout_layout_data(
+                sample,
+                ((60, 600), (1020, 600), (1020, 1450), (60, 1450)),
+                120,
+                "Barlow Condensed",
+                "Crisp Outline",
+            )
+        return
+
+    data = renderer._manual_subject_cutout_layout_data(
+        sample,
+        ((60, 600), (1020, 600), (1020, 1450), (60, 1450)),
+        120,
+        "Barlow Condensed",
+        "Crisp Outline",
+    )
+    assert data["font"].layout_engine == ImageFont.Layout.RAQM
+    assert data["font_data"] == (
+        Path(renderer.__file__).resolve().parent / "fonts" / font_name
+    ).read_bytes()
+    assert data["layouts"]

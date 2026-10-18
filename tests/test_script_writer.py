@@ -590,3 +590,129 @@ def test_write_script_with_angle(monkeypatch):
     assert result["story_angle"] == "Injury Scare: Focus on the injury."
 
 
+
+
+def test_groq_http_errors_include_provider_detail_and_retry_after(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    class FakeResponse:
+        status_code = 429
+        headers = {"Retry-After": "12"}
+        text = '{"error":{"message":"rate limit exceeded","code":"rate_limit_exceeded"}}'
+
+        def json(self):
+            return {"error": {"message": "rate limit exceeded", "code": "rate_limit_exceeded"}}
+
+    monkeypatch.setattr(script_writer.requests, "post", lambda *args, **kwargs: FakeResponse())
+
+    with pytest.raises(script_writer.GroqAPIError, match="rate_limit_exceeded.*rate limit exceeded") as caught:
+        script_writer._request("openai/gpt-oss-120b", "Write a JSON script", "evidence")
+
+    assert caught.value.status_code == 429
+    assert caught.value.retry_after == "12"
+    assert "Retry-After: 12" in str(caught.value)
+
+
+def test_groq_400_body_is_preserved_for_schema_debugging(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+
+    class FakeResponse:
+        status_code = 400
+        headers = {}
+        text = ""
+
+        def json(self):
+            return {
+                "error": {
+                    "message": "Invalid JSON schema at properties.script",
+                    "type": "invalid_request_error",
+                    "code": "json_schema_validation_error",
+                }
+            }
+
+    monkeypatch.setattr(script_writer.requests, "post", lambda *args, **kwargs: FakeResponse())
+
+    with pytest.raises(script_writer.GroqAPIError, match="json_schema_validation_error.*Invalid JSON schema") as caught:
+        script_writer._request("openai/gpt-oss-20b", "Write a JSON script", "evidence")
+
+    assert caught.value.status_code == 400
+
+
+def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt))
+        if len(calls) == 1:
+            raise script_writer.GroqAPIError(429, "Rate limit reached", "15")
+        return valid_result()
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.write_script(Story(), language="hindi")
+
+    assert [call[0] for call in calls] == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    assert "HIDDEN REWRITE" not in calls[1][1]
+    assert "RECOVERY" not in calls[1][1]
+    assert result["provider_used"] == "openai/gpt-oss-20b"
+
+
+def test_writer_stops_on_groq_400_without_spending_another_request(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append(model)
+        raise script_writer.GroqAPIError(400, "The provider rejected the request: json_schema_validation_error")
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+
+    with pytest.raises(RuntimeError, match="Groq rejected the Scriptwriter request.*json_schema_validation_error"):
+        script_writer.write_script(Story(), language="hindi")
+
+    assert calls == ["openai/gpt-oss-120b"]
+
+
+def test_groq_strict_schema_omits_undocumented_array_length_keywords(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+        headers = {}
+
+        def json(self):
+            return {"choices": [{"message": {"content": "{}"}}]}
+
+    def fake_post(_url, *, json, **_kwargs):
+        captured.update(json)
+        return FakeResponse()
+
+    monkeypatch.setattr(script_writer.requests, "post", fake_post)
+    script_writer._request(
+        "openai/gpt-oss-120b",
+        "Generate a cricket script",
+        "evidence",
+        schema=script_writer.CRICKET_SCHEMA,
+        schema_name="cricket_shorts_script",
+    )
+
+    provider_schema = captured["response_format"]["json_schema"]["schema"]
+    assert captured["response_format"]["json_schema"]["strict"] is True
+    assert "minItems" in script_writer.CRICKET_SCHEMA["properties"]["script"]
+    assert "maxItems" in script_writer.CRICKET_SCHEMA["properties"]["script"]
+    assert not _contains_array_length_constraints(provider_schema)
+    assert provider_schema["properties"]["script"]["items"]["required"] == (
+        script_writer.CRICKET_SCHEMA["properties"]["script"]["items"]["required"]
+    )
+
+
+def _contains_array_length_constraints(value):
+    if isinstance(value, dict):
+        return any(
+            key in {"minItems", "maxItems"} or _contains_array_length_constraints(child)
+            for key, child in value.items()
+        )
+    if isinstance(value, list):
+        return any(_contains_array_length_constraints(child) for child in value)
+    return False
