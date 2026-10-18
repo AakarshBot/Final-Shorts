@@ -5392,7 +5392,12 @@ def _render_live_script():
             est_seconds = round(word_count / 2.5, 1) if word_count else 0.0
             role = scene.get("narrative_role") or scene_roles.get(index, f"SCENE {index}")
 
-            if index == 1:
+            lead_language_live = str(
+                script.get("language_used") or st.session_state.get("live_script_language", "english")
+            ).strip().casefold()
+            if index == 1 and lead_language_live in {"hindi", "telugu", "hi", "te"}:
+                meter_badge = '<span style="font-size:0.72rem; font-weight:700; color:var(--muted); background:var(--surface-soft); padding:3px 8px; border-radius:6px; border:1px solid var(--line);">Hindi/Telugu lead: measured audio ≤5.2s</span>'
+            elif index == 1:
                 if word_count <= 13:
                     meter_badge = f'<span class="hook-meter-ok">✓ LEAD HOOK: {word_count}w (&lt;14w target)</span>'
                 elif word_count == 14:
@@ -8246,7 +8251,10 @@ def render_scriptwriter():
                 est_seconds = round(word_count / 2.5, 1) if word_count else 0.0
                 role = scene.get("narrative_role") or scene_roles.get(index, f"SCENE {index}")
 
-                if index == 1:
+                lead_language_test = str(script.get("language_used") or language).strip().casefold()
+                if index == 1 and lead_language_test in {"hindi", "telugu", "hi", "te"}:
+                    meter_badge = '<span style="font-size:0.72rem; font-weight:700; color:var(--muted); background:var(--surface-soft); padding:3px 8px; border-radius:6px; border:1px solid var(--line);">Hindi/Telugu lead: measured audio ≤5.2s</span>'
+                elif index == 1:
                     if word_count <= 13:
                         meter_badge = f'<span class="hook-meter-ok">✓ LEAD HOOK: {word_count}w (&lt;14w target)</span>'
                     elif word_count == 14:
