@@ -3233,7 +3233,7 @@ def _render_card_studio(
     language_label = {"english": "English", "hindi": "Hindi (Devanagari)", "telugu": "Telugu"}.get(card_language, "English")
     st.caption(
         f"Card copy language: {language_label}. Starter copy follows the selected pipeline language. "
-        "Custom text is rendered as entered and is not automatically translated."
+        "Custom text is rendered as entered."
     )
 
     if card_type == "Stat Highlight":
@@ -3409,6 +3409,46 @@ def _render_card_studio(
     data["layout_position"] = layout_position
     data["contrast_treatment"] = contrast_treatment
     data["language"] = card_language
+
+    if not live and card_language in {"hindi", "telugu"}:
+        language_action_name = "Hindi" if card_language == "hindi" else "Telugu"
+        if st.button(
+            f"Translate card text to {language_action_name}",
+            width="stretch",
+            key=f"{state_id}-translate-copy",
+            help="Translates editable text using the configured Scriptwriter model. Review the result before rendering.",
+        ):
+            try:
+                from script_writer import translate_card_copy
+
+                translated_data = translate_card_copy(card_type, data, card_language)
+                if card_type == "Stat Highlight":
+                    for field in ("eyebrow", "headline", "unit"):
+                        st.session_state[value_key(field)] = translated_data.get(field, "")
+                    for index, metric in enumerate(translated_data.get("metrics") or [], 1):
+                        st.session_state[value_key(f"metric-{index}-label")] = metric.get("label", "")
+                elif card_type == "Quote / Reaction":
+                    for field in ("eyebrow", "quote", "attribution", "context"):
+                        st.session_state[value_key(field)] = translated_data.get(field, "")
+                elif card_type == "Head-to-Head":
+                    for field in ("eyebrow", "headline"):
+                        st.session_state[value_key(field)] = translated_data.get(field, "")
+                    for index, metric in enumerate(translated_data.get("metrics") or [], 1):
+                        st.session_state[value_key(f"metric-{index}-label")] = metric
+                elif card_type == "Key Fact / Milestone":
+                    for field in ("eyebrow", "label", "context"):
+                        st.session_state[value_key(field)] = translated_data.get(field, "")
+                st.session_state[f"{state_id}-result"] = None
+                st.session_state[f"{state_id}-translation-notice"] = (
+                    f"Card copy translated to {language_action_name}. Review all fields before rendering."
+                )
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Card text translation failed: {exc}")
+
+    translation_notice = st.session_state.get(f"{state_id}-translation-notice")
+    if translation_notice:
+        st.info(translation_notice)
 
     result_key = f"{state_id}-result"
     from card_studio import invalidate_card_studio_result_for_composition
