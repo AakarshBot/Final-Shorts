@@ -286,8 +286,8 @@ def _localized_font(language: str, size: int) -> ImageFont.FreeTypeFont | None:
 
 def _font_for_text(text: str, size: int, fallback):
     value = str(text or "")
-    devanagari = any("\\u0900" <= char <= "\\u097F" for char in value)
-    telugu = any("\\u0C00" <= char <= "\\u0C7F" for char in value)
+    devanagari = any("\u0900" <= char <= "\u097F" for char in value)
+    telugu = any("\u0C00" <= char <= "\u0C7F" for char in value)
     if devanagari and telugu:
         raise CardStudioError("One card text field cannot mix Hindi and Telugu scripts.")
     if devanagari:
