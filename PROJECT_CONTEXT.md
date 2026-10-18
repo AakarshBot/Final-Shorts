@@ -384,7 +384,7 @@ output/
 - Scriptwriter now generates hashtags and the public-upload comment in the same generation call.
 - YouTube Upload QC was added with editable publish metadata and Public/Private upload lanes.
 - Renderer text layout was corrected to use stroke-aware, screen-safe measurements so headline and subtitle characters do not clip at the canvas edges.
-- Historical root-headline overlay/wrapping is no longer used by the standard Shorts renderer; editable headlines inside Text Subject Cutout/editorial cards remain on their separate visual paths.
+- Historical root-headline overlay/wrapping is no longer used by the standard Shorts renderer, and the root dashboard field is never copied into Text Subject Cutout. That card's independently editable text defaults from the source story title, then first-scene narration as fallback; editorial-card text and Top-5's six slide headlines remain separate.
 
 ## Current baseline
 
