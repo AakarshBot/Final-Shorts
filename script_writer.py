@@ -300,7 +300,7 @@ VIRAL PACKAGING SUITE
 - `comment`: one provocative, high-engagement pinned question designed to ignite debate in the comments. Tailor it specifically to the real tactical or ethical dilemma in the story without using canned bot phrases.
 - `quote`: the strongest meaningful direct quote from the research, copied faithfully, when one materially adds to the story. Return an empty string when there is no worthwhile quote.
 - `quote_attribution`: the exact speaker/source of `quote`, or an empty string when there is no quote.
-- `quote_slide`: the existing slide number (1–5) where the quote most naturally supports the narration, or 0 when there is no quote. Do not create an extra slide for a quote.
+- `quote_slide`: the existing slide number (1–5, never greater than the generated slide count) where the quote most naturally supports the narration, or 0 when there is no quote. Do not create an extra slide for a quote.
 - Never invent, reconstruct, or shorten a quote in a way that changes its wording.
 
 VISUAL HANDOFF
@@ -316,7 +316,7 @@ GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSO
 - Name the non-empty subject_name exactly in the spoken narration.
 - Include a non-empty 3–4-word opening headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
 - Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the generated slides.
-- quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–5 when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
+- quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–5, never greater than the generated slide count, when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
 - Make every field complete in the first JSON returned. Before output, check the actual field values, not only the JSON shape.
 
 FINAL SELF-CHECK
