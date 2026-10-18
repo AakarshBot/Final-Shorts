@@ -524,17 +524,18 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
         draw, str(right["name"]), right_x2 - right_x1 - 22, 2, 48, 31,
         font_fn=_font_headline,
     )
-    _draw_lines(canvas, left_lines, left_x1, panel_top + 48, left_font, 3, fill=WHITE)
-    _draw_lines(canvas, right_lines, right_x1, panel_top + 48, right_font, 3, fill=WHITE)
+    left_end = _draw_lines(canvas, left_lines, left_x1, panel_top + 48, left_font, 3, fill=WHITE)
+    right_end = _draw_lines(canvas, right_lines, right_x1, panel_top + 48, right_font, 3, fill=WHITE)
 
     draw = ImageDraw.Draw(canvas)
     draw.text((mid_x, panel_top + 62), "VS", font=_font_label(22), fill=ACCENT, anchor="mm")
-    _draw_rule(canvas, SAFE_LEFT, panel_top + 126, SAFE_RIGHT - SAFE_LEFT, alpha=148)
+    names_bottom = max(left_end, right_end)
+    _draw_rule(canvas, SAFE_LEFT, names_bottom + 12, SAFE_RIGHT - SAFE_LEFT, alpha=148)
 
     left_values = left.get("values") or {}
     right_values = right.get("values") or {}
-    row_y = panel_top + 148
-    row_height = min(102, max(76, (SAFE_BOTTOM - row_y) // len(metrics)))
+    row_y = names_bottom + 26
+    row_height = min(130, max(96, (SAFE_BOTTOM - row_y) // len(metrics)))
     for metric in metrics:
         label = " ".join(str(metric).split())
         left_value = " ".join(str(left_values.get(label) or "").split())
@@ -546,25 +547,25 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
             draw, left_value, 220, 1, 42, 28, font_fn=_font_headline
         )
         label_font, label_lines = _fit(
-            draw, label.upper(), 235, 1, 24, 17,
+            draw, label.upper(), SAFE_RIGHT - SAFE_LEFT, 1, 23, 17,
             font_fn=lambda size: _font_label(size, False),
         )
         right_value_font, right_value_lines = _fit(
             draw, right_value, 220, 1, 42, 28, font_fn=_font_headline
         )
         draw.text(
-            (SAFE_LEFT + 150, row_y + 8), left_value_lines[0],
-            font=left_value_font, fill=WHITE, anchor="mm",
-        )
-        draw.text(
-            (mid_x, row_y + 8), label_lines[0],
+            (mid_x, row_y + 18), label_lines[0],
             font=label_font, fill=MUTED, anchor="mm",
         )
         draw.text(
-            (SAFE_RIGHT - 150, row_y + 8), right_value_lines[0],
+            (SAFE_LEFT + 150, row_y + 68), left_value_lines[0],
+            font=left_value_font, fill=WHITE, anchor="mm",
+        )
+        draw.text(
+            (SAFE_RIGHT - 150, row_y + 68), right_value_lines[0],
             font=right_value_font, fill=WHITE, anchor="mm",
         )
-        _draw_rule(canvas, SAFE_LEFT, row_y + row_height - 8, SAFE_RIGHT - SAFE_LEFT, alpha=76)
+        _draw_rule(canvas, SAFE_LEFT, row_y + row_height - 4, SAFE_RIGHT - SAFE_LEFT, alpha=76)
         row_y += row_height
 
     return canvas.convert("RGB")
