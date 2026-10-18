@@ -671,3 +671,48 @@ def test_writer_stops_on_groq_400_without_spending_another_request(monkeypatch):
         script_writer.write_script(Story(), language="hindi")
 
     assert calls == ["openai/gpt-oss-120b"]
+
+
+def test_groq_strict_schema_omits_undocumented_array_length_keywords(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    captured = {}
+
+    class FakeResponse:
+        status_code = 200
+        headers = {}
+
+        def json(self):
+            return {"choices": [{"message": {"content": "{}"}}]}
+
+    def fake_post(_url, *, json, **_kwargs):
+        captured.update(json)
+        return FakeResponse()
+
+    monkeypatch.setattr(script_writer.requests, "post", fake_post)
+    script_writer._request(
+        "openai/gpt-oss-120b",
+        "Generate a cricket script",
+        "evidence",
+        schema=script_writer.CRICKET_SCHEMA,
+        schema_name="cricket_shorts_script",
+    )
+
+    provider_schema = captured["response_format"]["json_schema"]["schema"]
+    assert captured["response_format"]["json_schema"]["strict"] is True
+    assert "minItems" in script_writer.CRICKET_SCHEMA["properties"]["script"]
+    assert "maxItems" in script_writer.CRICKET_SCHEMA["properties"]["script"]
+    assert not _contains_array_length_constraints(provider_schema)
+    assert provider_schema["properties"]["script"]["items"]["required"] == (
+        script_writer.CRICKET_SCHEMA["properties"]["script"]["items"]["required"]
+    )
+
+
+def _contains_array_length_constraints(value):
+    if isinstance(value, dict):
+        return any(
+            key in {"minItems", "maxItems"} or _contains_array_length_constraints(child)
+            for key, child in value.items()
+        )
+    if isinstance(value, list):
+        return any(_contains_array_length_constraints(child) for child in value)
+    return False
