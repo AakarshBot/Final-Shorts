@@ -909,8 +909,7 @@ def _extract_article(url: str) -> tuple[str, str]:
         timeout=RESEARCH_TIMEOUT,
         allow_redirects=True,
     )
-    if response.status_code >= 400:
-        raise _groq_http_error(response)
+    response.raise_for_status()
     response.encoding = response.encoding or response.apparent_encoding or "utf-8"
     resolved_url = str(response.url or target)
     article = _clean(
@@ -1170,7 +1169,8 @@ def _request(
                 raise
             time.sleep(2 ** attempt)
 
-    response.raise_for_status()
+    if response.status_code >= 400:
+        raise _groq_http_error(response)
     content = response.json()["choices"][0]["message"]["content"]
     if isinstance(content, dict):
         return content
