@@ -11,7 +11,7 @@ import subprocess
 from functools import lru_cache
 from itertools import combinations
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
 
 
 WIDTH = 1080
@@ -99,8 +99,54 @@ MANUAL_SUBJECT_STYLE_OPTIONS = (
 )
 
 
-@lru_cache(maxsize=256)
-def _font(candidates: tuple[Path, ...], size: int):
+def _normalise_indic_language(language: str | None) -> str:
+    key = str(language or "").strip().casefold()
+    return {"hi": "hindi", "te": "telugu"}.get(key, key)
+
+
+def _indic_language_for_text(text: str) -> str | None:
+    value = str(text or "")
+    devanagari = any("\\u0900" <= char <= "\\u097F" for char in value)
+    telugu = any("\\u0C00" <= char <= "\\u0C7F" for char in value)
+    if devanagari and telugu:
+        raise RuntimeError("A single text block cannot mix Hindi and Telugu scripts; split it by language.")
+    if devanagari:
+        return "hindi"
+    if telugu:
+        return "telugu"
+    return None
+
+
+def _require_raqm(language: str) -> None:
+    try:
+        available = features.check_feature("raqm")
+    except (AttributeError, ValueError):
+        available = False
+    if not available:
+        raise RuntimeError(
+            f"{language.title()} text needs Pillow's RAQM text-shaping engine. "
+            "Rendering has been stopped rather than producing incorrectly joined letters. "
+            "On Windows, make sure the FriBiDi runtime DLL (fribidi.dll or fribidi-0.dll) "
+            "is installed in the DLL search path, then restart the factory."
+        )
+
+
+@lru_cache(maxsize=512)
+def _font(candidates: tuple[Path, ...], size: int, language: str | None = None):
+    language_key = _normalise_indic_language(language)
+    if language_key in {"hindi", "telugu"}:
+        _require_raqm(language_key)
+        for path in candidates:
+            if path.exists():
+                try:
+                    return ImageFont.truetype(str(path), size, layout_engine=ImageFont.Layout.RAQM)
+                except (OSError, ValueError):
+                    continue
+        raise RuntimeError(
+            f"The bundled Noto Sans font for {language_key.title()} is missing or unreadable. "
+            "The factory will not fall back to a font that may corrupt Indic text."
+        )
+
     for path in candidates:
         if path.exists():
             return ImageFont.truetype(str(path), size)
@@ -120,42 +166,29 @@ def _font(candidates: tuple[Path, ...], size: int):
 @lru_cache(maxsize=64)
 def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
     root = Path(__file__).resolve().parent / "fonts"
-    language = str(language or "english").casefold()
+    language = _normalise_indic_language(language)
 
     if role == "headline":
         if language == "hindi":
-            return (
-                root / "NotoSansDevanagari-Bold.ttf",
-                root / "NotoSansDevanagari-CondensedBlack.ttf",
-                root / "NotoSansDevanagari-Black.ttf",
-            )
+            return (root / "NotoSansDevanagari-Bold.ttf",)
         if language == "telugu":
-            return (
-                root / "NotoSansTelugu-Bold.ttf",
-                root / "NotoSansTelugu-CondensedBlack.ttf",
-                root / "NotoSansTelugu-Black.ttf",
-            )
+            return (root / "NotoSansTelugu-Bold.ttf",)
         return (root / "Oswald-Bold.ttf",)
 
     if language == "hindi":
-        return (
-            root / "NotoSansDevanagari-Bold.ttf",
-            root / "NotoSansDevanagariUI-ExtraBold.ttf",
-            root / "NotoSansDevanagari-ExtraBold.ttf",
-        )
+        return (root / "NotoSansDevanagari-Bold.ttf",)
     if language == "telugu":
-        return (
-            root / "NotoSansTelugu-Bold.ttf",
-            root / "NotoSansTelugu-ExtraBold.ttf",
-        )
-    return (
-        root / "Oswald-Bold.ttf",
-    )
+        return (root / "NotoSansTelugu-Bold.ttf",)
+    return (root / "Oswald-Bold.ttf",)
 
 
 @lru_cache(maxsize=64)
 def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
-    candidates = list(_font_candidates("headline", language))
+    language_key = _normalise_indic_language(language)
+    is_indic = language_key in {"hindi", "telugu"}
+    if is_indic:
+        _require_raqm(language_key)
+    candidates = list(_font_candidates("headline", language_key))
     candidates.extend(
         [
             Path("C:/Windows/Fonts/seguiemj.ttf"),
@@ -182,7 +215,13 @@ def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
             continue
         seen.add(key)
         try:
-            fonts.append(ImageFont.truetype(str(path), size))
+            fonts.append(
+                ImageFont.truetype(
+                    str(path),
+                    size,
+                    layout_engine=ImageFont.Layout.RAQM if is_indic else ImageFont.Layout.BASIC,
+                )
+            )
         except OSError:
             continue
     if not fonts:
@@ -424,25 +463,17 @@ def _top5_wrap_editorial_words(draw: ImageDraw.ImageDraw, text: str, fonts: tupl
 @lru_cache(maxsize=256)
 def _top5_headline_font_stack(size: int, language: str) -> tuple[object, ...]:
     root = Path(__file__).resolve().parent / "fonts"
-    language = str(language or "english").casefold()
-    paths = {
-        "hindi": (
-            root / "NotoSansDevanagari-CondensedBlack.ttf",
-            root / "NotoSansDevanagari-Black.ttf",
-        ),
-        "telugu": (
-            root / "NotoSansTelugu-CondensedBlack.ttf",
-            root / "NotoSansTelugu-Black.ttf",
-        ),
-    }.get(language, (root / "Oswald-Bold.ttf",))
-    fonts = []
-    for path in paths:
-        if path.exists():
-            try:
-                fonts.append(ImageFont.truetype(str(path), size))
-            except OSError:
-                pass
-    return tuple(fonts) or (ImageFont.load_default(),)
+    language_key = _normalise_indic_language(language)
+    if language_key in {"hindi", "telugu"}:
+        _require_raqm(language_key)
+        font_name = "NotoSansDevanagari-Bold.ttf" if language_key == "hindi" else "NotoSansTelugu-Bold.ttf"
+        path = root / font_name
+        if not path.is_file():
+            raise RuntimeError(f"The bundled Top-5 font {font_name} is missing; Indic text will not use a substitute font.")
+        return (ImageFont.truetype(str(path), size, layout_engine=ImageFont.Layout.RAQM),)
+
+    path = root / "Oswald-Bold.ttf"
+    return (ImageFont.truetype(str(path), size),) if path.is_file() else (ImageFont.load_default(),)
 
 
 def _top5_two_line_headline(draw: ImageDraw.ImageDraw, words: list[str], fonts: tuple[object, ...]):
@@ -776,6 +807,19 @@ def _manual_subject_font_bytes(font_name: str) -> bytes:
 
 
 
+def _manual_subject_text_font_bytes(headline: str, font_name: str) -> bytes:
+    script_language = _indic_language_for_text(headline)
+    if not script_language:
+        return _manual_subject_font_bytes(font_name)
+    _require_raqm(script_language)
+    filename = "NotoSansDevanagari-Bold.ttf" if script_language == "hindi" else "NotoSansTelugu-Bold.ttf"
+    path = Path(__file__).resolve().parent / "fonts" / filename
+    if not path.is_file():
+        raise RuntimeError(f"Text Subject Cutout requires the bundled {filename} for {script_language.title()} copy.")
+    return path.read_bytes()
+
+
+
 def _manual_subject_cutout_layout_data_uncached(
     headline: str,
     polygon,
@@ -828,7 +872,10 @@ def _manual_subject_cutout_layout_data_uncached(
     if clean_style not in MANUAL_SUBJECT_STYLE_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid text style.")
 
-    font_data = _manual_subject_font_bytes(mode)
+    script_language = _indic_language_for_text(clean_headline)
+    if script_language:
+        _require_raqm(script_language)
+    font_data = _manual_subject_text_font_bytes(clean_headline, mode)
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     stroke_width = {
         "Crisp Outline": 4,
@@ -918,7 +965,11 @@ def _manual_subject_cutout_layout_data_uncached(
 
     words = clean_headline.split()
     layouts = []
-    font = ImageFont.truetype(BytesIO(font_data), requested_size)
+    font = ImageFont.truetype(
+        BytesIO(font_data),
+        requested_size,
+        layout_engine=ImageFont.Layout.RAQM if script_language else ImageFont.Layout.BASIC,
+    )
     line_box = probe.textbbox(
         (0, 0),
         "Ag",
@@ -1095,7 +1146,7 @@ def _manual_subject_cutout_layout_data(
             headline, polygon, font_size, font_name, style, polygon_flow
         )
 
-    font_signature = hashlib.sha1(_manual_subject_font_bytes(font_key)).hexdigest()
+    font_signature = hashlib.sha1(_manual_subject_text_font_bytes(clean_headline, font_key)).hexdigest()
     return _manual_subject_cutout_layout_data_cached(
         clean_headline,
         polygon_key,
@@ -1724,9 +1775,12 @@ def _fit_subtitle_layout_cached(
     language: str,
 ):
     words = [{"text": text} for text in word_texts]
+    language = _normalise_indic_language(language or "english")
+    script_language = _indic_language_for_text(" ".join(word_texts))
+    render_language = script_language or language
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
     for size in range(SUBTITLE_MAX_SIZE, SUBTITLE_MIN_SIZE - 1, -1):
-        font = _font(_font_candidates("subtitle", language), size)
+        font = _font(_font_candidates("subtitle", render_language), size, language=render_language)
         try:
             lines = _subtitle_lines(words, probe, font)
         except ValueError:
