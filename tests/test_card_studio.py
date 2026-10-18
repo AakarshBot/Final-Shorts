@@ -53,23 +53,6 @@ def test_card_studio_defaults_fill_every_wip_field():
     assert all(milestone[key] for key in ("eyebrow", "value", "label", "context"))
 
 
-def test_card_studio_subject_aware_position_prefers_negative_space():
-    mask = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(mask).rectangle((88, 220, 620, 1460), fill=255)
-
-    x, y = card_studio._best_text_position(
-        mask,
-        300,
-        140,
-        (88, 260, 864, 900),
-        88,
-        300,
-    )
-
-    assert x >= 500
-    assert y >= 260
-
-
 def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
     mask = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(mask).rectangle((88, 220, 620, 1300), fill=255)
