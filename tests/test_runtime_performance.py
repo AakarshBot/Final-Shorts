@@ -125,6 +125,23 @@ def test_manual_subject_cutout_reuses_layout_geometry(monkeypatch):
     renderer._manual_subject_cutout_layout_data_cached.cache_clear()
 
 
+def test_card_studio_exposes_manual_composition_controls_for_all_editorial_cards():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    start = app_source.index("def _render_card_studio(")
+    end = app_source.index("def _top5_fit_preview(", start)
+    studio_source = app_source[start:end]
+
+    assert "CARD_LAYOUT_POSITIONS" in studio_source
+    assert "CARD_CONTRAST_TREATMENTS" in studio_source
+    assert '"Text / gradient position"' in studio_source
+    assert '"Contrast treatment"' in studio_source
+    assert 'data["layout_position"] = layout_position' in studio_source
+    assert 'data["contrast_treatment"] = contrast_treatment' in studio_source
+    assert "invalidate_card_studio_result_for_composition(" in studio_source
+    assert "Card type or composition changed. Render the card again" in studio_source
+    assert "Text Subject Cutout is unchanged." in studio_source
+
+
 def test_live_card_studio_uses_approved_card_allowlist():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     start = app_source.index("def _render_card_studio(")

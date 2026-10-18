@@ -30,6 +30,17 @@ def test_card_studio_outputs_1080x1920_png():
 
 
 def test_card_studio_defaults_fill_every_wip_field():
+    for card_type in (
+        "Stat Highlight",
+        "Quote / Reaction",
+        "Head-to-Head",
+        "Key Fact / Milestone",
+    ):
+        defaults = card_studio.card_data_for_type(card_type)
+        assert defaults["layout_position"] == "Auto · Best negative space"
+        assert defaults["contrast_treatment"] == "Soft gradient"
+
+
     stat = card_studio.card_data_for_type("Stat Highlight")
     assert all(stat[key] for key in ("eyebrow", "headline", "value", "unit"))
     assert len(stat["metrics"]) == 3
@@ -82,6 +93,58 @@ def test_recropping_source_invalidates_cached_card_results_for_all_source_images
     assert state["test-card-studio-result"]["bytes"] == b"old-render"
     assert state["test-unrelated-card-result"]["bytes"] == b"keep"
     assert state["visual_result"] == {"assets": []}
+
+
+def test_all_editorial_cards_support_manual_photo_compositions():
+    for card_type in (
+        "Stat Highlight",
+        "Quote / Reaction",
+        "Head-to-Head",
+        "Key Fact / Milestone",
+    ):
+        for position in card_studio.CARD_LAYOUT_POSITIONS:
+            data = card_studio.card_data_for_type(card_type)
+            data["layout_position"] = position
+            data["contrast_treatment"] = "Soft gradient"
+            output = card_studio.render_card(card_type, _image_bytes(), data)
+            with Image.open(BytesIO(output)) as image:
+                assert image.size == (1080, 1920)
+                assert image.format == "PNG"
+
+
+def test_changed_composition_invalidates_a_stale_rendered_preview():
+    state = {
+        "card-result": {
+            "bytes": b"old-render",
+            "type": "Quote / Reaction",
+            "data": {
+                "layout_position": "Left half",
+                "contrast_treatment": "Soft gradient",
+            },
+        }
+    }
+
+    changed = card_studio.invalidate_card_studio_result_for_composition(
+        state,
+        "card-result",
+        "Quote / Reaction",
+        "Bottom half",
+        "Soft gradient",
+    )
+
+    assert changed is True
+    assert state["card-result"] is None
+
+
+def test_contrast_treatments_are_manual_and_visually_distinct():
+    image = Image.new("RGB", (1080, 1920), (175, 100, 70))
+    soft = card_studio._contrast_bed(image, "left", "Soft gradient")
+    deep = card_studio._contrast_bed(image, "left", "Deep gradient")
+    panel = card_studio._contrast_bed(image, "left", "Editorial panel")
+
+    assert soft.getpixel((140, 800)) != deep.getpixel((140, 800))
+    assert panel.getpixel((100, 300)) != soft.getpixel((100, 300))
+    assert soft.getpixel((1010, 800))[:3] == image.getpixel((1010, 800))
 
 
 def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
