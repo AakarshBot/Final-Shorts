@@ -438,18 +438,6 @@ def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None)
     return canvas.convert("RGB")
 
 
-def _split_image_source(source_pair, direction: str) -> tuple[Image.Image, Image.Image]:
-    if not isinstance(source_pair, (tuple, list)) or len(source_pair) != 2:
-        raise CardStudioError("Two-image Head-to-Head needs two source images.")
-    if direction == "Horizontal":
-        first = _cover(source_pair[0], WIDTH, HEIGHT // 2)
-        second = _cover(source_pair[1], WIDTH, HEIGHT - HEIGHT // 2)
-    else:
-        first = _cover(source_pair[0], WIDTH // 2, HEIGHT)
-        second = _cover(source_pair[1], WIDTH - WIDTH // 2, HEIGHT)
-    return first, second
-
-
 def _split_image_and_mask(source, mask, direction: str) -> tuple[Image.Image, Image.Image | None, Image.Image, Image.Image | None]:
     first_source, second_source = source
     masks = mask if isinstance(mask, (tuple, list)) and len(mask) == 2 else (None, None)
@@ -478,36 +466,46 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
     if image_mode == "Two images":
         if not isinstance(source, (tuple, list)) or len(source) != 2:
             raise CardStudioError("Two-image Head-to-Head needs two source images.")
-        first, _first_mask, second, _second_mask = _split_image_and_mask(source, subject_mask, direction)
+        first, first_mask, second, second_mask = _split_image_and_mask(source, subject_mask, direction)
         canvas = Image.new("RGB", (WIDTH, HEIGHT), INK)
+        combined_mask = None
+        if first_mask is not None or second_mask is not None:
+            combined_mask = Image.new("L", (WIDTH, HEIGHT), 0)
         if direction == "Horizontal":
             canvas.paste(first, (0, 0))
             canvas.paste(second, (0, HEIGHT // 2))
+            if combined_mask is not None:
+                if first_mask is not None:
+                    combined_mask.paste(first_mask, (0, 0))
+                if second_mask is not None:
+                    combined_mask.paste(second_mask, (0, HEIGHT // 2))
         else:
             canvas.paste(first, (0, 0))
             canvas.paste(second, (WIDTH // 2, 0))
-        header = Image.new("RGBA", (WIDTH, 620), (0, 0, 0, 0))
-        hdraw = ImageDraw.Draw(header)
-        for y in range(620):
-            alpha = max(0, 202 - int(y * 202 / 620))
-            if alpha:
-                hdraw.line((0, y, WIDTH, y), fill=INK + (alpha,))
-        canvas = Image.alpha_composite(canvas.convert("RGBA"), header)
-        side = "left"
-        header_x = SAFE_LEFT
+            if combined_mask is not None:
+                if first_mask is not None:
+                    combined_mask.paste(first_mask, (0, 0))
+                if second_mask is not None:
+                    combined_mask.paste(second_mask, (WIDTH // 2, 0))
+        side = _choose_text_side(canvas, combined_mask)
+        canvas = _side_gradient(canvas, side)
+        header_x, _ = _content_region(side)
     else:
-        canvas, aligned_mask = _cover_with_mask(source, subject_mask if isinstance(subject_mask, Image.Image) else None)
+        canvas, aligned_mask = _cover_with_mask(
+            source, subject_mask if isinstance(subject_mask, Image.Image) else None
+        )
         side = _choose_text_side(canvas, aligned_mask)
         canvas = _side_gradient(canvas, side)
         header_x, _ = _content_region(side)
 
     draw = ImageDraw.Draw(canvas)
     kicker_y = _draw_kicker(canvas, header_x, 160, data.get("eyebrow") or "HEAD TO HEAD")
-    head_font, head_lines = _fit(draw, headline, CONTENT_WIDTH, 2, 88, 56, font_fn=_font_headline)
+    head_font, head_lines = _fit(
+        draw, headline, CONTENT_WIDTH, 2, 88, 56, font_fn=_font_headline
+    )
     y = _draw_lines(canvas, head_lines, header_x, kicker_y + 8, head_font, 6, fill=WHITE)
 
-    panel_top = max(720, y + 42)
-    panel_top = min(panel_top, 820)
+    panel_top = min(820, max(720, y + 42))
     panel = Image.new("RGBA", (WIDTH, HEIGHT - panel_top), CARD_BG)
     canvas.alpha_composite(panel, (0, panel_top))
     draw = ImageDraw.Draw(canvas)
@@ -518,14 +516,19 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
     right_x2 = SAFE_RIGHT
     mid_x = WIDTH // 2
 
-    left_font, left_lines = _fit(draw, str(left["name"]), left_x2 - left_x1 - 22, 2, 48, 31, font_fn=_font_headline)
-    right_font, right_lines = _fit(draw, str(right["name"]), right_x2 - right_x1 - 22, 2, 48, 31, font_fn=_font_headline)
+    left_font, left_lines = _fit(
+        draw, str(left["name"]), left_x2 - left_x1 - 22, 2, 48, 31,
+        font_fn=_font_headline,
+    )
+    right_font, right_lines = _fit(
+        draw, str(right["name"]), right_x2 - right_x1 - 22, 2, 48, 31,
+        font_fn=_font_headline,
+    )
     _draw_lines(canvas, left_lines, left_x1, panel_top + 48, left_font, 3, fill=WHITE)
     _draw_lines(canvas, right_lines, right_x1, panel_top + 48, right_font, 3, fill=WHITE)
 
     draw = ImageDraw.Draw(canvas)
-    vs_y = panel_top + 62
-    draw.text((mid_x, vs_y), "VS", font=_font_label(22), fill=ACCENT, anchor="mm")
+    draw.text((mid_x, panel_top + 62), "VS", font=_font_label(22), fill=ACCENT, anchor="mm")
     _draw_rule(canvas, SAFE_LEFT, panel_top + 126, SAFE_RIGHT - SAFE_LEFT, alpha=148)
 
     left_values = left.get("values") or {}
@@ -539,9 +542,28 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
         if not left_value or not right_value:
             raise CardStudioError(f"Both sides need a value for {label}.")
         draw = ImageDraw.Draw(canvas)
-        draw.text((SAFE_LEFT + 150, row_y + 8), left_value, font=_fit(draw, left_value, 220, 1, 42, 28, font_fn=_font_headline)[0], fill=WHITE, anchor="mm")
-        draw.text((mid_x, row_y + 8), label.upper(), font=_fit(draw, label.upper(), 235, 1, 24, 17, font_fn=lambda size: _font_label(size, False))[0], fill=MUTED, anchor="mm")
-        draw.text((SAFE_RIGHT - 150, row_y + 8), right_value, font=_fit(draw, right_value, 220, 1, 42, 28, font_fn=_font_headline)[0], fill=WHITE, anchor="mm")
+        left_value_font, left_value_lines = _fit(
+            draw, left_value, 220, 1, 42, 28, font_fn=_font_headline
+        )
+        label_font, label_lines = _fit(
+            draw, label.upper(), 235, 1, 24, 17,
+            font_fn=lambda size: _font_label(size, False),
+        )
+        right_value_font, right_value_lines = _fit(
+            draw, right_value, 220, 1, 42, 28, font_fn=_font_headline
+        )
+        draw.text(
+            (SAFE_LEFT + 150, row_y + 8), left_value_lines[0],
+            font=left_value_font, fill=WHITE, anchor="mm",
+        )
+        draw.text(
+            (mid_x, row_y + 8), label_lines[0],
+            font=label_font, fill=MUTED, anchor="mm",
+        )
+        draw.text(
+            (SAFE_RIGHT - 150, row_y + 8), right_value_lines[0],
+            font=right_value_font, fill=WHITE, anchor="mm",
+        )
         _draw_rule(canvas, SAFE_LEFT, row_y + row_height - 8, SAFE_RIGHT - SAFE_LEFT, alpha=76)
         row_y += row_height
 
