@@ -2713,6 +2713,8 @@ def _render_card_studio(
     split_view: bool = False,
 ):
     from card_studio import (
+        CARD_CONTRAST_TREATMENTS,
+        CARD_LAYOUT_POSITIONS,
         CardStudioError,
         LIVE_CARD_TYPES,
         TEST_CARD_TYPES,
@@ -3175,6 +3177,32 @@ def _render_card_studio(
     def value_key(field):
         return f"{state_id}-{card_type.lower().replace(' ', '-').replace('/', '-').replace('&', 'and')}-{field}"
 
+    st.markdown(
+        '<div class="section-head"><div><div class="eyebrow">COMPOSITION</div>'
+        '<div class="section-title">Choose how this card uses the photo</div></div></div>',
+        unsafe_allow_html=True,
+    )
+    layout_key = value_key("layout-position")
+    contrast_key = value_key("contrast-treatment")
+    st.session_state.setdefault(layout_key, defaults.get("layout_position", CARD_LAYOUT_POSITIONS[0]))
+    st.session_state.setdefault(contrast_key, defaults.get("contrast_treatment", CARD_CONTRAST_TREATMENTS[0]))
+    comp_col_position, comp_col_contrast = st.columns(2, gap="medium")
+    with comp_col_position:
+        layout_position = st.selectbox(
+            "Text / gradient position",
+            list(CARD_LAYOUT_POSITIONS),
+            key=layout_key,
+            help="Auto finds the clearer side. Choose a fixed half when the subject or negative space needs it.",
+        )
+    with comp_col_contrast:
+        contrast_treatment = st.selectbox(
+            "Contrast treatment",
+            list(CARD_CONTRAST_TREATMENTS),
+            key=contrast_key,
+            help="Soft gradient preserves the photo; Deep gradient darkens the text area; Editorial panel adds a contained contrast panel.",
+        )
+    st.caption("These controls apply to all four editorial card types in Test and Live. Text Subject Cutout is unchanged.")
+
     if card_type == "Stat Highlight":
         st.markdown(
             '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
@@ -3227,7 +3255,7 @@ def _render_card_studio(
         st.markdown(
             '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
             '<strong style="color: #0F172A; font-size: 0.9rem;">THE PULL QUOTE · REACTION OR INTERVIEW</strong><br>'
-            '<span style="font-size: 0.86rem; color: #475569;">A restrained magazine pull quote with clear attribution and context. The quote is positioned against the photo’s available negative space, with a subtle contrast fade only where text sits.</span>'
+            '<span style="font-size: 0.86rem; color: #475569;">An editorial pull quote with an oversized opening mark, strong type hierarchy and a clean attribution lockup. Choose the text zone and contrast treatment to suit each photo.</span>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -3344,6 +3372,9 @@ def _render_card_studio(
             "label": label_val,
             "context": context_val,
         }
+
+    data["layout_position"] = layout_position
+    data["contrast_treatment"] = contrast_treatment
 
     result_key = f"{state_id}-result"
     if st.button("Render card", type="primary", width="stretch", key=f"{state_id}-render", help="Generate and render card"):
