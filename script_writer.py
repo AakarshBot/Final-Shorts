@@ -1591,7 +1591,7 @@ def write_script(
     try:
         result = _request(MODELS[0], instruction, source)
     except GroqAPIError as first_error:
-        if first_error.status_code != 429:
+        if 400 <= first_error.status_code < 500 and first_error.status_code != 429:
             raise RuntimeError(
                 "Groq rejected the Scriptwriter request before generating a draft. "
                 "This is a provider/request error, not a script-validation failure: "
