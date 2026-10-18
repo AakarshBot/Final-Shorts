@@ -1959,47 +1959,17 @@ def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
     return (left, left + width, top, top + height)
 
 
-def _visual_asset_key(result_key: str, index: int, asset: dict) -> str:
-    identity = (
-        str(asset.get("source_page_url") or asset.get("url") or "")
-        + "|"
-        + str(asset.get("article_title") or asset.get("model") or "")
-        + "|"
-        + str(index)
-    )
-    digest = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:12]
-    return f"{result_key}-{digest}"
-
-
-@st.dialog("Crop visual", width="large")
-def _crop_visual_dialog(
-    asset_key: str,
-    image_bytes: bytes,
-    label: str,
-    crop_store: str = "visual_crops",
-):
+@st.cache_data(max_entries=4, show_spinner=False)
+def _prepare_crop_dialog_canvas(image_bytes: bytes, max_canvas_width: int = 1600):
+    """Build the bounded crop canvas once per source image, not on every drag."""
     from PIL import Image, ImageFilter, ImageOps
 
     image = _asset_to_image(image_bytes)
     if image is None:
-        st.error("This visual could not be opened for cropping.")
-        return
+        return None, None, (0, 0)
 
-    st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
-    st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
-    st.caption(
-        "9:16 frame · drag to reposition or resize the crop. Double-click to confirm the crop selection. "
-        "Zooming out reveals a blurred extension of the same image."
-    )
-
-    from streamlit_cropper import st_cropper
-
-    # The cropper's frontend scales its input for display. Keep the backing canvas
-    # near delivery resolution too, so large source photos do not trigger a costly
-    # full-resolution blur and image payload on each dialog interaction.
     canvas_width = max(image.width, int(round(image.height * 9 / 16)))
     canvas_height = int(round(canvas_width * 16 / 9))
-    max_canvas_width = 1600
     scale = min(1.0, max_canvas_width / canvas_width)
     scaled_canvas_width = max(1, int(round(canvas_width * scale)))
     scaled_canvas_height = max(1, int(round(canvas_height * scale)))
@@ -2033,11 +2003,55 @@ def _crop_visual_dialog(
         offset_y + default[2],
         offset_y + default[3],
     )
+    return canvas, default_coords, (image.width, image.height)
+
+
+def _visual_asset_key(result_key: str, index: int, asset: dict) -> str:
+    identity = (
+        str(asset.get("source_page_url") or asset.get("url") or "")
+        + "|"
+        + str(asset.get("article_title") or asset.get("model") or "")
+        + "|"
+        + str(index)
+    )
+    digest = hashlib.sha1(identity.encode("utf-8")).hexdigest()[:12]
+    return f"{result_key}-{digest}"
+
+
+@st.dialog("Crop visual", width="large")
+def _crop_visual_dialog(
+    asset_key: str,
+    image_bytes: bytes,
+    label: str,
+    crop_store: str = "visual_crops",
+    card_selector: bool = False,
+):
+    canvas, default_coords, original_size = _prepare_crop_dialog_canvas(
+        bytes(image_bytes), max_canvas_width=1600
+    )
+    if canvas is None:
+        st.error("This visual could not be opened for cropping.")
+        return
+
+    st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
+    st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
+    if card_selector:
+        st.caption(
+            "9:16 frame · drag to reposition or resize the crop. The preview follows your selection; "
+            "click Apply crop when the framing is right. Zooming out reveals a blurred extension of the same image."
+        )
+    else:
+        st.caption(
+            "9:16 frame · drag to reposition or resize the crop. Double-click to confirm the crop selection. "
+            "Zooming out reveals a blurred extension of the same image."
+        )
+
+    from streamlit_cropper import st_cropper
 
     store = st.session_state.setdefault(crop_store, {})
     cropped = st_cropper(
         canvas,
-        realtime_update=False,
+        realtime_update=card_selector,
         default_coords=default_coords,
         box_color="#4F46E5",
         aspect_ratio=(9, 16),
@@ -2052,7 +2066,7 @@ def _crop_visual_dialog(
         st.image(cropped, width="stretch")
     with right:
         st.markdown('<div class="crop-dialog-kicker">ORIGINAL SIZE</div>', unsafe_allow_html=True)
-        st.caption(f"{image.width} × {image.height}px")
+        st.caption(f"{original_size[0]} × {original_size[1]}px")
         st.markdown('<div class="crop-dialog-kicker" style="margin-top:1rem;">OUTPUT</div>', unsafe_allow_html=True)
         st.caption("Applying the crop changes the selected slide framing only; the original visual stays untouched.")
         if st.button("Apply crop", type="primary", width="stretch"):
@@ -2064,6 +2078,15 @@ def _crop_visual_dialog(
             for assignment in assignments.values():
                 if assignment.get("asset_key") == asset_key:
                     assignment["bytes"] = crop_bytes
+            invalidated_cards = 0
+            if card_selector:
+                from card_studio import invalidate_card_studio_results_for_source
+
+                invalidated_cards = invalidate_card_studio_results_for_source(
+                    st.session_state, asset_key
+                )
+            if invalidated_cards:
+                st.toast("Crop applied. Re-render the card and add it to the slide again.", icon="✂️")
             st.rerun()
 
 
@@ -3036,6 +3059,7 @@ def _render_card_studio(
                                     bytes(raw),
                                     str(asset["label"]),
                                     crop_store=crop_store_name,
+                                    card_selector=True,
                                 )
                             else:
                                 st.warning("This visual is not crop-ready.")
@@ -3360,6 +3384,10 @@ def _render_card_studio(
                     except Exception:
                         subject_mask = None
 
+                source_keys = [selected_primary_asset["asset_key"]]
+                if card_type == "Head-to-Head" and image_mode == "Two images":
+                    source_keys.append(selected_secondary_asset["asset_key"])
+
                 st.session_state[result_key] = {
                     "bytes": render_card(
                         card_type,
@@ -3371,6 +3399,7 @@ def _render_card_studio(
                     "data": data,
                     "source": selected_primary_asset["source"],
                     "source_key": selected_primary_asset["asset_key"],
+                    "source_keys": source_keys,
                 }
             except (CardStudioError, OSError, RuntimeError) as exc:
                 st.session_state[result_key] = {"error": str(exc)}
