@@ -1863,8 +1863,6 @@ if "live_visual_option" not in st.session_state:
     st.session_state.live_visual_option = "Option 1 · Automatic Scraper"
 if "live_script_language" not in st.session_state:
     st.session_state.live_script_language = "english"
-if "live_headline_enabled" not in st.session_state:
-    st.session_state.live_headline_enabled = True
 if "live_top5_topics" not in st.session_state:
     st.session_state.live_top5_topics = []
 if "live_top5_selected" not in st.session_state:
@@ -3980,7 +3978,6 @@ def _live_reset_downstream():
         "live_upload_description": "",
         "live_upload_hashtags": "",
         "live_upload_comment": "",
-        "live_headline_enabled": True,
         "live_top5_topics": [],
         "live_top5_selected": [],
         "live_top5_topic_open_tile": None,
@@ -5075,10 +5072,6 @@ def _render_live_visuals(slide_count: int):
                             st.session_state.live_subtitle_data,
                             assigned_items,
                             output_path=output,
-                            headline_text=st.session_state.live_approved_script.get("headline", ""),
-                            headline_enabled=bool(
-                                st.session_state.live_approved_script.get("headline_overlay_enabled", False)
-                            ),
                         )
                     st.session_state.live_rendered_video_path = str(output.resolve())
                     st.session_state.live_visuals_approved = True
@@ -5125,13 +5118,6 @@ def _render_live_visuals(slide_count: int):
                             st.session_state.live_subtitle_data,
                             assigned,
                             output_path=output,
-                            headline_text=st.session_state.live_approved_script.get("headline", ""),
-                            headline_enabled=bool(
-                                st.session_state.live_approved_script.get(
-                                    "headline_enabled",
-                                    st.session_state.live_headline_enabled,
-                                )
-                            ),
                             source_label=story.source or "SPORTS DESK",
                         )
                     st.session_state.live_rendered_video_path = str(output.resolve())
@@ -5157,22 +5143,17 @@ def _render_live_visuals(slide_count: int):
 def _render_packaging_deck_and_phone(
     script: dict,
     story_title: str,
-    current_headline: str,
     current_vo1: str,
-    headline_enabled: bool = True,
 ):
-    headline_display = current_headline.strip() if headline_enabled and current_headline.strip() else ""
     vo_display = current_vo1.strip()[:140] if current_vo1 else ""
 
     st.markdown('<div class="mini-label" style="margin-top:16px; margin-bottom:8px;">9:16 IN-FEED PHONE SIMULATOR</div>', unsafe_allow_html=True)
-    headline_html = f'<div class="phone-sim-headline">{headline_display}</div>' if headline_display else ""
     st.markdown(
         f'<div class="phone-sim-wrapper">'
         f'<div class="phone-sim-frame">'
         f'<div class="phone-sim-notch"></div>'
         f'<div>'
         f'<div class="phone-billboard-badge">🔴 SHORTS FEED PREVIEW</div>'
-        f'{headline_html}'
         f'</div>'
         f'<div class="phone-sim-preview-video">'
         f'<div class="phone-sim-ui-overlay">'
@@ -5388,22 +5369,15 @@ def _render_live_script():
             unsafe_allow_html=True,
         )
 
-        st.session_state.live_headline_enabled = st.toggle(
-            "Use opening headline",
-            value=st.session_state.get("live_headline_enabled", True),
-            key=f"live-headline-enabled-{story_id}",
-        )
-
         edited_headline = st.text_input(
-            "Opening headline",
-            value=str(script.get("headline") or "") if st.session_state.live_headline_enabled else "",
-            max_chars=100,
-            key=f"live-script-headline-{story_id}",
-            disabled=not st.session_state.live_headline_enabled,
+            "Dashboard-only opening headline",
+            value=str(script.get("headline") or ""),
+            key=f"live-script-headline-display-{story_id}",
+            help="Crisp editorial label for this dashboard only. It is never added to the rendered Short.",
         )
 
         scene_roles = {
-            1: "THE LEAD HOOK (<14w)",
+            1: "THE LEAD HOOK"
             2: "THE TURN / CAUSE",
             3: "STAKES & EVIDENCE",
             4: "THE KICKER / IMPACT",
@@ -5457,10 +5431,9 @@ def _render_live_script():
                 approved = ScriptWriter.apply_edits(
                     script,
                     edited_voiceovers,
-                    headline=edited_headline if st.session_state.live_headline_enabled else "",
+                    headline=edited_headline,
                     profile=desk_p,
                 )
-                approved["headline_enabled"] = bool(st.session_state.live_headline_enabled)
             except ValueError as exc:
                 st.session_state.live_script_error = str(exc)
                 st.rerun()
@@ -5506,9 +5479,7 @@ def _render_live_script():
         _render_packaging_deck_and_phone(
             script=script,
             story_title=story.title,
-            current_headline=edited_headline,
             current_vo1=current_vo1,
-            headline_enabled=bool(st.session_state.live_headline_enabled),
         )
 
     if st.session_state.live_approved_script:
@@ -6386,7 +6357,6 @@ def render_live_top5():
                     render_production_video(
                         script, audio, None, visuals,
                         output_path=output,
-                        headline_enabled=False,
                     )
                 st.session_state.live_rendered_video_path = str(output.resolve())
                 st.rerun()
@@ -8095,15 +8065,14 @@ def render_scriptwriter():
         return
     topic=st.session_state.topics[selected_index]
     story_key = _live_story_key(topic)
-    headline_toggle_key = f"test-headline-enabled-{story_key}"
-    headline_text_key = f"test-script-headline-{story_key}"
+    headline_text_key = f"test-script-headline-display-{story_key}"
 
     st.markdown(
         f'<div class="radar-banner">'
         f'<div>'
         f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--primary);">02 · BROADCAST PROMPTER & SCRIPT STUDIO</div>'
         f'<div style="font-size:1.35rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:var(--ink);">{topic.title}</div>'
-        f'<div style="font-size:0.78rem; color:var(--muted);">Continuous 20–30s broadcast news article · First slide &lt; 14 words</div>'
+        f'<div style="font-size:0.78rem; color:var(--muted);">Continuous 20–30s broadcast news article · English lead &lt; 14 words · Hindi/Telugu lead ≤ 5.2s measured audio</div>'
         f'</div>'
         f'<div class="radar-chip">PRO STUDIO ENGINE</div>'
         f'</div>',
@@ -8159,7 +8128,6 @@ def render_scriptwriter():
         )
         if selected_angle:
             for key in (
-                headline_toggle_key,
                 headline_text_key,
                 *(f"script-slide-{story_key}-{index}" for index in range(1, 7)),
             ):
@@ -8245,18 +8213,12 @@ def render_scriptwriter():
                 unsafe_allow_html=True,
             )
 
-            st.markdown('<div class="mini-label">Opening Headline</div>',unsafe_allow_html=True)
-            headline_enabled = st.toggle(
-                "Use opening headline",
-                value=st.session_state.get(headline_toggle_key, True),
-                key=headline_toggle_key,
-            )
+            st.markdown('<div class="mini-label">Opening Headline · Dashboard Only</div>',unsafe_allow_html=True)
             edited_headline=st.text_input(
-                "Opening heading (3–4 words)",
-                value=script.get("headline","") if headline_enabled else "",
-                max_chars=48,
+                "Dashboard-only headline",
+                value=script.get("headline",""),
                 key=headline_text_key,
-                disabled=not headline_enabled,
+                help="Crisp editorial label for this dashboard only. It is never added to the rendered Short.",
                 label_visibility="collapsed",
             )
             st.markdown('<div style="height:.4rem"></div>',unsafe_allow_html=True)
@@ -8269,7 +8231,7 @@ def render_scriptwriter():
                     st.caption(f"— {quote_attribution}")
 
             scene_roles = {
-                1: "THE LEAD HOOK (<14w)",
+                1: "THE LEAD HOOK"
                 2: "THE TURN / CAUSE",
                 3: "STAKES & EVIDENCE",
                 4: "THE KICKER / IMPACT",
@@ -8310,10 +8272,9 @@ def render_scriptwriter():
                     approved = ScriptWriter.apply_edits(
                         script,
                         edited_voiceovers,
-                        headline=edited_headline if headline_enabled else "",
+                        headline=edited_headline,
                         profile=desk_p,
                     )
-                    approved["headline_enabled"] = bool(headline_enabled)
                     st.session_state.approved_script=approved
                     st.session_state.visuals_approved = False
                     st.session_state.approved_visuals = None
@@ -8374,9 +8335,7 @@ def render_scriptwriter():
         _render_packaging_deck_and_phone(
             script=script,
             story_title=topic.title,
-            current_headline=edited_headline,
             current_vo1=current_vo1,
-            headline_enabled=bool(headline_enabled),
         )
 
 def _test_visual_slide_count() -> int:
@@ -8796,8 +8755,6 @@ def render_renderer_test():
         st.info("Renderer is waiting for approval of: " + ", ".join(missing) + ".")
         return
 
-    headline_enabled = bool(script.get("headline_enabled", True))
-    headline_text = str(script.get("headline") or "").strip()
     selected_topic = st.session_state.get("selected_topic")
     topics = st.session_state.get("topics") or []
     source_label = "SPORTS DESK"
@@ -8868,8 +8825,6 @@ def render_renderer_test():
                     subtitles,
                     visuals,
                     output_path=output,
-                    headline_text=headline_text,
-                    headline_enabled=headline_enabled,
                     source_label=source_label,
                 )
             st.session_state.rendered_video_path = str(output)
@@ -8937,7 +8892,6 @@ def render_top5_renderer_test():
                     None,
                     visuals,
                     output_path=output,
-                    headline_enabled=False,
                 )
             st.session_state.test_top5_rendered_video_path = str(output)
             st.session_state.test_top5_upload_qc_approved = False
