@@ -1959,7 +1959,7 @@ def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
     return (left, left + width, top, top + height)
 
 
-@st.cache_data(max_entries=24, show_spinner=False)
+@st.cache_data(max_entries=4, show_spinner=False)
 def _prepare_crop_dialog_canvas(image_bytes: bytes, max_canvas_width: int = 1600):
     """Build the bounded crop canvas once per source image, not on every drag."""
     from PIL import Image, ImageFilter, ImageOps
