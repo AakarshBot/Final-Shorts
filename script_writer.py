@@ -1162,9 +1162,15 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
         if text:
             paths.append((path, text))
 
+    def add_if_textual_value(path: str, value) -> None:
+        text = str(value or "").strip()
+        if text and re.search(r"[A-Za-z\\u0900-\\u097F\\u0C00-\\u0C7F]", text):
+            add(path, text)
+
     add("eyebrow", data.get("eyebrow"))
     if card_type == "Stat Highlight":
         add("headline", data.get("headline"))
+        add_if_textual_value("value", data.get("value"))
         add("unit", data.get("unit"))
         for index, metric in enumerate(data.get("metrics") or []):
             add(f"metrics.{index}.label", (metric or {}).get("label"))
@@ -1177,6 +1183,7 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
         for index, metric in enumerate(data.get("metrics") or []):
             add(f"metrics.{index}", metric)
     elif card_type == "Key Fact / Milestone":
+        add_if_textual_value("value", data.get("value"))
         add("label", data.get("label"))
         add("context", data.get("context"))
     else:
