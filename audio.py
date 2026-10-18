@@ -503,20 +503,23 @@ def _chatterbox_audio_texts(texts: list[str]) -> list[str]:
 
 
 def _chatterbox_delivery(text: str, scene_number: int, scene_count: int) -> tuple[str, float]:
-    """Use script meaning for conservative line-level sampling; Turbo has no emotion slider."""
+    """Keep the established clear-speech temperatures and reserve variation for delivery emphasis."""
     serious = bool(_SERIOUS_AUDIO_RE.search(text))
     high_energy = bool(_HIGH_ENERGY_AUDIO_RE.search(text)) or bool(_SURPRISE_AUDIO_RE.search(text)) or "!" in text
 
+    # 0.80 is Chatterbox Turbo's established neutral setting for this factory.
+    # Avoid dropping routine or serious lines to a much lower temperature, which
+    # can flatten the delivery without adding a reliable emotion control.
     if serious:
-        temperature = 0.72
+        temperature = 0.80
     elif high_energy:
         temperature = 0.88
     elif scene_number == 1:
-        temperature = 0.84
+        temperature = 0.88
     elif scene_number == scene_count:
-        temperature = 0.82
+        temperature = 0.84
     else:
-        temperature = 0.77
+        temperature = 0.80
     return text, temperature
 
 
@@ -623,7 +626,7 @@ def generate_chatterbox_audio(
         for number, text in enumerate(texts, 1)
     ]
     signature_payload = {
-        "cache_version": "chatterbox-turbo-audio-v2-script-led",
+        "cache_version": "chatterbox-turbo-audio-v3-clear-speech",
         "texts": texts,
         "audio_texts": audio_texts,
         "temperatures": temperatures,
