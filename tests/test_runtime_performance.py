@@ -119,6 +119,15 @@ def test_manual_subject_cutout_reuses_layout_geometry(monkeypatch):
     renderer._manual_subject_cutout_layout_data_cached.cache_clear()
 
 
+def test_live_card_studio_uses_approved_card_allowlist():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    start = app_source.index("def _render_card_studio(")
+    end = app_source.index("def _top5_fit_preview(", start)
+    studio_source = app_source[start:end]
+
+    assert "card_types = LIVE_CARD_TYPES if live else TEST_CARD_TYPES" in studio_source
+
+
 def test_live_rendered_video_path_survives_upload_qc_reruns():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
 
