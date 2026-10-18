@@ -257,36 +257,6 @@ def _subject_occupancy(mask: Image.Image | None, box: tuple[int, int, int, int])
     return sum(histogram[96:]) / max(1, (x2 - x1) * (y2 - y1))
 
 
-def _best_text_position(
-    mask: Image.Image | None,
-    width: int,
-    height: int,
-    region: tuple[int, int, int, int],
-    preferred_x: int,
-    preferred_y: int,
-) -> tuple[int, int]:
-    rx1, ry1, rx2, ry2 = region
-    if width >= rx2 - rx1 or height >= ry2 - ry1:
-        return max(rx1, min(rx2 - width, preferred_x)), max(ry1, min(ry2 - height, preferred_y))
-    x_values = [rx1, (rx1 + rx2 - width) // 2, rx2 - width]
-    y_values = [
-        ry1,
-        ry1 + max(0, (ry2 - ry1 - height) // 3),
-        ry1 + max(0, (ry2 - ry1 - height) * 2 // 3),
-        ry2 - height,
-    ]
-    candidates = []
-    for x in x_values:
-        for y in y_values:
-            x = max(rx1, min(rx2 - width, x))
-            y = max(ry1, min(ry2 - height, y))
-            occupancy = _subject_occupancy(mask, (x, y, x + width, y + height))
-            distance = abs(x - preferred_x) / max(1, width) + abs(y - preferred_y) / max(1, height)
-            candidates.append((occupancy * 8 + distance * 0.08, x, y))
-    _, x, y = min(candidates, key=lambda item: item[0])
-    return int(x), int(y)
-
-
 def _region_complexity(image: Image.Image, box: tuple[int, int, int, int]) -> float:
     x1, y1, x2, y2 = box
     crop = image.crop((max(0, x1), max(0, y1), min(WIDTH, x2), min(HEIGHT, y2))).convert("L")
