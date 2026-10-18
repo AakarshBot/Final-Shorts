@@ -2879,7 +2879,64 @@ def _render_card_studio(
         )
         return
 
-    defaults = card_data_for_type(card_type)
+    if top5:
+        selected_card_language = st.session_state.get("test_top5_audio_language", "english")
+    elif live:
+        script_for_language = (
+            st.session_state.get("live_approved_script")
+            or st.session_state.get("live_script_data")
+            or {}
+        )
+        selected_card_language = (
+            script_for_language.get("language_used")
+            or st.session_state.get("live_script_language", "english")
+        )
+    else:
+        selected_card_language = st.session_state.get("script_language", "english")
+    card_language = str(selected_card_language or "english").strip().casefold()
+    card_language = {"en": "english", "hi": "hindi", "te": "telugu"}.get(card_language, card_language)
+    if card_language not in {"english", "hindi", "telugu"}:
+        card_language = "english"
+
+    def value_key(field):
+        shared_fields = {"layout-position", "contrast-treatment", "image-mode", "split-direction"}
+        language_suffix = (
+            f"-{card_language}"
+            if card_language in {"hindi", "telugu"} and field not in shared_fields
+            else ""
+        )
+        return (
+            f"{state_id}-{card_type.lower().replace(' ', '-').replace('/', '-').replace('&', 'and')}"
+            f"-{field}{language_suffix}"
+        )
+
+    pending_translation_key = f"{state_id}-pending-copy-translation"
+    pending_translation = st.session_state.get(pending_translation_key)
+    if (
+        isinstance(pending_translation, dict)
+        and pending_translation.get("card_type") == card_type
+        and pending_translation.get("language") == card_language
+    ):
+        translated_data = pending_translation.get("data") or {}
+        if card_type == "Stat Highlight":
+            for field in ("eyebrow", "headline", "unit"):
+                st.session_state[value_key(field)] = translated_data.get(field, "")
+            for index, metric in enumerate(translated_data.get("metrics") or [], 1):
+                st.session_state[value_key(f"metric-{index}-label")] = metric.get("label", "")
+        elif card_type == "Quote / Reaction":
+            for field in ("eyebrow", "quote", "attribution", "context"):
+                st.session_state[value_key(field)] = translated_data.get(field, "")
+        elif card_type == "Head-to-Head":
+            for field in ("eyebrow", "headline"):
+                st.session_state[value_key(field)] = translated_data.get(field, "")
+            for index, metric in enumerate(translated_data.get("metrics") or [], 1):
+                st.session_state[value_key(f"metric-{index}-label")] = metric
+        elif card_type == "Key Fact / Milestone":
+            for field in ("eyebrow", "label", "context"):
+                st.session_state[value_key(field)] = translated_data.get(field, "")
+        del st.session_state[pending_translation_key]
+
+    defaults = card_data_for_type(card_type, language=card_language)
 
     if top5 and active_slide is None:
         image = _asset_to_image(current_image)
@@ -3174,9 +3231,6 @@ def _render_card_studio(
                     st.rerun()
             st.markdown('</div>', unsafe_allow_html=True)
 
-    def value_key(field):
-        return f"{state_id}-{card_type.lower().replace(' ', '-').replace('/', '-').replace('&', 'and')}-{field}"
-
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">COMPOSITION</div>'
         '<div class="section-title">Choose how this card uses the photo</div></div></div>',
@@ -3202,6 +3256,11 @@ def _render_card_studio(
             help="Soft gradient preserves the photo; Deep gradient darkens the text area; Editorial panel adds a contained contrast panel.",
         )
     st.caption("These controls apply to all four editorial card types in Test and Live. Text Subject Cutout is unchanged.")
+    language_label = {"english": "English", "hindi": "Hindi (Devanagari)", "telugu": "Telugu"}.get(card_language, "English")
+    st.caption(
+        f"Card copy language: {language_label}. Starter copy follows the selected pipeline language. "
+        "Custom text is rendered as entered."
+    )
 
     if card_type == "Stat Highlight":
         st.markdown(
@@ -3375,12 +3434,50 @@ def _render_card_studio(
 
     data["layout_position"] = layout_position
     data["contrast_treatment"] = contrast_treatment
+    data["language"] = card_language
+
+    if card_language in {"hindi", "telugu"}:
+        language_action_name = "Hindi" if card_language == "hindi" else "Telugu"
+        if st.button(
+            f"Translate card text to {language_action_name}",
+            width="stretch",
+            key=f"{state_id}-translate-copy",
+            help="Translates editable text using the configured Scriptwriter model. Review the result before rendering.",
+        ):
+            try:
+                from script_writer import translate_card_copy
+
+                with st.spinner(f"Translating card copy into {language_action_name}…"):
+                    translated_data = translate_card_copy(card_type, data, card_language)
+                st.session_state[f"{state_id}-pending-copy-translation"] = {
+                    "card_type": card_type,
+                    "language": card_language,
+                    "data": translated_data,
+                }
+                st.session_state[f"{state_id}-result"] = None
+                st.session_state[f"{state_id}-translation-notice"] = {
+                    "card_type": card_type,
+                    "language": card_language,
+                    "message": f"Card copy translated to {language_action_name}. Review all fields before rendering.",
+                }
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Card text translation failed: {exc}")
+
+    translation_notice = st.session_state.get(f"{state_id}-translation-notice")
+    if (
+        isinstance(translation_notice, dict)
+        and translation_notice.get("card_type") == card_type
+        and translation_notice.get("language") == card_language
+    ):
+        st.info(translation_notice.get("message") or "")
 
     result_key = f"{state_id}-result"
     from card_studio import invalidate_card_studio_result_for_composition
 
     if invalidate_card_studio_result_for_composition(
-        st.session_state, result_key, card_type, layout_position, contrast_treatment
+        st.session_state, result_key, card_type, layout_position, contrast_treatment,
+        language=card_language,
     ):
         st.info("Card type or composition changed. Render the card again before attaching it.")
 
@@ -5139,6 +5236,26 @@ def _render_live_script():
     )
 
     if not isinstance(script, dict):
+        if st.session_state.get("live_production_line") != "top_5":
+            stored_language = str(st.session_state.get("live_script_language") or "english").casefold()
+            language_default = stored_language.title() if stored_language in {"english", "hindi", "telugu"} else "English"
+            selected_language = st.pills(
+                "Script language",
+                ["English", "Hindi", "Telugu"],
+                default=language_default,
+                key="live-script-language-choice",
+                help="Choose the narration and story-angle language before generating the script.",
+            ) or language_default
+            selected_language_key = selected_language.strip().casefold()
+            if selected_language_key != stored_language:
+                st.session_state.live_script_language = selected_language_key
+                st.session_state.live_universal_angles = None
+                st.session_state.live_universal_angle_source = None
+                st.session_state.live_universal_angle_selected = 0
+                st.session_state.live_universal_angle_custom = ""
+                st.session_state.live_universal_angle_story_key = None
+                st.session_state.live_script_error = ""
+                st.caption("Language changed. Generate fresh story angles in the selected language.")
         angles = st.session_state.get("live_universal_angles")
         if not angles:
             if st.button(
