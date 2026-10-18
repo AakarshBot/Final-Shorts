@@ -1279,6 +1279,12 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
                 raise ValueError("The translation provider returned incomplete card copy.")
             translated = candidate
             break
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError(
+                    "Groq rejected the card-copy translation request: " + str(exc)
+                ) from exc
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
     if translated is None:
@@ -1821,6 +1827,12 @@ def suggest_universal_story_angles(
                     "provider_used": model,
                 }
             errors.append(f"{model}: {reason}")
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError(
+                    "Groq rejected the universal story-angle request: " + str(exc)
+                ) from exc
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
 
