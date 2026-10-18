@@ -38,7 +38,7 @@ CARD_TYPES = (
     "Key Fact / Milestone",
 )
 TEST_CARD_TYPES = CARD_TYPES
-LIVE_CARD_TYPES = ("Text Subject Cutout",)
+LIVE_CARD_TYPES = CARD_TYPES
 
 
 class CardStudioError(ValueError):
