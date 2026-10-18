@@ -273,14 +273,14 @@ def test_localized_card_starter_copy_and_native_script_rendering():
         "Key Fact / Milestone",
     )
     for language, start, end, font_name in (
-        ("hindi", "\\u0900", "\\u097f", "NotoSansDevanagari-Bold.ttf"),
-        ("telugu", "\\u0c00", "\\u0c7f", "NotoSansTelugu-Bold.ttf"),
+        ("hindi", 0x0900, 0x097F, "NotoSansDevanagari-Bold.ttf"),
+        ("telugu", 0x0C00, 0x0C7F, "NotoSansTelugu-Bold.ttf"),
     ):
         for card_type in card_types:
             data = card_studio.card_data_for_type(card_type, language=language)
             assert data["language"] == language
             serialized = repr(data)
-            assert any(start <= char <= end for char in serialized), (language, card_type)
+            assert any(start <= ord(char) <= end for char in serialized), (language, card_type)
             output = card_studio.render_card(card_type, _image_bytes(), data)
             with Image.open(BytesIO(output)) as image:
                 assert image.size == (1080, 1920)
