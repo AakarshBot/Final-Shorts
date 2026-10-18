@@ -190,6 +190,7 @@ def test_cricket_test_exposes_shared_text_cutout():
     render = next(button for button in at.button if button.label == "Render Now")
     render.click().run()
     assert not at.exception, at.exception
+    assert at.session_state["manual_subject_cutout"]["rendered_config"]["headline"] == "One."
     assert at.session_state["manual_subject_cutout"]["rendered_config"]["text_polygon"] == (
         (120, 700),
         (540, 700),
@@ -479,6 +480,7 @@ def test_live_cricket_text_cutout_second_run_preserves_text_size():
     render.click().run()
     assert not at.exception, at.exception
     assert [slider.label for slider in at.slider] == ["Text size"]
+    assert at.session_state["live_manual_subject_cutout"]["rendered_config"]["headline"] == "One."
 
     first_preview = bytes(at.session_state["live_manual_subject_cutout"]["rendered_preview"])
     at.slider[0].set_value(220).run()
