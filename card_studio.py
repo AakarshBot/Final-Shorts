@@ -45,6 +45,25 @@ class CardStudioError(ValueError):
     """Raised when a Card Studio frame cannot be rendered cleanly."""
 
 
+
+def invalidate_card_studio_results_for_source(session_state, asset_key: str) -> int:
+    """Discard rendered card previews that used a source image whose crop changed."""
+    invalidated = 0
+    for state_key in list(session_state.keys()):
+        if not state_key.endswith("-result"):
+            continue
+        result = session_state.get(state_key)
+        if not isinstance(result, dict) or result.get("bytes") is None:
+            continue
+        source_keys = result.get("source_keys")
+        if not isinstance(source_keys, (list, tuple, set)):
+            source_keys = (result.get("source_key"),)
+        if asset_key in source_keys:
+            session_state[state_key] = None
+            invalidated += 1
+    return invalidated
+
+
 def _open_image(source: bytes | bytearray | Image.Image) -> Image.Image:
     if isinstance(source, Image.Image):
         return source.convert("RGB")
