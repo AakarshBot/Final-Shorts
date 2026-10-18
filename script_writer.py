@@ -2078,25 +2078,31 @@ def generate_top5_script(stories: list[dict]) -> dict:
             )
         try:
             result = _request(model, instruction, evidence)
-            valid, reason = validate_top5_script(result, stories)
-            if valid:
-                result["provider_used"] = model
-                result["delivery_profile"] = "TOP-5 CRICKET EDITOR"
-                result["stories"] = [
-                    {
-                        "title": _story_value(story, "title"),
-                        "url": _story_value(story, "url"),
-                        "source": _story_value(story, "source"),
-                        "published_at": _story_value(story, "published_at"),
-                    }
-                    for story in stories
-                ]
-                return result
-            recovery_reason = reason
-            errors.append(f"{model}: {reason}")
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError("Groq rejected the Top-5 Scriptwriter request: " + str(exc)) from exc
+            continue
         except Exception as exc:
-            recovery_reason = f"{type(exc).__name__}: {exc}"
-            errors.append(f"{model}: {recovery_reason}")
+            errors.append(f"{model}: {type(exc).__name__}: {exc}")
+            continue
+
+        valid, reason = validate_top5_script(result, stories)
+        if valid:
+            result["provider_used"] = model
+            result["delivery_profile"] = "TOP-5 CRICKET EDITOR"
+            result["stories"] = [
+                {
+                    "title": _story_value(story, "title"),
+                    "url": _story_value(story, "url"),
+                    "source": _story_value(story, "source"),
+                    "published_at": _story_value(story, "published_at"),
+                }
+                for story in stories
+            ]
+            return result
+        recovery_reason = reason
+        errors.append(f"{model}: {reason}")
 
     raise RuntimeError("Top-5 script generation failed: " + " | ".join(errors))
 
