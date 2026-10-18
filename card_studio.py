@@ -103,6 +103,7 @@ def invalidate_card_studio_result_for_composition(
     card_type: str,
     layout_position: str,
     contrast_treatment: str,
+    language: str = "english",
 ) -> bool:
     """Clear a rendered preview when its card type or photo composition has changed."""
     result = session_state.get(result_key)
@@ -113,6 +114,8 @@ def invalidate_card_studio_result_for_composition(
         result.get("type") != card_type
         or previous.get("layout_position", CARD_LAYOUT_POSITIONS[0]) != layout_position
         or previous.get("contrast_treatment", CARD_CONTRAST_TREATMENTS[0]) != contrast_treatment
+        or _normalise_card_language(previous.get("language", "english"))
+        != _normalise_card_language(language)
     ):
         session_state[result_key] = None
         return True
