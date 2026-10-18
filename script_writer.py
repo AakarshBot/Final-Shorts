@@ -1868,46 +1868,56 @@ def write_universal_script(
         )
 
     errors = []
-    for attempt, model in enumerate(MODELS):
+    recovery_reason = ""
+    for model in MODELS:
+        model_instruction = instruction
+        if recovery_reason:
+            model_instruction += (
+                "\nRECOVERY:\n"
+                "The previous draft was rejected by local validation. "
+                "Rewrite the complete package now. Fix the exact failure below "
+                "while preserving every other hard rule and all supported facts. "
+                "Return only the complete JSON package.\n"
+                f"Validation failure: {recovery_reason}"
+            )
         try:
-            model_instruction = instruction
-            if attempt:
-                model_instruction += (
-                    "\nRECOVERY:\n"
-                    "The previous draft was rejected by local validation. "
-                    "Rewrite the complete package now. Fix the exact failure below "
-                    "while preserving every other hard rule and all supported facts. "
-                    "Return only the complete JSON package.\n"
-                    f"Validation failure: {errors[-1]}"
-                )
             result = _request(model, model_instruction, source)
-            if angle_text:
-                result["story_angle"] = angle_text
-
-            valid, reason = validate_universal_script(result, language=language_key)
-            if valid:
-                return _finish_result(
-                    result,
-                    story,
-                    source,
-                    model,
-                    language_key,
-                    angle_text=angle_text,
-                    search_query=search_query,
-                    delivery_profile=(
-                        "UNIVERSAL SPORTS"
-                        if norm_profile in {"niche_sports", "universal"}
-                        else DESK_PROFILES.get(norm_profile, "UNIVERSAL SPORTS")
-                    ),
-                    desk_profile=norm_profile,
-                )
-            errors.append(reason)
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError(
+                    "Groq rejected the universal Scriptwriter request; no recovery prompt was sent: "
+                    + str(exc)
+                ) from exc
+            continue
         except Exception as exc:
-            errors.append(f"{type(exc).__name__}: {exc}")
+            errors.append(f"{model}: {type(exc).__name__}: {exc}")
+            continue
+
+        if angle_text:
+            result["story_angle"] = angle_text
+        valid, reason = validate_universal_script(result, language=language_key)
+        if valid:
+            return _finish_result(
+                result,
+                story,
+                source,
+                model,
+                language_key,
+                angle_text=angle_text,
+                search_query=search_query,
+                delivery_profile=(
+                    "UNIVERSAL SPORTS"
+                    if norm_profile in {"niche_sports", "universal"}
+                    else DESK_PROFILES.get(norm_profile, "UNIVERSAL SPORTS")
+                ),
+                desk_profile=norm_profile,
+            )
+        recovery_reason = reason
+        errors.append(f"{model}: {reason}")
 
     raise RuntimeError(
-        "Universal sports script generation failed after one hidden rewrite: "
-        + " | ".join(errors)
+        "Universal sports script generation failed: " + " | ".join(errors)
     )
 
 
