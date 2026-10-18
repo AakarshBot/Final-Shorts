@@ -58,6 +58,26 @@ class CardStudioError(ValueError):
 
 
 
+def invalidate_card_studio_result_for_composition(
+    session_state,
+    result_key: str,
+    layout_position: str,
+    contrast_treatment: str,
+) -> bool:
+    """Clear a rendered preview when the user changes how the source photo is composed."""
+    result = session_state.get(result_key)
+    if not isinstance(result, dict) or result.get("bytes") is None:
+        return False
+    previous = result.get("data") or {}
+    if (
+        previous.get("layout_position", CARD_LAYOUT_POSITIONS[0]) != layout_position
+        or previous.get("contrast_treatment", CARD_CONTRAST_TREATMENTS[0]) != contrast_treatment
+    ):
+        session_state[result_key] = None
+        return True
+    return False
+
+
 def invalidate_card_studio_results_for_source(session_state, asset_key: str) -> int:
     """Discard rendered card previews that used a source image whose crop changed."""
     invalidated = 0
@@ -502,34 +522,36 @@ def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None)
     if not quote or not attribution:
         raise CardStudioError("Quote / Reaction needs a quote and attribution.")
 
-    # A large typographic opening mark replaces the old narrow gold sidebar.
-    mark_font = _font_display(124 if bottom_mode else 142)
-    draw.text((x - 5, y - 32), "“", font=mark_font, fill=ACCENT)
-    quote_top = y + (54 if bottom_mode else 62)
+    # Keep the oversized opening mark clear of the quote's first line.
+    text_x = x + (76 if width > CONTENT_WIDTH else 64)
+    text_width = width - (text_x - x)
+    mark_font = _font_display(116 if bottom_mode else 132)
+    draw.text((x - 5, y - 12), "“", font=mark_font, fill=ACCENT)
+    quote_top = y + 24
     quote_font, quote_lines = _fit(
-        draw, quote, width - 16, 4,
-        76 if bottom_mode else 80,
-        43 if bottom_mode else 46,
+        draw, quote, text_width - 8, 4,
+        74 if bottom_mode else 78,
+        42 if bottom_mode else 44,
         bold=False, font_fn=_font_body,
     )
-    y = _draw_lines(canvas, quote_lines, x + 6, quote_top, quote_font, 8, fill=WHITE) + 20
+    y = _draw_lines(canvas, quote_lines, text_x, quote_top, quote_font, 8, fill=WHITE) + 20
 
-    draw.rounded_rectangle((x + 6, y, x + 62, y + 5), radius=2, fill=ACCENT)
+    draw.rounded_rectangle((text_x, y, text_x + 56, y + 5), radius=2, fill=ACCENT)
     y += 25
     attr_font, attr_lines = _fit(
-        draw, attribution, width - 12, 2,
-        44 if bottom_mode else 48, 30 if bottom_mode else 34,
+        draw, attribution, text_width - 4, 2,
+        42 if bottom_mode else 46, 29 if bottom_mode else 32,
         font_fn=_font_headline,
     )
-    y = _draw_lines(canvas, attr_lines, x + 6, y, attr_font, 4, fill=WHITE) + 8
+    y = _draw_lines(canvas, attr_lines, text_x, y, attr_font, 4, fill=WHITE) + 8
 
     if context:
         context_font, context_lines = _fit(
-            draw, context, width - 12, 2 if bottom_mode else 3,
-            27 if bottom_mode else 31, 20 if bottom_mode else 23,
+            draw, context, text_width - 4, 2 if bottom_mode else 3,
+            27 if bottom_mode else 30, 20 if bottom_mode else 22,
             bold=False, font_fn=_font_body,
         )
-        _draw_lines(canvas, context_lines, x + 6, y, context_font, 4, fill=MUTED)
+        _draw_lines(canvas, context_lines, text_x, y, context_font, 4, fill=MUTED)
 
     return canvas.convert("RGB")
 
