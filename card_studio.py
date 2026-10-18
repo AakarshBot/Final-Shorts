@@ -342,7 +342,17 @@ def _draw_lines(
     shadow_offset: tuple[int, int] = (0, 0),
 ) -> int:
     draw = ImageDraw.Draw(canvas)
-    _, line_height = _measure(draw, "Ag", font)
+    script_line = next(
+        (
+            line for line in lines
+            if any(
+                0x0900 <= ord(char) <= 0x097F or 0x0C00 <= ord(char) <= 0x0C7F
+                for char in line
+            )
+        ),
+        "Ag",
+    )
+    _, line_height = _measure(draw, script_line, font)
     shadow_x, shadow_y = shadow_offset
     for line in lines:
         if shadow_x or shadow_y:
