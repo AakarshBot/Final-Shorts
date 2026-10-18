@@ -723,3 +723,67 @@ def test_live_scriptwriter_can_select_hindi_before_generating_angles():
     assert at.session_state["live_script_language"] == "hindi"
     assert at.session_state["live_universal_angles"] is None
     assert any(button.label == "Generate Script" for button in at.button)
+
+
+def _dashboard_headline_test_script(language="english"):
+    return {
+        "language_used": language,
+        "subject_name": "Shubman Gill",
+        "headline": "Shubman Gill injury update explains what India's next ODI selection decision depends on and how the latest assessment may affect the squad",
+        "titles": ["Shubman Gill injury update", "Why India's selection decision matters", "What the latest assessment means"],
+        "seo_description": "The latest confirmed update on Shubman Gill before India's next ODI.",
+        "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
+        "comment": "Should India wait for the medical assessment before selecting Gill?",
+        "script": [
+            {"voiceover": "Shubman Gill faces a new injury concern.", "narrative_role": "hook"},
+            {"voiceover": "He was assessed after returning from training.", "narrative_role": "development"},
+            {"voiceover": "The team will review his availability before the ODI.", "narrative_role": "consequence"},
+        ],
+    }
+
+
+def test_test_scriptwriter_headline_is_dashboard_only_and_unlimited():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "02 · Script"
+    at.session_state["topics"] = [Topic(
+        title="Shubman Gill injury update",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/gill",
+    )]
+    at.session_state["selected_topic"] = 0
+    at.session_state["script_data"] = _dashboard_headline_test_script()
+    at.run()
+
+    assert not at.exception, at.exception
+    headline = next(field for field in at.text_input if field.label == "Dashboard-only headline")
+    assert len(headline.value) > 100
+    assert not any(toggle.label == "Use opening headline" for toggle in at.toggle)
+
+
+def test_live_scriptwriter_headline_is_dashboard_only_and_unlimited():
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "deep_dive"
+    at.session_state["live_desk"] = "cricket"
+    at.session_state["live_cricket_profile"] = "cricket_india_asia"
+    at.session_state["live_topics_profile"] = "cricket_india_asia"
+    at.session_state["live_topics"] = [Topic(
+        title="Shubman Gill injury update",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/gill",
+    )]
+    at.session_state["live_selected_topic"] = 0
+    at.session_state["live_stage"] = "02 · Script"
+    at.session_state["live_script_data"] = _dashboard_headline_test_script()
+    at.session_state["live_script_language"] = "english"
+    at.session_state["live_approved_script"] = None
+    at.run()
+
+    assert not at.exception, at.exception
+    headline = next(field for field in at.text_input if field.label == "Dashboard-only opening headline")
+    assert len(headline.value) > 100
+    assert not any(toggle.label == "Use opening headline" for toggle in at.toggle)
