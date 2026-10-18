@@ -996,11 +996,21 @@ def _manual_subject_cutout_layout_data_uncached(
 
     words = clean_headline.split()
     layouts = []
-    font = ImageFont.truetype(
-        BytesIO(font_data),
-        requested_size,
-        layout_engine=ImageFont.Layout.RAQM if script_language else ImageFont.Layout.BASIC,
-    )
+    if script_language:
+        try:
+            font = ImageFont.truetype(
+                BytesIO(font_data),
+                requested_size,
+                layout_engine=ImageFont.Layout.RAQM,
+            )
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(
+                f"Text Subject Cutout could not load the bundled Indic font with RAQM. "
+                f"On Windows, confirm the FriBiDi runtime DLL is available and restart the factory."
+            ) from exc
+    else:
+        # Preserve Pillow's established default layout engine for English.
+        font = ImageFont.truetype(BytesIO(font_data), requested_size)
     line_box = probe.textbbox(
         (0, 0),
         "Ag",
