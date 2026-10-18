@@ -2864,7 +2864,7 @@ def _render_card_studio(
             ),
             crop_store_name="live_visual_crops" if live else "visual_crops",
             state_id=state_id,
-            default_headline=str(script.get("headline") or ""),
+            default_headline="",
             handoff="cricket",
             slide_count=slide_count,
             assignment_store=(
