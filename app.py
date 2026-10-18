@@ -5377,7 +5377,7 @@ def _render_live_script():
         )
 
         scene_roles = {
-            1: "THE LEAD HOOK"
+            1: "THE LEAD HOOK",
             2: "THE TURN / CAUSE",
             3: "STAKES & EVIDENCE",
             4: "THE KICKER / IMPACT",
@@ -8236,7 +8236,7 @@ def render_scriptwriter():
                     st.caption(f"— {quote_attribution}")
 
             scene_roles = {
-                1: "THE LEAD HOOK"
+                1: "THE LEAD HOOK",
                 2: "THE TURN / CAUSE",
                 3: "STAKES & EVIDENCE",
                 4: "THE KICKER / IMPACT",
