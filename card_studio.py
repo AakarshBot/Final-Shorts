@@ -22,21 +22,13 @@ SAFE_RIGHT = 864
 SAFE_BOTTOM = 1460
 CONTENT_WIDTH = 520
 
-# Editorial palette: photo, ink, paper, and one restrained signal accent.
+# Editorial palette: photography, ink, white, and one restrained signal accent.
 INK = (12, 15, 19)
-PAPER = (245, 242, 234)
 ACCENT = (244, 202, 61)
 WHITE = (250, 249, 245)
-IVORY = PAPER
 MUTED = (199, 201, 199)
-SUBTLE = (153, 160, 163)
 DARK = INK
-GOLD_ACCENT = ACCENT
-PRESTIGE_GOLD = ACCENT
-ELECTRIC_CYAN = ACCENT
-CRIMSON_ACCENT = ACCENT
 CARD_BG = (12, 15, 19, 232)
-DIVIDER = (255, 255, 255, 48)
 
 CARD_TYPES = (
     "Text Subject Cutout",
@@ -263,7 +255,8 @@ def _region_complexity(image: Image.Image, box: tuple[int, int, int, int]) -> fl
     crop.thumbnail((40, 64))
     if crop.width <= 1 or crop.height <= 1:
         return 1.0
-    return sum(ImageStat.Stat(crop).stddev) / (255 * len(ImageStat.Stat(crop).stddev))
+    stddev = ImageStat.Stat(crop).stddev
+    return sum(stddev) / (255 * len(stddev))
 
 
 def _content_region(side: str) -> tuple[int, int]:
