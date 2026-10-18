@@ -133,7 +133,7 @@ Status: **Approved.**
 Unified Scriptwriter (`script_writer.py`):
 - One shared module serves Deep-Dive Cricket, Top-5, YouTube Search Trends, Niche Sports, and On This Day; do not add parallel writers or wrapper layers.
 - Research starts with the selected article and adds related reports when available to ground facts and clarify current status.
-- Deep-Dive Cricket: three editorial angles for human selection, then exactly four spoken slides. Slide 1 is at most 13 words; total narration targets 50–70 words and under 30 seconds.
+- Deep-Dive Cricket: three editorial angles for human selection, then 3–5 spoken slides, preferring four when the story fits naturally. Slide 1 is at most 13 words; total narration targets 50–70 words and under 30 seconds.
 - YouTube Search Trends, Niche Sports, and On This Day: three editorial angles for selection, then 3–5 connected spoken slides, 50–74 words overall and under 30 seconds, with a subject-named lead and complete per-slide visual metadata.
 - Top-5: six slides; Slide 1 is a package label plus visual-only roundup copy, Slides 2–6 correspond to the five selected stories in order, and the six spoken headlines target less than 30 seconds.
 - The generation prompts explicitly list the content, packaging, quote, visual-handoff, and shape requirements enforced by generation validators. Generation may use one hidden recovery/rewrite for a failed draft; failed generated output is not sent to Manual QC.
@@ -482,7 +482,7 @@ Checkpoint rule:
 All previous scriptwriters (`universal_script_writer.py`, `top5_script_writer.py`, and the legacy cricket writer) have been consolidated into **one unified scriptwriter** (`script_writer.py`) with zero compatibility wrappers.
 
 Scope & Stream Dispatch:
-- **Deep-Dive Cricket:** Generates 3 research-backed editorial angles for human selection, producing a 4-slide spoken script. Slide 1 capped at 13 words; narration under 30 seconds.
+- **Deep-Dive Cricket:** Generates 3 research-backed editorial angles for human selection, producing 3–5 spoken slides, preferring four only when the story fits naturally. Slide 1 capped at 13 words; narration remains 50–70 words and under 30 seconds.
 - **YouTube Search Trends & Niche Sports:** Generates 3 research-backed editorial angles honoring search intent, producing 3–5 spoken slides. Slide 1 capped at 13 words; total narration 18–30 seconds (50–74 words). Preserves the raw search query context for SEO/Search packaging.
 - **Top-5 Stories:** Generates a 6-slide package (Slide 1: hook headline ≤8 words with visual body copy; Slides 2–6: spoken headline + visual card body). Total spoken headline duration strictly under 30 seconds.
 

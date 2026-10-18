@@ -1,7 +1,7 @@
 """Unified Scriptwriter for Final-Shorts.
 
 Serves all production streams and desks:
-- Deep-Dive Cricket (4 spoken slides + 3 angles + publish metadata)
+- Deep-Dive Cricket (3–5 spoken slides + 3 angles + publish metadata)
 - YouTube Search Trends & Niche Sports (universal sports Shorts engine)
 - Top-5 (6 slides: 1 hook + 5 distinct spoken headlines with visual body copy)
 """
@@ -44,7 +44,7 @@ MAX_TOP5_TOTAL_SPEECH_SECONDS = 30.0
 MIN_HASHTAGS = 3
 MAX_HASHTAGS = 5
 
-# Universal specific constants
+# Shared non-Top-5 spoken-script constants
 MIN_WORDS = 50
 MAX_WORDS = 74
 MIN_SCENES = 3
@@ -67,11 +67,11 @@ CRICKET_SCHEMA = {
         "comment": {"type": "string"},
         "quote": {"type": "string"},
         "quote_attribution": {"type": "string"},
-        "quote_slide": {"type": "integer", "minimum": 0, "maximum": 4},
+        "quote_slide": {"type": "integer", "minimum": 0, "maximum": MAX_SCENES},
         "script": {
             "type": "array",
-            "minItems": 4,
-            "maxItems": 4,
+            "minItems": MIN_SCENES,
+            "maxItems": MAX_SCENES,
             "items": {
                 "type": "object",
                 "properties": {
@@ -243,7 +243,7 @@ SCHEMA = TOP5_SCHEMA  # Backward-compatible alias for Top-5 schema tests
 SYSTEM_PROMPT = """You are the senior cricket editor and viral showrunner for a human-reviewed YouTube Shorts channel.
 
 JOB
-Turn the supplied researched cricket story into one complete, high-retention four-slide spoken Short.
+Turn the supplied researched cricket story into one complete, high-retention 3–5-slide spoken Short, targeting the same 20–30 second duration.
 
 SOURCE USE & FACTUAL GROUNDING VS EDITORIAL LIBERTY
 - Read the entire research packet before writing.
@@ -257,7 +257,7 @@ EDITORIAL ANGLE & PROMPT (AUTHORITATIVE)
 - The underlying match event provides the factual context, but the selected angle determines what the Short is actually about.
 
 INFORMATION & RETENTION
-Compress all material factual information into four slides.
+Compress all material factual information into 3–5 slides, letting the story determine the natural number of cuts.
 Keep the facts a viewer actually needs: who it is about, what happened, when and where relevant, important scores/numbers/records, material background, and the latest confirmed consequence or status.
 Remove only repetition, boilerplate and low-value wording.
 Do not replace facts with generic empty hype.
@@ -268,12 +268,12 @@ NAMING THE SUBJECT
 - Never describe the main player only as "the 35-year-old", "the player", "the batter", "the bowler", "the captain", or with a pronoun when the exact name is available.
 - For a story about a specific player, name that player in the first two slides whenever the evidence supports the name.
 
-FOUR SLIDES — 20-30s BROADCAST NEWS ARTICLE
-- Return exactly four spoken slides.
+3–5 SLIDES — 20–30s BROADCAST NEWS ARTICLE
+- Return 3–5 spoken slides. Prefer four when that best serves the story, but do not force a fixed slide count.
 - Slide 1 is the hook: the strongest specific fact from the story.
 - Slide 1 MUST contain 13 words or fewer. This is a generation rule, not a post-generation target.
-- Slides 2–4 must add new information and should carry the important remaining facts.
-- The complete four-slide narration MUST fit within 30 seconds at the channel's normal spoken delivery pace. Treat this as a generation requirement; keep wording tight and do not pad.
+- Later slides must add new information and carry the important remaining facts.
+- The complete narration MUST fit within 30 seconds at the channel's normal spoken delivery pace. Treat this as a generation requirement; keep wording tight and do not pad.
 - As a generation target, keep the complete narration between 50 and 70 spoken words (~20 to 28 seconds).
 - Do not pad the script to hit a word count.
 
@@ -300,7 +300,7 @@ VIRAL PACKAGING SUITE
 - `comment`: one provocative, high-engagement pinned question designed to ignite debate in the comments. Tailor it specifically to the real tactical or ethical dilemma in the story without using canned bot phrases.
 - `quote`: the strongest meaningful direct quote from the research, copied faithfully, when one materially adds to the story. Return an empty string when there is no worthwhile quote.
 - `quote_attribution`: the exact speaker/source of `quote`, or an empty string when there is no quote.
-- `quote_slide`: the existing slide number (1–4) where the quote most naturally supports the narration, or 0 when there is no quote. Do not create an extra slide for a quote.
+- `quote_slide`: the existing slide number (1–5, never greater than the generated slide count) where the quote most naturally supports the narration, or 0 when there is no quote. Do not create an extra slide for a quote.
 - Never invent, reconstruct, or shorten a quote in a way that changes its wording.
 
 VISUAL HANDOFF
@@ -311,20 +311,20 @@ Every slide must include useful metadata matching the narrated fact:
 - sport_or_topic_category
 
 GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSON
-- Return exactly four non-empty spoken slides. Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
+- Return 3–5 non-empty spoken slides. Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
 - Keep Slide 1 to 13 words or fewer; never rely on an automatic post-generation trim.
 - Name the non-empty subject_name exactly in the spoken narration.
 - Include a non-empty 3–4-word opening headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
-- Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the four slides.
-- quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–4 when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
+- Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the generated slides.
+- quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–5, never greater than the generated slide count, when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
 - Make every field complete in the first JSON returned. Before output, check the actual field values, not only the JSON shape.
 
 FINAL SELF-CHECK
 Before returning JSON, silently verify:
-1. Exactly four slides.
+1. Return 3–5 slides, preferring four only when it best fits the story.
 2. Slide 1 is 13 words or fewer.
 3. The main subject is named in the narration.
-4. All important factual information is compressed into the four slides.
+4. All important factual information is compressed across the generated slides.
 5. No unsupported claim has been added.
 6. The metadata is complete.
 7. Any quote is copied faithfully from the research packet and points to an existing slide; never create an extra slide for it.
@@ -1213,8 +1213,8 @@ def validate_cricket_script(result: dict, *, headline_required: bool = True) -> 
         return False, "The provider returned no script object."
 
     scenes = result.get("script")
-    if not isinstance(scenes, list) or len(scenes) != 4:
-        return False, "Cricket Scriptwriter must return exactly 4 slides."
+    if not isinstance(scenes, list) or not MIN_SCENES <= len(scenes) <= MAX_SCENES:
+        return False, "Cricket Scriptwriter must return 3–5 slides."
 
     subject = _clean(result.get("subject_name"))
     if not subject:
@@ -1380,7 +1380,7 @@ def write_script(
     rewrite_instruction = (
         instruction
         + "\n\nHIDDEN REWRITE\n"
-        "The first draft is NOT being shown to the human reviewer. Rewrite the complete four-slide script now. "
+        "The first draft is NOT being shown to the human reviewer. Rewrite the complete 3–5-slide script now, using the story's natural structure. "
         "Keep every important factual detail from the research packet, but fix the exact failure below. "
         "Do not explain the rewrite. Return only the complete JSON package.\n"
         f"Failure to fix: {first_reason}\n"
