@@ -52,6 +52,45 @@ CARD_CONTRAST_TREATMENTS = (
     "Editorial panel",
 )
 
+_CARD_COPY_LABELS = {
+    "english": {
+        "sports_desk": "SPORTS DESK",
+        "performance": "PERFORMANCE",
+        "reaction": "REACTION",
+        "head_to_head": "HEAD TO HEAD",
+        "milestone": "MILESTONE",
+        "versus": "VS",
+    },
+    "hindi": {
+        "sports_desk": "खेल डेस्क",
+        "performance": "प्रदर्शन",
+        "reaction": "प्रतिक्रिया",
+        "head_to_head": "आमने-सामने",
+        "milestone": "उपलब्धि",
+        "versus": "बनाम",
+    },
+    "telugu": {
+        "sports_desk": "క్రీడా విభాగం",
+        "performance": "ప్రదర్శన",
+        "reaction": "స్పందన",
+        "head_to_head": "ఎదురెదురు పోటీ",
+        "milestone": "మైలురాయి",
+        "versus": "వర్సెస్",
+    },
+}
+
+
+def _normalise_card_language(language: str | None) -> str:
+    key = str(language or "english").strip().casefold()
+    key = {"en": "english", "hi": "hindi", "te": "telugu"}.get(key, key)
+    return key if key in _CARD_COPY_LABELS else "english"
+
+
+def _card_label(key: str, language: str | None = "english") -> str:
+    language_key = _normalise_card_language(language)
+    return _CARD_COPY_LABELS[language_key].get(key, _CARD_COPY_LABELS["english"].get(key, ""))
+
+
 
 class CardStudioError(ValueError):
     """Raised when a Card Studio frame cannot be rendered cleanly."""
@@ -210,6 +249,37 @@ def _font_body(size: int) -> ImageFont.FreeTypeFont:
     return ImageFont.load_default()
 
 
+@lru_cache(maxsize=256)
+def _localized_font(language: str, size: int) -> ImageFont.FreeTypeFont | None:
+    language_key = _normalise_card_language(language)
+    font_name = {
+        "hindi": "NotoSansDevanagari-Bold.ttf",
+        "telugu": "NotoSansTelugu-Bold.ttf",
+    }.get(language_key)
+    if not font_name:
+        return None
+    path = _font_file(font_name)
+    if not path.is_file():
+        return None
+    try:
+        return ImageFont.truetype(str(path), size, layout_engine=ImageFont.Layout.RAQM)
+    except (AttributeError, OSError, ValueError):
+        return ImageFont.truetype(str(path), size)
+
+
+def _font_for_text(text: str, size: int, fallback):
+    value = str(text or "")
+    if any("\u0900" <= char <= "\u097F" for char in value):
+        font = _localized_font("hindi", size)
+        if font is not None:
+            return font
+    if any("\u0C00" <= char <= "\u0C7F" for char in value):
+        font = _localized_font("telugu", size)
+        if font is not None:
+            return font
+    return fallback(size)
+
+
 def _measure(draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont) -> tuple[int, int]:
     box = draw.textbbox((0, 0), text, font=font)
     return box[2] - box[0], box[3] - box[1]
@@ -249,7 +319,7 @@ def _fit(
 ) -> tuple[ImageFont.ImageFont, list[str]]:
     getter = font_fn or (lambda size: _font(size, bold=bold))
     for size in range(start_size, min_size - 1, -2):
-        font = getter(size)
+        font = _font_for_text(text, size, getter)
         lines = _wrap(draw, text, font, max_width)
         if lines and len(lines) <= max_lines:
             return font, lines
@@ -397,11 +467,17 @@ def _contrast_bed(image: Image.Image, position: str, treatment: str = "Soft grad
                 draw.line((x, 0, x, HEIGHT), fill=INK + (alpha,))
     return Image.alpha_composite(rgba, overlay)
 
-def _draw_kicker(canvas: Image.Image, x: int, y: int, text: str) -> int:
+def _draw_kicker(
+    canvas: Image.Image,
+    x: int,
+    y: int,
+    text: str,
+    language: str = "english",
+) -> int:
     draw = ImageDraw.Draw(canvas)
-    clean = " ".join(str(text or "").split()).upper() or "SPORTS DESK"
+    clean = " ".join(str(text or "").split()).upper() or _card_label("sports_desk", language)
     draw.rounded_rectangle((x, y + 8, x + 42, y + 13), radius=2, fill=ACCENT)
-    font = _font_label(25)
+    font = _font_for_text(clean, 25, _font_label)
     available_width = max(100, SAFE_RIGHT - x)
     if _measure(draw, clean, font)[0] > available_width:
         font, lines = _fit(draw, clean, available_width, 1, 25, 18, font_fn=_font_label)
@@ -428,7 +504,12 @@ def _render_stat_highlight(source, data: dict, subject_mask: Image.Image | None)
     )
     draw = ImageDraw.Draw(canvas)
     bottom_mode = position == "bottom"
-    y = _draw_kicker(canvas, x, content_top, data.get("eyebrow") or "PERFORMANCE")
+    language = _normalise_card_language(data.get("language"))
+    y = _draw_kicker(
+        canvas, x, content_top,
+        data.get("eyebrow") or _card_label("performance", language),
+        language=language,
+    )
     headline = " ".join(str(data.get("headline") or "").split())
     value = " ".join(str(data.get("value") or "").split())
     unit = " ".join(str(data.get("unit") or "").split())
@@ -462,7 +543,11 @@ def _render_stat_highlight(source, data: dict, subject_mask: Image.Image | None)
 
     if unit:
         draw.rounded_rectangle((x, y + 4, x + 34, y + 8), radius=2, fill=ACCENT)
-        draw.text((x + 48, y - 6), unit.upper(), font=_font_label(24 if bottom_mode else 28), fill=ACCENT)
+        unit_size = 24 if bottom_mode else 28
+        draw.text(
+            (x + 48, y - 6), unit.upper(),
+            font=_font_for_text(unit, unit_size, _font_label), fill=ACCENT
+        )
         y += 34 if bottom_mode else 42
 
     if metrics and bottom_mode:
@@ -498,7 +583,11 @@ def _render_stat_highlight(source, data: dict, subject_mask: Image.Image | None)
             if not label or not metric_value:
                 raise CardStudioError("Every supporting metric needs a label and value.")
             _draw_rule(canvas, x, y, width, alpha=104)
-            draw.text((x, y + 14), label.upper(), font=_font_label(23, False), fill=MUTED)
+            draw.text(
+                (x, y + 14), label.upper(),
+                font=_font_for_text(label, 23, lambda size: _font_label(size, False)),
+                fill=MUTED,
+            )
             value_font, value_lines = _fit(
                 draw, metric_value, width // 2, 1, 43, 27, font_fn=_font_headline
             )
@@ -513,9 +602,11 @@ def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None)
     )
     draw = ImageDraw.Draw(canvas)
     bottom_mode = position == "bottom"
+    language = _normalise_card_language(data.get("language"))
     y = _draw_kicker(
         canvas, x, content_top + (12 if bottom_mode else 30),
-        data.get("eyebrow") or "REACTION",
+        data.get("eyebrow") or _card_label("reaction", language),
+        language=language,
     )
 
     quote = " ".join(str(data.get("quote") or "").split())
@@ -615,10 +706,12 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
     treatment = str(data.get("contrast_treatment") or "Soft gradient")
     canvas = _contrast_bed(image, position, treatment)
     bottom_mode = position == "bottom"
+    language = _normalise_card_language(data.get("language"))
     header_x, header_width = _content_region(position)
     kicker_y = _draw_kicker(
         canvas, header_x, 765 if bottom_mode else 160,
-        data.get("eyebrow") or "HEAD TO HEAD",
+        data.get("eyebrow") or _card_label("head_to_head", language),
+        language=language,
     )
     head_font, head_lines = _fit(
         ImageDraw.Draw(canvas), headline, header_width, 2,
@@ -656,7 +749,12 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
 
     draw = ImageDraw.Draw(canvas)
     vs_y = panel_top + (46 if bottom_mode else 62)
-    draw.text((mid_x, vs_y), "VS", font=_font_label(22), fill=ACCENT, anchor="mm")
+    versus = _card_label("versus", language)
+    draw.text(
+        (mid_x, vs_y), versus,
+        font=_font_for_text(versus, 22, _font_label),
+        fill=ACCENT, anchor="mm",
+    )
     names_bottom = max(left_end, right_end)
     _draw_rule(canvas, SAFE_LEFT, names_bottom + 10, SAFE_RIGHT - SAFE_LEFT, alpha=148)
 
@@ -701,9 +799,11 @@ def _render_fact_milestone(source, data: dict, subject_mask: Image.Image | None)
     )
     draw = ImageDraw.Draw(canvas)
     bottom_mode = position == "bottom"
+    language = _normalise_card_language(data.get("language"))
     y = _draw_kicker(
         canvas, x, content_top + (8 if bottom_mode else 15),
-        data.get("eyebrow") or "MILESTONE",
+        data.get("eyebrow") or _card_label("milestone", language),
+        language=language,
     )
 
     value = " ".join(str(data.get("value") or "").split())
@@ -761,9 +861,12 @@ def render_card(card_type: str, source, data: dict, subject_mask=None) -> bytes:
     return buffer.getvalue()
 
 
-def card_data_for_type(card_type: str) -> dict:
+def card_data_for_type(card_type: str, language: str = "english") -> dict:
+    """Return editable starter copy in the selected language without changing card geometry."""
+    language_key = _normalise_card_language(language)
+
     if card_type == "Stat Highlight":
-        return {
+        data = {
             "eyebrow": "CAREER STAT",
             "layout_position": "Auto · Best negative space",
             "contrast_treatment": "Soft gradient",
@@ -776,8 +879,8 @@ def card_data_for_type(card_type: str) -> dict:
                 {"label": "Strike rate", "value": "132.4"},
             ],
         }
-    if card_type == "Quote / Reaction":
-        return {
+    elif card_type == "Quote / Reaction":
+        data = {
             "eyebrow": "POST-MATCH REACTION",
             "layout_position": "Auto · Best negative space",
             "contrast_treatment": "Soft gradient",
@@ -785,8 +888,8 @@ def card_data_for_type(card_type: str) -> dict:
             "attribution": "Player Name · after the final",
             "context": "The reaction came after the latest match.",
         }
-    if card_type == "Head-to-Head":
-        return {
+    elif card_type == "Head-to-Head":
+        data = {
             "eyebrow": "HEAD TO HEAD",
             "layout_position": "Auto · Best negative space",
             "contrast_treatment": "Soft gradient",
@@ -803,8 +906,8 @@ def card_data_for_type(card_type: str) -> dict:
             },
             "metrics": ["Runs", "Average", "Strike Rate"],
         }
-    if card_type == "Key Fact / Milestone":
-        return {
+    elif card_type == "Key Fact / Milestone":
+        data = {
             "eyebrow": "MILESTONE",
             "layout_position": "Auto · Best negative space",
             "contrast_treatment": "Soft gradient",
@@ -812,4 +915,87 @@ def card_data_for_type(card_type: str) -> dict:
             "label": "International appearances",
             "context": "A landmark reached in the latest match.",
         }
-    return {}
+    else:
+        return {}
+
+    if language_key == "hindi":
+        if card_type == "Stat Highlight":
+            data.update({
+                "eyebrow": "करियर के आँकड़े",
+                "headline": "रनों की शानदार पारी",
+                "unit": "रन",
+                "metrics": [
+                    {"label": "मैच", "value": "38"},
+                    {"label": "औसत", "value": "46.27"},
+                    {"label": "स्ट्राइक रेट", "value": "132.4"},
+                ],
+            })
+        elif card_type == "Quote / Reaction":
+            data.update({
+                "eyebrow": "मैच के बाद प्रतिक्रिया",
+                "quote": "हमने पहली गेंद से भरोसा रखा।",
+                "attribution": "खिलाड़ी का नाम · मैच के बाद",
+                "context": "यह प्रतिक्रिया हालिया मैच के बाद आई।",
+            })
+        elif card_type == "Head-to-Head":
+            data.update({
+                "eyebrow": "आमने-सामने",
+                "headline": "किसका पलड़ा भारी?",
+                "left": {
+                    "name": "खिलाड़ी A",
+                    "values": {"रन": "1,020", "औसत": "48.4", "स्ट्राइक रेट": "132.4"},
+                },
+                "right": {
+                    "name": "खिलाड़ी B",
+                    "values": {"रन": "934", "औसत": "42.1", "स्ट्राइक रेट": "121.8"},
+                },
+                "metrics": ["रन", "औसत", "स्ट्राइक रेट"],
+            })
+        else:
+            data.update({
+                "eyebrow": "उपलब्धि",
+                "label": "अंतरराष्ट्रीय मुकाबले",
+                "context": "यह उपलब्धि हालिया मैच में हासिल हुई।",
+            })
+    elif language_key == "telugu":
+        if card_type == "Stat Highlight":
+            data.update({
+                "eyebrow": "కెరీర్ గణాంకాలు",
+                "headline": "అద్భుతమైన పరుగుల జోరు",
+                "unit": "పరుగులు",
+                "metrics": [
+                    {"label": "మ్యాచ్‌లు", "value": "38"},
+                    {"label": "సగటు", "value": "46.27"},
+                    {"label": "స్ట్రైక్ రేట్", "value": "132.4"},
+                ],
+            })
+        elif card_type == "Quote / Reaction":
+            data.update({
+                "eyebrow": "మ్యాచ్ తర్వాత స్పందన",
+                "quote": "మొదటి బంతి నుంచే మాకు నమ్మకం ఉంది.",
+                "attribution": "ఆటగాడి పేరు · మ్యాచ్ తర్వాత",
+                "context": "తాజా మ్యాచ్ అనంతరం ఈ స్పందన వచ్చింది.",
+            })
+        elif card_type == "Head-to-Head":
+            data.update({
+                "eyebrow": "ఎదురెదురు పోటీ",
+                "headline": "ఎవరిది పైచేయి?",
+                "left": {
+                    "name": "ఆటగాడు A",
+                    "values": {"పరుగులు": "1,020", "సగటు": "48.4", "స్ట్రైక్ రేట్": "132.4"},
+                },
+                "right": {
+                    "name": "ఆటగాడు B",
+                    "values": {"పరుగులు": "934", "సగటు": "42.1", "స్ట్రైక్ రేట్": "121.8"},
+                },
+                "metrics": ["పరుగులు", "సగటు", "స్ట్రైక్ రేట్"],
+            })
+        else:
+            data.update({
+                "eyebrow": "మైలురాయి",
+                "label": "అంతర్జాతీయ మ్యాచ్‌లు",
+                "context": "తాజా మ్యాచ్‌లో ఈ ఘనత సాధించారు.",
+            })
+
+    data["language"] = language_key
+    return data
