@@ -7168,7 +7168,7 @@ def render_longform_audio(live: bool = False):
     st.markdown(
         f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Voice Cloning & Paced Narration</div>'
-        '<div class="canvas-copy">High-fidelity voice synthesis with per-act temperature pacing (0.88 Hook, 0.80 Body, 0.85 Climax), atmospheric act pauses, and linear word timings.</div></div></div>',
+        '<div class="canvas-copy">Script-aware delivery cues, reusable local voice conditioning, atmospheric act pauses, and cached repeat renders.</div></div></div>',
         unsafe_allow_html=True,
     )
 
@@ -7195,7 +7195,7 @@ def render_longform_audio(live: bool = False):
         f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{ref_status}</span>'
         f'</div>'
         f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Documentary Narration Suite (6 Acts · ~8 Min)</div>'
-        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Dynamic temperature modulation · Linear word-level subtitle timings · Normalized master audio</div>'
+        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led narration · Shared Chatterbox model · Cached master and scene audio</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -9145,7 +9145,7 @@ def render_audio():
                 f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">🎙️ {ref_info}</span>'
                 f'</div>'
                 f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">ChatterboxTurboTTS Voice Cloning</div>'
-                f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Seed-locked pacing · Linear word timings · 24kHz studio stream</div>'
+                f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led delivery cues · Reusable voice conditioning · Cached exact takes</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
