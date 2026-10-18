@@ -1,6 +1,7 @@
 from io import BytesIO
 from pathlib import Path
 
+import pytest
 from PIL import Image, ImageDraw, ImageFont, features
 
 import card_studio
