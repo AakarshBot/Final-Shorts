@@ -53,6 +53,37 @@ def test_card_studio_defaults_fill_every_wip_field():
     assert all(milestone[key] for key in ("eyebrow", "value", "label", "context"))
 
 
+def test_recropping_source_invalidates_cached_card_results_for_all_source_images():
+    state = {
+        "test-card-studio-result": {
+            "bytes": b"old-render",
+            "source_key": "asset-primary",
+            "source_keys": ["asset-primary"],
+        },
+        "test-head-to-head-result": {
+            "bytes": b"old-two-image-render",
+            "source_key": "asset-primary",
+            "source_keys": ["asset-primary", "asset-secondary"],
+        },
+        "test-unrelated-card-result": {
+            "bytes": b"keep",
+            "source_key": "other-asset",
+            "source_keys": ["other-asset"],
+        },
+        "visual_result": {"assets": []},
+    }
+
+    invalidated = card_studio.invalidate_card_studio_results_for_source(
+        state, "asset-secondary"
+    )
+
+    assert invalidated == 1
+    assert state["test-head-to-head-result"] is None
+    assert state["test-card-studio-result"]["bytes"] == b"old-render"
+    assert state["test-unrelated-card-result"]["bytes"] == b"keep"
+    assert state["visual_result"] == {"assets": []}
+
+
 def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
     mask = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(mask).rectangle((88, 220, 620, 1300), fill=255)
