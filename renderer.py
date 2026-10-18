@@ -357,10 +357,11 @@ def _fit_headline_font(
     language: str = "english",
 ):
     clean = " ".join(str(text or "").upper().split()) or HEADLINE_TEXT
+    detected_language = _indic_language_for_text(clean) or _normalise_indic_language(language)
     probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
 
     for size in range(HEADLINE_MAX_SIZE, HEADLINE_MIN_SIZE - 1, -1):
-        fonts = _headline_font_stack(size, language)
+        fonts = _headline_font_stack(size, detected_language)
         try:
             lines = _headline_lines(clean, probe, fonts)
         except ValueError:
