@@ -3232,7 +3232,7 @@ def _render_card_studio(
     st.caption("These controls apply to all four editorial card types in Test and Live. Text Subject Cutout is unchanged.")
     language_label = {"english": "English", "hindi": "Hindi (Devanagari)", "telugu": "Telugu"}.get(card_language, "English")
     st.caption(
-        f"Card copy language: {language_label}. Starter copy follows the selected Scriptwriter language. "
+        f"Card copy language: {language_label}. Starter copy follows the selected pipeline language. "
         "Custom text is rendered as entered and is not automatically translated."
     )
 
