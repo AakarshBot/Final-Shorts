@@ -392,10 +392,18 @@ def _paste_logo(base: Image.Image) -> None:
     )
 
 
+def _renderer_font_for_text(text: str, size: int, language: str = "english"):
+    script_language = _indic_language_for_text(text)
+    language_key = script_language or _normalise_indic_language(language)
+    if language_key in {"hindi", "telugu"}:
+        return _font(_font_candidates("subtitle", language_key), size, language=language_key)
+    return _font((), size)
+
+
 def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
     draw = ImageDraw.Draw(base)
-    font = _font((), 24)
     label = str(source_label or SOURCE_LABEL).strip() or SOURCE_LABEL
+    font = _renderer_font_for_text(label, 24)
     width, _ = _measure(draw, label, font)
     draw.text(
         (WIDTH - width - 42, HEIGHT - 86),
@@ -407,16 +415,25 @@ def _paste_source(base: Image.Image, source_label: str | None = None) -> None:
 
 
 
-@lru_cache(maxsize=64)
+@lru_cache(maxsize=128)
 def _top5_body_font(size: int, language: str = "english"):
     root = Path(__file__).resolve().parent / "fonts"
-    language = str(language or "english").casefold()
-    path = {
-        "hindi": root / "NotoSansDevanagariUI-Regular.ttf",
-        "telugu": root / "NotoSansTelugu-Regular.ttf",
-    }.get(language, root / "Barlow-Regular.ttf")
+    language_key = _normalise_indic_language(language)
+    if language_key in {"hindi", "telugu"}:
+        _require_raqm(language_key)
+        font_name = "NotoSansDevanagari-Bold.ttf" if language_key == "hindi" else "NotoSansTelugu-Bold.ttf"
+        path = root / font_name
+        if not path.is_file():
+            raise RuntimeError(f"The bundled Top-5 body font {font_name} is missing; Indic text will not use a substitute.")
+        try:
+            return ImageFont.truetype(str(path), size, layout_engine=ImageFont.Layout.RAQM)
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(f"The Top-5 body font {font_name} could not be loaded with RAQM.") from exc
+
+    path = root / "Barlow-Regular.ttf"
+    if path.is_file():
+        return ImageFont.truetype(str(path), size)
     for candidate in (
-        path,
         Path("C:/Windows/Fonts/arial.ttf"),
         Path("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf"),
     ):
@@ -513,6 +530,8 @@ def _top5_editorial_layout(
 ) -> dict:
     clean_headline = " ".join(str(headline or "").split()).upper()
     clean_body = "" if subject_mask is not None else " ".join(str(body or "").split())
+    language = _indic_language_for_text(clean_headline) or _normalise_indic_language(language)
+    body_language = _indic_language_for_text(clean_body) or language
     if not clean_headline:
         raise ValueError("Top-5 card requires a headline.")
 
@@ -556,7 +575,7 @@ def _top5_editorial_layout(
         body_height = 0
         if clean_body:
             for body_size in range(TOP5_EDITORIAL_BODY_MAX_SIZE, TOP5_EDITORIAL_BODY_MIN_SIZE - 1, -2):
-                font = _top5_body_font(body_size, language)
+                font = _top5_body_font(body_size, body_language)
                 lines_body = _top5_wrap_editorial_words(draw, clean_body, (font,), safe_width)
                 box = draw.textbbox((0, 0), "Ag", font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
                 line_height = box[3] - box[1]
@@ -1498,7 +1517,7 @@ def build_manual_subject_cutout_layout_previews(
 def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:
     label = str(source_label or "Commons").strip() or "Commons"
     draw = ImageDraw.Draw(base)
-    font = _font((), 20)
+    font = _renderer_font_for_text(label, 20)
     box = draw.textbbox((0, 0), label, font=font)
     draw.text(
         (WIDTH - TOP5_EDITORIAL_MARGIN_X - (box[2] - box[0]), HEIGHT - 48),
