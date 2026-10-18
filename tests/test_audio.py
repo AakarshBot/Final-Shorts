@@ -315,3 +315,173 @@ def test_audio_approval_creates_visual_handoff(tmp_path):
     )
 
     assert result["approved_for_visuals"] is True
+
+
+def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeypatch, tmp_path):
+    import sys
+    import types
+    import torch
+    import audio
+
+    class FakeChatterbox:
+        sr = 16000
+
+        def __init__(self):
+            self.generate_calls = []
+            self.conditioning_calls = []
+
+        def prepare_conditionals(self, reference_path, exaggeration=0.5):
+            self.conditioning_calls.append(reference_path)
+
+        def generate(self, text, temperature=0.8):
+            self.generate_calls.append((text, temperature))
+            return torch.ones((1, self.sr), dtype=torch.float32)
+
+    model = FakeChatterbox()
+    fake_torchaudio = types.SimpleNamespace(
+        save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
+    )
+    from pathlib import Path
+
+    monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda: model)
+    monkeypatch.setattr(audio, "AUDIO_REFERENCE", tmp_path / "missing-reference.wav")
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
+
+    script = approved_script()
+    output_dir = tmp_path / "chatterbox-output"
+    first = audio.generate_chatterbox_audio(script, output_dir=output_dir)
+    second = audio.generate_chatterbox_audio(script, output_dir=output_dir)
+
+    assert all(not scene["from_cache"] for scene in first["scenes"])
+    assert all(scene["from_cache"] for scene in second["scenes"])
+    assert len(model.generate_calls) == 2
+    assert len(model.conditioning_calls) == 0
+    assert Path(second["full_path"]).is_file()
+
+    changed_script = approved_script()
+    changed_script["script"][0]["voiceover"] = "India lost."
+    third = audio.generate_chatterbox_audio(changed_script, output_dir=output_dir)
+
+    assert all(not scene["from_cache"] for scene in third["scenes"])
+    assert len(model.generate_calls) == 4
+
+
+def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_path):
+    import sys
+    import types
+    import torch
+    import audio
+    from pathlib import Path
+
+    class FakeChatterbox:
+        sr = 16000
+
+        def __init__(self):
+            self.generate_calls = 0
+            self.conditioning_calls = 0
+
+        def prepare_conditionals(self, reference_path, exaggeration=0.5):
+            self.conditioning_calls += 1
+
+        def generate(self, text, temperature=0.8):
+            self.generate_calls += 1
+            return torch.ones((1, self.sr), dtype=torch.float32)
+
+    model = FakeChatterbox()
+    fake_torchaudio = types.SimpleNamespace(
+        save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
+    )
+    reference = tmp_path / "audio_reference.wav"
+    reference.write_bytes(b"reference audio bytes")
+    monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda: model)
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
+
+    audio.generate_chatterbox_audio(
+        approved_script(), output_dir=tmp_path / "one", reference=reference
+    )
+    changed_script = approved_script()
+    changed_script["script"][0]["voiceover"] = "A different sentence."
+    audio.generate_chatterbox_audio(
+        changed_script, output_dir=tmp_path / "two", reference=reference
+    )
+
+    assert model.conditioning_calls == 1
+    assert model.generate_calls == 4
+
+
+def test_chatterbox_script_led_delivery_is_conservative():
+    import audio
+
+    assert audio._chatterbox_delivery("A routine report today.", 2, 4)[1] == 0.77
+    assert audio._chatterbox_delivery("A heartbreaking injury ends the season.", 2, 4)[1] == 0.72
+    assert audio._chatterbox_delivery("An unbelievable last-ball finish stuns the favourites.", 2, 4)[1] == 0.88
+    assert audio._chatterbox_audio_texts([
+        "A stunning comeback shocks everyone.",
+        "The captain lifted the trophy."
+    ])[0].startswith("[gasp] ")
+    assert audio._chatterbox_audio_texts([
+        "A shocking result after a fatal injury."
+    ])[0].startswith("A shocking")
+
+
+def test_three_local_chatterbox_voice_choices_are_configured(monkeypatch, tmp_path):
+    import audio
+
+    expected = {
+        "Voice 1 · Original": "audio_reference.wav",
+        "Voice 2": "audio_reference_2.wav",
+        "Voice 3": "audio_reference_3.wav",
+    }
+    assert {label: path.name for label, path in audio.CHATTERBOX_VOICE_REFERENCES.items()} == expected
+    for label, name in expected.items():
+        file_path = tmp_path / name
+        file_path.write_bytes(b"local voice reference")
+        monkeypatch.setitem(audio.CHATTERBOX_VOICE_REFERENCES, label, file_path)
+        assert audio.resolve_chatterbox_reference(label) == file_path
+
+
+def test_chatterbox_voice_variant_outputs_do_not_overwrite_each_other(monkeypatch, tmp_path):
+    import sys
+    import types
+    import torch
+    from pathlib import Path
+    import audio
+
+    class FakeChatterbox:
+        sr = 16000
+
+        def __init__(self):
+            self.conds = "builtin"
+            self.generated = 0
+
+        def prepare_conditionals(self, reference_path, exaggeration=0.5):
+            self.conds = Path(reference_path).name
+
+        def generate(self, text, temperature=0.8):
+            self.generated += 1
+            return torch.ones((1, self.sr), dtype=torch.float32)
+
+    model = FakeChatterbox()
+    fake_torchaudio = types.SimpleNamespace(
+        save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
+    )
+    refs = [tmp_path / "voice_a.wav", tmp_path / "voice_b.wav"]
+    for ref in refs:
+        ref.write_bytes(b"sample reference content")
+    monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda: model)
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_CACHE", {})
+    monkeypatch.setattr(audio, "_CHATTERBOX_DEFAULT_CONDITIONALS", None)
+
+    output = tmp_path / "same-output-root"
+    first = audio.generate_chatterbox_audio(approved_script(), output_dir=output, reference=refs[0])
+    second = audio.generate_chatterbox_audio(approved_script(), output_dir=output, reference=refs[1])
+    again = audio.generate_chatterbox_audio(approved_script(), output_dir=output, reference=refs[0])
+
+    assert first["full_path"] != second["full_path"]
+    assert first["full_path"] == again["full_path"]
+    assert all(s["from_cache"] for s in again["scenes"])
+    assert model.generated == 4

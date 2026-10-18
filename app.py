@@ -4204,7 +4204,7 @@ def _live_generate_audio_and_subtitles():
     st.session_state.live_approved_audio = None
     st.session_state.live_subtitle_data = None
 
-    from audio import approve_audio, generate_audio
+    from audio import approve_audio, generate_audio, resolve_chatterbox_reference
     from subtitles import generate_subtitles
 
     selected_engine = (
@@ -4212,10 +4212,16 @@ def _live_generate_audio_and_subtitles():
         if st.session_state.get("live_audio_engine_choice_v2") == "Edge-TTS Neural"
         else "chatterbox"
     )
+    reference = (
+        resolve_chatterbox_reference(st.session_state.get("live_audio_voice_reference"))
+        if selected_engine == "chatterbox"
+        else None
+    )
     audio = generate_audio(
         approved_script,
         output_dir="output/live/audio",
         engine=selected_engine,
+        reference=reference,
     )
     approved_audio = approve_audio(audio)
     subtitles = generate_subtitles(approved_script, approved_audio)
@@ -5803,11 +5809,28 @@ def render_live_top5():
                 key="live_top5_audio_engine_choice_v2",
             ) or "Chatterbox Turbo (Voice Cloning)"
             is_live_top5_chatterbox = "Chatterbox" in live_top5_engine_choice
+            live_top5_reference = None
+            live_top5_reference_ready = True
+            if is_live_top5_chatterbox:
+                from audio import CHATTERBOX_VOICE_REFERENCES
+                live_top5_reference_label = st.selectbox(
+                    "Narrator voice",
+                    list(CHATTERBOX_VOICE_REFERENCES),
+                    key="live_top5_chatterbox_voice_reference",
+                )
+                live_top5_reference = CHATTERBOX_VOICE_REFERENCES[live_top5_reference_label]
+                live_top5_reference_ready = live_top5_reference.is_file()
+                st.caption(
+                    f"{live_top5_reference_label}: "
+                    + (f"reference ready ({live_top5_reference.name})" if live_top5_reference_ready
+                       else f"missing {live_top5_reference.name} — place it in the factory root")
+                )
             if st.button(
                 "Generate Top-5 Audio",
                 type="primary",
                 width="stretch",
                 key="live-top5-generate-audio",
+                disabled=is_live_top5_chatterbox and not live_top5_reference_ready,
             ):
                 try:
                     with st.spinner("Generating the six spoken Top-5 lines…"):
@@ -5815,6 +5838,7 @@ def render_live_top5():
                             handoff,
                             output_dir="output/live/top5_audio",
                             engine="chatterbox" if is_live_top5_chatterbox else "edge",
+                            reference=live_top5_reference if is_live_top5_chatterbox else None,
                         )
                     st.session_state.live_top5_audio_data = audio
                 except (RuntimeError, ValueError) as exc:
@@ -6585,6 +6609,21 @@ def render_live_dashboard():
         is_live_chatterbox = "Chatterbox" in live_audio_engine_choice
         if is_live_chatterbox and live_language not in {"english", "en"}:
             st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
+        live_reference_ready = True
+        if is_live_chatterbox:
+            from audio import CHATTERBOX_VOICE_REFERENCES
+            live_reference_label = st.selectbox(
+                "Narrator voice",
+                list(CHATTERBOX_VOICE_REFERENCES),
+                key="live_audio_voice_reference",
+            )
+            live_reference_path = CHATTERBOX_VOICE_REFERENCES[live_reference_label]
+            live_reference_ready = live_reference_path.is_file()
+            st.caption(
+                f"{live_reference_label}: "
+                + (f"reference ready ({live_reference_path.name})" if live_reference_ready
+                   else f"missing {live_reference_path.name} — place it in the factory root")
+            )
         if not isinstance(st.session_state.live_approved_audio, dict) or not isinstance(st.session_state.live_subtitle_data, dict):
             if st.session_state.live_handoff_error:
                 st.error(st.session_state.live_handoff_error)
@@ -6593,7 +6632,7 @@ def render_live_dashboard():
                 type="primary",
                 width="stretch",
                 key="live-generate-handoffs-stage",
-                disabled=is_live_chatterbox and live_language not in {"english", "en"},
+                disabled=(is_live_chatterbox and live_language not in {"english", "en"}) or (is_live_chatterbox and not live_reference_ready),
             ):
                 st.session_state.live_handoff_error = ""
                 st.session_state.live_approved_audio = None
@@ -7129,13 +7168,25 @@ def render_longform_audio(live: bool = False):
     st.markdown(
         f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Voice Cloning & Paced Narration</div>'
-        '<div class="canvas-copy">High-fidelity voice synthesis with per-act temperature pacing (0.88 Hook, 0.80 Body, 0.85 Climax), atmospheric act pauses, and linear word timings.</div></div></div>',
+        '<div class="canvas-copy">Script-aware delivery cues, reusable local voice conditioning, atmospheric act pauses, and cached repeat renders.</div></div></div>',
         unsafe_allow_html=True,
     )
 
     from pathlib import Path
-    ref_file = Path("audio_reference.wav")
-    ref_status = f"🎙️ Using `{ref_file.name}` voice conditioning" if ref_file.is_file() else "🔊 Using built-in Chatterbox neural voice"
+    from audio import CHATTERBOX_VOICE_REFERENCES
+    voice_label = st.selectbox(
+        "Narrator voice",
+        list(CHATTERBOX_VOICE_REFERENCES),
+        key=f"{prefix}audio_voice_reference",
+    )
+    ref_file = CHATTERBOX_VOICE_REFERENCES[voice_label]
+    ref_ready = ref_file.is_file()
+    ref_status = (
+        f"🎙️ Using `{ref_file.name}` voice conditioning"
+        if ref_ready
+        else f"Missing `{ref_file.name}` — place it in the factory root"
+    )
+    st.caption(f"{voice_label}: " + ("reference ready" if ref_ready else "reference file missing"))
 
     st.markdown(
         f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 14px 0;">'
@@ -7144,7 +7195,7 @@ def render_longform_audio(live: bool = False):
         f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{ref_status}</span>'
         f'</div>'
         f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Documentary Narration Suite (6 Acts · ~8 Min)</div>'
-        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Dynamic temperature modulation · Linear word-level subtitle timings · Normalized master audio</div>'
+        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led narration · Shared Chatterbox model · Cached master and scene audio</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -7152,12 +7203,16 @@ def render_longform_audio(live: bool = False):
     with st.container(key=f"{k_prefix}audio-toolbar"):
         col_btn, col_info = st.columns([1, 2])
         with col_btn:
-            if st.button("Synthesize Full Narration", type="primary", width="stretch", key=f"{k_prefix}gen-audio"):
+            if st.button("Synthesize Full Narration", type="primary", width="stretch", key=f"{k_prefix}gen-audio", disabled=not ref_ready):
                 with st.spinner("Synthesizing ~8-minute documentary narration with Chatterbox Turbo..."):
                     try:
                         from longform_audio import LongformAudioEngine
                         out_dir = Path("output/live/longform_audio") if live else Path("output/longform_audio")
-                        audio_res = LongformAudioEngine.generate(approved_script, output_dir=out_dir)
+                        audio_res = LongformAudioEngine.generate(
+                            approved_script,
+                            reference_audio=ref_file,
+                            output_dir=out_dir,
+                        )
                         st.session_state[f"{prefix}audio_data"] = audio_res
                         st.session_state[f"{prefix}audio_error"] = ""
                         st.rerun()
@@ -9019,7 +9074,13 @@ def render_upload_qc():
         st.rerun()
 
 def render_audio():
-    from audio import AUDIO_REFERENCE, approve_audio, generate_audio, package_human_audio, resolve_voice
+    from audio import (
+        CHATTERBOX_VOICE_REFERENCES,
+        approve_audio,
+        generate_audio,
+        package_human_audio,
+        resolve_voice,
+    )
 
     script=st.session_state.approved_script
     if not script:
@@ -9050,14 +9111,33 @@ def render_audio():
             gender=st.pills("Voice Gender",["Female","Male"],default="Female",key="audio_gender") or "Female"
         selected_voice = resolve_voice(language.casefold(), gender.casefold())
         is_cb = "Chatterbox" in engine_choice
+        selected_reference_label = None
+        selected_reference = None
+        selected_reference_ready = True
+        if is_cb:
+            selected_reference_label = st.selectbox(
+                "Narrator voice",
+                list(CHATTERBOX_VOICE_REFERENCES),
+                key="audio_chatterbox_voice_reference",
+            )
+            selected_reference = CHATTERBOX_VOICE_REFERENCES[selected_reference_label]
+            selected_reference_ready = selected_reference.is_file()
+            st.caption(
+                f"{selected_reference_label}: "
+                + (f"local reference ready ({selected_reference.name})" if selected_reference_ready
+                   else f"missing {selected_reference.name} — place it in the factory root")
+            )
         flag = "🇺🇸 / 🇬🇧" if language == "English" else "🇮🇳"
         if is_cb and language != "English":
             st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
 
         if "Chatterbox" in engine_choice:
-            from pathlib import Path
-            has_ref = AUDIO_REFERENCE.is_file()
-            ref_info = "audio_reference.wav conditioned" if has_ref else "Built-in neural voice"
+            has_ref = bool(selected_reference_ready and selected_reference is not None)
+            ref_info = (
+                f"{selected_reference.name} conditioned"
+                if has_ref
+                else f"Missing {selected_reference.name if selected_reference is not None else 'voice reference'}"
+            )
             st.markdown(
                 f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 12px 0;">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
@@ -9065,7 +9145,7 @@ def render_audio():
                 f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">🎙️ {ref_info}</span>'
                 f'</div>'
                 f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">ChatterboxTurboTTS Voice Cloning</div>'
-                f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Seed-locked pacing · Linear word timings · 24kHz studio stream</div>'
+                f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led delivery cues · Reusable voice conditioning · Cached exact takes</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -9086,7 +9166,7 @@ def render_audio():
             "Generate audio",
             type="primary",
             width="stretch",
-            disabled=is_cb and language != "English",
+            disabled=(is_cb and language != "English") or (is_cb and not selected_reference_ready),
         ):
             selected=dict(script)
             selected["language_used"]=language.casefold()
@@ -9099,6 +9179,7 @@ def render_audio():
                         selected,
                         voice="chatterbox" if is_cb else selected_voice,
                         engine="chatterbox" if is_cb else "edge",
+                        reference=selected_reference if is_cb else None,
                     )
                     st.session_state.approved_audio=None
                 except (RuntimeError,ValueError) as exc:
@@ -9871,8 +9952,22 @@ elif st.session_state.app_mode == "test":
                     t5_gender = st.pills("Voice Gender", ["Female", "Male"], default="Female", key="test_top5_audio_gender") or "Female"
                 is_t5_chatterbox = "Chatterbox" in t5_engine_choice
                 t5_voice = "chatterbox" if is_t5_chatterbox else resolve_voice(t5_language.casefold(), t5_gender.casefold())
+                t5_reference = None
+                t5_reference_ready = True
                 if is_t5_chatterbox:
-                    st.caption("Selected Voice: **Chatterbox Turbo** · default factory engine")
+                    from audio import CHATTERBOX_VOICE_REFERENCES
+                    t5_reference_label = st.selectbox(
+                        "Narrator voice",
+                        list(CHATTERBOX_VOICE_REFERENCES),
+                        key="test_top5_chatterbox_voice_reference",
+                    )
+                    t5_reference = CHATTERBOX_VOICE_REFERENCES[t5_reference_label]
+                    t5_reference_ready = t5_reference.is_file()
+                    st.caption(
+                        f"{t5_reference_label}: "
+                        + (f"reference ready ({t5_reference.name})" if t5_reference_ready
+                           else f"missing {t5_reference.name} — place it in the factory root")
+                    )
                     if t5_language != "English":
                         st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
                 else:
@@ -9889,7 +9984,7 @@ elif st.session_state.app_mode == "test":
                     type="primary",
                     width="stretch",
                     key="test-top5-audio-generate",
-                    disabled=is_t5_chatterbox and t5_language != "English",
+                    disabled=(is_t5_chatterbox and t5_language != "English") or (is_t5_chatterbox and not t5_reference_ready),
                 ):
                     with st.spinner("Generating the six spoken Top-5 lines…"):
                         try:
@@ -9902,6 +9997,7 @@ elif st.session_state.app_mode == "test":
                                 selected_t5,
                                 voice=t5_voice,
                                 engine="chatterbox" if is_t5_chatterbox else "edge",
+                                reference=t5_reference if is_t5_chatterbox else None,
                             )
                             st.session_state.test_top5_audio_handoff = None
                             st.rerun()
