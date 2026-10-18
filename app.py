@@ -2846,6 +2846,13 @@ def _render_card_studio(
             if live
             else st.session_state.get("approved_script") or st.session_state.get("script_data")
         ) or {}
+        cutout_default_headline = str(script.get("source_title") or "").strip()
+        if not cutout_default_headline:
+            cutout_scenes = script.get("script") or []
+            if cutout_scenes and isinstance(cutout_scenes[0], dict):
+                cutout_default_headline = str(cutout_scenes[0].get("voiceover") or "").strip()
+        if not cutout_default_headline:
+            cutout_default_headline = "STORY UPDATE"
         _render_manual_subject_cutout(
             state=st.session_state.live_manual_subject_cutout if live else st.session_state.manual_subject_cutout,
             assets=[
@@ -2864,7 +2871,7 @@ def _render_card_studio(
             ),
             crop_store_name="live_visual_crops" if live else "visual_crops",
             state_id=state_id,
-            default_headline="",
+            default_headline=cutout_default_headline,
             handoff="cricket",
             slide_count=slide_count,
             assignment_store=(
