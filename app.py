@@ -2697,7 +2697,7 @@ def _render_card_studio(
         render_card,
     )
 
-    card_types = TEST_CARD_TYPES
+    card_types = LIVE_CARD_TYPES if live else TEST_CARD_TYPES
     state_id = (
         f"{'live' if live else 'test'}-"
         f"{'top5-' if top5 else ''}"
