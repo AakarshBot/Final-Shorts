@@ -188,6 +188,23 @@ def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
     is_indic = language_key in {"hindi", "telugu"}
     if is_indic:
         _require_raqm(language_key)
+        path = _font_candidates("headline", language_key)[0]
+        if not path.is_file():
+            raise RuntimeError(
+                f"The bundled Indic headline font {path.name} is missing; rendering will not use a substitute."
+            )
+        try:
+            return (
+                ImageFont.truetype(
+                    str(path),
+                    size,
+                    layout_engine=ImageFont.Layout.RAQM,
+                ),
+            )
+        except (OSError, ValueError) as exc:
+            raise RuntimeError(
+                f"The bundled Indic headline font {path.name} could not be loaded with RAQM."
+            ) from exc
     candidates = list(_font_candidates("headline", language_key))
     candidates.extend(
         [
@@ -1304,6 +1321,10 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
             if cand_data.get("layouts"):
                 data = cand_data
                 break
+        except RuntimeError:
+            raise
+        except RuntimeError:
+            raise
         except Exception:
             pass
         step_size -= 10
