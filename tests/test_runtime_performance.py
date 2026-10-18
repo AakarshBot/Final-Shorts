@@ -32,12 +32,15 @@ def test_crop_dialog_uses_bounded_canvas_and_explicit_crop_confirmation():
     end = app_source.index("@st.fragment", start)
     crop_source = app_source[start:end]
 
-    assert "max_canvas_width = 1600" in crop_source
-    assert "realtime_update=False" in crop_source
+    assert "max_canvas_width=1600" in crop_source
+    assert "realtime_update=card_selector" in crop_source
+    assert "card_selector: bool = False" in crop_source
     assert "Double-click to confirm the crop selection." in crop_source
-    assert "invalidate_card_result: bool = False" in crop_source
+    assert "The preview follows your selection" in crop_source
+    assert "def _prepare_crop_dialog_canvas(" in app_source
+    assert "@st.cache_data(max_entries=24, show_spinner=False)" in app_source
     assert "invalidate_card_studio_results_for_source(" in crop_source
-    assert "invalidate_card_result=True" in app_source
+    assert "card_selector=True" in app_source
 
 
 def test_visual_pool_work_uses_cached_validation_and_thumbnails():
