@@ -112,6 +112,28 @@ def test_all_editorial_cards_support_manual_photo_compositions():
                 assert image.format == "PNG"
 
 
+def test_changed_composition_invalidates_a_stale_rendered_preview():
+    state = {
+        "card-result": {
+            "bytes": b"old-render",
+            "data": {
+                "layout_position": "Left half",
+                "contrast_treatment": "Soft gradient",
+            },
+        }
+    }
+
+    changed = card_studio.invalidate_card_studio_result_for_composition(
+        state,
+        "card-result",
+        "Bottom half",
+        "Soft gradient",
+    )
+
+    assert changed is True
+    assert state["card-result"] is None
+
+
 def test_contrast_treatments_are_manual_and_visually_distinct():
     image = Image.new("RGB", (1080, 1920), (175, 100, 70))
     soft = card_studio._contrast_bed(image, "left", "Soft gradient")
@@ -120,7 +142,7 @@ def test_contrast_treatments_are_manual_and_visually_distinct():
 
     assert soft.getpixel((140, 800)) != deep.getpixel((140, 800))
     assert panel.getpixel((100, 300)) != soft.getpixel((100, 300))
-    assert soft.getpixel((1010, 800)) == image.getpixel((1010, 800))
+    assert soft.getpixel((1010, 800))[:3] == image.getpixel((1010, 800))
 
 
 def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
