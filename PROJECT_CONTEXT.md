@@ -188,7 +188,7 @@ Universal 2-Stage Visual Architecture across all desks (Deep-Dive Cricket, YT Tr
    - **Slide Attachment:** Attach any cropped image or generated card to any slide (1 to N).
    - **Visual Board:** Review all assigned slide visuals before approving the final handoff for Renderer.
 
-Status: **Visual collection and board flow remain approved. Non-cutout Card Studio designs are Test-only / awaiting visual QC. Text Subject Cutout, crop/reposition, and polygon placement remain hard locked and unchanged; Live continues to expose Text Subject Cutout only until the user approves any other card type.**
+Status: **Visual collection and board flow remain approved. Non-cutout Card Studio designs are Test-only / awaiting visual QC. The shared Card Studio now selects TEST_CARD_TYPES in Test and LIVE_CARD_TYPES in Live, so Live exposes only Text Subject Cutout until the user approves other types. Text Subject Cutout rendering, crop/reposition, and polygon placement remain hard locked and unchanged.**
 
 ## Subtitles — Function 05
 
