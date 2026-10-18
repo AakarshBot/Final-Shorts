@@ -3447,23 +3447,30 @@ def _render_card_studio(
             try:
                 from script_writer import translate_card_copy
 
-                translated_data = translate_card_copy(card_type, data, card_language)
+                with st.spinner(f"Translating card copy into {language_action_name}…"):
+                    translated_data = translate_card_copy(card_type, data, card_language)
                 st.session_state[f"{state_id}-pending-copy-translation"] = {
                     "card_type": card_type,
                     "language": card_language,
                     "data": translated_data,
                 }
                 st.session_state[f"{state_id}-result"] = None
-                st.session_state[f"{state_id}-translation-notice"] = (
-                    f"Card copy translated to {language_action_name}. Review all fields before rendering."
-                )
+                st.session_state[f"{state_id}-translation-notice"] = {
+                    "card_type": card_type,
+                    "language": card_language,
+                    "message": f"Card copy translated to {language_action_name}. Review all fields before rendering.",
+                }
                 st.rerun()
             except Exception as exc:
                 st.error(f"Card text translation failed: {exc}")
 
     translation_notice = st.session_state.get(f"{state_id}-translation-notice")
-    if translation_notice:
-        st.info(translation_notice)
+    if (
+        isinstance(translation_notice, dict)
+        and translation_notice.get("card_type") == card_type
+        and translation_notice.get("language") == card_language
+    ):
+        st.info(translation_notice.get("message") or "")
 
     result_key = f"{state_id}-result"
     from card_studio import invalidate_card_studio_result_for_composition
