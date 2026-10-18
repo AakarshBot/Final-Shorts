@@ -488,15 +488,28 @@ _HIGH_ENERGY_AUDIO_RE = re.compile(
 )
 
 
+def _chatterbox_audio_texts(texts: list[str]) -> list[str]:
+    """Add at most one native Turbo cue to an otherwise unchanged script when surprise is explicit."""
+    audio_texts = list(texts)
+    if any(_SERIOUS_AUDIO_RE.search(text) for text in texts):
+        return audio_texts
+    surprise_scene = next(
+        (index for index, text in enumerate(texts) if _SURPRISE_AUDIO_RE.search(text)),
+        None,
+    )
+    if surprise_scene is not None:
+        audio_texts[surprise_scene] = "[gasp] " + audio_texts[surprise_scene]
+    return audio_texts
+
+
 def _chatterbox_delivery(text: str, scene_number: int, scene_count: int) -> tuple[str, float]:
-    """Vary Turbo sampling using story meaning; Turbo does not support emotion control knobs."""
+    """Use script meaning for conservative line-level sampling; Turbo has no emotion slider."""
     serious = bool(_SERIOUS_AUDIO_RE.search(text))
-    surprise = bool(_SURPRISE_AUDIO_RE.search(text))
-    high_energy = bool(_HIGH_ENERGY_AUDIO_RE.search(text)) or "!" in text
+    high_energy = bool(_HIGH_ENERGY_AUDIO_RE.search(text)) or bool(_SURPRISE_AUDIO_RE.search(text)) or "!" in text
 
     if serious:
         temperature = 0.72
-    elif surprise or high_energy:
+    elif high_energy:
         temperature = 0.88
     elif scene_number == 1:
         temperature = 0.84
@@ -603,16 +616,7 @@ def generate_chatterbox_audio(
             "sha256": _file_sha256(actual_ref),
         }
 
-    audio_texts = list(texts)
-    serious_story = any(_SERIOUS_AUDIO_RE.search(text) for text in texts)
-    if not serious_story:
-        surprise_scene = next(
-            (index for index, text in enumerate(texts) if _SURPRISE_AUDIO_RE.search(text)),
-            None,
-        )
-        # Add one supported Turbo paralinguistic cue only when the script clearly signals surprise.
-        if surprise_scene is not None:
-            audio_texts[surprise_scene] = "[gasp] " + audio_texts[surprise_scene]
+    audio_texts = _chatterbox_audio_texts(texts)
 
     temperatures = [
         _chatterbox_delivery(text, number, len(texts))[1]
