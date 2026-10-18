@@ -30,6 +30,7 @@ _CHATTERBOX_CONDITIONALS_CACHE: dict[str, Any] = {}
 MAX_CONCURRENCY = 2
 MAX_ATTEMPTS = 2
 MAX_DURATION_SECONDS = 30.0
+FIRST_SCENE_MAX_DURATION_SECONDS = 5.2
 CORRECTION_TARGET_SECONDS = 29.6
 TOP5_SCENE_COUNT = 6
 TOP5_MAX_TOTAL_DURATION_SECONDS = 30.0
@@ -797,6 +798,26 @@ def _use_chatterbox_engine(engine: str | None, voice: str | None, handoff: dict[
     return True
 
 
+def _validate_indic_first_scene_duration(scenes: list[dict[str, Any]], language: str | None) -> None:
+    """Use measured TTS timing, not whitespace-token counts, for an Indic lead."""
+    language_key = str(language or "").strip().casefold()
+    if language_key not in {"hindi", "telugu", "hi", "te"}:
+        return
+    if not isinstance(scenes, list) or not scenes or not isinstance(scenes[0], dict):
+        raise ValueError("Hindi/Telugu first-slide audio duration could not be measured.")
+    try:
+        first_duration = float(scenes[0].get("duration") or 0)
+    except (TypeError, ValueError):
+        first_duration = 0.0
+    if first_duration <= 0:
+        raise ValueError("Hindi/Telugu first-slide audio duration could not be measured.")
+    if first_duration > FIRST_SCENE_MAX_DURATION_SECONDS:
+        raise ValueError(
+            f"Hindi/Telugu first-slide audio is {first_duration:.2f}s; it must be no more than "
+            f"{FIRST_SCENE_MAX_DURATION_SECONDS:.1f} seconds. Shorten Slide 1 in Scriptwriter and regenerate Audio."
+        )
+
+
 def generate_audio(
     approved_script: dict,
     output_dir: str | Path = "output/audio_test",
@@ -818,12 +839,17 @@ def generate_audio(
 
     is_chatterbox = _use_chatterbox_engine(engine, voice, approved_script)
     if is_chatterbox:
-        return generate_chatterbox_audio(
+        result = generate_chatterbox_audio(
             approved_script,
             run_number=run_number,
             output_dir=output_dir,
             reference=reference,
         )
+        _validate_indic_first_scene_duration(
+            result.get("scenes") or [],
+            approved_script.get("language_used") or result.get("language"),
+        )
+        return result
 
     language = str(
         approved_script.get("language_used") or "english"
@@ -874,6 +900,7 @@ def generate_audio(
                 f"({total:.2f}s)."
             )
 
+    _validate_indic_first_scene_duration(results, language)
     return {
         "language": language,
         "voice": selected_voice,
@@ -1010,6 +1037,10 @@ def approve_audio(audio: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(audio, dict) or not audio.get("scenes"):
         raise ValueError("No generated audio is available for approval.")
     total = float(audio.get("total_duration") or 0)
+    _validate_indic_first_scene_duration(
+        audio.get("scenes") or [],
+        audio.get("language") or audio.get("language_used"),
+    )
     if total <= 0 or total > MAX_DURATION_SECONDS:
         raise ValueError("Audio duration is outside the factory limit.")
     for scene in audio["scenes"]:
