@@ -3436,7 +3436,7 @@ def _render_card_studio(
     data["contrast_treatment"] = contrast_treatment
     data["language"] = card_language
 
-    if not live and card_language in {"hindi", "telugu"}:
+    if card_language in {"hindi", "telugu"}:
         language_action_name = "Hindi" if card_language == "hindi" else "Telugu"
         if st.button(
             f"Translate card text to {language_action_name}",
