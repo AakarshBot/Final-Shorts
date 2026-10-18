@@ -1977,6 +1977,7 @@ def _crop_visual_dialog(
     image_bytes: bytes,
     label: str,
     crop_store: str = "visual_crops",
+    invalidate_card_result: bool = False,
 ):
     from PIL import Image, ImageFilter, ImageOps
 
@@ -2064,6 +2065,15 @@ def _crop_visual_dialog(
             for assignment in assignments.values():
                 if assignment.get("asset_key") == asset_key:
                     assignment["bytes"] = crop_bytes
+            invalidated_cards = 0
+            if invalidate_card_result:
+                from card_studio import invalidate_card_studio_results_for_source
+
+                invalidated_cards = invalidate_card_studio_results_for_source(
+                    st.session_state, asset_key
+                )
+            if invalidated_cards:
+                st.toast("Crop applied. Re-render the card to use the new framing.", icon="✂️")
             st.rerun()
 
 
@@ -3036,6 +3046,7 @@ def _render_card_studio(
                                     bytes(raw),
                                     str(asset["label"]),
                                     crop_store=crop_store_name,
+                                    invalidate_card_result=True,
                                 )
                             else:
                                 st.warning("This visual is not crop-ready.")
@@ -3360,6 +3371,10 @@ def _render_card_studio(
                     except Exception:
                         subject_mask = None
 
+                source_keys = [selected_primary_asset["asset_key"]]
+                if card_type == "Head-to-Head" and image_mode == "Two images":
+                    source_keys.append(selected_secondary_asset["asset_key"])
+
                 st.session_state[result_key] = {
                     "bytes": render_card(
                         card_type,
@@ -3371,6 +3386,7 @@ def _render_card_studio(
                     "data": data,
                     "source": selected_primary_asset["source"],
                     "source_key": selected_primary_asset["asset_key"],
+                    "source_keys": source_keys,
                 }
             except (CardStudioError, OSError, RuntimeError) as exc:
                 st.session_state[result_key] = {"error": str(exc)}
