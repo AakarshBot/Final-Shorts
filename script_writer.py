@@ -70,7 +70,7 @@ def _groq_http_error(response: requests.Response) -> GroqAPIError:
     code = ""
     try:
         payload = response.json()
-    except (ValueError, requests.JSONDecodeError):
+    except ValueError:
         payload = None
 
     if isinstance(payload, dict):
@@ -1386,6 +1386,12 @@ def suggest_cricket_story_angles(
                     res["search_query"] = search_query
                 return res
             errors.append(f"{model}: {reason}")
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError(
+                    "Groq rejected the cricket story-angle request: " + str(exc)
+                ) from exc
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
 
