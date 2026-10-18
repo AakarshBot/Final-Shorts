@@ -1,4 +1,5 @@
 from io import BytesIO
+from pathlib import Path
 
 from PIL import Image, ImageDraw
 
@@ -261,3 +262,54 @@ def test_all_non_cutout_cards_render_with_subject_masks():
             assert image.size == (1080, 1920)
             assert image.format == "PNG"
 
+
+
+
+def test_localized_card_starter_copy_and_native_script_rendering():
+    card_types = (
+        "Stat Highlight",
+        "Quote / Reaction",
+        "Head-to-Head",
+        "Key Fact / Milestone",
+    )
+    for language, start, end, font_name in (
+        ("hindi", "\\u0900", "\\u097f", "NotoSansDevanagari-Bold.ttf"),
+        ("telugu", "\\u0c00", "\\u0c7f", "NotoSansTelugu-Bold.ttf"),
+    ):
+        for card_type in card_types:
+            data = card_studio.card_data_for_type(card_type, language=language)
+            assert data["language"] == language
+            serialized = repr(data)
+            assert any(start <= char <= end for char in serialized), (language, card_type)
+            output = card_studio.render_card(card_type, _image_bytes(), data)
+            with Image.open(BytesIO(output)) as image:
+                assert image.size == (1080, 1920)
+                assert image.format == "PNG"
+
+        script_sample = "हिंदी कार्ड" if language == "hindi" else "తెలుగు కార్డు"
+        font = card_studio._font_for_text(script_sample, 28, card_studio._font_headline)
+        assert Path(font.path).name == font_name
+
+
+def test_changing_card_language_invalidates_the_old_render():
+    state = {
+        "card-result": {
+            "bytes": b"old-render",
+            "type": "Quote / Reaction",
+            "data": {
+                "layout_position": "Left half",
+                "contrast_treatment": "Soft gradient",
+                "language": "english",
+            },
+        }
+    }
+    changed = card_studio.invalidate_card_studio_result_for_composition(
+        state,
+        "card-result",
+        "Quote / Reaction",
+        "Left half",
+        "Soft gradient",
+        language="hindi",
+    )
+    assert changed is True
+    assert state["card-result"] is None
