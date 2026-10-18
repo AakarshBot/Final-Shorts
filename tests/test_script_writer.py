@@ -292,6 +292,37 @@ def test_generation_validator_requires_but_does_not_limit_dashboard_headline(lan
     assert valid, reason
 
 
+@pytest.mark.parametrize("language", ["hindi", "telugu"])
+def test_universal_validator_allows_long_dashboard_headline_and_duration_based_lead(language):
+    result = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
+    )
+    result["headline"] = (
+        "Shubman Gill injury update explains what India's next ODI selection decision depends on"
+    )
+    result["script"][3]["voiceover"] += (
+        " The selection decision will follow the medical review and the team's final assessment before match day."
+    )
+
+    valid, reason = script_writer.validate_universal_script(result, language=language)
+
+    assert valid, reason
+
+
+def test_universal_validator_keeps_english_13_word_limit():
+    result = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
+    )
+    result["script"][3]["voiceover"] += (
+        " The selection decision will follow the medical review and the team's final assessment before match day."
+    )
+
+    valid, reason = script_writer.validate_universal_script(result, language="english")
+
+    assert not valid
+    assert "Slide 1" in reason
+
+
 def test_validator_requires_subject_name_in_narration():
     result = valid_result()
     for scene in result["script"]:
