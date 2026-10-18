@@ -167,8 +167,10 @@ Contract:
   - Telugu: Female (te-IN-ShrutiNeural), Male (te-IN-MohanNeural).
 - The Edge-TTS dependency floor is edge-tts>=7.3.1,<8 to include the October 2026 upstream fix for Microsoft speech-service token-format changes that caused WebSocket 403 failures.
 - Human Audio upload & microphone recording remain available as intentional manual overrides, with linear word timing synthesis for subtitle synchronization.
+- Runtime behaviour: the Chatterbox Turbo model is cached in process memory after its first load, so Streamlit script reruns do not reload the weights while the Python process remains alive. Prior to the audio-cache update, each explicit generation click still regenerated every spoken slide and re-prepared a present voice reference; the generator also removed existing WAVs from the target output folder.
+- Optimisation in PR `perf/chatterbox-audio-cache`: exact matching Chatterbox results are now reused from an output-folder manifest when script text, seed/run number, reference-file fingerprint, temperature profile, and cache version match. Changed script/seed/reference inputs regenerate. Matching voice-reference conditioning is reused in-process. Cache hits return the same output schema/paths and mark each scene as cached. No new dependency is added.
 
-Status: Chatterbox-default routing implemented; CI and a local generated-audio smoke test are required before treating the current commit as fully verified.
+Status: Chatterbox-default routing and output/conditioning reuse implemented on the working branch; CI and a local generated-audio smoke test are required before treating the current commit as fully verified.
 
 ## Visuals — Function 04
 
