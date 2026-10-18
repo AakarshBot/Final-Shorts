@@ -10,6 +10,7 @@ import tempfile
 from typing import Any
 
 from audio import (
+    _SERIOUS_AUDIO_RE,
     _chatterbox_audio_texts,
     _chatterbox_delivery,
     _file_sha256,
@@ -131,8 +132,8 @@ class LongformAudioEngine:
         for number, (scene, text) in enumerate(zip(scenes, texts), 1):
             temperature = _chatterbox_delivery(text, number, len(texts))[1]
             act_num = scene.get("act_number", 1)
-            # Keep the established act shape, unless the script calls for serious or high-energy delivery.
-            if temperature > 0.72:
+            # Act-level emphasis must not override serious/sensitive narration.
+            if not _SERIOUS_AUDIO_RE.search(text):
                 if act_num == 1:
                     temperature = max(temperature, 0.84)
                 elif act_num == 5:
@@ -142,7 +143,7 @@ class LongformAudioEngine:
             temperatures.append(round(temperature, 3))
 
         signature_payload = {
-            "cache_version": "longform-chatterbox-v2-script-led",
+            "cache_version": "longform-chatterbox-v3-clear-speech",
             "texts": texts,
             "audio_texts": audio_texts,
             "temperatures": temperatures,
