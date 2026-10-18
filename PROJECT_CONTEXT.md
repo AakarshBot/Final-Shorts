@@ -35,7 +35,7 @@ Test is a modular laboratory; Live is the approved production line.
 - Audio consumes the Scriptwriter handoff and returns audio/timing data. Test lets the user listen and approve it.
 - Visuals are a modular function. Automatic scraping starts from the selected story URL, while manual scraper/search/AI options can be run independently. Manual inputs may deliberately bypass upstream approvals when the visual function does not actually require that approval.
 - Test Visuals uses the same slide-board interaction as Live: script context above each slide, per-slide visual attachment, crop/reposition, and an explicit approved visual handoff. Standard Cricket production uses four visual slides; Top-5 remains a separate six-slide workflow.
-- Card Studio and other visual sub-functions are independently testable in Test. They must not be blocked merely because an earlier pipeline stage is unapproved. Card Studio receives the existing image pool or a manually supplied test image and leaves final approval entirely to Manual QC.
+- Card Studio and other visual sub-functions are independently testable in Test. Card Studio uses the existing image pool and manual QC. On 2026-10-18, the user explicitly promoted the four sports-editorial card types to Live in addition to Text Subject Cutout; the shared card implementation is used in both modes.
 - Subtitles consume approved Audio + Scriptwriter handoffs and produce the subtitle handoff used by Renderer. No visual subtitle preview is required in Test or Live.
 - Test Renderer is the integration check. It consumes only the exact approved handoffs it needs—Scriptwriter, Audio, Subtitles and Visuals. When one is missing, Test explicitly identifies the missing approval. Once all required handoffs exist, it builds the real Short.
 - Test stage navigation may jump directly to any stage so individual functions can be tested out of order. Live enforces the approved production sequence.
@@ -63,7 +63,7 @@ Production lines:
 2. **On This Day** — **Test-first / WIP**
 3. **YouTube Search Trends** — **Test + Live / search-opportunity rebuild in validation**
 
-Top-5 is currently Test-only / WIP. **Card Studio is the single card entry point in Top-5 Test.** Text Subject Cutout is the only approved card type. Cricket and YT Trends use the same shared Card Studio; Top-5 Live remains retrieval-only and does not expose Card Studio.
+Top-5 remains Test-only / WIP. **Card Studio is the single card entry point in Top-5 Test.** Cricket and YT Trends use the shared Card Studio in Test and Live; Live now exposes the four sports-editorial card types alongside the existing Text Subject Cutout. Top-5 Live remains retrieval-only and does not expose Card Studio.
 
 ### Dashboard UI & UX System (Modern Studio Design)
 - **Theme & Palette:** Professional light studio theme (`--bg: #f5f7fb`, `--surface: #ffffff`, `--surface-soft: #f1f5f9`, `--ink: #0f172a`, `--muted: #64748b`, `--line: #e2e8f0`) with restrained indigo actions (`--primary: #4f46e5`), subtle borders and shadows, and high-contrast text. The dashboard chrome and form fields stay light; only the simulated Short/video preview intentionally uses a dark background.
@@ -184,11 +184,11 @@ Universal 2-Stage Visual Architecture across all desks (Deep-Dive Cricket, YT Tr
 2. **Stage 2: Visual Builder (Layout & Assembly)**
    - **Crop & Reposition:** Interactive polygon and rectangular crop tool. (Hard locked, untouched).
    - **Text Subject Cutout:** Rembg foreground cutout with text placed behind or around subjects. (Hard locked, untouched).
-   - **Card Studio:** Stat Highlight Card, Quote / Reaction Card, Head-to-Head Split Card, Key Fact / Milestone Card with negative-space subject awareness.
+   - **Card Studio:** Stat Highlight, Quote / Reaction, Head-to-Head and Key Fact / Milestone use a photo-led sports-editorial system in Test and Live: restrained ink/white/signal-accent palette, expressive display type, clear type hierarchy, thin rules instead of decorative glass panels/3D effects, and composition-specific layouts. Existing BiRefNet subject masks are generated for selected images and passed to the card renderer; image and mask receive the same crop/resize transform. If segmentation is unavailable, image texture supplies a fallback layout without blocking rendering. No new dependencies.
    - **Slide Attachment:** Attach any cropped image or generated card to any slide (1 to N).
    - **Visual Board:** Review all assigned slide visuals before approving the final handoff for Renderer.
 
-Status: **Approved / 2-stage universal visual flow across all desks.**
+Status (2026-10-18): **The sports-editorial card designs are promoted to Live at the user’s direction. The shared Card Studio selects TEST_CARD_TYPES in Test and LIVE_CARD_TYPES in Live; both allow Text Subject Cutout, Stat Highlight, Quote / Reaction, Head-to-Head, and Key Fact / Milestone in the Cricket and YT Trends live routes where Card Studio is exposed. Text Subject Cutout rendering, crop/reposition, and polygon placement remain hard locked and unchanged. Top-5 Live remains retrieval-only and does not expose Card Studio.**
 
 ## Subtitles — Function 05
 
@@ -241,9 +241,9 @@ The dashboard uses a **professional light studio theme** across Test and Live: p
 - Top-5 Option 3 is **Manual Fetcher**: manual query → real-image provider results → existing image pool. It does not render card typography.
 - Top-5 Option 4 is **AI Generation**.
 - Top-5 Option 5 is **Card Studio**, the single card entry point.
-- Card Studio Test exposes five card types: **Text Subject Cutout** (approved), **Stat Highlight** (WIP), **Quote / Reaction** (WIP), **Head-to-Head** (WIP), and **Key Fact / Milestone** (WIP).
+- Card Studio exposes five card types in Cricket and YT Trends Test + Live: **Text Subject Cutout**, **Stat Highlight**, **Quote / Reaction**, **Head-to-Head**, and **Key Fact / Milestone**. The four sports-editorial types use the same shared renderer in Test and Live.
 - Text Subject Cutout is implemented by the existing shared Manual Subject Cutout editor/renderer. Cricket Test + Live, YT Trends Test + Live, and Top-5 Test use that same implementation; it is not reimplemented inside Card Studio.
-- The other four Card Studio types are static 1080 × 1920 Pillow frames, manually entered and manually QC'd in Test. They are not Live-approved.
+- The four sports-editorial Card Studio types are static 1080 × 1920 Pillow frames with editable content and explicit manual visual QC in Test and Live.
 - Card Studio reuses the existing visual pool or the standalone Top-5 test image. It does not perform its own image retrieval.
 - The renderer treats a completed Card Studio frame as a static visual input and does not add normal headline/subtitle animation on top of it. Normal production logo/source overlays remain controlled by the existing renderer flags.
 - Top-5 Live remains retrieval-only and exposes Options 1–4. Card Studio is not exposed there until a Test card type is approved.
@@ -262,7 +262,7 @@ Status: **Planned / Test framework WIP.**
 
 ### Shared Text Subject Cutout · Card Studio
 
-**Text Subject Cutout** is the approved card type backed by the existing manual subject-cutout implementation. It is exposed through Card Studio in Cricket Test/Live, YT Trends Test/Live, and Top-5 Test. Top-5 Live does not expose Card Studio yet.
+**Text Subject Cutout** remains backed by the existing manual subject-cutout implementation. It is exposed through Card Studio in Cricket Test/Live, YT Trends Test/Live, and Top-5 Test. The four editorial card types are now available in Cricket and YT Trends Live as well; Top-5 Live remains retrieval-only.
 
 There is exactly one implementation:
 - One shared editor in `app.py`.
@@ -457,11 +457,11 @@ Status: **Test + Live / search-opportunity rebuild in validation.**
 
 Current overall cricket-line checkpoint: **6/10**.
 
-This is the baseline for future Cricket pipeline changes. The established Cricket functionality remains usable. New card work now lives under Card Studio so Test can prove each visual type before any Live promotion.
+This is the baseline for future Cricket pipeline changes. The established Cricket functionality remains usable. Card Studio’s four sports-editorial card types have now been promoted to Cricket and YT Trends Live at the user’s direction.
 
 Card Studio checkpoint:
-- Text Subject Cutout remains the only approved card type. The shared Subject Cutout implementation is preserved, with polygon-flow enabled only for Deep-Dive Cricket and YT Trends.
-- Stat Highlight, Quote / Reaction, Head-to-Head and Key Fact / Milestone remain Test-only WIP Card Studio types.
+- Text Subject Cutout remains on its preserved shared Subject Cutout implementation, with polygon-flow enabled only for Deep-Dive Cricket and YT Trends. The four editorial cards are separately rendered by Card Studio and are now enabled in Cricket and YT Trends Live.
+- Stat Highlight, Quote / Reaction, Head-to-Head and Key Fact / Milestone use the shared sports-editorial Card Studio in Test and in Cricket/YT Trends Live.
 - All WIP card fields open with usable default test values.
 - WIP Card Studio shows the full image pool with real image previews and the existing crop/reposition control before image selection.
 - WIP cards use the existing subject-aware foreground mask only for simple negative-space text placement. They do not hide text behind subjects.

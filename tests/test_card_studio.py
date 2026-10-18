@@ -53,23 +53,6 @@ def test_card_studio_defaults_fill_every_wip_field():
     assert all(milestone[key] for key in ("eyebrow", "value", "label", "context"))
 
 
-def test_card_studio_subject_aware_position_prefers_negative_space():
-    mask = Image.new("L", (1080, 1920), 0)
-    ImageDraw.Draw(mask).rectangle((88, 220, 620, 1460), fill=255)
-
-    x, y = card_studio._best_text_position(
-        mask,
-        300,
-        140,
-        (88, 260, 864, 900),
-        88,
-        300,
-    )
-
-    assert x >= 500
-    assert y >= 260
-
-
 def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
     mask = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(mask).rectangle((88, 220, 620, 1300), fill=255)
@@ -93,12 +76,18 @@ def test_head_to_head_supports_two_images_with_manual_split_direction():
     data = card_studio.card_data_for_type("Head-to-Head")
     data["image_mode"] = "Two images"
 
+    left_mask = Image.new("L", (900, 1600), 0)
+    right_mask = Image.new("L", (900, 1600), 0)
+    ImageDraw.Draw(left_mask).ellipse((500, 180, 850, 950), fill=255)
+    ImageDraw.Draw(right_mask).ellipse((70, 200, 390, 980), fill=255)
+
     for direction in ("Vertical", "Horizontal"):
         data["split_direction"] = direction
         output = card_studio.render_card(
             "Head-to-Head",
             (left, right),
             data,
+            subject_mask=(left_mask, right_mask),
         )
         with Image.open(BytesIO(output)) as image:
             assert image.size == (1080, 1920)
@@ -127,4 +116,54 @@ def test_card_studio_keeps_subject_cutout_on_shared_editor():
 
 def test_card_type_lists_match_approval_scope():
     assert "Text Subject Cutout" in card_studio.TEST_CARD_TYPES
-    assert card_studio.LIVE_CARD_TYPES == ("Text Subject Cutout",)
+    assert card_studio.LIVE_CARD_TYPES == card_studio.TEST_CARD_TYPES
+
+
+def test_subject_mask_uses_the_same_centre_crop_as_the_photo():
+    image = Image.new("RGB", (1000, 1000), (80, 90, 100))
+    mask = Image.new("L", (1000, 1000), 0)
+    ImageDraw.Draw(mask).rectangle((300, 200, 450, 800), fill=255)
+
+    covered, aligned = card_studio._cover_with_mask(image, mask)
+
+    assert covered.size == (1080, 1920)
+    assert aligned is not None
+    assert aligned.size == covered.size
+    bbox = aligned.point(lambda value: 255 if value >= 96 else 0).getbbox()
+    assert bbox is not None
+    assert 130 <= bbox[0] <= 180
+    assert 400 <= bbox[2] <= 470
+
+
+def test_dynamic_text_side_moves_away_from_subject():
+    image = Image.new("RGB", (1080, 1920), (90, 90, 90))
+    right_subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(right_subject).rectangle((700, 260, 1020, 1400), fill=255)
+    left_subject = Image.new("L", (1080, 1920), 0)
+    ImageDraw.Draw(left_subject).rectangle((90, 260, 350, 1400), fill=255)
+
+    assert card_studio._choose_text_side(image, right_subject) == "left"
+    assert card_studio._choose_text_side(image, left_subject) == "right"
+
+
+def test_all_non_cutout_cards_render_with_subject_masks():
+    source = _image_bytes(size=(900, 1600))
+    mask = Image.new("L", (900, 1600), 0)
+    ImageDraw.Draw(mask).ellipse((500, 180, 850, 950), fill=255)
+
+    for card_type in (
+        "Stat Highlight",
+        "Quote / Reaction",
+        "Head-to-Head",
+        "Key Fact / Milestone",
+    ):
+        output = card_studio.render_card(
+            card_type,
+            source,
+            card_studio.card_data_for_type(card_type),
+            subject_mask=mask,
+        )
+        with Image.open(BytesIO(output)) as image:
+            assert image.size == (1080, 1920)
+            assert image.format == "PNG"
+

@@ -2697,7 +2697,7 @@ def _render_card_studio(
         render_card,
     )
 
-    card_types = TEST_CARD_TYPES
+    card_types = LIVE_CARD_TYPES if live else TEST_CARD_TYPES
     state_id = (
         f"{'live' if live else 'test'}-"
         f"{'top5-' if top5 else ''}"
@@ -3153,9 +3153,9 @@ def _render_card_studio(
 
     if card_type == "Stat Highlight":
         st.markdown(
-            '<div class="archetype-badge" style="background: rgba(255, 210, 30, 0.10); border-left: 4px solid #FFD21E; padding: 10px 14px; border-radius: 6px; margin: 12px 0 16px 0;">'
-            '<strong style="color: #FFD21E; font-size: 0.95rem;">⚡ ATHLETIC DATA GRAPHIC · 2026 EDITION</strong><br>'
-            '<span style="font-size: 0.86rem; color: #C3C9D1;">High-performance sports stat card featuring an electric category pill, 3D broadcast depth shadow, floating gold unit tag, and a segmented 3-tile scorecard shelf.</span>'
+            '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
+            '<strong style="color: #0F172A; font-size: 0.9rem;">FEATURE STAT · PERFORMANCE STORY</strong><br>'
+            '<span style="font-size: 0.86rem; color: #475569;">Photo-led editorial layout with an oversized record number, a concise headline and supporting figures in a clean ruled list. Text placement adapts around the detected subject when available.</span>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -3201,9 +3201,9 @@ def _render_card_studio(
             data["metrics"].append({"label": label, "value": value})
     elif card_type == "Quote / Reaction":
         st.markdown(
-            '<div class="archetype-badge" style="background: rgba(245, 204, 82, 0.10); border-left: 4px solid #F5CC52; padding: 10px 14px; border-radius: 6px; margin: 12px 0 16px 0;">'
-            '<strong style="color: #F5CC52; font-size: 0.95rem;">❝ EDITORIAL INTERVIEW · 2026 EDITION</strong><br>'
-            '<span style="font-size: 0.86rem; color: #C3C9D1;">Magazine feature portrait card featuring a champagne gold quotation glyph, left editorial accent rail, ivory text, and a frosted speaker plaque.</span>'
+            '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
+            '<strong style="color: #0F172A; font-size: 0.9rem;">THE PULL QUOTE · REACTION OR INTERVIEW</strong><br>'
+            '<span style="font-size: 0.86rem; color: #475569;">A restrained magazine pull quote with clear attribution and context. The quote is positioned against the photo’s available negative space, with a subtle contrast fade only where text sits.</span>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -3233,9 +3233,9 @@ def _render_card_studio(
         }
     elif card_type == "Head-to-Head":
         st.markdown(
-            '<div class="archetype-badge" style="background: rgba(64, 196, 255, 0.10); border-left: 4px solid #40C4FF; padding: 10px 14px; border-radius: 6px; margin: 12px 0 16px 0;">'
-            '<strong style="color: #40C4FF; font-size: 0.95rem;">⚔ BROADCAST CLASH · TALE OF THE TAPE (2026)</strong><br>'
-            '<span style="font-size: 0.86rem; color: #C3C9D1;">Matchday rivalry comparison graphic with central 3D VS medallion, dual-color team identity (Cyan vs Gold), and comparative metric duel rows.</span>'
+            '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
+            '<strong style="color: #0F172A; font-size: 0.9rem;">THE COMPARISON · HEAD TO HEAD</strong><br>'
+            '<span style="font-size: 0.86rem; color: #475569;">A clean comparison layout with matched names and values. Use one image or a two-image split; the comparison table keeps its hierarchy and stays inside the Shorts-safe area.</span>'
             '</div>',
             unsafe_allow_html=True,
         )
@@ -3290,9 +3290,9 @@ def _render_card_studio(
                 data["right"]["values"][label.strip()] = right_value.strip()
     else:
         st.markdown(
-            '<div class="archetype-badge" style="background: rgba(255, 218, 98, 0.10); border-left: 4px solid #FFDA62; padding: 10px 14px; border-radius: 6px; margin: 12px 0 16px 0;">'
-            '<strong style="color: #FFDA62; font-size: 0.95rem;">🏛 PRESTIGE LANDMARK · HISTORIC RECORD (2026)</strong><br>'
-            '<span style="font-size: 0.86rem; color: #C3C9D1;">Commemorative Hall-of-Fame achievement plaque featuring landmark brass corner brackets, monumental gold numeral with 3D depth, and a framed context plate.</span>'
+            '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
+            '<strong style="color: #0F172A; font-size: 0.9rem;">THE RECORD · MILESTONE OR KEY FACT</strong><br>'
+            '<span style="font-size: 0.86rem; color: #475569;">A record-led editorial layout with a large value, a clear achievement label and concise context. Its text position adapts to the subject and image composition when a subject mask is available.</span>'
             '</div>',
             unsafe_allow_html=True,
         )
