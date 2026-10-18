@@ -9,7 +9,7 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageStat
+from PIL import Image, ImageDraw, ImageFont, ImageStat, features
 
 
 WIDTH = 1080
@@ -261,25 +261,39 @@ def _localized_font(language: str, size: int) -> ImageFont.FreeTypeFont | None:
     }.get(language_key)
     if not font_name:
         return None
+    try:
+        raqm_available = features.check_feature("raqm")
+    except (AttributeError, ValueError):
+        raqm_available = False
+    if not raqm_available:
+        raise CardStudioError(
+            f"{language_key.title()} card text needs Pillow's RAQM shaping engine. "
+            "Rendering has stopped to prevent incorrectly joined letters. On Windows, "
+            "ensure the FriBiDi runtime DLL is available and restart the factory."
+        )
     path = _font_file(font_name)
     if not path.is_file():
-        return None
+        raise CardStudioError(
+            f"The bundled {font_name} font is missing; the card will not use a substitute font."
+        )
     try:
         return ImageFont.truetype(str(path), size, layout_engine=ImageFont.Layout.RAQM)
-    except (AttributeError, OSError, ValueError):
-        return ImageFont.truetype(str(path), size)
+    except (AttributeError, OSError, ValueError) as exc:
+        raise CardStudioError(
+            f"Could not load {font_name} with correct Indic text shaping."
+        ) from exc
 
 
 def _font_for_text(text: str, size: int, fallback):
     value = str(text or "")
-    if any("\u0900" <= char <= "\u097F" for char in value):
-        font = _localized_font("hindi", size)
-        if font is not None:
-            return font
-    if any("\u0C00" <= char <= "\u0C7F" for char in value):
-        font = _localized_font("telugu", size)
-        if font is not None:
-            return font
+    devanagari = any("\\u0900" <= char <= "\\u097F" for char in value)
+    telugu = any("\\u0C00" <= char <= "\\u0C7F" for char in value)
+    if devanagari and telugu:
+        raise CardStudioError("One card text field cannot mix Hindi and Telugu scripts.")
+    if devanagari:
+        return _localized_font("hindi", size)
+    if telugu:
+        return _localized_font("telugu", size)
     return fallback(size)
 
 
