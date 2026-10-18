@@ -50,6 +50,50 @@ MAX_WORDS = 74
 MIN_SCENES = 3
 MAX_SCENES = 5
 
+
+class GroqAPIError(RuntimeError):
+    """A Groq HTTP error with provider detail and retry metadata."""
+
+    def __init__(self, status_code: int, message: str, retry_after: str | None = None):
+        self.status_code = int(status_code)
+        self.retry_after = str(retry_after or "").strip() or None
+        detail = f"Groq API HTTP {self.status_code}: {message}"
+        if self.retry_after:
+            detail += f" (Retry-After: {self.retry_after})"
+        super().__init__(detail)
+
+
+def _groq_http_error(response: requests.Response) -> GroqAPIError:
+    status = int(response.status_code)
+    retry_after = response.headers.get("Retry-After")
+    detail = ""
+    code = ""
+    try:
+        payload = response.json()
+    except (ValueError, requests.JSONDecodeError):
+        payload = None
+
+    if isinstance(payload, dict):
+        error = payload.get("error")
+        if isinstance(error, dict):
+            detail = _clean(error.get("message"))
+            code = _clean(error.get("code") or error.get("type"))
+        elif isinstance(error, str):
+            detail = _clean(error)
+        if not detail:
+            detail = _clean(payload.get("message"))
+    if not detail:
+        detail = _clean(getattr(response, "text", ""))[:700]
+    if not detail:
+        detail = "The provider returned no error detail."
+    if code:
+        detail = f"{code}: {detail}"
+    if status == 429:
+        detail = "Rate limit reached. " + detail
+    elif status == 400:
+        detail = "The provider rejected the request. " + detail
+    return GroqAPIError(status, detail, retry_after)
+
 LANGUAGE_INSTRUCTIONS = {
     "english": "Write all narration and publish metadata in punchy, natural spoken English.",
     "hindi": "Write all narration and publish metadata in natural spoken Hindi using Devanagari script.",
@@ -865,7 +909,8 @@ def _extract_article(url: str) -> tuple[str, str]:
         timeout=RESEARCH_TIMEOUT,
         allow_redirects=True,
     )
-    response.raise_for_status()
+    if response.status_code >= 400:
+        raise _groq_http_error(response)
     response.encoding = response.encoding or response.apparent_encoding or "utf-8"
     resolved_url = str(response.url or target)
     article = _clean(
