@@ -106,8 +106,8 @@ def _normalise_indic_language(language: str | None) -> str:
 
 def _indic_language_for_text(text: str) -> str | None:
     value = str(text or "")
-    devanagari = any("\\u0900" <= char <= "\\u097F" for char in value)
-    telugu = any("\\u0C00" <= char <= "\\u0C7F" for char in value)
+    devanagari = any("\u0900" <= char <= "\u097F" for char in value)
+    telugu = any("\u0C00" <= char <= "\u0C7F" for char in value)
     if devanagari and telugu:
         raise RuntimeError("A single text block cannot mix Hindi and Telugu scripts; split it by language.")
     if devanagari:
