@@ -137,6 +137,8 @@ def test_card_studio_exposes_manual_composition_controls_for_all_editorial_cards
     assert '"Contrast treatment"' in studio_source
     assert 'data["layout_position"] = layout_position' in studio_source
     assert 'data["contrast_treatment"] = contrast_treatment' in studio_source
+    assert "invalidate_card_studio_result_for_composition(" in studio_source
+    assert "Composition changed. Render the card again" in studio_source
     assert "Text Subject Cutout is unchanged." in studio_source
 
 
