@@ -411,12 +411,14 @@ def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_pat
     assert model.generate_calls == 4
 
 
-def test_chatterbox_script_led_delivery_is_conservative():
+def test_chatterbox_script_led_delivery_preserves_clear_baseline():
     import audio
 
-    assert audio._chatterbox_delivery("A routine report today.", 2, 4)[1] == 0.77
-    assert audio._chatterbox_delivery("A heartbreaking injury ends the season.", 2, 4)[1] == 0.72
+    assert audio._chatterbox_delivery("A routine report today.", 2, 4)[1] == 0.80
+    assert audio._chatterbox_delivery("A heartbreaking injury ends the season.", 2, 4)[1] == 0.80
+    assert audio._chatterbox_delivery("The captain opened the innings.", 1, 4)[1] == 0.88
     assert audio._chatterbox_delivery("An unbelievable last-ball finish stuns the favourites.", 2, 4)[1] == 0.88
+    assert audio._chatterbox_delivery("The final result changed everything.", 4, 4)[1] == 0.84
     assert audio._chatterbox_audio_texts([
         "A stunning comeback shocks everyone.",
         "The captain lifted the trophy."
