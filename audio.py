@@ -462,7 +462,7 @@ def _prepare_chatterbox_reference(
 
     try:
         model.prepare_conditionals(str(reference), exaggeration=0.5)
-        _CHATTERBOX_CONDITIONALS_CACHE[key] = model.conds
+        _CHATTERBOX_CONDITIONALS_CACHE[key] = getattr(model, "conds", None)
     except Exception as exc:
         raise RuntimeError(
             f"Chatterbox could not use the voice reference file '{reference}': {exc}. "
