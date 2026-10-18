@@ -232,13 +232,7 @@ def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
             continue
         seen.add(key)
         try:
-            fonts.append(
-                ImageFont.truetype(
-                    str(path),
-                    size,
-                    layout_engine=ImageFont.Layout.RAQM if is_indic else ImageFont.Layout.BASIC,
-                )
-            )
+            fonts.append(ImageFont.truetype(str(path), size))
         except OSError:
             continue
     if not fonts:
