@@ -271,7 +271,7 @@ NAMING THE SUBJECT
 3–5 SLIDES — 20–30s BROADCAST NEWS ARTICLE
 - Return 3–5 spoken slides. Prefer four when that best serves the story, but do not force a fixed slide count.
 - Slide 1 is the hook: the strongest specific fact from the story.
-- Slide 1 MUST contain 13 words or fewer. This is a generation rule, not a post-generation target.
+- For English narration, Slide 1 MUST contain 13 words or fewer. For Hindi and Telugu, write a concise lead designed to fit within 5.2 seconds of natural narration; the Audio stage validates its measured first-scene duration instead of counting whitespace-separated words.
 - Later slides must add new information and carry the important remaining facts.
 - The complete narration MUST fit within 30 seconds at the channel's normal spoken delivery pace. Treat this as a generation requirement; keep wording tight and do not pad.
 - As a generation target, keep the complete narration between 50 and 70 spoken words (~20 to 28 seconds).
@@ -288,7 +288,7 @@ YouTube strictly flags repetitive template scripts as inauthentic content. To en
 - Write with varied, human conversational cadence: use sharp contrasts, active verbs, and natural pauses. Never sound like a robotic news wire summary.
 
 VIRAL PACKAGING SUITE
-- `headline`: exactly 3 or 4 words. This is the On-Screen Scroll-Stopper Billboard pinned to Slide 1. Make it an intense, curiosity-inducing hook (e.g. "33-BALL DUCK HEROIC?", "TACTICAL MASTERCLASS?", "WORST RECORD BROKEN").
+- `headline`: a crisp, story-specific display field for the dashboard only. It is metadata, not on-screen text, narration, or part of the rendered Short. Keep it concise and useful, but do not enforce a word or character limit.
 - `titles`: exactly 3 distinct viral YouTube Shorts title candidates across these 3 archetypes:
   1. SEO / Search — lead with the main player, team, event or key search term and make the story immediately discoverable in search.
   2. High-Stakes Debate & Consequence / Why It Matters — ask a polarizing question or foreground the concrete impact that forces viewers to debate in the comments.
@@ -314,7 +314,7 @@ GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSO
 - Return 3–5 non-empty spoken slides. Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
 - Keep Slide 1 to 13 words or fewer; never rely on an automatic post-generation trim.
 - Name the non-empty subject_name exactly in the spoken narration.
-- Include a non-empty 3–4-word opening headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
+- Include a non-empty, crisp dashboard-only headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
 - Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the generated slides.
 - quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–5, never greater than the generated slide count, when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
 - Make every field complete in the first JSON returned. Before output, check the actual field values, not only the JSON shape.
@@ -404,7 +404,7 @@ NARRATION CONTRACT
 - Four slides are the preferred structure when they fit naturally.
 - Use 3 slides when the story is genuinely tight.
 - Use 5 slides when five distinct factual beats are needed.
-- Slide 1 MUST contain fewer than 14 words. This is a generation rule.
+- For English, Slide 1 MUST contain fewer than 14 words. For Hindi and Telugu, write a concise lead designed to fit within 5.2 seconds of natural narration; measured first-scene duration is validated after Audio generation.
 - The complete spoken narration MUST be at least 18 seconds and strictly under 30 seconds at normal channel delivery.
 - As a generation proxy, keep the complete narration between 50 and 74 spoken words. This protects the 18-second minimum and the under-30-second ceiling without padding.
 - Target roughly 52–68 words when the story permits.
@@ -436,13 +436,13 @@ Curiosity must come from a real information gap created by the facts.
 STORY FLOW — ONE CONNECTED 18–30s BROADCAST ARTICLE
 - Write one cohesive news article split across spoken cuts, not disconnected bullet points.
 - Let the facts determine the transitions and slide structure. Use natural connective wording grounded in actual chronology, cause, context, or consequence; never use a fixed template or any phrase forbidden by NO FILLER OR RETENTION BAIT.
-- Slide 1: lead with the strongest specific development, name the subject when supported, and stay under 14 words.
+- Slide 1: lead with the strongest specific development and name the subject when supported. For English, stay under 14 words. For Hindi/Telugu, keep the lead concise enough to fit within a measured 5.2 seconds of audio.
 - Later slides: add the next useful fact, evidence, background, or consequence. Each slide must contribute new information without repeating a fact or mechanically restating the headline.
 - Use 3–5 slides as the story warrants, preferably four when that is the clearest structure. Do not force fixed per-slide word ranges.
 - Read the cuts in sequence: they must sound natural, flow into one continuous article, and stay within 50–74 total spoken words and under 30 seconds without padding.
 
 PUBLISH METADATA
-- headline: exactly 3 or 4 words. It should identify the actual story, not use empty phrases.
+- headline: a crisp, story-specific display field for the dashboard only. It is never spoken or rendered onto the Short. It has no word-count limit.
 - titles: exactly 3 concise YouTube Shorts title candidates:
   1. SEO / Search — lead with the strongest identifiable person, team, event or distinctive search term.
   2. Consequence / Why It Matters — foreground the concrete impact or significance.
@@ -476,10 +476,10 @@ Do not invent a visual moment unsupported by the research.
 
 GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSON
 - Return 3–5 non-empty spoken slides, each with non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
-- Keep Slide 1 to 13 words or fewer, and the total narration between 50 and 74 spoken words. Aim for 52–68 words when the evidence supports it; never pad.
+- For English, keep Slide 1 to 13 words or fewer. For Hindi/Telugu, keep Slide 1 concise for a maximum measured audio duration of 5.2 seconds. Keep total narration between 50 and 74 spoken words; aim for 52–68 words when the evidence supports it, never padding.
 - subject_name must be non-empty and the exact name must appear naturally in the spoken narration.
 - Do not use any listed filler or retention-bait phrase, including “what happens next remains to be seen”.
-- Return a non-empty 3–4-word headline, exactly three non-empty title candidates, a non-empty SEO description, 3–5 hashtags each beginning with # and containing no spaces, and a non-empty public comment.
+- Return a non-empty, crisp dashboard-only headline (no word-count limit), exactly three non-empty title candidates, a non-empty SEO description, 3–5 hashtags each beginning with # and containing no spaces, and a non-empty public comment.
 - quote, quote_attribution, and quote_slide must agree: if a quote is present, give its source attribution and a valid existing slide number; otherwise return empty quote and attribution with quote_slide 0. Never invent or alter a quotation.
 - Complete every required value in the generated JSON. Do not expect manual QC to repair omitted required fields.
 
@@ -493,7 +493,7 @@ Before returning JSON, silently verify:
 6. No filler or retention-bait phrase appears.
 7. Every slide adds new factual information.
 8. Every factual claim is grounded in the research packet.
-9. The headline is 3–4 words.
+9. The headline is crisp dashboard-only metadata with no word-count limit.
 10. Exactly 3 titles are present.
 11. Description, hashtags and comment are useful and story-specific.
 12. Any quote is faithful and attached to an existing slide.
@@ -1349,7 +1349,12 @@ def suggest_cricket_story_angles(
     )
 
 
-def validate_cricket_script(result: dict, *, headline_required: bool = True) -> tuple[bool, str]:
+def validate_cricket_script(
+    result: dict,
+    *,
+    headline_required: bool = True,
+    language: str | None = None,
+) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
 
@@ -1361,8 +1366,9 @@ def validate_cricket_script(result: dict, *, headline_required: bool = True) -> 
     if not subject:
         return False, "The Scriptwriter must identify the main subject."
 
+    language_key = str(language or result.get("language_used") or "english").strip().casefold()
     first_words = _words((scenes[0] or {}).get("voiceover")) if isinstance(scenes[0], dict) else 0
-    if first_words > MAX_SLIDE_ONE_WORDS:
+    if language_key not in {"hindi", "telugu", "hi", "te"} and first_words > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
 
     narration = _normalise(" ".join(_clean(scene.get("voiceover")) for scene in scenes))
@@ -1371,10 +1377,8 @@ def validate_cricket_script(result: dict, *, headline_required: bool = True) -> 
         return False, "The main subject is not named in the spoken narration."
 
     headline = _clean(result.get("headline"))
-    if headline and not 3 <= _words(headline) <= 4:
-        return False, "The opening headline must contain 3 or 4 words."
     if headline_required and not headline:
-        return False, "The opening headline must contain 3 or 4 words."
+        return False, "The opening headline is required."
 
     titles = result.get("titles")
     if not isinstance(titles, list) or len(titles) != 3 or not all(_clean(item) for item in titles):
@@ -1504,7 +1508,7 @@ def write_script(
         result = None
         first_reason = f"{type(first_error).__name__}: {first_error}"
     else:
-        valid, reason = validate_cricket_script(result)
+        valid, reason = validate_cricket_script(result, language=language_key)
         if valid:
             return _finish_result(
                 result,
@@ -1535,7 +1539,7 @@ def write_script(
             + f"{first_reason} | {type(second_error).__name__}: {second_error}"
         ) from second_error
 
-    valid, reason = validate_cricket_script(rewritten)
+    valid, reason = validate_cricket_script(rewritten, language=language_key)
     if not valid:
         raise RuntimeError("Script generation failed after one hidden rewrite: " + reason)
 
@@ -1588,6 +1592,7 @@ def validate_universal_script(
     result: dict,
     *,
     headline_required: bool = True,
+    language: str | None = None,
 ) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
@@ -1600,12 +1605,13 @@ def validate_universal_script(
     if not subject:
         return False, "The Scriptwriter must identify the main subject."
 
+    language_key = str(language or result.get("language_used") or "english").strip().casefold()
     first_words = _words(
         scenes[0].get("voiceover")
         if isinstance(scenes[0], dict)
         else ""
     )
-    if first_words > MAX_SLIDE_ONE_WORDS:
+    if language_key not in {"hindi", "telugu", "hi", "te"} and first_words > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
 
     narration_parts = []
@@ -1642,8 +1648,6 @@ def validate_universal_script(
     headline = _clean(result.get("headline"))
     if headline_required and not headline:
         return False, "The opening headline is required."
-    if headline and not 3 <= _words(headline) <= 4:
-        return False, "The opening headline must contain 3 or 4 words."
 
     titles = result.get("titles")
     if (
@@ -1817,7 +1821,7 @@ def write_universal_script(
             if angle_text:
                 result["story_angle"] = angle_text
 
-            valid, reason = validate_universal_script(result)
+            valid, reason = validate_universal_script(result, language=language_key)
             if valid:
                 return _finish_result(
                     result,
