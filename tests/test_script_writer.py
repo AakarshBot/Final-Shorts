@@ -136,6 +136,32 @@ def test_translate_card_copy_remaps_head_to_head_metric_keys(monkeypatch):
     assert result["right"]["name"] == "Joe Root"
 
 
+def test_translate_card_copy_translates_textual_milestone_value(monkeypatch):
+    data = {
+        "language": "english",
+        "eyebrow": "MILESTONE",
+        "value": "100 international appearances",
+        "label": "A career landmark",
+        "context": "Reached in the latest match.",
+    }
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        payload = json.loads(story)
+        translate = {
+            "MILESTONE": "उपलब्धि",
+            "100 international appearances": "100 अंतरराष्ट्रीय मुकाबले",
+            "A career landmark": "करियर की खास उपलब्धि",
+            "Reached in the latest match.": "हालिया मैच में हासिल हुई।",
+        }
+        return {key: translate[value] for key, value in payload.items()}
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.translate_card_copy("Key Fact / Milestone", data, "hindi")
+
+    assert result["value"] == "100 अंतरराष्ट्रीय मुकाबले"
+    assert result["value"].startswith("100 ")
+
+
 def test_translate_card_copy_rejects_text_subject_cutout():
     with pytest.raises(ValueError, match="not supported"):
         script_writer.translate_card_copy("Text Subject Cutout", {}, "hindi")
