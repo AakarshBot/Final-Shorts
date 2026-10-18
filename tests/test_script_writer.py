@@ -233,7 +233,7 @@ def test_generation_prompts_cover_validator_requirements():
     top5 = script_writer.TOP5_SYSTEM_PROMPT
 
     assert "Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category" in cricket
-    assert "a non-empty 3–4-word opening headline" in cricket
+    assert "a non-empty, crisp dashboard-only headline" in cricket
     assert "at least one relevant hashtag" in cricket
     assert "quote_attribution and quote_slide from 1–5" in cricket
     assert "never greater than the generated slide count" in cricket
@@ -257,6 +257,72 @@ def test_validator_rejects_slide_one_over_13_words():
     assert "Slide 1" in reason
 
 
+@pytest.mark.parametrize("language", ["hindi", "telugu"])
+def test_indic_script_validator_uses_audio_duration_instead_of_word_count(language):
+    result = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
+    )
+    assert script_writer._words(result["script"][0]["voiceover"]) == 14
+
+    valid, reason = script_writer.validate_cricket_script(result, language=language)
+
+    assert valid, reason
+
+
+def test_generation_validator_accepts_long_dashboard_only_headline():
+    result = valid_result()
+    result["headline"] = (
+        "Shubman Gill injury update explains what India's next ODI selection decision depends on"
+    )
+
+    valid, reason = script_writer.validate_cricket_script(result)
+
+    assert valid, reason
+
+
+@pytest.mark.parametrize("language", ["hindi", "telugu"])
+def test_generation_validator_requires_but_does_not_limit_dashboard_headline(language):
+    result = valid_result()
+    result["headline"] = (
+        "A much longer headline that remains crisp but only appears on the dashboard"
+    )
+
+    valid, reason = script_writer.validate_cricket_script(result, language=language)
+
+    assert valid, reason
+
+
+@pytest.mark.parametrize("language", ["hindi", "telugu"])
+def test_universal_validator_allows_long_dashboard_headline_and_duration_based_lead(language):
+    result = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
+    )
+    result["headline"] = (
+        "Shubman Gill injury update explains what India's next ODI selection decision depends on"
+    )
+    result["script"][3]["voiceover"] += (
+        " The selection decision will follow the medical review and the team's final assessment before match day."
+    )
+
+    valid, reason = script_writer.validate_universal_script(result, language=language)
+
+    assert valid, reason
+
+
+def test_universal_validator_keeps_english_13_word_limit():
+    result = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
+    )
+    result["script"][3]["voiceover"] += (
+        " The selection decision will follow the medical review and the team's final assessment before match day."
+    )
+
+    valid, reason = script_writer.validate_universal_script(result, language="english")
+
+    assert not valid
+    assert "Slide 1" in reason
+
+
 def test_validator_requires_subject_name_in_narration():
     result = valid_result()
     for scene in result["script"]:
@@ -273,7 +339,7 @@ def test_validator_requires_headline_when_generating():
     result["headline"] = ""
     valid, reason = script_writer.validate_cricket_script(result)
     assert not valid
-    assert "3 or 4 words" in reason
+    assert "headline is required" in reason
 
 
 def test_quote_handoff_survives_script_edits():

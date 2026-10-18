@@ -1,3 +1,5 @@
+import inspect
+
 import pytest
 from io import BytesIO
 from pathlib import Path
@@ -213,7 +215,6 @@ def test_manual_subject_cutout_polygon_adapts_to_irregular_end_to_end_shape(monk
 
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
-    assert renderer.HEADLINE_SECONDS == 1.35
 
 
 def test_renderer_frame_is_vertical_and_independent():
@@ -246,55 +247,19 @@ def test_headline_is_large_and_dynamic():
     assert len(long_lines) >= len(short_lines)
 
 
-def test_renderer_uses_supplied_headline(monkeypatch):
-    seen = []
+def test_dashboard_headline_is_not_part_of_rendering_contract(monkeypatch):
+    assert "headline_text" not in inspect.signature(renderer.render_frame).parameters
+    assert "headline_enabled" not in inspect.signature(renderer.render_frame).parameters
+    assert "headline_text" not in inspect.signature(renderer.render_production_video).parameters
+    assert "headline_enabled" not in inspect.signature(renderer.render_production_video).parameters
 
-    def fake_draw(base, text, t, language):
-        seen.append(text)
-
-    monkeypatch.setattr(renderer, "_draw_headline", fake_draw)
-    base = _test_base()
-
-    renderer.render_frame(
-        base,
-        0.30,
-        headline_text="Gill Injury Scare",
-        headline_enabled=True,
-    )
-
-    assert seen == ["Gill Injury Scare"]
-
-
-def test_renderer_skips_headline_when_disabled(monkeypatch):
     seen = []
     monkeypatch.setattr(renderer, "_draw_headline", lambda *args: seen.append("headline"))
     base = _test_base()
-
-    renderer.render_frame(
-        base,
-        0.50,
-        headline_text="Gill Injury Scare",
-        headline_enabled=False,
-    )
+    frame = renderer.render_frame(base, 0.30, source_enabled=False)
 
     assert seen == []
-
-
-
-def test_renderer_shows_headline_and_subtitles_together(monkeypatch):
-    calls = []
-    monkeypatch.setattr(renderer, "_draw_headline", lambda *args: calls.append("headline"))
-    monkeypatch.setattr(renderer, "_draw_subtitles", lambda *args: calls.append("subtitles"))
-    base = _test_base()
-
-    renderer.render_frame(
-        base,
-        0.50,
-        headline_text="Gill Injury Scare",
-        headline_enabled=True,
-    )
-
-    assert calls == ["headline", "subtitles"]
+    assert ImageChops.difference(base, frame).getbbox() is None
 
 
 def test_headline_wraps_three_and_six_word_inputs_without_overflow():
@@ -319,24 +284,6 @@ def test_headline_wraps_three_and_six_word_inputs_without_overflow():
             for line in lines
         )
         assert width <= renderer.HEADLINE_MAX_WIDTH
-
-
-def test_headline_render_stays_inside_canvas_bounds(monkeypatch):
-    monkeypatch.setattr(renderer, "_paste_logo", lambda base: None)
-    monkeypatch.setattr(renderer, "_paste_source", lambda base: None)
-    base = _test_base()
-
-    frame = renderer.render_frame(
-        base,
-        0.50,
-        headline_text="BIG CRICKET NEWS FROM INDIA TODAY",
-        headline_enabled=True,
-    )
-    bbox = ImageChops.difference(base, frame).getbbox()
-
-    assert bbox is not None
-    assert bbox[0] >= 0
-    assert bbox[2] <= renderer.WIDTH
 
 
 def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
@@ -364,30 +311,12 @@ def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
         base,
         1.0,
         subtitle_data=subtitle_data,
-        headline_enabled=False,
     )
     bbox = ImageChops.difference(base, frame).getbbox()
 
     assert bbox is not None
     assert bbox[0] >= renderer.SUBTITLE_SAFE_MARGIN
     assert bbox[2] <= renderer.WIDTH - renderer.SUBTITLE_SAFE_MARGIN
-
-
-def test_headline_and_subtitles_do_not_overlap():
-    base = _test_base()
-
-    headline_frame = renderer.render_frame(
-        base,
-        0.50,
-        headline_enabled=True,
-    )
-    subtitle_frame = renderer.render_frame(
-        base,
-        renderer.HEADLINE_SECONDS + 0.10,
-        headline_enabled=True,
-    )
-
-    assert ImageChops.difference(headline_frame, subtitle_frame).getbbox()
 
 
 def test_subtitles_remain_visible_during_headline(monkeypatch):
@@ -399,11 +328,10 @@ def test_subtitles_remain_visible_during_headline(monkeypatch):
     monkeypatch.setattr(renderer, "_draw_subtitles", fake_draw)
     base = _test_base()
 
-    renderer.render_frame(base, 0.30, headline_enabled=True)
+    renderer.render_frame(base, 0.30)
     renderer.render_frame(
         base,
         renderer.HEADLINE_SECONDS + 0.30,
-        headline_enabled=True,
     )
 
     assert seen == [0.30, renderer.HEADLINE_SECONDS + 0.30]
@@ -543,7 +471,6 @@ def test_production_renderer_preserves_manual_subject_cutout(monkeypatch, tmp_pa
         None,
         visuals,
         output,
-        headline_enabled=False,
     )
 
     assert output.read_bytes() == b"final"
@@ -604,7 +531,6 @@ def test_production_renderer_uses_approved_handoffs(monkeypatch, tmp_path):
         subtitles,
         visuals,
         output,
-        headline_text="Gill Injury Scare",
         source_label="Test Sports Desk",
     )
 
@@ -662,7 +588,7 @@ def test_production_renderer_keeps_normal_visual_subtitles_on_default_position(m
     )
 
     assert seen
-    assert seen[0][0][5] is None
+    assert seen[0][1].get("source_label") is None
     assert seen[0][1].get("top5_card") is None
 
 

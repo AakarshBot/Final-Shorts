@@ -1835,8 +1835,6 @@ def render_frame(
     base_image: Image.Image,
     t: float,
     subtitle_data: dict | None = None,
-    headline_text: str = HEADLINE_TEXT,
-    headline_enabled: bool = True,
     source_label: str | None = None,
     subtitle_y: int | None = None,
     top5_card: dict | None = None,
@@ -1862,13 +1860,6 @@ def render_frame(
     if top5_card is not None:
         _draw_top5_editorial_card(frame, top5_card)
     else:
-        if headline_enabled and t < HEADLINE_SECONDS:
-            _draw_headline(
-                frame,
-                headline_text,
-                t,
-                str(subtitle_data.get("language") or "english"),
-            )
         if subtitle_y is None:
             _draw_subtitles(frame, subtitle_data, t)
         else:
@@ -2012,8 +2003,6 @@ def render_production_video(
     subtitle_data: dict | None,
     visuals: list[dict],
     output_path: str | Path,
-    headline_text: str | None = None,
-    headline_enabled: bool = True,
     source_label: str | None = None,
     logo_enabled: bool = False,
     source_enabled: bool = True,
@@ -2170,9 +2159,7 @@ def render_production_video(
                 base_image,
                 t,
                 subtitle_data,
-                headline_text or HEADLINE_TEXT,
-                headline_enabled,
-                source_label,
+                source_label=source_label,
                 top5_card=None,
                 validate_handoff=False,
                 logo_enabled=logo_enabled,

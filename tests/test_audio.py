@@ -120,6 +120,65 @@ def test_audio_uses_edge_word_boundaries(monkeypatch, tmp_path):
     assert result["scenes"][0]["timings"][0]["word"] == "India"
 
 
+@pytest.mark.parametrize(
+    ("language", "first_duration", "should_fail"),
+    [
+        ("hindi", 5.21, True),
+        ("telugu", 5.21, True),
+        ("hindi", 5.2, False),
+        ("telugu", 5.1, False),
+        ("english", 8.0, False),
+    ],
+)
+def test_audio_uses_measured_lead_duration_for_hindi_telugu(
+    monkeypatch, tmp_path, language, first_duration, should_fail
+):
+    import audio
+
+    async def fake_generate(scenes, requested_language, rate_percent, output_dir):
+        return [
+            {
+                "scene": index,
+                "path": str(tmp_path / f"voiceover_{index}.mp3"),
+                "duration": first_duration if index == 1 else 1.0,
+                "timings": [{"word": "sample", "start": 0.0, "end": 0.5}],
+                "from_cache": False,
+            }
+            for index, _scene in enumerate(scenes, 1)
+        ]
+
+    monkeypatch.setattr(audio, "_generate_at_rate", fake_generate)
+    script = approved_script(language)
+
+    if should_fail:
+        with pytest.raises(ValueError, match="first-slide audio.*no more than 5.2 seconds"):
+            generate_audio(script, tmp_path, engine="edge")
+    else:
+        result = generate_audio(script, tmp_path, engine="edge")
+        assert result["scenes"][0]["duration"] == first_duration
+
+
+def test_audio_approval_cannot_bypass_hindi_lead_duration_limit(tmp_path):
+    import audio
+
+    first = tmp_path / "voiceover_1.mp3"
+    second = tmp_path / "voiceover_2.mp3"
+    first.write_bytes(b"x" * 700)
+    second.write_bytes(b"x" * 700)
+
+    with pytest.raises(ValueError, match="first-slide audio.*no more than 5.2 seconds"):
+        approve_audio(
+            {
+                "language": "hindi",
+                "scenes": [
+                    {"scene": 1, "path": str(first), "duration": 5.21, "timings": []},
+                    {"scene": 2, "path": str(second), "duration": 1.0, "timings": []},
+                ],
+                "total_duration": 6.21,
+            }
+        )
+
+
 def test_top5_audio_uses_six_spoken_headlines_only(monkeypatch, tmp_path):
     import audio
 
