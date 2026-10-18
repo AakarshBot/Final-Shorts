@@ -67,6 +67,8 @@ def test_prompt_contains_generation_rules():
     assert "exact `subject_name` must appear in the spoken narration" in script_writer.SYSTEM_PROMPT
     assert "all important factual information" in script_writer.SYSTEM_PROMPT.casefold()
     assert "fit within 30 seconds" in script_writer.SYSTEM_PROMPT
+    assert "between 50 and 70 spoken words (~20 to 28 seconds)" in script_writer.SYSTEM_PROMPT
+    assert "Return 3–5 spoken slides" in script_writer.SYSTEM_PROMPT
     assert "direct quote" in script_writer.SYSTEM_PROMPT
     assert "Do not create an extra slide for a quote" in script_writer.SYSTEM_PROMPT
 
@@ -129,6 +131,7 @@ def test_generation_prompts_cover_validator_requirements():
     assert "a non-empty 3–4-word opening headline" in cricket
     assert "at least one relevant hashtag" in cricket
     assert "quote_attribution and quote_slide from 1–5" in cricket
+    assert "never greater than the generated slide count" in cricket
     assert "3–5 hashtags each beginning with # and containing no spaces" in universal
     assert "quote, quote_attribution, and quote_slide must agree" in universal
     assert "story_index equals slide_number minus one" in top5
