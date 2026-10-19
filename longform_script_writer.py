@@ -30,7 +30,6 @@ TIMEOUT = 45
 RESEARCH_TIMEOUT = 10
 MAX_SOURCE_CHARS = 32000
 WORDS_PER_MINUTE = 145.0
-TARGET_DURATION_SECONDS = 480.0  # 8 minutes
 
 LONGFORM_SYSTEM_PROMPT = """You are the lead cricket documentary director and investigative sports journalist for an authoritative, monetized YouTube channel.
 
