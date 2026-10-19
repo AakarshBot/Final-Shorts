@@ -114,8 +114,33 @@ def _extract_article_text(url: str) -> str:
     return ""
 
 
+def _background_context_snippets(main_title: str) -> str:
+    """Fetch supporting search snippets without blocking article extraction."""
+    try:
+        ddg_results = DDGS(timeout=5).text(
+            f"{main_title} cricket details quotes",
+            max_results=4,
+        ) or []
+        return "\n".join(
+            f"- {item.get('title')}: {item.get('body')}"
+            for item in ddg_results
+            if isinstance(item, dict) and item.get("body")
+        )
+    except Exception:
+        return ""
+
+
+def _article_url_key(value: object) -> tuple[str, str, str]:
+    parsed = urlparse(_clean(value))
+    return (
+        parsed.scheme.casefold(),
+        parsed.netloc.casefold(),
+        parsed.path.rstrip("/").casefold(),
+    )
+
+
 def _research_longform_story(story: dict) -> str:
-    """Gathers comprehensive multi-source factual evidence for the long-form story."""
+    """Gathers primary, clustered and search evidence concurrently."""
     sections: list[str] = []
     main_title = _clean(story.get("title"))
     main_url = _clean(story.get("url"))
@@ -125,28 +150,48 @@ def _research_longform_story(story: dict) -> str:
     if summary:
         sections.append(f"DISCOVERY SUMMARY: {summary}")
 
-    # 1. Primary article extraction
-    if main_url:
-        main_text = _extract_article_text(main_url)
-        if main_text:
-            sections.append(f"[PRIMARY SOURCE — {main_url}]\n{main_text[:12000]}")
+    # Duplicate report links often differ only by tracking query/fragment. Avoid
+    # downloading the same article twice; keep the main source first and preserve
+    # report order in the evidence packet.
+    main_key = _article_url_key(main_url)
+    alt_urls = []
+    seen_urls = {main_key} if main_url else set()
+    for report in story.get("reports") or []:
+        if not isinstance(report, dict):
+            continue
+        url = _clean(report.get("url"))
+        key = _article_url_key(url)
+        if not url or key in seen_urls:
+            continue
+        seen_urls.add(key)
+        alt_urls.append(url)
+        if len(alt_urls) >= 3:
+            break
 
-    # 2. Clustered reports extraction (up to 3 alternate reports)
-    reports = list(story.get("reports") or [])
-    alt_urls = [r.get("url") for r in reports if r.get("url") and r.get("url") != main_url][:3]
-    for idx, r_url in enumerate(alt_urls, 1):
-        r_text = _extract_article_text(r_url)
-        if r_text:
-            sections.append(f"[RELATED REPORT {idx} — {r_url}]\n{r_text[:6000]}")
+    # These network requests used to run serially (up to four 10-second article
+    # fetches plus the search request). Run independently, but assemble results in
+    # a fixed order so the prompt remains deterministic.
+    with ThreadPoolExecutor(max_workers=max(1, len(alt_urls) + bool(main_url) + 1)) as executor:
+        primary_future = executor.submit(_extract_article_text, main_url) if main_url else None
+        related_futures = [
+            executor.submit(_extract_article_text, url)
+            for url in alt_urls
+        ]
+        context_future = executor.submit(_background_context_snippets, main_title)
 
-    # 3. Targeted DuckDuckGo News & Context Queries
-    try:
-        ddg_results = DDGS(timeout=5).text(f"{main_title} cricket details quotes", max_results=4) or []
-        ddg_snippets = "\n".join(f"- {r.get('title')}: {r.get('body')}" for r in ddg_results if r.get("body"))
-        if ddg_snippets:
-            sections.append(f"[BACKGROUND CONTEXT & QUOTES]\n{ddg_snippets}")
-    except Exception:
-        pass
+        if primary_future is not None:
+            main_text = primary_future.result()
+            if main_text:
+                sections.append(f"[PRIMARY SOURCE — {main_url}]\n{main_text[:12000]}")
+
+        for idx, (url, future) in enumerate(zip(alt_urls, related_futures), 1):
+            report_text = future.result()
+            if report_text:
+                sections.append(f"[RELATED REPORT {idx} — {url}]\n{report_text[:6000]}")
+
+        context_snippets = context_future.result()
+        if context_snippets:
+            sections.append(f"[BACKGROUND CONTEXT & SEARCH SNIPPETS]\n{context_snippets}")
 
     return "\n\n".join(sections)[:MAX_SOURCE_CHARS]
 
