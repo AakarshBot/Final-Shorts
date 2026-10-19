@@ -114,6 +114,19 @@ def test_stat_card_requires_source_grounded_values():
         render_longform_stat_card(_sample_image_bytes(), {"player_name": "Jasprit Bumrah"})
 
 
+def test_zero_is_a_valid_source_grounded_stat_value():
+    image = render_longform_stat_card(
+        _sample_image_bytes(),
+        {
+            "player_name": "Example Player",
+            "hero_stat": 0,
+            "stat_label": "Runs in this sample",
+            "tiles": [{"label": "Wickets", "value": 0}],
+        },
+    )
+    assert image.size == (WIDTH, HEIGHT)
+
+
 def test_quote_card_requires_named_speaker():
     with pytest.raises(LongformCardError, match="speaker attribution"):
         render_longform_quote_card(_sample_image_bytes(), {"quote": "We will win."})
