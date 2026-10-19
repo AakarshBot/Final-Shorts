@@ -1884,19 +1884,38 @@ def _mux_audio(
     output_path: Path,
 ) -> Path:
     inputs = ["-i", str(silent_video)]
-    filter_inputs = []
-
-    for index, scene in enumerate(audio_scenes, 1):
-        audio_path = Path(str(scene.get("path") or ""))
-        if not audio_path.is_file() or audio_path.stat().st_size <= 0:
-            raise ValueError(f"Audio file for scene {scene.get('scene') or index} is missing.")
-        inputs.extend(["-i", str(audio_path)])
-        filter_inputs.append(f"[{index}:a]")
-
-    filter_complex = (
-        "".join(filter_inputs)
-        + f"concat=n={len(audio_scenes)}:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+    continuous_master = (
+        audio_scenes[0].get("continuous_master_path")
+        if audio_scenes
+        else None
     )
+    is_continuous_take = bool(
+        continuous_master
+        and all(
+            scene.get("continuous_master_path") == continuous_master
+            for scene in audio_scenes
+        )
+        and not any(scene.get("human_recorded") for scene in audio_scenes)
+    )
+
+    if is_continuous_take:
+        master_path = Path(str(continuous_master))
+        if not master_path.is_file() or master_path.stat().st_size <= 0:
+            raise ValueError("The continuous Chatterbox master audio file is missing.")
+        inputs.extend(["-i", str(master_path)])
+        filter_complex = "[1:a]loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+    else:
+        filter_inputs = []
+        for index, scene in enumerate(audio_scenes, 1):
+            audio_path = Path(str(scene.get("path") or ""))
+            if not audio_path.is_file() or audio_path.stat().st_size <= 0:
+                raise ValueError(f"Audio file for scene {scene.get('scene') or index} is missing.")
+            inputs.extend(["-i", str(audio_path)])
+            filter_inputs.append(f"[{index}:a]")
+        filter_complex = (
+            "".join(filter_inputs)
+            + f"concat=n={len(audio_scenes)}:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+        )
 
     process = subprocess.run(
         [
