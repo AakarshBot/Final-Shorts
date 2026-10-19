@@ -847,7 +847,7 @@ def _prepare_generated_script(result, language_key: str):
             if isinstance(scene, dict)
         ))
         subject = _normalise_name(result.get("subject_name"))
-        if subject and subject not in narration:
+        if not subject or subject not in narration:
             # In native-script output, the first slide's primary entity is the
             # strongest grounded alternative spelling for the spoken subject.
             for scene in scenes[:2]:
