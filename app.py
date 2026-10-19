@@ -4606,8 +4606,9 @@ def _delete_visual_asset(result_key: str, index: int, asset: dict, live: bool = 
         if assignment.get("asset_key") == asset_key:
             del st.session_state[assignments_key][slide]
     st.session_state[crops_key].pop(asset_key, None)
-    st.session_state["live_card_studio_crops" if live else "card_studio_crops"].pop(asset_key, None)
-    st.session_state.get("test_top5_card_studio_visual_crops", {}).pop(asset_key, None)
+    st.session_state.setdefault("live_card_studio_crops" if live else "card_studio_crops", {}).pop(asset_key, None)
+    st.session_state.setdefault("test_top5_card_studio_crops", {}).pop(asset_key, None)
+    st.session_state.setdefault("test_top5_card_studio_visual_crops", {}).pop(asset_key, None)
     if live:
         st.session_state.live_visuals_approved = False
     else:
