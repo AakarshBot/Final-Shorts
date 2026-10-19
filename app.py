@@ -4390,6 +4390,7 @@ def _live_generate_audio_and_subtitles():
         output_dir="output/live/audio",
         engine=selected_engine,
         reference=reference,
+        model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold(),
     )
     approved_audio = approve_audio(audio)
     subtitles = generate_subtitles(approved_script, approved_audio)
@@ -5971,11 +5972,20 @@ def render_live_top5():
         if not isinstance(audio, dict):
             live_top5_engine_choice = st.pills(
                 "Voice Engine",
-                ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
-                default="Chatterbox Turbo (Voice Cloning)",
+                ["Chatterbox (Voice Cloning)", "Edge-TTS Neural"],
+                default="Chatterbox (Voice Cloning)",
                 key="live_top5_audio_engine_choice_v2",
-            ) or "Chatterbox Turbo (Voice Cloning)"
+            ) or "Chatterbox (Voice Cloning)"
             is_live_top5_chatterbox = "Chatterbox" in live_top5_engine_choice
+            live_top5_chatterbox_model_choice = st.selectbox(
+                "Chatterbox model",
+                ["Turbo", "Full"],
+                index=0,
+                key="live_top5_chatterbox_model",
+                disabled=not is_live_top5_chatterbox,
+            )
+            if is_live_top5_chatterbox:
+                st.caption("Turbo is lighter. Full exposes CFG/exaggeration controls.")
             live_top5_reference = None
             live_top5_reference_ready = True
             if is_live_top5_chatterbox:
@@ -6006,6 +6016,7 @@ def render_live_top5():
                             output_dir="output/live/top5_audio",
                             engine="chatterbox" if is_live_top5_chatterbox else "edge",
                             reference=live_top5_reference if is_live_top5_chatterbox else None,
+                            model_version=live_top5_chatterbox_model_choice.casefold(),
                         )
                     st.session_state.live_top5_audio_data = audio
                 except (RuntimeError, ValueError) as exc:
@@ -6773,8 +6784,17 @@ def render_live_dashboard():
         ) or "Chatterbox Turbo (Voice Cloning)"
         live_language = str(script.get("language_used") or "english").strip().casefold()
         is_live_chatterbox = "Chatterbox" in live_audio_engine_choice
+        live_chatterbox_model_choice = st.selectbox(
+            "Chatterbox model",
+            ["Turbo", "Full"],
+            index=0,
+            key="live_audio_chatterbox_model",
+            disabled=not is_live_chatterbox,
+        )
+        if is_live_chatterbox:
+            st.caption("Turbo is lighter. Full exposes CFG/exaggeration controls; both generate one continuous narration take.")
         if is_live_chatterbox and live_language not in {"english", "en"}:
-            st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
+            st.warning("Chatterbox Full and Turbo are English-only. Select Edge-TTS Neural for Hindi or Telugu narration.")
         live_reference_ready = True
         if is_live_chatterbox:
             from audio import CHATTERBOX_VOICE_REFERENCES
@@ -7334,7 +7354,7 @@ def render_longform_audio(live: bool = False):
     st.markdown(
         f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Voice Cloning & Paced Narration</div>'
-        '<div class="canvas-copy">Script-aware delivery cues, reusable local voice conditioning, atmospheric act pauses, and cached repeat renders.</div></div></div>',
+        '<div class="canvas-copy">Continuous script-led narration, a Full/Turbo model choice, and cached repeat renders.</div></div></div>',
         unsafe_allow_html=True,
     )
 
@@ -7353,11 +7373,18 @@ def render_longform_audio(live: bool = False):
         else f"Missing `{ref_file.name}` — place it in the factory root"
     )
     st.caption(f"{voice_label}: " + ("reference ready" if ref_ready else "reference file missing"))
+    longform_chatterbox_model_choice = st.selectbox(
+        "Chatterbox model",
+        ["Turbo", "Full"],
+        index=0,
+        key=f"{prefix}audio_chatterbox_model",
+    )
+    st.caption("Turbo is lighter. Full offers CFG/exaggeration controls. Long-form narration is grouped into paragraph-sized chunks to respect model limits, with brief gaps between chunks and the existing act pauses.")
 
     st.markdown(
         f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 14px 0;">'
         f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
-        f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">AUDIO ENGINE · CHATTERBOX TURBO TTS</span>'
+        f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">AUDIO ENGINE · CHATTERBOX {longform_chatterbox_model_choice.upper()} TTS</span>'
         f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{ref_status}</span>'
         f'</div>'
         f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Documentary Narration Suite (6 Acts · ~8 Min)</div>'
@@ -7370,7 +7397,7 @@ def render_longform_audio(live: bool = False):
         col_btn, col_info = st.columns([1, 2])
         with col_btn:
             if st.button("Synthesize Full Narration", type="primary", width="stretch", key=f"{k_prefix}gen-audio", disabled=not ref_ready):
-                with st.spinner("Synthesizing ~8-minute documentary narration with Chatterbox Turbo..."):
+                with st.spinner(f"Synthesizing ~8-minute documentary narration with Chatterbox {longform_chatterbox_model_choice}..."):
                     try:
                         from longform_audio import LongformAudioEngine
                         out_dir = Path("output/live/longform_audio") if live else Path("output/longform_audio")
@@ -7378,6 +7405,7 @@ def render_longform_audio(live: bool = False):
                             approved_script,
                             reference_audio=ref_file,
                             output_dir=out_dir,
+                            model_version=longform_chatterbox_model_choice.casefold(),
                         )
                         st.session_state[f"{prefix}audio_data"] = audio_res
                         st.session_state[f"{prefix}audio_error"] = ""
@@ -7385,7 +7413,7 @@ def render_longform_audio(live: bool = False):
                     except Exception as exc:
                         st.session_state[f"{prefix}audio_error"] = str(exc)
         with col_info:
-            st.caption("Narration is rendered scene-by-scene with 0.8s act pauses and breath gaps, generating full master audio + word timings.")
+            st.caption("Narration is synthesized in grouped continuous chunks; scene previews are cut from the master take and word timings are estimated for visual synchronization.")
 
     if st.session_state.get(f"{prefix}audio_error"):
         st.error(st.session_state[f"{prefix}audio_error"])
@@ -9243,7 +9271,7 @@ def render_audio():
     st.markdown(
         '<div class="canvas-head"><div><div class="eyebrow">03 · AUDIO</div>'
         '<div class="canvas-title">Build the voice track</div>'
-        '<div class="canvas-copy">Generate the approved narration voice and inspect each scene before handing it to Visuals.</div></div></div>',
+        '<div class="canvas-copy">Generate one continuous narration take, review the estimated slide cuts, then hand the full track to the Renderer.</div></div></div>',
         unsafe_allow_html=True,
     )
     left,right=st.columns([1.15,.85],gap="large")
@@ -9264,6 +9292,15 @@ def render_audio():
             gender=st.pills("Voice Gender",["Female","Male"],default="Female",key="audio_gender") or "Female"
         selected_voice = resolve_voice(language.casefold(), gender.casefold())
         is_cb = "Chatterbox" in engine_choice
+        chatterbox_model_choice = st.selectbox(
+            "Chatterbox model",
+            ["Turbo", "Full"],
+            index=0,
+            key="audio_chatterbox_model_choice",
+            disabled=not is_cb,
+        )
+        if is_cb:
+            st.caption("Turbo is lighter. Full exposes CFG/exaggeration controls; both generate one continuous narration take.")
         selected_reference_label = None
         selected_reference = None
         selected_reference_ready = True
@@ -9294,10 +9331,10 @@ def render_audio():
             st.markdown(
                 f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 12px 0;">'
                 f'<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">'
-                f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">VOICE ENGINE · CHATTERBOX TURBO (VOICE CLONING)</span>'
+                f'<span style="font-size:0.65rem; font-weight:800; letter-spacing:0.08em; color:var(--accent); text-transform:uppercase;">VOICE ENGINE · CHATTERBOX {chatterbox_model_choice.upper()} (VOICE CLONING)</span>'
                 f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">🎙️ {ref_info}</span>'
                 f'</div>'
-                f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">ChatterboxTurboTTS Voice Cloning</div>'
+                f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Chatterbox {chatterbox_model_choice} Voice Cloning</div>'
                 f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led delivery cues · Reusable voice conditioning · Cached exact takes</div>'
                 f'</div>',
                 unsafe_allow_html=True,
@@ -9333,6 +9370,7 @@ def render_audio():
                         voice="chatterbox" if is_cb else selected_voice,
                         engine="chatterbox" if is_cb else "edge",
                         reference=selected_reference if is_cb else None,
+                        model_version=chatterbox_model_choice.casefold(),
                     )
                     st.session_state.approved_audio=None
                 except (RuntimeError,ValueError) as exc:
@@ -10104,6 +10142,15 @@ elif st.session_state.app_mode == "test":
                 with col_t5_gender:
                     t5_gender = st.pills("Voice Gender", ["Female", "Male"], default="Female", key="test_top5_audio_gender") or "Female"
                 is_t5_chatterbox = "Chatterbox" in t5_engine_choice
+                t5_chatterbox_model_choice = st.selectbox(
+                    "Chatterbox model",
+                    ["Turbo", "Full"],
+                    index=0,
+                    key="test_top5_chatterbox_model",
+                    disabled=not is_t5_chatterbox,
+                )
+                if is_t5_chatterbox:
+                    st.caption("Turbo is lighter. Full exposes CFG/exaggeration controls.")
                 t5_voice = "chatterbox" if is_t5_chatterbox else resolve_voice(t5_language.casefold(), t5_gender.casefold())
                 t5_reference = None
                 t5_reference_ready = True
@@ -10151,6 +10198,7 @@ elif st.session_state.app_mode == "test":
                                 voice=t5_voice,
                                 engine="chatterbox" if is_t5_chatterbox else "edge",
                                 reference=t5_reference if is_t5_chatterbox else None,
+                                model_version=t5_chatterbox_model_choice.casefold(),
                             )
                             st.session_state.test_top5_audio_handoff = None
                             st.rerun()
