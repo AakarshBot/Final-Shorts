@@ -287,12 +287,23 @@ def render_longform_stat_card(source: bytes | bytearray | Image.Image | None, da
     stat_label_value = data.get("stat_label")
     if stat_label_value is None or not str(stat_label_value).strip():
         stat_label_value = data.get("metric")
-    if not str(hero_stat_value or "").strip() or not str(stat_label_value or "").strip():
+    if (
+        hero_stat_value is None
+        or not str(hero_stat_value).strip()
+        or stat_label_value is None
+        or not str(stat_label_value).strip()
+    ):
         raise LongformCardError("Stat Card requires a source-grounded hero_stat and stat_label.")
     hero_stat = " ".join(str(hero_stat_value).split())
     stat_label = " ".join(str(stat_label_value).split()).upper()
     context_note = " ".join(str(data.get("context_note") or data.get("note") or "").split())
-    tiles = list(data.get("tiles") or data.get("metrics") or [])
+    tiles = [
+        item for item in (data.get("tiles") or data.get("metrics") or [])
+        if isinstance(item, dict)
+        and str(item.get("label") or "").strip()
+        and item.get("value") is not None
+        and str(item.get("value")).strip()
+    ]
 
     canvas = _widescreen_backdrop(source, side="right")
     draw = ImageDraw.Draw(canvas)
