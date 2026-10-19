@@ -69,6 +69,11 @@ def test_card_studio_receives_original_visuals_and_uses_an_independent_crop_stor
     studio_source = app_source[app_source.index("def _render_card_studio("):]
     assert 'crop_store_name = "live_card_studio_crops" if live else "card_studio_crops"' in studio_source
     assert 'crop_store_name = "test_top5_card_studio_visual_crops"' in studio_source
+    delete_start = app_source.index("def _delete_visual_asset(")
+    delete_end = app_source.index("def _attach_visual_asset(", delete_start)
+    delete_source = app_source[delete_start:delete_end]
+    assert 'setdefault("live_card_studio_crops" if live else "card_studio_crops", {})' in delete_source
+    assert 'setdefault("test_top5_card_studio_crops", {})' in delete_source
 
 
 def test_crop_assignment_store_is_pipeline_specific():
