@@ -241,6 +241,8 @@ class LongformRenderer:
         def frame_generator():
             total_frames = int(math.ceil(total_duration * FPS))
             scene_index = 0
+            cue_index = 0
+            billboard_index = 0
             for frame_idx in range(total_frames):
                 current_time = frame_idx / FPS
 
@@ -272,22 +274,31 @@ class LongformRenderer:
                 # Apply Ken Burns if it's a photo, subtle push if card
                 frame = _apply_ken_burns(base, sc_prog)
 
-                # Check for active Act Title Billboard
-                for bb in act_billboards:
+                # Billboards and subtitles are in timeline order. Advance cursors
+                # monotonically rather than scanning every cue on every video frame.
+                while billboard_index < len(act_billboards):
+                    bb = act_billboards[billboard_index]
                     b_start = float(bb.get("start_time", 0))
                     b_dur = float(bb.get("duration", 3.5))
-                    if b_start <= current_time < (b_start + b_dur):
+                    if current_time < b_start + b_dur:
+                        break
+                    billboard_index += 1
+                if billboard_index < len(act_billboards):
+                    bb = act_billboards[billboard_index]
+                    b_start = float(bb.get("start_time", 0))
+                    b_dur = float(bb.get("duration", 3.5))
+                    if b_start <= current_time < b_start + b_dur:
                         b_prog = (current_time - b_start) / b_dur
                         frame = _draw_act_billboard(frame, int(bb["act_number"]), str(bb["title"]), b_prog)
-                        break
 
-                # Check for active Lower-Third Subtitle Cue
-                for c in cues:
-                    c_start = float(c.get("start", 0))
-                    c_end = float(c.get("end", 0))
+                while cue_index < len(cues) and current_time > float(cues[cue_index].get("end", 0)):
+                    cue_index += 1
+                if cue_index < len(cues):
+                    cue = cues[cue_index]
+                    c_start = float(cue.get("start", 0))
+                    c_end = float(cue.get("end", 0))
                     if c_start <= current_time <= c_end:
-                        frame = _draw_lower_third_subtitle(frame, str(c.get("text", "")))
-                        break
+                        frame = _draw_lower_third_subtitle(frame, str(cue.get("text", "")))
 
                 yield frame
 
