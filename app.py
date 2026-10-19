@@ -9319,7 +9319,7 @@ def render_audio():
             )
         flag = "🇺🇸 / 🇬🇧" if language == "English" else "🇮🇳"
         if is_cb and language != "English":
-            st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
+            st.warning("Chatterbox Full and Turbo are English-only. Select Edge-TTS Neural for Hindi or Telugu narration.")
 
         if "Chatterbox" in engine_choice:
             has_ref = bool(selected_reference_ready and selected_reference is not None)
@@ -10169,7 +10169,7 @@ elif st.session_state.app_mode == "test":
                            else f"missing {t5_reference.name} — place it in the factory root")
                     )
                     if t5_language != "English":
-                        st.warning("Chatterbox Turbo supports English only. Select Edge-TTS Neural for Hindi or Telugu narration.")
+                        st.warning("Chatterbox Full and Turbo are English-only. Select Edge-TTS Neural for Hindi or Telugu narration.")
                 else:
                     st.caption(f"Selected Voice: **{t5_voice}** ({t5_language} {t5_gender}) · native Edge-TTS")
 
