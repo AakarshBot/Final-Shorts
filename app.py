@@ -6025,6 +6025,10 @@ def render_live_top5():
                 st.rerun()
             st.info("Press Generate Top-5 Audio to start voice generation.")
             return
+        full_path = audio.get("full_path")
+        if full_path and Path(full_path).is_file():
+            st.markdown("### Full narration · continuous take")
+            st.audio(full_path, format="audio/wav")
         for scene in audio.get("scenes") or []:
             with st.container(key=f"live-top5-audio-scene-{scene['scene']}"):
                 st.markdown(
@@ -9430,6 +9434,10 @@ def render_audio():
 
         audio=st.session_state.audio_data
         if audio:
+            full_path = audio.get("full_path")
+            if full_path and Path(full_path).is_file():
+                st.markdown("### Full narration · continuous take")
+                st.audio(full_path, format="audio/wav")
             for scene in audio["scenes"]:
                 with st.container(key=f"audio-scene-{scene['scene']}"):
                     st.markdown(
@@ -10243,6 +10251,10 @@ elif st.session_state.app_mode == "test":
 
                 audio = st.session_state.get("test_top5_audio_data")
                 if audio:
+                    full_path = audio.get("full_path")
+                    if full_path and Path(full_path).is_file():
+                        st.markdown("### Full narration · continuous take")
+                        st.audio(full_path, format="audio/wav")
                     for scene in audio["scenes"]:
                         with st.container(key=f"test-top5-audio-scene-{scene['scene']}"):
                             st.markdown(
