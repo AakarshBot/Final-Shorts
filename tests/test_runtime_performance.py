@@ -33,6 +33,9 @@ def test_crop_dialog_shows_full_source_and_applies_free_crop_to_9x16():
     crop_source = app_source[start:end]
 
     assert "max_canvas_width=1600" in crop_source
+    coords_start = app_source.index("def _largest_9x16_crop_coords(")
+    coords_end = app_source.index("@st.cache_data(max_entries=4", coords_start)
+    assert "return (left, left + width, top, top + height)" in app_source[coords_start:coords_end]
     assert "realtime_update=True" in crop_source
     assert "aspect_ratio=None" in crop_source
     assert "Reset rectangle to centred 9:16" in crop_source
