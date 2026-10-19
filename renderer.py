@@ -147,7 +147,7 @@ def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
         with decompressor.stream_reader(BytesIO(package_bytes)) as unpacked:
             with tarfile.open(fileobj=unpacked, mode="r|") as archive:
                 for member in archive:
-                    member_name = member.name.replace("\\\\", "/").lstrip("./")
+                    member_name = member.name.replace("\\", "/").lstrip("./")
                     if member_name not in {_FRIBIDI_DLL_MEMBER, _FRIBIDI_LICENSE_MEMBER}:
                         continue
                     if not member.isfile():
