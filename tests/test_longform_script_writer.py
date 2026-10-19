@@ -172,3 +172,17 @@ def test_longform_research_fetches_sources_concurrently_and_deduplicates_urls(mo
     assert packet.index("[RELATED REPORT 1") < packet.index("[RELATED REPORT 2")
     assert "BACKGROUND CONTEXT & SEARCH SNIPPETS" in packet
     assert "Search context." in packet
+
+
+def test_format_rejects_missing_narrative_acts_early():
+    raw = sample_raw_llm_script()
+    raw["acts"].pop()
+    with pytest.raises(ValueError, match="exactly six acts"):
+        LongformScriptWriter.validate_and_format(raw, sample_longform_story())
+
+
+def test_format_rejects_empty_voiceover_before_audio_or_visuals():
+    raw = sample_raw_llm_script()
+    raw["acts"][2]["scenes"][1]["voiceover"] = "   "
+    with pytest.raises(ValueError, match="has no voiceover narration"):
+        LongformScriptWriter.validate_and_format(raw, sample_longform_story())
