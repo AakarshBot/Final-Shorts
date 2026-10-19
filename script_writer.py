@@ -316,7 +316,7 @@ Do not replace facts with generic empty hype.
 
 NAMING THE SUBJECT
 - Identify the exact main player/person/team in `subject_name`.
-- The exact subject name must appear verbatim in a spoken voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
+- The exact `subject_name` must appear in the spoken narration, using the same script and spelling as the name in a voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
 - Never describe the main player only as "the 35-year-old", "the player", "the batter", "the bowler", "the captain", or with a pronoun when the exact name is available.
 - For a story about a specific player, name that player in the first two slides whenever the evidence supports the name.
 
@@ -444,7 +444,7 @@ Do not force a fixed event template. A transfer, injury, retirement, qualifying 
 
 NAMING PEOPLE AND ENTITIES
 - Identify the exact main subject in subject_name.
-- The exact subject name must appear verbatim in a spoken voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
+- The exact `subject_name` must appear in the spoken narration, using the same script and spelling as the name in a voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
 - If the source or headline uses a descriptor such as "legend", "champion", "star", "former champion", "defending champion" or "world number one", resolve that descriptor to the actual named person or team from the story before writing.
 - Never make the viewer guess who a descriptor refers to when the research identifies the person.
 - Prefer the exact name early when the identity is central to the story.
@@ -1621,7 +1621,11 @@ def validate_cricket_script(
     if language_key not in {"hindi", "telugu", "hi", "te"} and first_words > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
 
-    narration = _normalise_name(" ".join(_clean(scene.get("voiceover")) for scene in scenes))
+    narration = _normalise_name(" ".join(
+        _clean(scene.get("voiceover"))
+        for scene in scenes
+        if isinstance(scene, dict)
+    ))
     subject_normalised = _normalise_name(subject)
     if subject_normalised and subject_normalised not in narration:
         if language_key in {"hindi", "telugu", "hi", "te"}:
