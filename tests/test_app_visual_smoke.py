@@ -714,6 +714,8 @@ def test_hindi_live_card_studio_exposes_translation_and_hindi_starter_copy():
     at.run()
 
     assert not at.exception, at.exception
+    assert any(button.label == "Stat Highlight" for button in at.button)
+    assert any(button.label == "Option 5 · Card Studio" for button in at.button)
     next(button for button in at.button if button.label == "Select image").click().run()
 
     assert not at.exception, at.exception
