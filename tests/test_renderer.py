@@ -1171,6 +1171,93 @@ def test_mux_audio_loudnorm_is_inside_complex_filtergraph(monkeypatch, tmp_path)
     assert "-af" not in command
 
 
+def test_mux_audio_uses_one_continuous_chatterbox_master_when_available(monkeypatch, tmp_path):
+    silent_video = tmp_path / "silent.mp4"
+    silent_video.write_bytes(b"video")
+    master = tmp_path / "full.wav"
+    master.write_bytes(b"continuous master")
+    slide_one = tmp_path / "slide_01.wav"
+    slide_two = tmp_path / "slide_02.wav"
+    slide_one.write_bytes(b"slice one")
+    slide_two.write_bytes(b"slice two")
+    output = tmp_path / "output.mp4"
+    seen = {}
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        return Result()
+
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+
+    result = renderer._mux_audio(
+        silent_video,
+        [
+            {"scene": 1, "path": str(slide_one), "continuous_master_path": str(master)},
+            {"scene": 2, "path": str(slide_two), "continuous_master_path": str(master)},
+        ],
+        output,
+    )
+
+    assert result == output
+    command = seen["command"]
+    input_paths = [
+        command[index + 1]
+        for index, value in enumerate(command[:-1])
+        if value == "-i"
+    ]
+    assert input_paths == [str(silent_video), str(master)]
+    filter_value = command[command.index("-filter_complex") + 1]
+    assert filter_value == "[1:a]loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+    assert "concat=n=" not in filter_value
+
+
+def test_mux_audio_falls_back_to_scene_files_when_one_continuous_slice_is_overridden(monkeypatch, tmp_path):
+    silent_video = tmp_path / "silent.mp4"
+    silent_video.write_bytes(b"video")
+    master = tmp_path / "full.wav"
+    master.write_bytes(b"continuous master")
+    generated_slice = tmp_path / "slide_01.wav"
+    human_override = tmp_path / "human_override.mp3"
+    generated_slice.write_bytes(b"generated slice")
+    human_override.write_bytes(b"human audio")
+    output = tmp_path / "output.mp4"
+    seen = {}
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        return Result()
+
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+
+    renderer._mux_audio(
+        silent_video,
+        [
+            {"scene": 1, "path": str(generated_slice), "continuous_master_path": str(master)},
+            {"scene": 2, "path": str(human_override), "human_recorded": True},
+        ],
+        output,
+    )
+
+    command = seen["command"]
+    input_paths = [
+        command[index + 1]
+        for index, value in enumerate(command[:-1])
+        if value == "-i"
+    ]
+    assert input_paths == [str(silent_video), str(generated_slice), str(human_override)]
+    filter_value = command[command.index("-filter_complex") + 1]
+    assert "concat=n=2:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]" in filter_value
+    assert str(master) not in input_paths
+
+
 def test_top5_card_preview_honors_logo_enabled(monkeypatch):
     calls = []
     monkeypatch.setattr(renderer, "_paste_logo", lambda *_args: calls.append("logo"))
@@ -1430,3 +1517,95 @@ def test_production_render_does_not_fail_when_windows_locks_silent_intermediate(
     assert locked_paths[0].exists()
     assert ".silent.mp4" in locked_paths[0].name
     assert locked_paths[0].name != f"{output.stem}.silent.mp4"
+
+
+def test_windows_fribidi_bootstrap_runs_existing_no_pip_powershell_installer(monkeypatch, tmp_path):
+    script = tmp_path / "setup_windows_indic_rendering.ps1"
+    script.write_text("# mocked setup script", encoding="utf-8")
+    captured = {}
+
+    class ProcessResult:
+        returncode = 0
+        stdout = "FriBiDi package checksum verified."
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        dll_dir = tmp_path / "dlls"
+        license_dir = dll_dir
+        dll_dir.mkdir(parents=True, exist_ok=True)
+        (dll_dir / "libfribidi-0.dll").write_bytes(b"D" * 20_000)
+        (license_dir / "FRIBIDI-COPYING.txt").write_text("LGPL-2.1-or-later", encoding="ascii")
+        return ProcessResult()
+
+    monkeypatch.setattr(renderer.shutil, "which", lambda name: "powershell.exe" if name == "powershell.exe" else None)
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+
+    renderer._install_windows_fribidi_via_powershell(tmp_path)
+
+    command = captured["command"]
+    assert command[0] == "powershell.exe"
+    assert command[1:5] == ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
+    assert command[5] == str(script)
+    assert "pip" not in " ".join(command).casefold()
+    assert captured["kwargs"]["timeout"] == 180
+    assert (tmp_path / "dlls" / "libfribidi-0.dll").stat().st_size == 20_000
+    assert (tmp_path / "dlls" / "FRIBIDI-COPYING.txt").is_file()
+
+
+def test_windows_fribidi_bootstrap_surfaces_checksum_failure_without_accepting_dll(monkeypatch, tmp_path):
+    script = tmp_path / "setup_windows_indic_rendering.ps1"
+    script.write_text("# mocked setup script", encoding="utf-8")
+
+    class ProcessResult:
+        returncode = 1
+        stdout = "Trying trusted MSYS2 mirrors"
+        stderr = "No checksum-verified FriBiDi package was obtained."
+
+    monkeypatch.setattr(renderer.shutil, "which", lambda name: "powershell.exe" if name == "powershell.exe" else None)
+    monkeypatch.setattr(renderer.subprocess, "run", lambda *_args, **_kwargs: ProcessResult())
+
+    with pytest.raises(RuntimeError, match="No checksum-verified FriBiDi package was obtained"):
+        renderer._install_windows_fribidi_via_powershell(tmp_path)
+
+    assert not (tmp_path / "dlls" / "libfribidi-0.dll").exists()
+
+
+def test_indic_raqm_error_explains_verified_automatic_bootstrap(monkeypatch):
+    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
+    monkeypatch.setattr(renderer.os, "name", "posix")
+    with pytest.raises(RuntimeError, match="automatically runs the existing checksum-verified, no-pip PowerShell installer"):
+        renderer._require_raqm("hindi")
+
+
+def test_windows_raqm_bootstrap_rechecks_pillow_after_install(monkeypatch):
+    checks = iter([False, True])
+    calls = []
+
+    monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
+    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: next(checks))
+    monkeypatch.setattr(
+        renderer,
+        "_install_windows_fribidi_via_powershell",
+        lambda: calls.append("installed"),
+    )
+
+    renderer._require_raqm("hindi")
+
+    assert calls == ["installed"]
+
+
+def test_windows_raqm_bootstrap_surfaces_the_setup_failure_details(monkeypatch):
+    monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
+    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
+    monkeypatch.setattr(
+        renderer,
+        "_install_windows_fribidi_via_powershell",
+        lambda: (_ for _ in ()).throw(RuntimeError("all trusted MSYS2 sources failed checksum verification")),
+    )
+
+    with pytest.raises(RuntimeError, match="Automatic FriBiDi setup could not complete: all trusted MSYS2 sources failed checksum verification"):
+        renderer._require_raqm("hindi")

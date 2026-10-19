@@ -69,6 +69,75 @@ def _register_windows_dll_paths() -> None:
         _DLL_DIRECTORY_HANDLES.append(handle)
 
 
+def _install_windows_fribidi_via_powershell(root: Path | None = None) -> None:
+    """Run the repo's checksum-verified no-pip installer, then validate its DLL output."""
+    root = Path(root or Path(__file__).resolve().parent)
+    setup_script = root / "setup_windows_indic_rendering.ps1"
+    if not setup_script.is_file():
+        raise RuntimeError(
+            "The factory's setup_windows_indic_rendering.ps1 file is missing; "
+            "cannot install the verified FriBiDi runtime automatically."
+        )
+
+    powershell = (
+        shutil.which("powershell.exe")
+        or shutil.which("powershell")
+        or shutil.which("pwsh.exe")
+        or shutil.which("pwsh")
+    )
+    if not powershell:
+        raise RuntimeError(
+            "PowerShell was not found. The factory's automatic FriBiDi setup could not start."
+        )
+
+    try:
+        process = subprocess.run(
+            [
+                powershell,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(setup_script),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "The automatic FriBiDi setup exceeded 180 seconds while trying the trusted mirrors."
+        ) from exc
+    except OSError as exc:
+        raise RuntimeError(f"Could not start the automatic FriBiDi setup: {exc}") from exc
+
+    if process.returncode != 0:
+        details = "\n".join(
+            part.strip() for part in (process.stdout, process.stderr) if part and part.strip()
+        )
+        if len(details) > 3500:
+            details = details[-3500:]
+        raise RuntimeError(
+            f"The checksum-verified FriBiDi setup failed with exit code {process.returncode}. "
+            "No unverified DLL was accepted. "
+            + (details or "PowerShell did not return a diagnostic message.")
+        )
+
+    dll_path = root / "dlls" / "libfribidi-0.dll"
+    license_path = root / "dlls" / "FRIBIDI-COPYING.txt"
+    if not dll_path.is_file() or not (10_000 <= dll_path.stat().st_size <= 2 * 1024 * 1024):
+        raise RuntimeError(
+            "The FriBiDi setup reported success but did not create a valid dlls/libfribidi-0.dll."
+        )
+    if not license_path.is_file():
+        raise RuntimeError(
+            "The FriBiDi setup reported success but did not save the DLL's LGPL licence."
+        )
+
+
 _register_windows_dll_paths()
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
@@ -171,15 +240,31 @@ def _require_raqm(language: str) -> None:
         available = features.check_feature("raqm")
     except (AttributeError, ValueError):
         available = False
+
+    bootstrap_error = None
+    if not available and os.name == "nt":
+        try:
+            _install_windows_fribidi_via_powershell()
+            _register_windows_dll_paths()
+            # Pillow's Windows wheels load FriBiDi at runtime; check again after
+            # the DLL has been installed and its folder registered.
+            available = bool(features.check_feature("raqm"))
+        except Exception as exc:
+            bootstrap_error = str(exc)
+
     if not available:
+        detail = (
+            f" Automatic FriBiDi setup could not complete: {bootstrap_error}"
+            if bootstrap_error
+            else " FriBiDi was installed or found, but this Pillow build still does not expose RAQM."
+        )
         raise RuntimeError(
             f"{language.title()} text needs Pillow's RAQM text-shaping engine. "
             "Rendering has been stopped rather than producing incorrectly joined letters. "
-            "On Windows, Pillow needs FriBiDi (fribidi.dll, fribidi-0.dll, or "
-            "libfribidi-0.dll). The renderer checks the factory's dlls/.deps folders, "
-            "the active Python environment, and common MSYS2 folders automatically. "
-            "You can also set FRIBIDI_DLL_PATH to the DLL file or FRIBIDI_DLL_DIR to its "
-            "folder, then restart the factory."
+            "On Windows the factory automatically runs the existing checksum-verified, "
+            "no-pip PowerShell installer when FriBiDi is missing, then re-checks Pillow in this process. "
+            "You can also set FRIBIDI_DLL_PATH to a compatible DLL or FRIBIDI_DLL_DIR to its "
+            f"folder, then restart the factory.{detail}"
         )
 
 
@@ -1884,19 +1969,38 @@ def _mux_audio(
     output_path: Path,
 ) -> Path:
     inputs = ["-i", str(silent_video)]
-    filter_inputs = []
-
-    for index, scene in enumerate(audio_scenes, 1):
-        audio_path = Path(str(scene.get("path") or ""))
-        if not audio_path.is_file() or audio_path.stat().st_size <= 0:
-            raise ValueError(f"Audio file for scene {scene.get('scene') or index} is missing.")
-        inputs.extend(["-i", str(audio_path)])
-        filter_inputs.append(f"[{index}:a]")
-
-    filter_complex = (
-        "".join(filter_inputs)
-        + f"concat=n={len(audio_scenes)}:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+    continuous_master = (
+        audio_scenes[0].get("continuous_master_path")
+        if audio_scenes
+        else None
     )
+    is_continuous_take = bool(
+        continuous_master
+        and all(
+            scene.get("continuous_master_path") == continuous_master
+            for scene in audio_scenes
+        )
+        and not any(scene.get("human_recorded") for scene in audio_scenes)
+    )
+
+    if is_continuous_take:
+        master_path = Path(str(continuous_master))
+        if not master_path.is_file() or master_path.stat().st_size <= 0:
+            raise ValueError("The continuous Chatterbox master audio file is missing.")
+        inputs.extend(["-i", str(master_path)])
+        filter_complex = "[1:a]loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+    else:
+        filter_inputs = []
+        for index, scene in enumerate(audio_scenes, 1):
+            audio_path = Path(str(scene.get("path") or ""))
+            if not audio_path.is_file() or audio_path.stat().st_size <= 0:
+                raise ValueError(f"Audio file for scene {scene.get('scene') or index} is missing.")
+            inputs.extend(["-i", str(audio_path)])
+            filter_inputs.append(f"[{index}:a]")
+        filter_complex = (
+            "".join(filter_inputs)
+            + f"concat=n={len(audio_scenes)}:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+        )
 
     process = subprocess.run(
         [

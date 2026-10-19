@@ -10,11 +10,13 @@ import tempfile
 from typing import Any
 
 from audio import (
-    _SERIOUS_AUDIO_RE,
     _chatterbox_audio_texts,
-    _chatterbox_delivery,
     _file_sha256,
+    _join_narration_texts,
+    _generate_chatterbox_take,
+    _normalise_chatterbox_model_version,
     _prepare_chatterbox_reference,
+    _split_waveform_by_text,
     get_chatterbox_model,
     synthesize_linear_timings,
 )
@@ -23,24 +25,69 @@ ROOT_DIR = Path(__file__).resolve().parent
 DEFAULT_REFERENCE = Path(os.getenv("AUDIO_REFERENCE", ROOT_DIR / "audio_reference.wav"))
 LONGFORM_OUTPUT_DIR = ROOT_DIR / "output" / "audio_longform"
 ACT_PAUSE_SECONDS = 0.80
-SCENE_PAUSE_SECONDS = 0.15
+CHUNK_PAUSE_SECONDS = 0.08
+MAX_CHUNK_WORDS = 100
+MAX_CHUNK_CHARACTERS = 900
 
 
 def _clean(text: object) -> str:
     return re.sub(r"\s+", " ", str(text or "")).strip()
 
 
-def _scene_starts(scenes: list[dict[str, Any]], durations: list[float]) -> list[float]:
+def _scene_starts(
+    scenes: list[dict[str, Any]],
+    durations: list[float],
+    chunk_ids: list[int],
+) -> list[float]:
+    """Use gaps only at actual generated-chunk and documentary-act boundaries."""
     starts = []
     elapsed = 0.0
     for index, (scene, duration) in enumerate(zip(scenes, durations)):
         starts.append(round(elapsed, 3))
+        elapsed += duration
         if index < len(scenes) - 1:
             next_act = scenes[index + 1].get("act_number")
             curr_act = scene.get("act_number")
-            gap = ACT_PAUSE_SECONDS if next_act and curr_act and next_act != curr_act else SCENE_PAUSE_SECONDS
-            elapsed += duration + gap
+            if next_act and curr_act and next_act != curr_act:
+                elapsed += ACT_PAUSE_SECONDS
+            elif chunk_ids[index] != chunk_ids[index + 1]:
+                elapsed += CHUNK_PAUSE_SECONDS
     return starts
+
+
+def _audio_chunk_ranges(
+    scenes: list[dict[str, Any]],
+    texts: list[str],
+    max_words: int = MAX_CHUNK_WORDS,
+    max_characters: int = MAX_CHUNK_CHARACTERS,
+) -> list[tuple[int, int]]:
+    """Group several narration scenes into one TTS request while respecting model context."""
+    chunks: list[tuple[int, int]] = []
+    start = 0
+    current_words = 0
+    current_characters = 0
+    current_act = scenes[0].get("act_number", 1)
+
+    for index, (scene, text) in enumerate(zip(scenes, texts)):
+        act = scene.get("act_number", 1)
+        words = len(text.split())
+        characters = len(text)
+        should_break = index > start and (
+            act != current_act
+            or current_words + words > max_words
+            or current_characters + characters > max_characters
+        )
+        if should_break:
+            chunks.append((start, index))
+            start = index
+            current_words = 0
+            current_characters = 0
+            current_act = act
+        current_words += words
+        current_characters += characters
+
+    chunks.append((start, len(texts)))
+    return chunks
 
 
 def _result(
@@ -53,10 +100,12 @@ def _result(
     reference: Path | None,
     run_number: int,
     from_cache: bool,
+    chunk_ids: list[int],
+    model_version: str,
 ) -> dict[str, Any]:
     scene_paths = []
     scene_timings = []
-    starts = _scene_starts(scenes, durations)
+    starts = _scene_starts(scenes, durations, chunk_ids)
     for index, (scene, text, duration, start_seconds) in enumerate(
         zip(scenes, texts, durations, starts), 1
     ):
@@ -79,10 +128,12 @@ def _result(
         "scene_durations": durations,
         "scenes": scene_timings,
         "total_duration": round(total_duration, 2),
-        "engine": "Chatterbox-Turbo",
+        "engine": "Chatterbox-Full" if model_version == "full" else "Chatterbox-Turbo",
+        "model_version": model_version,
+        "continuous_audio": True,
         "reference": str(reference) if reference else "Built-in Chatterbox neural voice",
         "run_number": run_number,
-        "delivery": "Script-led",
+        "delivery": "Continuous narration grouped by paragraph-sized chunks",
         "from_cache": from_cache,
     }
 
@@ -97,12 +148,14 @@ class LongformAudioEngine:
         run_number: int = 1,
         reference_audio: Path | str | None = None,
         output_dir: Path | str | None = None,
+        model_version: str = "turbo",
     ) -> dict[str, Any]:
+        """Synthesize long-form narration in grouped chunks, never one request per scene."""
         language = str(
             script_data.get("language_used") or script_data.get("language") or "english"
         ).strip().casefold()
         if language not in {"english", "en"}:
-            raise ValueError("Long-form Chatterbox Turbo currently supports English narration only.")
+            raise ValueError("Chatterbox Full and Turbo currently support English narration only.")
 
         scenes = list(script_data.get("scenes") or [])
         if not scenes:
@@ -112,6 +165,13 @@ class LongformAudioEngine:
         for number, text in enumerate(texts, 1):
             if not text:
                 raise ValueError(f"Scene {number} has no voiceover narration.")
+
+        selected_model = _normalise_chatterbox_model_version(model_version)
+        chunk_ranges = _audio_chunk_ranges(scenes, texts)
+        chunk_ids = [0] * len(scenes)
+        for chunk_number, (start, end) in enumerate(chunk_ranges):
+            for scene_index in range(start, end):
+                chunk_ids[scene_index] = chunk_number
 
         if reference_audio is not None:
             actual_ref = Path(reference_audio)
@@ -128,30 +188,23 @@ class LongformAudioEngine:
             }
 
         audio_texts = _chatterbox_audio_texts(texts)
-        temperatures = []
-        for number, (scene, text) in enumerate(zip(scenes, texts), 1):
-            temperature = _chatterbox_delivery(text, number, len(texts))[1]
-            act_num = scene.get("act_number", 1)
-            # Act-level emphasis must not override serious/sensitive narration.
-            if not _SERIOUS_AUDIO_RE.search(text):
-                if act_num == 1:
-                    temperature = max(temperature, 0.84)
-                elif act_num == 5:
-                    temperature = max(temperature, 0.85)
-                elif act_num == 6 and number == len(texts):
-                    temperature = max(temperature, 0.82)
-            temperatures.append(round(temperature, 3))
-
+        settings = (
+            {"temperature": 0.75, "cfg_weight": 0.35, "exaggeration": 0.35,
+             "min_p": 0.05, "top_p": 1.0, "repetition_penalty": 1.2}
+            if selected_model == "full"
+            else {"temperature": 0.80}
+        )
         signature_payload = {
-            "cache_version": "longform-chatterbox-v3-clear-speech",
+            "cache_version": "longform-chatterbox-grouped-continuous-v4",
+            "model_version": selected_model,
             "texts": texts,
             "audio_texts": audio_texts,
-            "temperatures": temperatures,
-            "acts": [scene.get("act_number", 1) for scene in scenes],
+            "chunk_ranges": chunk_ranges,
+            "settings": settings,
             "run_number": int(run_number),
             "reference": reference_fingerprint,
             "act_pause_seconds": ACT_PAUSE_SECONDS,
-            "scene_pause_seconds": SCENE_PAUSE_SECONDS,
+            "chunk_pause_seconds": CHUNK_PAUSE_SECONDS,
         }
         signature = hashlib.sha256(
             json.dumps(signature_payload, ensure_ascii=False, sort_keys=True).encode("utf-8")
@@ -173,6 +226,8 @@ class LongformAudioEngine:
             ]
             if (
                 candidate.get("signature") == signature
+                and candidate.get("model_version") == selected_model
+                and candidate.get("chunk_ids") == chunk_ids
                 and isinstance(durations, list)
                 and len(durations) == len(scenes)
                 and all(float(value) > 0 for value in durations)
@@ -194,12 +249,14 @@ class LongformAudioEngine:
                 actual_ref,
                 run_number,
                 from_cache=True,
+                chunk_ids=chunk_ids,
+                model_version=selected_model,
             )
 
         import torch
         import torchaudio
 
-        model = get_chatterbox_model()
+        model = get_chatterbox_model() if selected_model == "turbo" else get_chatterbox_model("full")
         _prepare_chatterbox_reference(model, actual_ref, reference_fingerprint)
 
         for old in target_dir.glob("*.wav"):
@@ -209,48 +266,66 @@ class LongformAudioEngine:
                 pass
         manifest_path.unlink(missing_ok=True)
 
-        waves = []
-        scene_durations = []
-        for number, (scene, text) in enumerate(zip(scenes, audio_texts), 1):
-            torch.manual_seed(run_number * 1000 + number)
-            if torch.cuda.is_available():
-                torch.cuda.manual_seed_all(run_number * 1000 + number)
+        generated_chunks = []
+        for chunk_number, (start, end) in enumerate(chunk_ranges, 1):
+            chunk_text = _join_narration_texts(audio_texts[start:end])
+            wav = _generate_chatterbox_take(
+                model,
+                chunk_text,
+                selected_model,
+                seed=run_number * 1000 + chunk_number,
+            )
+            generated_chunks.append((start, end, wav))
 
-            wav = model.generate(text, temperature=temperatures[number - 1])
-            wav = wav.detach().cpu()
-            if wav.ndim == 1:
-                wav = wav.unsqueeze(0)
-            waves.append(wav)
-            duration = wav.shape[-1] / model.sr
-            scene_durations.append(duration)
-            torchaudio.save(str(target_dir / f"scene_{number:02d}.wav"), wav, model.sr)
-
-        act_pause_samples = int(model.sr * ACT_PAUSE_SECONDS)
-        scene_pause_samples = int(model.sr * SCENE_PAUSE_SECONDS)
-        act_silence = torch.zeros((1, act_pause_samples))
-        scene_silence = torch.zeros((1, scene_pause_samples))
         combined = []
-        for index, (wav, scene) in enumerate(zip(waves, scenes)):
+        for chunk_index, (start, end, wav) in enumerate(generated_chunks):
             combined.append(wav)
-            if index < len(waves) - 1:
-                next_act = scenes[index + 1].get("act_number")
-                curr_act = scene.get("act_number")
-                if next_act and curr_act and next_act != curr_act:
-                    combined.append(act_silence)
-                else:
-                    combined.append(scene_silence)
+            if chunk_index < len(generated_chunks) - 1:
+                next_start, _next_end, _next_wav = generated_chunks[chunk_index + 1]
+                curr_act = scenes[end - 1].get("act_number")
+                next_act = scenes[next_start].get("act_number")
+                gap_seconds = (
+                    ACT_PAUSE_SECONDS
+                    if curr_act and next_act and curr_act != next_act
+                    else CHUNK_PAUSE_SECONDS
+                )
+                combined.append(torch.zeros((1, int(model.sr * gap_seconds)), dtype=wav.dtype))
 
         full_wave = torch.cat(combined, dim=-1)
         peak = full_wave.abs().max()
+        gain = 0.94 / peak.item() if peak.item() > 0 else 1.0
         if peak.item() > 0:
-            full_wave = full_wave * (0.94 / peak)
+            full_wave = full_wave * gain
+        generated_chunks = [
+            (start, end, wav * gain)
+            for start, end, wav in generated_chunks
+        ]
+
+        # Scene WAVs are cut from grouped narration for review/subtitle timing,
+        # not independently synthesized. Renderer uses the uninterrupted master take.
+        scene_waves = [None] * len(scenes)
+        for start, end, chunk_wave in generated_chunks:
+            pieces = _split_waveform_by_text(chunk_wave, texts[start:end])
+            for offset, piece in enumerate(pieces):
+                scene_waves[start + offset] = piece
+
+        scene_durations = []
+        for index, scene_wave in enumerate(scene_waves, 1):
+            if scene_wave is None or scene_wave.shape[-1] <= 0:
+                raise RuntimeError(f"Could not derive the audio preview for Long-form scene {index}.")
+            scene_path = target_dir / f"scene_{index:02d}.wav"
+            torchaudio.save(str(scene_path), scene_wave, model.sr)
+            scene_durations.append(round(scene_wave.shape[-1] / model.sr, 6))
+
         master_path = target_dir / "longform_master.wav"
         torchaudio.save(str(master_path), full_wave, model.sr)
         total_duration = full_wave.shape[-1] / model.sr
 
         manifest = {
             "signature": signature,
-            "scene_durations": [round(value, 6) for value in scene_durations],
+            "model_version": selected_model,
+            "chunk_ids": chunk_ids,
+            "scene_durations": scene_durations,
             "total_duration": round(total_duration, 6),
         }
         fd, raw_manifest = tempfile.mkstemp(
@@ -274,6 +349,8 @@ class LongformAudioEngine:
             actual_ref,
             run_number,
             from_cache=False,
+            chunk_ids=chunk_ids,
+            model_version=selected_model,
         )
 
     @classmethod

@@ -1,4 +1,5 @@
 import pytest
+from pathlib import Path
 
 from audio import approve_audio, approve_top5_audio, generate_audio, generate_top5_audio
 
@@ -413,8 +414,11 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
     second = audio.generate_chatterbox_audio(script, output_dir=output_dir)
 
     assert all(not scene["from_cache"] for scene in first["scenes"])
+    assert model.generate_calls[0][0] == audio._join_narration_texts([scene["voiceover"] for scene in script["script"]])
+    assert model.generate_calls[0][1] == 0.80
+    assert all(scene["continuous_master_path"] == first["full_path"] for scene in first["scenes"])
     assert all(scene["from_cache"] for scene in second["scenes"])
-    assert len(model.generate_calls) == 2
+    assert len(model.generate_calls) == 1
     assert len(model.conditioning_calls) == 0
     assert Path(second["full_path"]).is_file()
 
@@ -423,7 +427,60 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
     third = audio.generate_chatterbox_audio(changed_script, output_dir=output_dir)
 
     assert all(not scene["from_cache"] for scene in third["scenes"])
-    assert len(model.generate_calls) == 4
+    assert len(model.generate_calls) == 2
+
+
+def test_chatterbox_full_generates_one_continuous_take_with_stable_controls(monkeypatch, tmp_path):
+    import sys
+    import types
+    import torch
+    import audio
+    from pathlib import Path
+
+    class FakeFullChatterbox:
+        sr = 16000
+
+        def __init__(self):
+            self.calls = []
+            self.conditioning_calls = 0
+            self.conds = "builtin"
+
+        def prepare_conditionals(self, reference_path, exaggeration=0.5):
+            self.conditioning_calls += 1
+
+        def generate(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return torch.ones((1, self.sr * 4), dtype=torch.float32)
+
+    model = FakeFullChatterbox()
+    fake_torchaudio = types.SimpleNamespace(
+        save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
+    )
+    monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda model_version="full": model)
+    monkeypatch.setattr(audio, "AUDIO_REFERENCE", tmp_path / "missing-reference.wav")
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
+
+    script = approved_script()
+    result = audio.generate_chatterbox_audio(
+        script,
+        output_dir=tmp_path / "full-output",
+        model_version="full",
+    )
+
+    assert len(model.calls) == 1
+    assert model.calls[0][0] == audio._join_narration_texts([scene["voiceover"] for scene in script["script"]])
+    assert model.calls[0][1] == {
+        "temperature": 0.75,
+        "cfg_weight": 0.35,
+        "exaggeration": 0.35,
+        "min_p": 0.05,
+        "top_p": 1.0,
+        "repetition_penalty": 1.2,
+    }
+    assert result["model_version"] == "full"
+    assert result["continuous_audio"] is True
+    assert all(scene["continuous_master_path"] == result["full_path"] for scene in result["scenes"])
 
 
 def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_path):
@@ -467,24 +524,38 @@ def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_pat
     )
 
     assert model.conditioning_calls == 1
-    assert model.generate_calls == 4
+    assert model.generate_calls == 2
 
 
-def test_chatterbox_script_led_delivery_preserves_clear_baseline():
+def test_continuous_narration_join_preserves_sentence_boundaries():
     import audio
 
-    assert audio._chatterbox_delivery("A routine report today.", 2, 4)[1] == 0.80
-    assert audio._chatterbox_delivery("A heartbreaking injury ends the season.", 2, 4)[1] == 0.80
-    assert audio._chatterbox_delivery("The captain opened the innings.", 1, 4)[1] == 0.88
-    assert audio._chatterbox_delivery("An unbelievable last-ball finish stuns the favourites.", 2, 4)[1] == 0.88
-    assert audio._chatterbox_delivery("The final result changed everything.", 4, 4)[1] == 0.84
-    assert audio._chatterbox_audio_texts([
-        "A stunning comeback shocks everyone.",
-        "The captain lifted the trophy."
-    ])[0].startswith("[gasp] ")
-    assert audio._chatterbox_audio_texts([
-        "A shocking result after a fatal injury."
-    ])[0].startswith("A shocking")
+    assert audio._join_narration_texts([
+        "Virat wins",
+        "The team celebrates!",
+        "A new record.",
+    ]) == "Virat wins. The team celebrates! A new record."
+    assert audio._join_narration_texts([
+        "A narrow win,",
+        "followed by a record",
+    ]) == "A narrow win. followed by a record."
+
+
+def test_chatterbox_delivery_uses_flat_temperature_and_no_heuristic_acting():
+    import audio
+
+    texts = [
+        "A routine report today.",
+        "A heartbreaking injury ends the season.",
+        "The captain opened the innings.",
+        "An unbelievable last-ball finish stuns the favourites.",
+        "The final result changed everything.",
+    ]
+    assert all(
+        audio._chatterbox_delivery(text, number, len(texts))[1] == 0.80
+        for number, text in enumerate(texts, 1)
+    )
+    assert audio._chatterbox_audio_texts(texts) == texts
 
 
 def test_three_local_chatterbox_voice_choices_are_configured(monkeypatch, tmp_path):
@@ -545,4 +616,30 @@ def test_chatterbox_voice_variant_outputs_do_not_overwrite_each_other(monkeypatc
     assert first["full_path"] != second["full_path"]
     assert first["full_path"] == again["full_path"]
     assert all(s["from_cache"] for s in again["scenes"])
-    assert model.generated == 4
+    assert model.generated == 2
+
+
+
+def test_dashboard_exposes_full_and_turbo_for_every_chatterbox_audio_route():
+    app_source = (Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8")
+
+    # Standard Shorts (Test/Live), Top-5 (Test/Live), and shared Long-form (Test/Live).
+    assert app_source.count('"Chatterbox model"') == 5
+    for key in (
+        "audio_chatterbox_model_choice",
+        "live_audio_chatterbox_model",
+        "test_top5_chatterbox_model",
+        "live_top5_chatterbox_model",
+        '{prefix}audio_chatterbox_model',
+    ):
+        assert key in app_source
+
+    assert app_source.count('["Turbo", "Full"]') == 5
+    assert 'model_version=chatterbox_model_choice.casefold()' in app_source
+    assert 'model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold()' in app_source
+    assert 'model_version=t5_chatterbox_model_choice.casefold()' in app_source
+    assert 'model_version=live_top5_chatterbox_model_choice.casefold()' in app_source
+    assert 'model_version=longform_chatterbox_model_choice.casefold()' in app_source
+    assert "def _audio_selection_mismatch(" in app_source
+    assert "disabled=model_mismatch" in app_source
+    assert "Chatterbox Turbo (Voice Cloning)" not in app_source
