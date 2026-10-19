@@ -640,4 +640,6 @@ def test_dashboard_exposes_full_and_turbo_for_every_chatterbox_audio_route():
     assert 'model_version=t5_chatterbox_model_choice.casefold()' in app_source
     assert 'model_version=live_top5_chatterbox_model_choice.casefold()' in app_source
     assert 'model_version=longform_chatterbox_model_choice.casefold()' in app_source
+    assert "def _audio_selection_mismatch(" in app_source
+    assert "disabled=model_mismatch" in app_source
     assert "Chatterbox Turbo (Voice Cloning)" not in app_source
