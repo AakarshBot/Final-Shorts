@@ -208,15 +208,6 @@ class LongformRenderer:
 
         out_file = Path(output_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
-        # Use a per-render intermediate name: multiple Streamlit sessions or
-        # retries must never share a Windows-locked silent MP4.
-        with tempfile.NamedTemporaryFile(
-            prefix=f"{out_file.stem}.",
-            suffix=".silent.mp4",
-            dir=out_file.parent,
-            delete=False,
-        ) as temp_handle:
-            temp_silent = Path(temp_handle.name)
 
         # Map scene number to prepared visual base image
         scene_visual_map: dict[int, dict[str, Any]] = {}
@@ -310,6 +301,16 @@ class LongformRenderer:
                         frame = _draw_lower_third_subtitle(frame, str(cue.get("text", "")))
 
                 yield frame
+
+        # Allocate the temporary file only after input preparation succeeds.
+        # This is unique per render and is cleaned for every FFmpeg/mux outcome.
+        with tempfile.NamedTemporaryFile(
+            prefix=f"{out_file.stem}.",
+            suffix=".silent.mp4",
+            dir=out_file.parent,
+            delete=False,
+        ) as temp_handle:
+            temp_silent = Path(temp_handle.name)
 
         # Pipe frames into FFmpeg for rawvideo video stream
         cmd = [
