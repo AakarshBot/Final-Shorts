@@ -281,8 +281,12 @@ def render_longform_stat_card(source: bytes | bytearray | Image.Image | None, da
     """Renders a 16:9 Stat Highlight Card with hero metric and telemetry grid."""
     player_name = " ".join(str(data.get("player_name") or data.get("headline") or "PLAYER STAT").split()).upper()
     eyebrow = " ".join(str(data.get("eyebrow") or "DEEP-DIVE TELEMETRY").split()).upper()
-    hero_stat_value = data.get("hero_stat") or data.get("stat")
-    stat_label_value = data.get("stat_label") or data.get("metric")
+    hero_stat_value = data.get("hero_stat")
+    if hero_stat_value is None or not str(hero_stat_value).strip():
+        hero_stat_value = data.get("stat")
+    stat_label_value = data.get("stat_label")
+    if stat_label_value is None or not str(stat_label_value).strip():
+        stat_label_value = data.get("metric")
     if not str(hero_stat_value or "").strip() or not str(stat_label_value or "").strip():
         raise LongformCardError("Stat Card requires a source-grounded hero_stat and stat_label.")
     hero_stat = " ".join(str(hero_stat_value).split())
@@ -352,7 +356,8 @@ def render_longform_stat_card(source: bytes | bytearray | Image.Image | None, da
         tx = panel_x1 + 36
         for item in tiles[:3]:
             t_label = " ".join(str(item.get("label") or "").split()).upper()
-            t_val = " ".join(str(item.get("value") or "").split())
+            raw_value = item.get("value")
+            t_val = " ".join(str(raw_value if raw_value is not None else "").split())
             t_tile = Image.new("RGBA", (tile_w, tile_h), (0, 0, 0, 0))
             tdraw = ImageDraw.Draw(t_tile)
             tdraw.rounded_rectangle((0, 0, tile_w - 1, tile_h - 1), radius=8, fill=(20, 26, 38, 220), outline=(255, 255, 255, 24), width=1)
@@ -451,8 +456,8 @@ def render_longform_h2h_card(source: bytes | bytearray | Image.Image | None, dat
         row for row in (data.get("metrics") or [])
         if isinstance(row, dict)
         and str(row.get("label") or "").strip()
-        and str(row.get("left") or "").strip()
-        and str(row.get("right") or "").strip()
+        and row.get("left") is not None and str(row.get("left")).strip()
+        and row.get("right") is not None and str(row.get("right")).strip()
     ]
     if not metrics:
         raise LongformCardError("Head-to-Head Card requires source-grounded comparison metrics.")
@@ -520,8 +525,8 @@ def render_longform_h2h_card(source: bytes | bytearray | Image.Image | None, dat
     row_y = comp_y + 20
     for row in metrics[:4]:
         lbl = " ".join(str(row.get("label") or "").split()).upper()
-        l_val = " ".join(str(row.get("left") or "").split())
-        r_val = " ".join(str(row.get("right") or "").split())
+        l_val = " ".join(str(row.get("left") if row.get("left") is not None else "").split())
+        r_val = " ".join(str(row.get("right") if row.get("right") is not None else "").split())
 
         # Central metric pill
         lbl_font = _font_label(22)
