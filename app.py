@@ -2065,12 +2065,16 @@ def _crop_visual_dialog(
                 for assignment in (st.session_state.get(assignment_key) or {}).values():
                     if assignment.get("asset_key") == asset_key:
                         assignment["bytes"] = bytes(image_bytes)
-            if crop_store == "live_visual_crops":
+            if crop_store in {"live_visual_crops", "live_card_studio_crops"}:
                 st.session_state.live_visuals_approved = False
-            elif crop_store == "visual_crops":
+            elif crop_store in {"visual_crops", "card_studio_crops"}:
                 st.session_state.visuals_approved = False
                 st.session_state.approved_visuals = None
-            elif crop_store == "test_top5_visual_crops":
+            elif crop_store in {
+                "test_top5_visual_crops",
+                "test_top5_card_studio_visual_crops",
+                "test_top5_card_studio_crops",
+            }:
                 st.session_state.test_top5_visual_handoff = None
                 st.session_state.test_top5_rendered_video_path = None
             if card_selector:
@@ -2107,12 +2111,16 @@ def _crop_visual_dialog(
                 for assignment in (st.session_state.get(assignment_key) or {}).values():
                     if assignment.get("asset_key") == asset_key:
                         assignment["bytes"] = crop_bytes
-            if crop_store == "live_visual_crops":
+            if crop_store in {"live_visual_crops", "live_card_studio_crops"}:
                 st.session_state.live_visuals_approved = False
-            elif crop_store == "visual_crops":
+            elif crop_store in {"visual_crops", "card_studio_crops"}:
                 st.session_state.visuals_approved = False
                 st.session_state.approved_visuals = None
-            elif crop_store == "test_top5_visual_crops":
+            elif crop_store in {
+                "test_top5_visual_crops",
+                "test_top5_card_studio_visual_crops",
+                "test_top5_card_studio_crops",
+            }:
                 st.session_state.test_top5_visual_handoff = None
                 st.session_state.test_top5_rendered_video_path = None
             if card_selector:
