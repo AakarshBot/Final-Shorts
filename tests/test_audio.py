@@ -415,6 +415,7 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
 
     assert all(not scene["from_cache"] for scene in first["scenes"])
     assert model.generate_calls[0][0] == " ".join(scene["voiceover"] for scene in script["script"])
+    assert model.generate_calls[0][1] == 0.80
     assert all(scene["continuous_master_path"] == first["full_path"] for scene in first["scenes"])
     assert all(scene["from_cache"] for scene in second["scenes"])
     assert len(model.generate_calls) == 1
