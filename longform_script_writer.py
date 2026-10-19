@@ -223,9 +223,28 @@ def _request_groq(prompt: str, user_payload: str, model: str = MODELS[0]) -> dic
             data = response.json()
             content = data["choices"][0]["message"]["content"]
             return json.loads(content)
+        except requests.exceptions.HTTPError as exc:
+            response = exc.response
+            status = getattr(response, "status_code", None)
+            detail = _clean(getattr(response, "text", ""))[:500]
+            # Deterministic client errors will not improve by sending the same
+            # request again. Try the alternate model once for a 400; fail fast
+            # for auth, permission and other non-retryable client errors.
+            if status is not None and 400 <= status < 500 and status != 429:
+                if status == 400 and model != MODELS[1]:
+                    return _request_groq(prompt, user_payload, model=MODELS[1])
+                message = f"Groq API rejected Long-form Scriptwriter request (HTTP {status})"
+                if detail:
+                    message += f": {detail}"
+                raise RuntimeError(message) from exc
+            if attempt == 2:
+                if model != MODELS[1]:
+                    return _request_groq(prompt, user_payload, model=MODELS[1])
+                raise RuntimeError(f"Groq API call failed for Long-form Scriptwriter: {exc}") from exc
+            time.sleep(2 ** attempt)
         except (requests.exceptions.RequestException, json.JSONDecodeError, KeyError) as exc:
             if attempt == 2:
-                # Try fallback model if first model failed
+                # Network errors and malformed model output may be transient.
                 if model != MODELS[1]:
                     return _request_groq(prompt, user_payload, model=MODELS[1])
                 raise RuntimeError(f"Groq API call failed for Long-form Scriptwriter: {exc}") from exc
