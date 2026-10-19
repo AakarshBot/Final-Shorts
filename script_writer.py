@@ -876,9 +876,9 @@ def _prepare_generated_script(result, language_key: str):
     def add_title(value):
         if not isinstance(value, str):
             return
-        candidate = _clean(value).strip(" \\t\\r\\n\\\"'“”‘’")
-        candidate = re.sub(r"^[*•-]+\\s*", "", candidate)
-        candidate = candidate.rstrip(" .。!?！？;；")
+        candidate = _clean(value).strip(" \t\r\n\"'“”‘’")
+        candidate = re.sub(r"^[*•-]+\s*", "", candidate)
+        candidate = candidate.rstrip(" .。;；")
         if not candidate:
             return
         if len(candidate) > 110:
@@ -914,7 +914,7 @@ def _prepare_generated_script(result, language_key: str):
             break
         text_value = _clean(candidate)
         if text_value:
-            sentence = re.split(r"(?<=[.!?。！？])\\s+", text_value, maxsplit=1)[0]
+            sentence = re.split(r"(?<=[.!?。！？])\s+", text_value, maxsplit=1)[0]
             add_title(sentence)
 
     suffixes = {
