@@ -7426,6 +7426,21 @@ def render_longform_audio(live: bool = False):
     if not audio_data:
         return
 
+    model_mismatch = _audio_selection_mismatch(
+        audio_data,
+        "chatterbox",
+        longform_chatterbox_model_choice.casefold(),
+    )
+    if model_mismatch:
+        generated_label = audio_data.get("engine") or "previous Chatterbox model"
+        st.warning(
+            f"This Long-form take was generated with {generated_label}, but Chatterbox {longform_chatterbox_model_choice} is selected. "
+            "Synthesize a new take before approval."
+        )
+        st.session_state[f"{prefix}approved_audio"] = None
+        st.session_state[f"{prefix}subtitles_data"] = None
+        st.session_state[f"{prefix}approved_subtitles"] = None
+
     m_col1, m_col2, m_col3, m_col4 = st.columns(4)
     tot_s = audio_data.get("total_duration", 0)
     mins = int(tot_s // 60)
@@ -7459,7 +7474,13 @@ def render_longform_audio(live: bool = False):
     st.markdown("---")
     app_col1, app_col2 = st.columns([2, 1])
     with app_col1:
-        if st.button("Approve Audio for Long-form", type="primary", width="stretch", key=f"{k_prefix}approve-audio"):
+        if st.button(
+            "Approve Audio for Long-form",
+            type="primary",
+            width="stretch",
+            key=f"{k_prefix}approve-audio",
+            disabled=model_mismatch,
+        ):
             from longform_audio import LongformAudioEngine
             st.session_state[f"{prefix}approved_audio"] = LongformAudioEngine.approve_audio(audio_data)
             if live:
@@ -9258,6 +9279,36 @@ def render_upload_qc():
     else:
         st.rerun()
 
+def _audio_selection_mismatch(
+    audio_data: dict | None,
+    selected_engine: str,
+    selected_model: str | None = None,
+) -> bool:
+    """Prevent approval of a take generated with a different selected engine/model."""
+    if not isinstance(audio_data, dict):
+        return False
+
+    generated_engine = str(audio_data.get("engine") or "").strip().casefold()
+    generated_model = str(audio_data.get("model_version") or "").strip().casefold()
+    has_generation_metadata = bool(
+        generated_engine or generated_model or audio_data.get("continuous_audio")
+    )
+    if not has_generation_metadata:
+        return False  # Intentionally human-recorded-only audio.
+
+    generated_is_chatterbox = (
+        generated_engine.startswith("chatterbox")
+        or bool(generated_model)
+        or audio_data.get("continuous_audio") is True
+    )
+    selected_is_chatterbox = str(selected_engine or "").strip().casefold() == "chatterbox"
+    if generated_is_chatterbox != selected_is_chatterbox:
+        return True
+    if selected_is_chatterbox:
+        return generated_model != str(selected_model or "turbo").strip().casefold()
+    return generated_engine not in {"edge-tts", "edge"}
+
+
 def render_audio():
     from audio import (
         CHATTERBOX_VOICE_REFERENCES,
@@ -9435,6 +9486,23 @@ def render_audio():
                         st.error(f"Failed to package audio: {exc}")
 
         audio=st.session_state.audio_data
+        model_mismatch = _audio_selection_mismatch(
+            audio,
+            "chatterbox" if is_cb else "edge-tts",
+            chatterbox_model_choice.casefold(),
+        )
+        if model_mismatch:
+            generated_label = audio.get("model") or (
+                "Edge-TTS Neural" if audio.get("engine") == "edge-tts" else "Chatterbox"
+            )
+            selected_label = f"Chatterbox {chatterbox_model_choice}" if is_cb else "Edge-TTS Neural"
+            st.warning(
+                f"The audio below was generated with {generated_label}, but {selected_label} is selected. "
+                "Generate a new take before approving audio."
+            )
+            st.session_state.approved_audio = None
+            st.session_state.subtitle_data = None
+            st.session_state.approved_subtitles = None
         if audio:
             full_path = audio.get("full_path")
             if full_path and Path(full_path).is_file():
@@ -9454,7 +9522,7 @@ def render_audio():
                         format="audio/wav" if str(scene["path"]).lower().endswith(".wav") else "audio/mp3",
                     )
                     st.caption("🎙️ Human Audio" if scene.get("human_recorded") else ("⚡ Cached" if scene["from_cache"] else "✨ Fresh Neural TTS generation"))
-            if st.button("Approve audio",type="primary",width="stretch"):
+            if st.button("Approve audio",type="primary",width="stretch",disabled=model_mismatch):
                 try:
                     st.session_state.approved_audio=approve_audio(audio)
                     st.session_state.test_stage = "04 · Visuals"
@@ -10254,6 +10322,29 @@ elif st.session_state.app_mode == "test":
                                 st.error(f"Failed to package human audio: {err}")
 
                 audio = st.session_state.get("test_top5_audio_data")
+                model_mismatch = _audio_selection_mismatch(
+                    audio,
+                    "chatterbox" if is_t5_chatterbox else "edge-tts",
+                    t5_chatterbox_model_choice.casefold(),
+                )
+                if model_mismatch:
+                    generated_label = audio.get("model") or (
+                        "Edge-TTS Neural" if audio.get("engine") == "edge-tts" else "Chatterbox"
+                    )
+                    selected_label = (
+                        f"Chatterbox {t5_chatterbox_model_choice}"
+                        if is_t5_chatterbox
+                        else "Edge-TTS Neural"
+                    )
+                    st.warning(
+                        f"The Top-5 audio below was generated with {generated_label}, but {selected_label} is selected. "
+                        "Generate a new take before approving it."
+                    )
+                    st.session_state.test_top5_audio_handoff = None
+                    st.session_state.test_top5_rendered_video_path = None
+                    st.session_state.test_top5_upload_qc_approved = False
+                    st.session_state.test_top5_upload_qc = None
+                    st.session_state.test_top5_upload_result = None
                 if audio:
                     full_path = audio.get("full_path")
                     if full_path and Path(full_path).is_file():
@@ -10284,6 +10375,7 @@ elif st.session_state.app_mode == "test":
                         type="primary",
                         width="stretch",
                         key="test-top5-audio-approve",
+                        disabled=model_mismatch,
                     ):
                         try:
                             st.session_state.test_top5_audio_handoff = approve_top5_audio(audio)
