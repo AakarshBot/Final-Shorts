@@ -5,7 +5,7 @@ import json
 import os
 from io import BytesIO
 from dataclasses import replace
-from PIL import Image
+from PIL import Image, ImageOps
 from pathlib import Path
 
 from dotenv import load_dotenv
@@ -1949,6 +1949,7 @@ def _is_valid_image_payload(value: bytes) -> bool:
 
 
 def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
+    """Return streamlit-cropper coordinates in its required (left, right, top, bottom) order."""
     aspect = 9 / 16
     width = min(image.width, max(1, int(image.height * aspect)))
     height = min(image.height, max(1, int(width / aspect)))
@@ -1958,50 +1959,19 @@ def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
-def _prepare_crop_dialog_canvas(image_bytes: bytes, max_canvas_width: int = 1600):
-    """Build the bounded crop canvas once per source image, not on every drag."""
-    from PIL import Image, ImageFilter, ImageOps
-
+def _prepare_crop_dialog_canvas(image_bytes: bytes):
+    """Return original-resolution pixels; streamlit-cropper scales only its display."""
     image = _asset_to_image(image_bytes)
     if image is None:
         return None, None, (0, 0)
+    original_size = (image.width, image.height)
+    image = image.convert("RGB")
+    return image, _largest_9x16_crop_coords(image), original_size
 
-    canvas_width = max(image.width, int(round(image.height * 9 / 16)))
-    canvas_height = int(round(canvas_width * 16 / 9))
-    scale = min(1.0, max_canvas_width / canvas_width)
-    scaled_canvas_width = max(1, int(round(canvas_width * scale)))
-    scaled_canvas_height = max(1, int(round(canvas_height * scale)))
 
-    rgb_image = image.convert("RGB")
-    if scale < 1.0:
-        working_image = rgb_image.resize(
-            (
-                max(1, int(round(rgb_image.width * scale))),
-                max(1, int(round(rgb_image.height * scale))),
-            ),
-            Image.Resampling.LANCZOS,
-        )
-    else:
-        working_image = rgb_image
-
-    background = ImageOps.fit(
-        working_image,
-        (scaled_canvas_width, scaled_canvas_height),
-        method=Image.Resampling.LANCZOS,
-    ).filter(ImageFilter.GaussianBlur(radius=max(18, scaled_canvas_width // 55)))
-    canvas = background.copy()
-    offset_x = (scaled_canvas_width - working_image.width) // 2
-    offset_y = (scaled_canvas_height - working_image.height) // 2
-    canvas.paste(working_image, (offset_x, offset_y))
-
-    default = _largest_9x16_crop_coords(working_image)
-    default_coords = (
-        offset_x + default[0],
-        offset_x + default[1],
-        offset_y + default[2],
-        offset_y + default[3],
-    )
-    return canvas, default_coords, (image.width, image.height)
+def _reset_crop_dialog_rectangle(asset_key: str) -> None:
+    reset_key = "crop-reset-" + hashlib.sha1(asset_key.encode("utf-8")).hexdigest()[:12]
+    st.session_state[reset_key] = int(st.session_state.get(reset_key, 0)) + 1
 
 
 def _visual_asset_key(result_key: str, index: int, asset: dict) -> str:
@@ -2024,67 +1994,142 @@ def _crop_visual_dialog(
     crop_store: str = "visual_crops",
     card_selector: bool = False,
 ):
-    canvas, default_coords, original_size = _prepare_crop_dialog_canvas(
-        bytes(image_bytes), max_canvas_width=1600
-    )
+    canvas, default_coords, original_size = _prepare_crop_dialog_canvas(bytes(image_bytes))
     if canvas is None:
         st.error("This visual could not be opened for cropping.")
         return
 
+    digest = hashlib.sha1(asset_key.encode("utf-8")).hexdigest()[:12]
+    reset_key = f"crop-reset-{digest}"
+    st.session_state.setdefault(reset_key, 0)
+    cropper_key = f"cropper-{digest}-{st.session_state[reset_key]}"
+
     st.markdown('<div class="crop-dialog-kicker">MANUAL CROP</div>', unsafe_allow_html=True)
     st.markdown(f'<div class="crop-dialog-title">{label}</div>', unsafe_allow_html=True)
-    if card_selector:
-        st.caption(
-            "9:16 frame · drag to reposition or resize the crop. The preview follows your selection; "
-            "click Apply crop when the framing is right. Zooming out reveals a blurred extension of the same image."
-        )
-    else:
-        st.caption(
-            "9:16 frame · drag to reposition or resize the crop. Double-click to confirm the crop selection. "
-            "Zooming out reveals a blurred extension of the same image."
-        )
+    st.caption(
+        "The complete original image is shown. Drag and resize the rectangle freely. "
+        "Apply crop stretches your selected area to the final 9:16 Short frame; "
+        "reset restores a centred 9:16 selection."
+    )
 
     from streamlit_cropper import st_cropper
 
     store = st.session_state.setdefault(crop_store, {})
     cropped = st_cropper(
         canvas,
-        realtime_update=card_selector,
+        realtime_update=True,
         default_coords=default_coords,
         box_color="#4F46E5",
-        aspect_ratio=(9, 16),
+        aspect_ratio=None,
         return_type="image",
-        key=f"cropper-{hashlib.sha1(asset_key.encode('utf-8')).hexdigest()[:12]}",
+        key=cropper_key,
         stroke_width=2,
     )
 
-    left, right = st.columns([1.2, .8], gap="large")
-    with left:
-        st.markdown('<div class="crop-dialog-kicker">PREVIEW</div>', unsafe_allow_html=True)
-        st.image(cropped, width="stretch")
-    with right:
-        st.markdown('<div class="crop-dialog-kicker">ORIGINAL SIZE</div>', unsafe_allow_html=True)
-        st.caption(f"{original_size[0]} × {original_size[1]}px")
-        st.markdown('<div class="crop-dialog-kicker" style="margin-top:1rem;">OUTPUT</div>', unsafe_allow_html=True)
-        st.caption("Applying the crop changes the selected slide framing only; the original visual stays untouched.")
-        if st.button("Apply crop", type="primary", width="stretch"):
-            buffer = BytesIO()
-            cropped.convert("RGB").save(buffer, format="JPEG", quality=92, optimize=True)
-            crop_bytes = buffer.getvalue()
-            store[asset_key] = crop_bytes
-            assignments = st.session_state.get("live_visual_assignments") or {}
-            for assignment in assignments.values():
-                if assignment.get("asset_key") == asset_key:
-                    assignment["bytes"] = crop_bytes
-            invalidated_cards = 0
+    reset_col, original_col = st.columns(2, gap="small")
+    with reset_col:
+        st.button(
+            "Reset rectangle to centred 9:16",
+            key=f"crop-reset-button-{digest}",
+            on_click=_reset_crop_dialog_rectangle,
+            args=(asset_key,),
+            width="stretch",
+        )
+    with original_col:
+        if asset_key in store and st.button(
+            "Use original image", key=f"crop-original-button-{digest}", width="stretch"
+        ):
+            store.pop(asset_key, None)
+            assignment_key = {
+                "visual_crops": "visual_assignments",
+                "live_visual_crops": "live_visual_assignments",
+                "test_top5_visual_crops": "test_top5_visual_assignments",
+                "card_studio_crops": "visual_assignments",
+                "live_card_studio_crops": "live_visual_assignments",
+                "test_top5_card_studio_visual_crops": "test_top5_visual_assignments",
+                "test_top5_card_studio_crops": "test_top5_visual_assignments",
+            }.get(crop_store)
+            if assignment_key:
+                card_studio_crop = crop_store in {
+                    "card_studio_crops",
+                    "live_card_studio_crops",
+                    "test_top5_card_studio_visual_crops",
+                    "test_top5_card_studio_crops",
+                }
+                for assignment in (st.session_state.get(assignment_key) or {}).values():
+                    if assignment.get("asset_key") == asset_key and (
+                        (assignment.get("result_key") == "card-studio-photo") == card_studio_crop
+                    ):
+                        assignment["bytes"] = bytes(image_bytes)
+            if crop_store in {"live_visual_crops", "live_card_studio_crops"}:
+                st.session_state.live_visuals_approved = False
+            elif crop_store in {"visual_crops", "card_studio_crops"}:
+                st.session_state.visuals_approved = False
+                st.session_state.approved_visuals = None
+            elif crop_store in {
+                "test_top5_visual_crops",
+                "test_top5_card_studio_visual_crops",
+                "test_top5_card_studio_crops",
+            }:
+                st.session_state.test_top5_visual_handoff = None
+                st.session_state.test_top5_rendered_video_path = None
             if card_selector:
                 from card_studio import invalidate_card_studio_results_for_source
+                invalidate_card_studio_results_for_source(st.session_state, asset_key)
+            st.rerun()
 
-                invalidated_cards = invalidate_card_studio_results_for_source(
-                    st.session_state, asset_key
-                )
-            if invalidated_cards:
-                st.toast("Crop applied. Re-render the card and add it to the slide again.", icon="✂️")
+    final_preview = cropped.convert("RGB").resize((1080, 1920), Image.Resampling.LANCZOS)
+    left, right = st.columns([1.2, .8], gap="large")
+    with left:
+        st.markdown('<div class="crop-dialog-kicker">FINAL 9:16 PREVIEW</div>', unsafe_allow_html=True)
+        st.image(final_preview, width="stretch")
+        st.caption("This exact 1080 × 1920 image is saved and attached to a slide.")
+    with right:
+        st.markdown('<div class="crop-dialog-kicker">ORIGINAL IMAGE</div>', unsafe_allow_html=True)
+        st.caption(f"{original_size[0]} × {original_size[1]}px")
+        st.markdown('<div class="crop-dialog-kicker" style="margin-top:1rem;">CROP OUTPUT</div>', unsafe_allow_html=True)
+        st.caption("The original source remains available; reopen this window to crop a different area.")
+        if st.button("Apply crop", type="primary", width="stretch", key=f"apply-crop-{digest}"):
+            buffer = BytesIO()
+            final_preview.save(buffer, format="JPEG", quality=94, optimize=True)
+            crop_bytes = buffer.getvalue()
+            store[asset_key] = crop_bytes
+            assignment_key = {
+                "visual_crops": "visual_assignments",
+                "live_visual_crops": "live_visual_assignments",
+                "test_top5_visual_crops": "test_top5_visual_assignments",
+                "card_studio_crops": "visual_assignments",
+                "live_card_studio_crops": "live_visual_assignments",
+                "test_top5_card_studio_visual_crops": "test_top5_visual_assignments",
+                "test_top5_card_studio_crops": "test_top5_visual_assignments",
+            }.get(crop_store)
+            if assignment_key:
+                card_studio_crop = crop_store in {
+                    "card_studio_crops",
+                    "live_card_studio_crops",
+                    "test_top5_card_studio_visual_crops",
+                    "test_top5_card_studio_crops",
+                }
+                for assignment in (st.session_state.get(assignment_key) or {}).values():
+                    if assignment.get("asset_key") == asset_key and (
+                        (assignment.get("result_key") == "card-studio-photo") == card_studio_crop
+                    ):
+                        assignment["bytes"] = crop_bytes
+            if crop_store in {"live_visual_crops", "live_card_studio_crops"}:
+                st.session_state.live_visuals_approved = False
+            elif crop_store in {"visual_crops", "card_studio_crops"}:
+                st.session_state.visuals_approved = False
+                st.session_state.approved_visuals = None
+            elif crop_store in {
+                "test_top5_visual_crops",
+                "test_top5_card_studio_visual_crops",
+                "test_top5_card_studio_crops",
+            }:
+                st.session_state.test_top5_visual_handoff = None
+                st.session_state.test_top5_rendered_video_path = None
+            if card_selector:
+                from card_studio import invalidate_card_studio_results_for_source
+                invalidate_card_studio_results_for_source(st.session_state, asset_key)
             st.rerun()
 
 
@@ -2668,7 +2713,6 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             ("live_real_image_result", "real", "Real Image Search"),
             ("live_ai_image_result", "ai", "AI Generation"),
         ]
-        crop_store = st.session_state.get("live_visual_crops") or {}
         deleted = st.session_state.get("live_visual_deleted") or set()
     else:
         specs = [
@@ -2677,7 +2721,6 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             ("real_image_result", "real-search", "Real Image Search"),
             ("ai_image_result", "ai-generation", "AI Generation"),
         ]
-        crop_store = st.session_state.get("visual_crops") or {}
         deleted = set()
 
     entries = []
@@ -2691,7 +2734,7 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             )
             if asset_key in deleted:
                 continue
-            raw = crop_store.get(asset_key) or asset.get("bytes")
+            raw = asset.get("bytes")
             if not isinstance(raw, (bytes, bytearray)) or not _is_valid_image_payload(bytes(raw)):
                 continue
             entries.append((asset_key, index, asset, bytes(raw), source_name))
@@ -2965,7 +3008,7 @@ def _render_card_studio(
         if not raw_assets:
             st.info("Run one of Options 1–4 for this slide first. Card Studio reuses that image pool.")
             return
-        crop_store_name = "test_top5_visual_crops"
+        crop_store_name = "test_top5_card_studio_visual_crops"
         crop_store = st.session_state.setdefault(crop_store_name, {})
         assets = [
             {
@@ -3031,7 +3074,7 @@ def _render_card_studio(
         else:
             target_entries = entries
 
-        crop_store_name = "live_visual_crops" if live else "visual_crops"
+        crop_store_name = "live_card_studio_crops" if live else "card_studio_crops"
         crop_store = st.session_state.setdefault(crop_store_name, {})
         assets = [
             {
@@ -3263,9 +3306,124 @@ def _render_card_studio(
     st.caption("These controls apply to all four editorial card types in Test and Live. Text Subject Cutout is unchanged.")
     language_label = {"english": "English", "hindi": "Hindi (Devanagari)", "telugu": "Telugu"}.get(card_language, "English")
     st.caption(
-        f"Card copy language: {language_label}. Starter copy follows the selected pipeline language. "
-        "Custom text is rendered as entered."
+        f"Card copy language: {language_label}. Auto-fill and prompt generation preserve English digits. "
+        "Review every field before rendering."
     )
+
+    def _card_story_context():
+        if top5:
+            source_script = (
+                st.session_state.get("test_top5_script_handoff")
+                or st.session_state.get("test_top5_script_data")
+                or {}
+            )
+            if not isinstance(source_script, dict):
+                source_script = {}
+            source_topics = st.session_state.get("test_top5_handoff") or st.session_state.get("test_top5_topics") or []
+            source_index = max(0, active_slide - 2) if active_slide else 0
+            source_story = source_topics[source_index] if source_topics and source_index < len(source_topics) else {}
+            slides = source_script.get("slides") or []
+            selected_slide = slides[active_slide - 1] if active_slide and active_slide <= len(slides) else None
+        else:
+            source_script = (
+                (st.session_state.get("live_approved_script") or st.session_state.get("live_script_data") or {})
+                if live
+                else (st.session_state.get("approved_script") or st.session_state.get("script_data") or {})
+            )
+            topic_list = st.session_state.get("live_topics" if live else "topics") or []
+            topic_index = st.session_state.get("live_selected_topic" if live else "selected_topic")
+            source_story = topic_list[topic_index] if isinstance(topic_index, int) and 0 <= topic_index < len(topic_list) else {}
+            selected_slide = None
+
+        def _story_value(field):
+            if isinstance(source_story, dict):
+                return source_story.get(field)
+            return getattr(source_story, field, None)
+
+        return {
+            "title": _story_value("title") or source_script.get("source_title") or source_script.get("headline") or "",
+            "description": _story_value("description") or _story_value("summary") or _story_value("article") or "",
+            "source": _story_value("source") or _story_value("publisher") or "",
+            "url": _story_value("url") or "",
+            "script": source_script,
+            "selected_slide": selected_slide,
+            "desk": st.session_state.get("live_desk") if live else st.session_state.get("test_desk"),
+        }
+
+    def _set_generated_card_fields(generated):
+        if card_type == "Stat Highlight":
+            for field in ("eyebrow", "headline", "value", "unit"):
+                st.session_state[value_key(field)] = str(generated.get(field) or "")
+            for index, metric in enumerate(generated.get("metrics") or [], 1):
+                st.session_state[value_key(f"metric-{index}-label")] = str(metric.get("label") or "")
+                st.session_state[value_key(f"metric-{index}-value")] = str(metric.get("value") or "")
+        elif card_type == "Quote / Reaction":
+            for field in ("eyebrow", "quote", "attribution", "context"):
+                st.session_state[value_key(field)] = str(generated.get(field) or "")
+        elif card_type == "Head-to-Head":
+            for field in ("eyebrow", "headline"):
+                st.session_state[value_key(field)] = str(generated.get(field) or "")
+            st.session_state[value_key("left-name")] = str((generated.get("left") or {}).get("name") or "")
+            st.session_state[value_key("right-name")] = str((generated.get("right") or {}).get("name") or "")
+            left_values = (generated.get("left") or {}).get("values") or {}
+            right_values = (generated.get("right") or {}).get("values") or {}
+            for index, metric in enumerate(generated.get("metrics") or [], 1):
+                st.session_state[value_key(f"metric-{index}-label")] = str(metric or "")
+                st.session_state[value_key(f"metric-{index}-left")] = str(left_values.get(metric) or "")
+                st.session_state[value_key(f"metric-{index}-right")] = str(right_values.get(metric) or "")
+        else:
+            for field in ("eyebrow", "value", "label", "context"):
+                st.session_state[value_key(field)] = str(generated.get(field) or "")
+
+    auto_col, prompt_col = st.columns([1, 1], gap="small")
+    with auto_col:
+        if st.button("Auto-fill this card from story", type="secondary", width="stretch", key=f"{state_id}-autofill-{card_type}"):
+            try:
+                from script_writer import generate_card_copy
+                story_context = _card_story_context()
+                if not (
+                    story_context.get("title")
+                    or story_context.get("description")
+                    or story_context.get("script")
+                ):
+                    raise ValueError("Select a story or generate its Scriptwriter result before auto-filling a card.")
+                with st.spinner("Writing story-backed card copy…"):
+                    generated = generate_card_copy(card_type, story_context, target_language=card_language)
+                _set_generated_card_fields(generated)
+                st.session_state[f"{state_id}-result"] = None
+                st.rerun()
+            except Exception as exc:
+                st.error(f"Card auto-fill failed: {exc}")
+    with prompt_col:
+        manual_prompt = st.text_area(
+            "Manual prompt for this card (optional)",
+            height=84,
+            key=value_key("manual-prompt"),
+            placeholder="e.g. Focus on the confirmed record and explain why it matters.",
+        )
+        if st.button("Generate card from prompt", type="secondary", width="stretch", key=f"{state_id}-prompt-generate-{card_type}"):
+            if not manual_prompt.strip():
+                st.warning("Enter a prompt describing how you want this card written.")
+            else:
+                try:
+                    from script_writer import generate_card_copy
+                    story_context = _card_story_context()
+                    if not (
+                        story_context.get("title")
+                        or story_context.get("description")
+                        or story_context.get("script")
+                    ):
+                        raise ValueError("Select a story or generate its Scriptwriter result before using a card prompt.")
+                    with st.spinner("Generating prompted card copy…"):
+                        generated = generate_card_copy(
+                            card_type, story_context,
+                            target_language=card_language, manual_prompt=manual_prompt.strip(),
+                        )
+                    _set_generated_card_fields(generated)
+                    st.session_state[f"{state_id}-result"] = None
+                    st.rerun()
+                except Exception as exc:
+                    st.error(f"Prompted card generation failed: {exc}")
 
     if card_type == "Stat Highlight":
         st.markdown(
@@ -4405,19 +4563,25 @@ def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | 
     image = _asset_to_image(value)
     if image is None:
         return None
-
-    target_ratio = width / height
+    image = image.convert("RGB")
     current_ratio = image.width / image.height
-    if current_ratio > target_ratio:
-        crop_width = max(1, int(image.height * target_ratio))
-        left = (image.width - crop_width) // 2
-        image = image.crop((left, 0, left + crop_width, image.height))
-    elif current_ratio < target_ratio:
-        crop_height = max(1, int(image.width / target_ratio))
-        top = (image.height - crop_height) // 2
-        image = image.crop((0, top, image.width, top + crop_height))
-
-    preview = image.resize((width, height), Image.Resampling.LANCZOS)
+    if abs(current_ratio - (9 / 16)) < 0.005:
+        # Applied crops are already the final 9:16 frame: show the entire frame
+        # inside the thumbnail rather than trimming its top and bottom again.
+        fitted = ImageOps.contain(image, (width, height), method=Image.Resampling.LANCZOS)
+        preview = Image.new("RGB", (width, height), (18, 20, 24))
+        preview.paste(fitted, ((width - fitted.width) // 2, (height - fitted.height) // 2))
+    else:
+        target_ratio = width / height
+        if current_ratio > target_ratio:
+            crop_width = max(1, int(image.height * target_ratio))
+            left = (image.width - crop_width) // 2
+            image = image.crop((left, 0, left + crop_width, image.height))
+        elif current_ratio < target_ratio:
+            crop_height = max(1, int(image.width / target_ratio))
+            top = (image.height - crop_height) // 2
+            image = image.crop((0, top, image.width, top + crop_height))
+        preview = image.resize((width, height), Image.Resampling.LANCZOS)
     buffer = BytesIO()
     preview.save(buffer, format="JPEG", quality=84, optimize=True)
     return buffer.getvalue()
@@ -4426,8 +4590,13 @@ def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | 
 def _fit_visual_preview(value, width=360, height=640):
     if isinstance(value, Image.Image):
         image = value.convert("RGB")
-        target_ratio = width / height
         current_ratio = image.width / image.height
+        if abs(current_ratio - (9 / 16)) < 0.005:
+            fitted = ImageOps.contain(image, (width, height), method=Image.Resampling.LANCZOS)
+            preview = Image.new("RGB", (width, height), (18, 20, 24))
+            preview.paste(fitted, ((width - fitted.width) // 2, (height - fitted.height) // 2))
+            return preview
+        target_ratio = width / height
         if current_ratio > target_ratio:
             crop_width = max(1, int(image.height * target_ratio))
             left = (image.width - crop_width) // 2
@@ -4457,6 +4626,9 @@ def _delete_visual_asset(result_key: str, index: int, asset: dict, live: bool = 
         if assignment.get("asset_key") == asset_key:
             del st.session_state[assignments_key][slide]
     st.session_state[crops_key].pop(asset_key, None)
+    st.session_state.setdefault("live_card_studio_crops" if live else "card_studio_crops", {}).pop(asset_key, None)
+    st.session_state.setdefault("test_top5_card_studio_crops", {}).pop(asset_key, None)
+    st.session_state.setdefault("test_top5_card_studio_visual_crops", {}).pop(asset_key, None)
     if live:
         st.session_state.live_visuals_approved = False
     else:

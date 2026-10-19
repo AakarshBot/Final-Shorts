@@ -9,7 +9,7 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
-from PIL import Image, ImageDraw, ImageFont, ImageStat, features
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageStat, features
 
 
 WIDTH = 1080
@@ -400,13 +400,16 @@ def _subject_occupancy(mask: Image.Image | None, box: tuple[int, int, int, int])
 
 
 def _region_complexity(image: Image.Image, box: tuple[int, int, int, int]) -> float:
+    """Estimate distraction using both tonal variation and edge density."""
     x1, y1, x2, y2 = box
     crop = image.crop((max(0, x1), max(0, y1), min(WIDTH, x2), min(HEIGHT, y2))).convert("L")
-    crop.thumbnail((40, 64))
+    crop.thumbnail((48, 72))
     if crop.width <= 1 or crop.height <= 1:
         return 1.0
-    stddev = ImageStat.Stat(crop).stddev
-    return sum(stddev) / (255 * len(stddev))
+    stats = ImageStat.Stat(crop)
+    tonal_variation = sum(stats.stddev) / (255 * len(stats.stddev))
+    edge_density = ImageStat.Stat(crop.filter(ImageFilter.FIND_EDGES)).mean[0] / 255
+    return min(1.0, tonal_variation * 0.45 + edge_density * 0.55)
 
 
 def _content_region(position: str) -> tuple[int, int]:
@@ -443,55 +446,68 @@ def _resolve_layout_position(image: Image.Image, mask: Image.Image | None, data:
 
 
 def _contrast_bed(image: Image.Image, position: str, treatment: str = "Soft gradient") -> Image.Image:
-    """Build a controlled, position-aware contrast surface without blanketing the whole photo."""
+    """Keep a restrained contrast bed behind the safe text area, away from the portrait centre."""
     rgba = image.convert("RGBA")
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(overlay)
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), INK + (0,))
+    max_alpha = 232 if treatment == "Deep gradient" else 174
 
     if treatment == "Editorial panel":
         x, width = _content_region(position)
         if position == "bottom":
-            box = (max(24, x - 28), 735, SAFE_RIGHT, SAFE_BOTTOM + 24)
+            box = (max(24, x - 28), 1020, min(SAFE_RIGHT + 80, WIDTH - 24), min(HEIGHT - 300, SAFE_BOTTOM + 190))
         elif position == "left":
-            box = (max(24, x - 28), SAFE_TOP - 34, min(SAFE_RIGHT, x + width + 28), SAFE_BOTTOM + 24)
+            box = (max(24, x - 28), SAFE_TOP - 30, min(SAFE_RIGHT, x + width + 36), SAFE_BOTTOM + 190)
         else:
-            box = (x - 28, SAFE_TOP - 34, SAFE_RIGHT, SAFE_BOTTOM + 24)
-        draw.rounded_rectangle(
-            box,
-            radius=28,
-            fill=INK + (190,),
-            outline=ACCENT + (112,),
-            width=2,
+            box = (max(24, x - 28), SAFE_TOP - 30, min(WIDTH - 24, x + width + 36), SAFE_BOTTOM + 190)
+        ImageDraw.Draw(overlay).rounded_rectangle(
+            box, radius=28, fill=INK + (194,), outline=ACCENT + (112,), width=2
         )
         return Image.alpha_composite(rgba, overlay)
 
-    max_alpha = 224 if treatment == "Deep gradient" else 166
-    if position == "bottom":
-        full_distance = 790
-        fade_span = 570
-        for y in range(HEIGHT):
-            distance = HEIGHT - 1 - y
-            if distance <= full_distance:
-                alpha = max_alpha
-            elif distance < full_distance + fade_span:
-                alpha = int(max_alpha * (full_distance + fade_span - distance) / fade_span)
+    vertical = Image.new("L", (1, HEIGHT), 0)
+    vp = []
+    for y in range(HEIGHT):
+        if position == "bottom":
+            if y < 1020:
+                factor = 0.0
+            elif y < 1200:
+                factor = (y - 1020) / 180
+            elif y <= SAFE_BOTTOM + 120:
+                factor = 1.0
             else:
-                alpha = 0
-            if alpha:
-                draw.line((0, y, WIDTH, y), fill=INK + (alpha,))
+                factor = max(0.0, (1780 - y) / (1780 - (SAFE_BOTTOM + 120)))
+        else:
+            if y < 140:
+                factor = 0.0
+            elif y < 300:
+                factor = (y - 140) / 160
+            elif y <= SAFE_BOTTOM + 100:
+                factor = 1.0
+            else:
+                factor = max(0.0, (1780 - y) / (1780 - (SAFE_BOTTOM + 100)))
+        vp.append(int(255 * max(0.0, min(1.0, factor))))
+    vertical.putdata(vp)
+    if position == "bottom":
+        alpha = Image.eval(vertical.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST), lambda value: int(value * max_alpha / 255))
     else:
         full_distance = SAFE_LEFT + CONTENT_WIDTH if position == "left" else WIDTH - SAFE_RIGHT + CONTENT_WIDTH
-        fade_span = 350
+        fade_span = 360
+        horizontal = Image.new("L", (WIDTH, 1), 0)
+        hp = []
         for x in range(WIDTH):
             distance = x if position == "left" else WIDTH - 1 - x
             if distance <= full_distance:
-                alpha = int(max_alpha * (0.58 + 0.42 * (1 - distance / full_distance)))
+                factor = 0.58 + 0.42 * (1 - distance / max(1, full_distance))
             elif distance < full_distance + fade_span:
-                alpha = int(max_alpha * 0.58 * (full_distance + fade_span - distance) / fade_span)
+                factor = 0.58 * (full_distance + fade_span - distance) / fade_span
             else:
-                alpha = 0
-            if alpha:
-                draw.line((x, 0, x, HEIGHT), fill=INK + (alpha,))
+                factor = 0.0
+            hp.append(int(255 * max(0.0, min(1.0, factor))))
+        horizontal.putdata(hp)
+        horizontal = horizontal.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST)
+        vertical = vertical.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST)
+        alpha = Image.eval(ImageChops.multiply(horizontal, vertical), lambda value: int(value * max_alpha / 255))
+    overlay.putalpha(alpha)
     return Image.alpha_composite(rgba, overlay)
 
 def _draw_kicker(
@@ -522,7 +538,7 @@ def _prepare_photo_card(source, subject_mask, data: dict | None = None):
     position = _resolve_layout_position(image, mask, data)
     treatment = str((data or {}).get("contrast_treatment") or "Soft gradient")
     canvas = _contrast_bed(image, position, treatment)
-    content_top = 765 if position == "bottom" else 205
+    content_top = 1010 if position == "bottom" else 205
     return canvas, mask, position, _content_region(position), content_top
 
 def _render_stat_highlight(source, data: dict, subject_mask: Image.Image | None) -> Image.Image:
@@ -624,16 +640,13 @@ def _render_stat_highlight(source, data: dict, subject_mask: Image.Image | None)
     return canvas.convert("RGB")
 
 def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None) -> Image.Image:
-    canvas, _mask, position, (x, width), content_top = _prepare_photo_card(
-        source, subject_mask, data
-    )
+    canvas, _mask, position, (x, width), content_top = _prepare_photo_card(source, subject_mask, data)
     draw = ImageDraw.Draw(canvas)
     bottom_mode = position == "bottom"
     language = _normalise_card_language(data.get("language"))
     y = _draw_kicker(
         canvas, x, content_top + (12 if bottom_mode else 30),
-        data.get("eyebrow") or _card_label("reaction", language),
-        language=language,
+        data.get("eyebrow") or _card_label("reaction", language), language=language,
     )
 
     quote = " ".join(str(data.get("quote") or "").split())
@@ -642,37 +655,43 @@ def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None)
     if not quote or not attribution:
         raise CardStudioError("Quote / Reaction needs a quote and attribution.")
 
-    # Keep the oversized opening mark clear of the quote's first line.
     text_x = x + (76 if width > CONTENT_WIDTH else 64)
     text_width = width - (text_x - x)
-    mark_font = _font_display(116 if bottom_mode else 132)
-    draw.text((x - 5, y - 12), "“", font=mark_font, fill=ACCENT)
+    draw.text((x - 5, y - 12), "“", font=_font_display(112 if bottom_mode else 132), fill=ACCENT)
     quote_top = y + 24
     quote_font, quote_lines = _fit(
-        draw, quote, text_width - 8, 4,
-        74 if bottom_mode else 78,
-        42 if bottom_mode else 44,
+        draw, quote, text_width - 8, 4 if bottom_mode else 6,
+        66 if bottom_mode else 78, 38 if bottom_mode else 42,
         bold=False, font_fn=_font_body,
     )
-    y = _draw_lines(canvas, quote_lines, text_x, quote_top, quote_font, 8, fill=WHITE) + 20
+    quote_bottom = _draw_lines(canvas, quote_lines, text_x, quote_top, quote_font, 8, fill=WHITE)
 
-    draw.rounded_rectangle((text_x, y, text_x + 56, y + 5), radius=2, fill=ACCENT)
-    y += 25
     attr_font, attr_lines = _fit(
         draw, attribution, text_width - 4, 2,
         42 if bottom_mode else 46, 29 if bottom_mode else 32,
         font_fn=_font_headline,
     )
-    y = _draw_lines(canvas, attr_lines, text_x, y, attr_font, 4, fill=WHITE) + 8
-
+    context_font = None
+    context_lines = []
     if context:
         context_font, context_lines = _fit(
             draw, context, text_width - 4, 2 if bottom_mode else 3,
             27 if bottom_mode else 30, 20 if bottom_mode else 22,
             bold=False, font_fn=_font_body,
         )
-        _draw_lines(canvas, context_lines, text_x, y, context_font, 4, fill=MUTED)
 
+    attr_height = sum(_measure(draw, line, attr_font)[1] + 4 for line in attr_lines)
+    context_height = sum(_measure(draw, line, context_font)[1] + 4 for line in context_lines) if context_font else 0
+    tail_height = 30 + 5 + 24 + attr_height + (8 + context_height if context_lines else 0)
+    target_rule_y = SAFE_BOTTOM - tail_height
+    rule_y = max(quote_bottom + (24 if bottom_mode else 20), target_rule_y - 18)
+    if quote_bottom + tail_height > SAFE_BOTTOM:
+        rule_y = quote_bottom + 18
+    draw.rounded_rectangle((text_x, rule_y, text_x + 56, rule_y + 5), radius=2, fill=ACCENT)
+    y = rule_y + 24
+    y = _draw_lines(canvas, attr_lines, text_x, y, attr_font, 4, fill=WHITE) + 8
+    if context_lines and context_font is not None:
+        _draw_lines(canvas, context_lines, text_x, y, context_font, 4, fill=MUTED)
     return canvas.convert("RGB")
 
 def _split_image_and_mask(source, mask, direction: str) -> tuple[Image.Image, Image.Image | None, Image.Image, Image.Image | None]:

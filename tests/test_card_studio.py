@@ -14,6 +14,21 @@ def _image_bytes(color=(52, 84, 118), size=(900, 1600)):
     return buffer.getvalue()
 
 
+def test_bottom_gradient_starts_below_the_main_portrait_zone():
+    image = Image.new("RGB", (1080, 1920), (175, 100, 70))
+    result = card_studio._contrast_bed(image, "bottom", "Soft gradient").convert("RGB")
+    assert result.getpixel((540, 990)) == image.getpixel((540, 990))
+    assert result.getpixel((540, 1300)) != image.getpixel((540, 1300))
+
+
+def test_auto_text_zone_uses_texture_when_no_subject_mask_is_available():
+    image = Image.new("RGB", (1080, 1920), (80, 80, 80))
+    draw = ImageDraw.Draw(image)
+    for x in range(660, 850, 8):
+        draw.line((x, 190, x, 1480), fill=(240, 240, 240), width=4)
+    assert card_studio._choose_text_side(image, None) == "left"
+
+
 def test_card_studio_outputs_1080x1920_png():
     for card_type in (
         "Stat Highlight",
