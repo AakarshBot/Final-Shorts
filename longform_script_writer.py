@@ -229,6 +229,7 @@ class LongformScriptWriter:
             normalized_act = dict(act)
             normalized_act["act_number"] = act_num
             normalized_act["chapter_title"] = ch_title
+            normalized_act["scenes"] = []
             normalized_acts.append(normalized_act)
             mins = int(cumulative_seconds // 60)
             secs = int(cumulative_seconds % 60)
@@ -272,6 +273,7 @@ class LongformScriptWriter:
                     "search_query": _clean(scene.get("search_query") or f"{primary_entity} cricket"),
                 }
                 all_scenes.append(scene_formatted)
+                normalized_act["scenes"].append(scene_formatted)
                 cumulative_seconds += scene_duration
 
         # Generate a description from verified metadata only. Do not claim wire
