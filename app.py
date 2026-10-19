@@ -5,7 +5,7 @@ import json
 import os
 from io import BytesIO
 from dataclasses import replace
-from PIL import Image
+from PIL import Image, ImageOps
 from pathlib import Path
 
 from dotenv import load_dotenv
