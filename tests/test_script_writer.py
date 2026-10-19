@@ -915,3 +915,57 @@ def test_groq_request_retries_rate_limit_after_retry_after(monkeypatch):
     assert result == valid_result()
     assert len(captured) == 2
     assert sleeps == [8.0]
+
+
+@pytest.mark.parametrize(
+    ("language", "subject", "voiceovers"),
+    [
+        (
+            "hindi",
+            "शुभमन गिल",
+            [
+                "शुभमन गिल की फिटनेस पर टीम अभी भी फैसला नहीं कर पाई है",
+                "रिपोर्ट के मुताबिक अभ्यास के दौरान उन्हें परेशानी हुई और बाद में जांच की गई",
+                "टीम प्रबंधन अगला फैसला मेडिकल रिपोर्ट मिलने के बाद ही करेगा जिससे चयन पर असर पड़ सकता है",
+                "अगर वह समय पर फिट नहीं होते तो अगले मुकाबले में भारत को नए विकल्प पर भरोसा करना पड़ सकता है",
+            ],
+        ),
+        (
+            "telugu",
+            "శుభ్‌మన్ గిల్",
+            [
+                "శుభ్‌మన్ గిల్ ఫిట్‌నెస్‌పై జట్టు ఇంకా తుది నిర్ణయం తీసుకోలేకపోయింది",
+                "నివేదిక ప్రకారం సాధన సమయంలో అతనికి ఇబ్బంది ఎదురైంది తరువాత వైద్య పరీక్ష కూడా జరిగింది",
+                "వైద్య నివేదిక అందిన తర్వాతే జట్టు యాజమాన్యం నిర్ణయం తీసుకుంటుంది దీంతో ఎంపికపై ప్రభావం పడవచ్చు",
+                "అతను సమయానికి ఫిట్ కాకపోతే తదుపరి మ్యాచ్‌లో భారత్ కొత్త ఆటగాడిపై ఆధారపడాల్సి రావచ్చు దీంతో వ్యూహం కూడా మారే అవకాశం ఉంది కోచ్‌లు దీనిని గమనిస్తున్నారు",
+            ],
+        ),
+    ],
+)
+def test_universal_validator_counts_hindi_telugu_words_without_splitting_script_marks(
+    language, subject, voiceovers
+):
+    result = valid_result()
+    result["subject_name"] = subject
+    result["headline"] = "Story headline"
+    result["titles"] = [
+        "కథ శీర్షిక ఒకటి" if language == "telugu" else "कहानी शीर्षक एक",
+        "ఇది ఎందుకు ముఖ్యం" if language == "telugu" else "यह क्यों महत्वपूर्ण है",
+        "తర్వాత ఏమవుతుంది" if language == "telugu" else "अब आगे क्या होगा",
+    ]
+    result["seo_description"] = "Story-specific description."
+    result["quote"] = ""
+    result["quote_attribution"] = ""
+    result["quote_slide"] = 0
+    for scene, voiceover in zip(result["script"], voiceovers):
+        scene["voiceover"] = voiceover
+        scene["primary_entity"] = subject
+    narration = " ".join(voiceovers)
+
+    valid, reason = script_writer.validate_universal_script(result, language=language)
+
+    assert script_writer._spoken_word_count(narration, language) == len(narration.split())
+    assert script_writer.MIN_WORDS <= script_writer._spoken_word_count(narration, language) <= script_writer.MAX_WORDS
+    assert valid, reason
+    metrics = script_writer.evaluate_flow({**result, "language_used": language})
+    assert metrics["total_words"] == len(narration.split())
