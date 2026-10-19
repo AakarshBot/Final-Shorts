@@ -97,6 +97,10 @@ def test_crop_assignment_store_is_pipeline_specific():
     assert '"visual_crops": "visual_assignments"' in crop_source
     assert '"live_visual_crops": "live_visual_assignments"' in crop_source
     assert '"test_top5_visual_crops": "test_top5_visual_assignments"' in crop_source
+    assert '"card_studio_crops": "visual_assignments"' in crop_source
+    assert '"live_card_studio_crops": "live_visual_assignments"' in crop_source
+    assert '"test_top5_card_studio_visual_crops": "test_top5_visual_assignments"' in crop_source
+    assert '"test_top5_card_studio_crops": "test_top5_visual_assignments"' in crop_source
 
 
 def test_visual_pool_work_uses_cached_validation_and_thumbnails():
