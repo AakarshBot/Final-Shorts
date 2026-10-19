@@ -281,8 +281,12 @@ def render_longform_stat_card(source: bytes | bytearray | Image.Image | None, da
     """Renders a 16:9 Stat Highlight Card with hero metric and telemetry grid."""
     player_name = " ".join(str(data.get("player_name") or data.get("headline") or "PLAYER STAT").split()).upper()
     eyebrow = " ".join(str(data.get("eyebrow") or "DEEP-DIVE TELEMETRY").split()).upper()
-    hero_stat = " ".join(str(data.get("hero_stat") or data.get("stat") or "0.0").split())
-    stat_label = " ".join(str(data.get("stat_label") or data.get("metric") or "METRIC RECORD").split()).upper()
+    hero_stat_value = data.get("hero_stat") or data.get("stat")
+    stat_label_value = data.get("stat_label") or data.get("metric")
+    if not str(hero_stat_value or "").strip() or not str(stat_label_value or "").strip():
+        raise LongformCardError("Stat Card requires a source-grounded hero_stat and stat_label.")
+    hero_stat = " ".join(str(hero_stat_value).split())
+    stat_label = " ".join(str(stat_label_value).split()).upper()
     context_note = " ".join(str(data.get("context_note") or data.get("note") or "").split())
     tiles = list(data.get("tiles") or data.get("metrics") or [])
 
@@ -378,12 +382,14 @@ def render_longform_stat_card(source: bytes | bytearray | Image.Image | None, da
 def render_longform_quote_card(source: bytes | bytearray | Image.Image | None, data: dict) -> Image.Image:
     """Renders a 16:9 Quote / Reaction Card with editorial quotation layout."""
     quote_text = " ".join(str(data.get("quote") or data.get("text") or "").split())
-    speaker_name = " ".join(str(data.get("speaker") or data.get("attribution") or "CRICKET INSIDER").split()).upper()
-    speaker_role = " ".join(str(data.get("role") or data.get("context") or "STATEMENT").split()).upper()
-    eyebrow = " ".join(str(data.get("eyebrow") or "EXCLUSIVE STATEMENT").split()).upper()
-
+    speaker_value = data.get("speaker") or data.get("attribution")
     if not quote_text:
         raise LongformCardError("Quote Card requires quote text.")
+    if not str(speaker_value or "").strip():
+        raise LongformCardError("Quote Card requires a source-grounded speaker attribution.")
+    speaker_name = " ".join(str(speaker_value).split()).upper()
+    speaker_role = " ".join(str(data.get("role") or data.get("context") or "").split()).upper()
+    eyebrow = " ".join(str(data.get("eyebrow") or "QUOTED STATEMENT").split()).upper()
 
     canvas = _widescreen_backdrop(source, side="right")
     draw = ImageDraw.Draw(canvas)
@@ -432,17 +438,24 @@ def render_longform_quote_card(source: bytes | bytearray | Image.Image | None, d
 
 def render_longform_h2h_card(source: bytes | bytearray | Image.Image | None, data: dict) -> Image.Image:
     """Renders a 16:9 Head-to-Head Split Card with dual player comparisons."""
-    headline = " ".join(str(data.get("headline") or "TACTICAL SHOWDOWN").split()).upper()
-    left_name = " ".join(str(data.get("left_name") or data.get("left", {}).get("name") or "PLAYER 1").split()).upper()
-    right_name = " ".join(str(data.get("right_name") or data.get("right", {}).get("name") or "PLAYER 2").split()).upper()
-    metrics = list(data.get("metrics") or [])
-
+    headline = " ".join(str(data.get("headline") or "HEAD-TO-HEAD COMPARISON").split()).upper()
+    left_data = data.get("left") if isinstance(data.get("left"), dict) else {}
+    right_data = data.get("right") if isinstance(data.get("right"), dict) else {}
+    left_value = data.get("left_name") or left_data.get("name")
+    right_value = data.get("right_name") or right_data.get("name")
+    if not str(left_value or "").strip() or not str(right_value or "").strip():
+        raise LongformCardError("Head-to-Head Card requires two named subjects.")
+    left_name = " ".join(str(left_value).split()).upper()
+    right_name = " ".join(str(right_value).split()).upper()
+    metrics = [
+        row for row in (data.get("metrics") or [])
+        if isinstance(row, dict)
+        and str(row.get("label") or "").strip()
+        and str(row.get("left") or "").strip()
+        and str(row.get("right") or "").strip()
+    ]
     if not metrics:
-        metrics = [
-            {"label": "TEST AVERAGE", "left": "52.4", "right": "48.2"},
-            {"label": "STRIKE RATE", "left": "78.9", "right": "84.1"},
-            {"label": "MATCH WINS", "left": "44", "right": "39"},
-        ]
+        raise LongformCardError("Head-to-Head Card requires source-grounded comparison metrics.")
 
     canvas = _cover(source).convert("RGBA")
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
@@ -540,8 +553,12 @@ def render_longform_h2h_card(source: bytes | bytearray | Image.Image | None, dat
 
 def render_longform_milestone_card(source: bytes | bytearray | Image.Image | None, data: dict) -> Image.Image:
     """Renders a 16:9 Landmark Milestone Card with prestige heritage styling."""
-    title = " ".join(str(data.get("title") or data.get("headline") or "HISTORIC MILESTONE").split()).upper()
-    milestone_badge = " ".join(str(data.get("milestone") or data.get("badge") or "RECORD").split()).upper()
+    title_value = data.get("title") or data.get("headline")
+    milestone_value = data.get("milestone") or data.get("badge")
+    if not str(title_value or "").strip() or not str(milestone_value or "").strip():
+        raise LongformCardError("Milestone Card requires a source-grounded title and milestone label.")
+    title = " ".join(str(title_value).split()).upper()
+    milestone_badge = " ".join(str(milestone_value).split()).upper()
     subtitle = " ".join(str(data.get("subtitle") or "").split())
     bullet_points = list(data.get("bullets") or data.get("facts") or [])
 
@@ -668,14 +685,12 @@ def render_longform_chapter_card(source: bytes | bytearray | Image.Image | None,
 def render_longform_timeline_card(source: bytes | bytearray | Image.Image | None, data: dict) -> Image.Image:
     """Renders a 16:9 Horizontal Chronological Track showing how events unfolded."""
     headline = " ".join(str(data.get("headline") or "CHRONOLOGY OF EVENTS").split()).upper()
-    nodes = list(data.get("nodes") or data.get("events") or [])
-
-    if not nodes:
-        nodes = [
-            {"date": "STAGE 1", "title": "The Incident", "desc": "Initial reports emerge during morning practice."},
-            {"date": "STAGE 2", "title": "Medical Scan", "desc": "Swelling confirmed; hospital scans advise mandatory rest."},
-            {"date": "STAGE 3", "title": "BCCI Statement", "desc": "Selectors officially name Bumrah as stand-in captain."},
-        ]
+    nodes = [
+        node for node in (data.get("nodes") or data.get("events") or [])
+        if isinstance(node, dict) and str(node.get("title") or "").strip()
+    ]
+    if len(nodes) < 2:
+        raise LongformCardError("Timeline Card requires at least two source-grounded event nodes.")
 
     canvas = _cover(source).convert("RGBA")
     overlay = Image.new("RGBA", (WIDTH, HEIGHT), (0, 0, 0, 0))
