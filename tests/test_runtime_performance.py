@@ -26,21 +26,45 @@ def test_dashboard_has_no_timed_refresh_or_polling():
     assert "runOnSave = false" in config
 
 
-def test_crop_dialog_uses_bounded_canvas_and_explicit_crop_confirmation():
+def test_crop_dialog_shows_full_source_and_applies_free_crop_to_9x16():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     start = app_source.index("def _crop_visual_dialog(")
     end = app_source.index("@st.fragment", start)
     crop_source = app_source[start:end]
 
     assert "max_canvas_width=1600" in crop_source
-    assert "realtime_update=card_selector" in crop_source
-    assert "card_selector: bool = False" in crop_source
-    assert "Double-click to confirm the crop selection." in crop_source
-    assert "The preview follows your selection" in crop_source
+    assert "realtime_update=True" in crop_source
+    assert "aspect_ratio=None" in crop_source
+    assert "Reset rectangle to centred 9:16" in crop_source
+    assert "Use original image" in crop_source
+    assert "final_preview = cropped.convert(\"RGB\").resize((1080, 1920)" in crop_source
+    assert "crop-reset-" in crop_source
     assert "def _prepare_crop_dialog_canvas(" in app_source
     assert "@st.cache_data(max_entries=4, show_spinner=False)" in app_source
     assert "invalidate_card_studio_results_for_source(" in crop_source
     assert "card_selector=True" in app_source
+
+
+def test_card_studio_receives_original_visuals_and_uses_an_independent_crop_store():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    start = app_source.index("def _visual_pool_entries(")
+    end = app_source.index("def _render_card_studio(", start)
+    pool_source = app_source[start:end]
+    assert "raw = asset.get(\"bytes\")" in pool_source
+    assert "crop_store.get(asset_key)" not in pool_source
+    studio_source = app_source[app_source.index("def _render_card_studio("):]
+    assert 'crop_store_name = "live_card_studio_crops" if live else "card_studio_crops"' in studio_source
+    assert 'crop_store_name = "test_top5_card_studio_visual_crops"' in studio_source
+
+
+def test_crop_assignment_store_is_pipeline_specific():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    start = app_source.index('@st.dialog("Crop visual"')
+    end = app_source.index("@st.fragment", start)
+    crop_source = app_source[start:end]
+    assert '"visual_crops": "visual_assignments"' in crop_source
+    assert '"live_visual_crops": "live_visual_assignments"' in crop_source
+    assert '"test_top5_visual_crops": "test_top5_visual_assignments"' in crop_source
 
 
 def test_visual_pool_work_uses_cached_validation_and_thumbnails():

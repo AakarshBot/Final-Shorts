@@ -535,6 +535,59 @@ def test_manual_subject_cutout_migrates_four_point_polygon_to_eight_points():
     ]
 
 
+
+def test_card_studio_story_autofill_populates_fields_for_selected_language(monkeypatch):
+    import script_writer
+
+    def fake_generate(card_type, story, target_language="english", manual_prompt=""):
+        assert story["title"] == "Gill reaches 123"
+        assert target_language == "hindi"
+        assert card_type == "Stat Highlight"
+        return {
+            "eyebrow": "करियर रिकॉर्ड", "headline": "शानदार पारी",
+            "value": "123", "unit": "रन",
+            "metrics": [
+                {"label": "औसत", "value": "46.27"},
+                {"label": "मैच", "value": "12"},
+                {"label": "शतक", "value": "3"},
+            ],
+        }
+
+    monkeypatch.setattr(script_writer, "generate_card_copy", fake_generate)
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "04 · Visuals"
+    at.session_state["script_language"] = "hindi"
+    at.session_state["topics"] = [Topic(
+        title="Gill reaches 123",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/gill-123",
+    )]
+    at.session_state["selected_topic"] = 0
+    at.session_state["visual_test_mode"] = "Option 5 · Card Studio"
+    at.session_state["visual_result"] = {"assets": [{
+        "bytes": _image_bytes(), "source": "Test Source",
+        "article_title": "Gill reaches 123",
+    }]}
+    at.session_state["test-standalone-card-studio-type"] = "Stat Highlight"
+    at.session_state["test-standalone-card-studio-image-1"] = ""
+    at.run()
+    assert not at.exception, at.exception
+
+    transfer = next((button for button in at.button if button.label == "Select image"), None)
+    if transfer:
+        transfer.click().run()
+    autofill = next(button for button in at.button if button.label == "Auto-fill this card from story")
+    autofill.click().run()
+    assert not at.exception, at.exception
+    values = {field.label: field.value for field in at.text_input}
+    assert values["Eyebrow"] == "करियर रिकॉर्ड"
+    assert values["Hero value"] == "123"
+    assert values["Unit"] == "रन"
+
+
 def test_card_studio_shows_image_pool_crop_controls_and_default_fields():
     assets = [
         {"bytes": _image_bytes((40, 50, 60)), "source": "source-a", "article_title": "Image A"},

@@ -1533,6 +1533,145 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
     return result
 
 
+def generate_card_copy(
+    card_type: str,
+    story: dict,
+    target_language: str = "english",
+    manual_prompt: str = "",
+) -> dict:
+    """Generate editable story-grounded copy for one selected editorial card."""
+    language = str(target_language or "english").strip().casefold()
+    language = {"en": "english", "hi": "hindi", "te": "telugu"}.get(language, language)
+    language_names = {
+        "english": "natural, concise English using Latin script",
+        "hindi": "natural, concise Hindi using Devanagari script",
+        "telugu": "natural, concise Telugu using Telugu script",
+    }
+    if language not in language_names:
+        raise ValueError(f"Unsupported card-copy language: {target_language}")
+    card_type = " ".join(str(card_type or "").split())
+    if card_type == "Text Subject Cutout":
+        raise ValueError("Text Subject Cutout is handled by the existing shared editor.")
+
+    text = {"type": "string"}
+    metric = {
+        "type": "object",
+        "properties": {"label": text, "value": text},
+        "required": ["label", "value"],
+        "additionalProperties": False,
+    }
+    h2h_metric = {
+        "type": "object",
+        "properties": {"label": text, "left_value": text, "right_value": text},
+        "required": ["label", "left_value", "right_value"],
+        "additionalProperties": False,
+    }
+    schemas = {
+        "Stat Highlight": {
+            "type": "object",
+            "properties": {
+                "eyebrow": text, "headline": text, "value": text, "unit": text,
+                "metrics": {"type": "array", "items": metric, "minItems": 3, "maxItems": 3},
+            },
+            "required": ["eyebrow", "headline", "value", "unit", "metrics"],
+            "additionalProperties": False,
+        },
+        "Quote / Reaction": {
+            "type": "object",
+            "properties": {"eyebrow": text, "quote": text, "attribution": text, "context": text},
+            "required": ["eyebrow", "quote", "attribution", "context"],
+            "additionalProperties": False,
+        },
+        "Head-to-Head": {
+            "type": "object",
+            "properties": {
+                "eyebrow": text, "headline": text, "left_name": text, "right_name": text,
+                "metrics": {"type": "array", "items": h2h_metric, "minItems": 3, "maxItems": 3},
+            },
+            "required": ["eyebrow", "headline", "left_name", "right_name", "metrics"],
+            "additionalProperties": False,
+        },
+        "Key Fact / Milestone": {
+            "type": "object",
+            "properties": {"eyebrow": text, "value": text, "label": text, "context": text},
+            "required": ["eyebrow", "value", "label", "context"],
+            "additionalProperties": False,
+        },
+    }
+    schema = schemas.get(card_type)
+    if schema is None:
+        raise ValueError(f"Unknown editorial card type: {card_type or 'None'}")
+
+    packet = story if isinstance(story, dict) else {"story": str(story or "")}
+    story_json = json.dumps(packet, ensure_ascii=False, default=str)
+    if len(story_json) > 18000:
+        story_json = story_json[:18000]
+    prompt = (
+        "Write copy for a single vertical 1080x1920 sports editorial Short card. Return only the requested JSON. "
+        "Target language: " + language_names[language] + ". Use only evidence in the supplied story, source description, "
+        "and approved narration. Never invent scores, statistics, dates, records, direct quotes, attributions, or "
+        "player/team facts. All digits must use ASCII 0-9 even in Hindi/Telugu. Keep names identifiable, copy concise, "
+        "and all fields filled. If numeric data is not available use an em dash (—), not a guessed number. "
+        "For Quote / Reaction, do not invent a verbatim quote: when no exact quote is supplied, write a clearly "
+        "labelled editorial summary and identify the attribution as a summary, not a direct quote. For Head-to-Head, "
+        "only compare entities when the packet supplies comparable evidence; otherwise use em dashes. Do not use "
+        "generic placeholders such as Player A, Player B, Name or invented metrics. "
+        + ("Card-specific direction: " + manual_prompt.strip() + ". " if manual_prompt.strip() else "")
+        + "Story packet follows as JSON."
+    )
+    errors = []
+    candidate = None
+    for model in MODELS:
+        try:
+            candidate = _request(
+                model, prompt, story_json, schema=schema,
+                schema_name="editorial_card_copy", max_completion_tokens=1300,
+            )
+            if not isinstance(candidate, dict) or any(key not in candidate for key in schema["required"]):
+                raise ValueError("The provider returned incomplete card-copy fields.")
+            if card_type in {"Stat Highlight", "Head-to-Head"} and (
+                not isinstance(candidate.get("metrics"), list) or len(candidate["metrics"]) != 3
+            ):
+                raise ValueError("The provider must return exactly three metric rows.")
+            break
+        except GroqAPIError as exc:
+            errors.append(f"{model}: {exc}")
+            candidate = None
+            if 400 <= exc.status_code < 500 and exc.status_code != 429:
+                raise RuntimeError("Groq rejected the card-copy request: " + str(exc)) from exc
+        except Exception as exc:
+            errors.append(f"{model}: {type(exc).__name__}: {exc}")
+            candidate = None
+    if candidate is None:
+        raise RuntimeError("Editorial card copy generation failed: " + " | ".join(errors))
+
+    def ascii_digits(value):
+        clean = str(value or "").strip()
+        return "".join(str(unicodedata.decimal(char)) if char.isdecimal() else char for char in clean)
+
+    for key, value in list(candidate.items()):
+        if key != "metrics":
+            candidate[key] = ascii_digits(value)
+    if card_type == "Stat Highlight":
+        for row in candidate["metrics"]:
+            row["label"] = ascii_digits(row.get("label"))
+            row["value"] = ascii_digits(row.get("value"))
+    elif card_type == "Head-to-Head":
+        raw_metrics = candidate["metrics"]
+        metrics = [ascii_digits(item.get("label")) for item in raw_metrics]
+        left_values = {metrics[i]: ascii_digits(raw_metrics[i].get("left_value")) for i in range(3)}
+        right_values = {metrics[i]: ascii_digits(raw_metrics[i].get("right_value")) for i in range(3)}
+        candidate = {
+            "eyebrow": ascii_digits(candidate.get("eyebrow")),
+            "headline": ascii_digits(candidate.get("headline")),
+            "metrics": metrics,
+            "left": {"name": ascii_digits(candidate.get("left_name")), "values": left_values},
+            "right": {"name": ascii_digits(candidate.get("right_name")), "values": right_values},
+        }
+    candidate["language"] = language
+    return candidate
+
+
 def _validate_cricket_story_angles(result: dict) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no angle object."

@@ -969,3 +969,59 @@ def test_universal_validator_counts_hindi_telugu_words_without_splitting_script_
     assert valid, reason
     metrics = script_writer.evaluate_flow({**result, "language_used": language})
     assert metrics["total_words"] == len(narration.split())
+
+
+def test_generate_stat_card_copy_preserves_story_and_ascii_digits(monkeypatch):
+    captured = {}
+    response = {
+        "eyebrow": "करियर रिकॉर्ड",
+        "headline": "शानदार पारी",
+        "value": "१२३",
+        "unit": "रन",
+        "metrics": [
+            {"label": "औसत", "value": "४६.२७"},
+            {"label": "मैच", "value": "१२"},
+            {"label": "शतक", "value": "३"},
+        ],
+    }
+
+    def fake_request(model, prompt, story, **kwargs):
+        captured.update({"prompt": prompt, "story": story, "kwargs": kwargs})
+        return response
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.generate_card_copy(
+        "Stat Highlight",
+        {"title": "Gill scores 123", "script": [{"voiceover": "He scored 123 runs."}]},
+        target_language="hindi",
+        manual_prompt="Focus on the record.",
+    )
+    assert result["value"] == "123"
+    assert result["metrics"][0]["value"] == "46.27"
+    assert result["metrics"][1]["value"] == "12"
+    assert "Hindi" in captured["prompt"]
+    assert "Focus on the record." in captured["prompt"]
+    assert "Gill scores 123" in captured["story"]
+    assert captured["kwargs"]["schema_name"] == "editorial_card_copy"
+
+
+def test_generate_head_to_head_card_copy_returns_renderer_shape(monkeypatch):
+    monkeypatch.setattr(script_writer, "_request", lambda *args, **kwargs: {
+        "eyebrow": "HEAD TO HEAD", "headline": "Who leads?",
+        "left_name": "Player One", "right_name": "Player Two",
+        "metrics": [
+            {"label": "Runs", "left_value": "1,020", "right_value": "990"},
+            {"label": "Average", "left_value": "48.2", "right_value": "44.1"},
+            {"label": "Centuries", "left_value": "3", "right_value": "2"},
+        ],
+    })
+    result = script_writer.generate_card_copy("Head-to-Head", {"title": "Comparison"})
+    assert result["metrics"] == ["Runs", "Average", "Centuries"]
+    assert result["left"]["name"] == "Player One"
+    assert result["left"]["values"]["Runs"] == "1,020"
+    assert result["right"]["values"]["Centuries"] == "2"
+
+
+def test_generate_card_copy_rejects_text_subject_cutout():
+    with pytest.raises(ValueError, match="existing shared editor"):
+        script_writer.generate_card_copy("Text Subject Cutout", {}, "english")
