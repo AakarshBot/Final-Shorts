@@ -248,23 +248,16 @@ class LongformRenderer:
 
                 # Scene starts are chronological. Advance a cursor rather than
                 # scanning the full scene list for every frame of an 8-minute render.
+                # Do not advance into the next scene during a genuine narration
+                # gap (e.g. an 0.8s act transition). Hold the prior visual until
+                # the next scene's actual audio start time.
                 while (
                     scene_index < len(prepared_bases) - 1
-                    and current_time
-                    >= prepared_bases[scene_index]["start"]
-                    + prepared_bases[scene_index]["duration"]
-                    + 0.15
+                    and current_time >= prepared_bases[scene_index + 1]["start"]
                 ):
                     scene_index += 1
 
                 active_scene = prepared_bases[scene_index]
-                # Keep the previous fallback for any timing gap in the audio handoff.
-                if not (
-                    active_scene["start"]
-                    <= current_time
-                    < active_scene["start"] + active_scene["duration"] + 0.15
-                ):
-                    active_scene = prepared_bases[-1]
 
                 sc_start = active_scene["start"]
                 sc_dur = max(0.1, active_scene["duration"])
