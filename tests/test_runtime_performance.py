@@ -53,6 +53,7 @@ def test_applied_9x16_crop_thumbnails_preserve_the_entire_final_frame():
     start = app_source.index("def _fit_visual_preview_bytes(")
     end = app_source.index("def _delete_visual_asset(", start)
     preview_source = app_source[start:end]
+    assert "from PIL import Image, ImageOps" in app_source
     assert preview_source.count("abs(current_ratio - (9 / 16)) < 0.005") == 2
     assert preview_source.count("ImageOps.contain(image, (width, height)") == 2
     assert "preview.paste(fitted" in preview_source
