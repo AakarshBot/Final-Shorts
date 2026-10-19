@@ -1517,3 +1517,73 @@ def test_production_render_does_not_fail_when_windows_locks_silent_intermediate(
     assert locked_paths[0].exists()
     assert ".silent.mp4" in locked_paths[0].name
     assert locked_paths[0].name != f"{output.stem}.silent.mp4"
+
+
+def _fake_fribidi_package_bytes(dll_bytes=b"M" * 20_000, license_bytes=b"LGPL-2.1-or-later\n"):
+    import tarfile
+    from io import BytesIO
+    import zstandard
+
+    buffer = BytesIO()
+    with tarfile.open(fileobj=buffer, mode="w") as archive:
+        for name, data in (
+            (renderer._FRIBIDI_DLL_MEMBER, dll_bytes),
+            (renderer._FRIBIDI_LICENSE_MEMBER, license_bytes),
+        ):
+            info = tarfile.TarInfo(name=name)
+            info.size = len(data)
+            archive.addfile(info, BytesIO(data))
+    return zstandard.ZstdCompressor().compress(buffer.getvalue())
+
+
+def test_windows_fribidi_bootstrap_downloads_only_verified_dll_and_license(monkeypatch, tmp_path):
+    import hashlib
+
+    dll_bytes = b"verified fake FriBiDi DLL" * 1000
+    license_bytes = b"LGPL-2.1-or-later\n"
+    package = _fake_fribidi_package_bytes(dll_bytes, license_bytes)
+    monkeypatch.setattr(
+        renderer,
+        "_FRIBIDI_PACKAGE_SHA256",
+        hashlib.sha256(package).hexdigest(),
+    )
+
+    requested = {}
+
+    def fake_urlopen(request, timeout):
+        requested["url"] = request.full_url
+        requested["timeout"] = timeout
+        return BytesIO(package)
+
+    monkeypatch.setattr(renderer.urllib.request, "urlopen", fake_urlopen)
+
+    installed = renderer._install_fribidi_from_official_package(tmp_path)
+
+    assert installed == tmp_path / "dlls" / "libfribidi-0.dll"
+    assert installed.read_bytes() == dll_bytes
+    assert (tmp_path / "dlls" / "licenses" / "fribidi-COPYING.txt").read_bytes() == license_bytes
+    assert requested["url"] == renderer._FRIBIDI_PACKAGE_URL
+    assert requested["timeout"] == 25
+
+
+def test_windows_fribidi_bootstrap_rejects_checksum_mismatch_without_installing(monkeypatch, tmp_path):
+    package = _fake_fribidi_package_bytes()
+    monkeypatch.setattr(renderer, "_FRIBIDI_PACKAGE_SHA256", "0" * 64)
+    monkeypatch.setattr(
+        renderer.urllib.request,
+        "urlopen",
+        lambda *_args, **_kwargs: BytesIO(package),
+    )
+
+    with pytest.raises(RuntimeError, match="pinned SHA-256 check"):
+        renderer._install_fribidi_from_official_package(tmp_path)
+
+    assert not (tmp_path / "dlls" / "libfribidi-0.dll").exists()
+    assert not (tmp_path / "dlls" / "licenses" / "fribidi-COPYING.txt").exists()
+
+
+def test_indic_raqm_error_explains_verified_automatic_bootstrap(monkeypatch):
+    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
+    monkeypatch.setattr(renderer.os, "name", "posix")
+    with pytest.raises(RuntimeError, match="attempts to download and verify FriBiDi automatically"):
+        renderer._require_raqm("hindi")
