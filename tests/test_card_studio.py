@@ -17,7 +17,7 @@ def _image_bytes(color=(52, 84, 118), size=(900, 1600)):
 def test_bottom_gradient_starts_below_the_main_portrait_zone():
     image = Image.new("RGB", (1080, 1920), (175, 100, 70))
     result = card_studio._contrast_bed(image, "bottom", "Soft gradient").convert("RGB")
-    assert result.getpixel((540, 850)) == image.getpixel((540, 850))
+    assert result.getpixel((540, 990)) == image.getpixel((540, 990))
     assert result.getpixel((540, 1300)) != image.getpixel((540, 1300))
 
 
