@@ -1426,3 +1426,56 @@ def test_text_subject_cutout_uses_script_specific_noto_font(sample, font_name):
         Path(renderer.__file__).resolve().parent / "fonts" / font_name
     ).read_bytes()
     assert data["layouts"]
+
+
+def test_production_render_does_not_fail_when_windows_locks_silent_intermediate(
+    monkeypatch, tmp_path
+):
+    audio_file = tmp_path / "scene1.mp3"
+    audio_file.write_bytes(b"audio")
+    visual_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual_buffer, format="PNG")
+    locked_paths = []
+
+    def fake_preview(frames, path):
+        list(frames)
+        path.write_bytes(b"silent")
+        locked_paths.append(path)
+        return path
+
+    def fake_mux(silent_video, audio_scenes, output):
+        assert silent_video.exists()
+        output.write_bytes(b"final")
+        return output
+
+    original_unlink = Path.unlink
+
+    def simulate_windows_lock(path, *args, **kwargs):
+        if path in locked_paths:
+            raise PermissionError(
+                32,
+                "The process cannot access the file because it is being used by another process",
+                str(path),
+            )
+        return original_unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
+    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
+    monkeypatch.setattr(Path, "unlink", simulate_windows_lock)
+
+    output = tmp_path / "final.mp4"
+    with pytest.warns(RuntimeWarning, match="temporary silent video could not be deleted"):
+        result = renderer.render_production_video(
+            {"approved_for_audio": True, "script": [{"voiceover": "A spoken line."}]},
+            {"approved_for_visuals": True, "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}]},
+            None,
+            [{"bytes": visual_buffer.getvalue()}],
+            output,
+        )
+
+    assert result == output
+    assert output.read_bytes() == b"final"
+    assert len(locked_paths) == 1
+    assert locked_paths[0].exists()
+    assert ".silent.mp4" in locked_paths[0].name
+    assert locked_paths[0].name != f"{output.stem}.silent.mp4"
