@@ -184,3 +184,93 @@ def test_longform_render_uses_unique_temp_and_cleans_it_when_frame_generation_fa
     assert ".silent.mp4" in temp_path.name
     assert not temp_path.exists()
     assert process.killed
+
+
+
+def test_longform_renderer_holds_previous_visual_until_next_audio_scene_start(monkeypatch, tmp_path):
+    import longform_renderer
+
+    # Use tiny frames/few frames so this tests timeline selection without FFmpeg cost.
+    monkeypatch.setattr(longform_renderer, "WIDTH", 32)
+    monkeypatch.setattr(longform_renderer, "HEIGHT", 18)
+    monkeypatch.setattr(longform_renderer, "FPS", 2)
+    monkeypatch.setattr(longform_renderer, "_ffmpeg_available", lambda: True)
+
+    def image_bytes(color):
+        buffer = BytesIO()
+        Image.new("RGB", (64, 36), color).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    master_audio = tmp_path / "master.wav"
+    master_audio.write_bytes(b"mock master audio")
+    output = tmp_path / "longform-gap-test.mp4"
+    frame_colors = []
+
+    def motion(base, progress):
+        frame_colors.append((base.getpixel((0, 0)), progress))
+        return base
+
+    monkeypatch.setattr(longform_renderer, "_apply_ken_burns", motion)
+
+    class FakePipe:
+        def write(self, _data):
+            return None
+
+        def close(self):
+            return None
+
+    class FakeStderr:
+        def read(self):
+            return b""
+
+    class FakeProcess:
+        def __init__(self):
+            self.stdin = FakePipe()
+            self.stderr = FakeStderr()
+
+        def poll(self):
+            return 0
+
+        def wait(self, timeout=None):
+            return 0
+
+    monkeypatch.setattr(longform_renderer.subprocess, "Popen", lambda *_args, **_kwargs: FakeProcess())
+    monkeypatch.setattr(
+        LongformRenderer,
+        "_mux_audio_track",
+        staticmethod(lambda **_kwargs: output.write_bytes(b"muxed video")),
+    )
+
+    visuals = {
+        "scenes_visuals": [
+            {"scene_number": 1, "image_bytes": image_bytes((200, 10, 10))},
+            {"scene_number": 2, "image_bytes": image_bytes((10, 10, 200))},
+        ]
+    }
+    audio = {
+        "master_path": str(master_audio),
+        "total_duration": 1.8,
+        "scenes": [
+            {"scene": 1, "act": 1, "start_seconds": 0.0, "duration": 0.25},
+            {"scene": 2, "act": 2, "start_seconds": 1.0, "duration": 0.8},
+        ],
+    }
+
+    rendered = LongformRenderer.render_video(
+        approved_script=sample_script(),
+        approved_audio=audio,
+        approved_visuals=visuals,
+        subtitle_data={"cues": [], "act_billboards": []},
+        output_path=output,
+    )
+
+    assert rendered.is_file()
+    assert [color for color, _progress in frame_colors] == [
+        (200, 10, 10),
+        (200, 10, 10),
+        (10, 10, 200),
+        (10, 10, 200),
+    ]
+    # At t=0.5s, the prior scene holds during the 0.75s act gap.
+    assert frame_colors[1][1] == 1.0
+    assert frame_colors[2][1] == 0.0
