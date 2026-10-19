@@ -69,9 +69,9 @@ def _register_windows_dll_paths() -> None:
         _DLL_DIRECTORY_HANDLES.append(handle)
 
 
-def _install_windows_fribidi_via_powershell() -> None:
+def _install_windows_fribidi_via_powershell(root: Path | None = None) -> None:
     """Run the repo's checksum-verified no-pip installer, then validate its DLL output."""
-    root = Path(__file__).resolve().parent
+    root = Path(root or Path(__file__).resolve().parent)
     setup_script = root / "setup_windows_indic_rendering.ps1"
     if not setup_script.is_file():
         raise RuntimeError(
