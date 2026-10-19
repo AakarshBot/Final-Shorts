@@ -536,7 +536,26 @@ def test_manual_subject_cutout_migrates_four_point_polygon_to_eight_points():
 
 
 
-def test_card_studio_shows_image_pool_crop_controls_and_default_fields():
+def test_card_studio_shows_image_pool_crop_controls_and_default_fields(monkeypatch):
+    import script_writer
+
+    def fake_generate(card_type, story, target_language="english", manual_prompt=""):
+        assert card_type == "Stat Highlight"
+        assert story["title"] == "India win again"
+        assert target_language == "english"
+        return {
+            "eyebrow": "AUTO CAREER STAT",
+            "headline": "Generated from approved story",
+            "value": "999",
+            "unit": "RUNS",
+            "metrics": [
+                {"label": "Matches", "value": "12"},
+                {"label": "Average", "value": "46.2"},
+                {"label": "Centuries", "value": "3"},
+            ],
+        }
+
+    monkeypatch.setattr(script_writer, "generate_card_copy", fake_generate)
     assets = [
         {"bytes": _image_bytes((40, 50, 60)), "source": "source-a", "article_title": "Image A"},
         {"bytes": _image_bytes((70, 80, 90)), "source": "source-b", "article_title": "Image B"},
@@ -565,6 +584,16 @@ def test_card_studio_shows_image_pool_crop_controls_and_default_fields():
     assert values["Hero value"] == "1,203"
     assert values["Unit"] == "RUNS"
     assert any(field.label == "Metric 1 label" and field.value == "Matches" for field in at.text_input)
+
+    next(button for button in at.button if button.label == "Auto-fill this card from story").click().run()
+    assert not at.exception, at.exception
+    generated_values = {field.label: field.value for field in at.text_input}
+    assert generated_values["Eyebrow"] == "AUTO CAREER STAT"
+    assert generated_values["Headline"] == "Generated from approved story"
+    assert generated_values["Hero value"] == "999"
+    assert generated_values["Unit"] == "RUNS"
+    assert any(field.label == "Metric 1 label" and field.value == "Matches" for field in at.text_input)
+
 
 def test_card_studio_direct_attach_photo_to_slide():
     assets = [
