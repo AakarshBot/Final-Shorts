@@ -1726,7 +1726,9 @@ def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> Non
 
 
 
+@lru_cache(maxsize=512)
 def _motion_profile(seed: str) -> tuple[int, float, float, int, int]:
+    """Calculate each deterministic Ken Burns profile once per visual seed."""
     digest = hashlib.sha1(str(seed or "visual").encode("utf-8")).digest()
     return (
         digest[0] % 5,
@@ -2256,6 +2258,23 @@ def render_production_video(
                     str(visual.get("source") or source_label or "Commons").strip() or "Commons",
                 )
 
+        motion_seed = ""
+        if static_frame is None and not isinstance(top5_card, dict) and not manual_subject_cutout and not card_studio:
+            motion_seed = "|".join(
+                str(visual.get(key) or "")
+                for key in (
+                    "primary_entity",
+                    "visual_intent",
+                    "specific_search_prompt",
+                    "sport_or_topic_category",
+                    "source",
+                )
+            ).strip("|")
+            if not motion_seed:
+                # Image bytes are stable for this scene; hashing them per frame is
+                # pure repeated work, so derive the fallback seed only once here.
+                motion_seed = hashlib.sha1(image.tobytes()).hexdigest()
+
         prepared_visuals.append({
             "image": image,
             "static_frame": static_frame,
@@ -2263,6 +2282,7 @@ def render_production_video(
             "top5_card": top5_card,
             "manual_subject_cutout": manual_subject_cutout,
             "card_studio": card_studio,
+            "motion_seed": motion_seed,
         })
 
     durations = []
@@ -2308,25 +2328,9 @@ def render_production_video(
                 continue
 
             base_image = visual["image"]
-            if not (
-                visual.get("is_top5_card")
-                or visual.get("manual_subject_cutout")
-                or visual.get("card_studio")
-            ):
-                visual_seed = "|".join(
-                    str(visual.get(key) or "")
-                    for key in (
-                        "primary_entity",
-                        "visual_intent",
-                        "specific_search_prompt",
-                        "sport_or_topic_category",
-                        "source",
-                    )
-                ).strip("|")
-                if not visual_seed:
-                    visual_seed = hashlib.sha1(base_image.tobytes()).hexdigest()
+            if visual.get("motion_seed"):
                 base_image = _animate_visual(
-                    base_image, scene_time, scene_duration, visual_seed
+                    base_image, scene_time, scene_duration, visual["motion_seed"]
                 )
 
             yield render_frame(
