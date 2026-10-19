@@ -526,7 +526,7 @@ def _scene_duration_weights(texts: list[str]) -> list[float]:
     """Estimate visual/subtitle boundaries inside a continuous narration take."""
     weights = []
     for text in texts:
-        words = re.findall(r"\\w+", str(text or ""), flags=re.UNICODE)
+        words = re.findall(r"\w+", str(text or ""), flags=re.UNICODE)
         lexical_weight = sum(0.65 + 0.20 * min(len(word), 10) for word in words)
         punctuation_weight = (
             0.35 * str(text or "").count(",")
