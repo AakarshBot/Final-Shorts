@@ -454,7 +454,7 @@ def _contrast_bed(image: Image.Image, position: str, treatment: str = "Soft grad
     if treatment == "Editorial panel":
         x, width = _content_region(position)
         if position == "bottom":
-            box = (max(24, x - 28), 960, min(SAFE_RIGHT + 80, WIDTH - 24), min(HEIGHT - 300, SAFE_BOTTOM + 190))
+            box = (max(24, x - 28), 1020, min(SAFE_RIGHT + 80, WIDTH - 24), min(HEIGHT - 300, SAFE_BOTTOM + 190))
         elif position == "left":
             box = (max(24, x - 28), SAFE_TOP - 30, min(SAFE_RIGHT, x + width + 36), SAFE_BOTTOM + 190)
         else:
@@ -468,10 +468,10 @@ def _contrast_bed(image: Image.Image, position: str, treatment: str = "Soft grad
     vp = []
     for y in range(HEIGHT):
         if position == "bottom":
-            if y < 960:
+            if y < 1020:
                 factor = 0.0
-            elif y < 1160:
-                factor = (y - 960) / 200
+            elif y < 1200:
+                factor = (y - 1020) / 180
             elif y <= SAFE_BOTTOM + 120:
                 factor = 1.0
             else:
