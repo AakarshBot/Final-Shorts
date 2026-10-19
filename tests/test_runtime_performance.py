@@ -101,6 +101,10 @@ def test_crop_assignment_store_is_pipeline_specific():
     assert '"live_card_studio_crops": "live_visual_assignments"' in crop_source
     assert '"test_top5_card_studio_visual_crops": "test_top5_visual_assignments"' in crop_source
     assert '"test_top5_card_studio_crops": "test_top5_visual_assignments"' in crop_source
+    assert 'if crop_store in {"live_visual_crops", "live_card_studio_crops"}' in crop_source
+    assert 'elif crop_store in {"visual_crops", "card_studio_crops"}' in crop_source
+    assert 'assignment["bytes"] = crop_bytes' in crop_source
+    assert 'assignment["bytes"] = bytes(image_bytes)' in crop_source
 
 
 def test_visual_pool_work_uses_cached_validation_and_thumbnails():
