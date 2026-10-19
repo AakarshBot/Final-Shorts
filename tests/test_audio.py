@@ -414,7 +414,7 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
     second = audio.generate_chatterbox_audio(script, output_dir=output_dir)
 
     assert all(not scene["from_cache"] for scene in first["scenes"])
-    assert model.generate_calls[0][0] == " ".join(scene["voiceover"] for scene in script["script"])
+    assert model.generate_calls[0][0] == audio._join_narration_texts([scene["voiceover"] for scene in script["script"]])
     assert model.generate_calls[0][1] == 0.80
     assert all(scene["continuous_master_path"] == first["full_path"] for scene in first["scenes"])
     assert all(scene["from_cache"] for scene in second["scenes"])
@@ -469,7 +469,7 @@ def test_chatterbox_full_generates_one_continuous_take_with_stable_controls(monk
     )
 
     assert len(model.calls) == 1
-    assert model.calls[0][0] == " ".join(scene["voiceover"] for scene in script["script"])
+    assert model.calls[0][0] == audio._join_narration_texts([scene["voiceover"] for scene in script["script"]])
     assert model.calls[0][1] == {
         "temperature": 0.75,
         "cfg_weight": 0.35,
@@ -525,6 +525,20 @@ def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_pat
 
     assert model.conditioning_calls == 1
     assert model.generate_calls == 2
+
+
+def test_continuous_narration_join_preserves_sentence_boundaries():
+    import audio
+
+    assert audio._join_narration_texts([
+        "Virat wins",
+        "The team celebrates!",
+        "A new record.",
+    ]) == "Virat wins. The team celebrates! A new record."
+    assert audio._join_narration_texts([
+        "A narrow win,",
+        "followed by a record",
+    ]) == "A narrow win. followed by a record."
 
 
 def test_chatterbox_delivery_uses_flat_temperature_and_no_heuristic_acting():
