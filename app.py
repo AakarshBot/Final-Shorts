@@ -3212,7 +3212,7 @@ def _render_card_studio(
                                         st.session_state[secondary_key] = key
                                 else:
                                     if st.button(
-                                        "Selected" if selected_primary == key else "Use image",
+                                        "Selected" if selected_primary == key else "Select image",
                                         width="stretch",
                                         type="primary" if selected_primary == key else "secondary",
                                         key=f"{state_id}-use-{key}",
