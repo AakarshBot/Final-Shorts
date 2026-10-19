@@ -1025,3 +1025,26 @@ def test_generate_head_to_head_card_copy_returns_renderer_shape(monkeypatch):
 def test_generate_card_copy_rejects_text_subject_cutout():
     with pytest.raises(ValueError, match="existing shared editor"):
         script_writer.generate_card_copy("Text Subject Cutout", {}, "english")
+
+
+def test_generate_telugu_card_copy_uses_telugu_script_and_ascii_digits(monkeypatch):
+    captured = {}
+
+    def fake_request(model, prompt, story, **kwargs):
+        captured["prompt"] = prompt
+        return {
+            "eyebrow": "రికార్డు",
+            "value": "౧౨౩",
+            "label": "పరుగులు",
+            "context": "మ్యాచ్‌లో సాధించిన స్కోరు",
+        }
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.generate_card_copy(
+        "Key Fact / Milestone",
+        {"title": "Gill scores 123 runs"},
+        target_language="telugu",
+    )
+    assert result["language"] == "telugu"
+    assert result["value"] == "123"
+    assert "Telugu" in captured["prompt"]
