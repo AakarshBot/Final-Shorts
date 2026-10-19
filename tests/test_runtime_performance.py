@@ -211,3 +211,7 @@ def test_longform_render_uses_monotonic_scene_cursor():
     assert "scene_index = 0" in frame_source
     assert "while (" in frame_source
     assert "for sc in prepared_bases" not in frame_source
+    assert "cue_index = 0" in frame_source
+    assert "billboard_index = 0" in frame_source
+    assert "for c in cues" not in frame_source
+    assert "for bb in act_billboards" not in frame_source
