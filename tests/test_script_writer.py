@@ -827,3 +827,91 @@ def _contains_array_length_constraints(value):
     if isinstance(value, list):
         return any(_contains_array_length_constraints(child) for child in value)
     return False
+
+
+@pytest.mark.parametrize(
+    ("language", "native_name", "lead"),
+    [
+        ("hindi", "शुभमन गिल", "शुभमन गिल की फिटनेस पर सवाल उठ रहे हैं।"),
+        ("telugu", "శుభ్‌మన్ గిల్", "శుభ్‌మన్ గిల్ ఫిట్‌నెస్‌పై ప్రశ్నలు కొనసాగుతున్నాయి."),
+    ],
+)
+def test_generated_script_recovery_normalises_title_count_and_native_subject(
+    language, native_name, lead
+):
+    result = valid_result()
+    result["subject_name"] = "Shubman Gill"
+    result["titles"] = result["titles"][:2]
+    result["script"][0]["voiceover"] = lead
+    result["script"][0]["primary_entity"] = native_name
+
+    prepared = script_writer._prepare_generated_script(result, language)
+
+    assert prepared["subject_name"] == native_name
+    assert len(prepared["titles"]) == 3
+    assert len({script_writer._normalise_name(title) for title in prepared["titles"]}) == 3
+    valid, reason = script_writer.validate_cricket_script(prepared, language=language)
+    assert valid, reason
+
+
+@pytest.mark.parametrize(
+    "titles",
+    [
+        ["First title", "Second title"],
+        ["First title", "Second title", "Third title", "Fourth title"],
+        ["First title", "First title", "Second title"],
+    ],
+)
+def test_generated_script_titles_are_always_three_distinct_candidates(titles):
+    result = valid_result()
+    result["titles"] = titles
+
+    prepared = script_writer._prepare_generated_script(result, "hindi")
+
+    assert len(prepared["titles"]) == 3
+    assert len({script_writer._normalise_name(title) for title in prepared["titles"]}) == 3
+
+
+def test_name_normalisation_preserves_indic_marks_and_ignores_zero_width_formatting():
+    assert script_writer._normalise_name("శుభ్‌మన్ గిల్") == script_writer._normalise_name(
+        "శుభ్‌మన్ గిల్".replace("\u200c", "")
+    )
+    assert script_writer._normalise_name("शुभमन गिल") == script_writer._normalise_name("शुभमन गिल")
+
+
+def test_groq_request_retries_rate_limit_after_retry_after(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    captured = []
+    sleeps = []
+
+    class FakeResponse:
+        def __init__(self, status_code, payload, headers=None):
+            self.status_code = status_code
+            self._payload = payload
+            self.headers = headers or {}
+            self.text = json.dumps(payload, ensure_ascii=False)
+
+        def json(self):
+            return self._payload
+
+    responses = [
+        FakeResponse(
+            429,
+            {"error": {"message": "TPM rate limit reached", "code": "rate_limit_exceeded"}},
+            {"Retry-After": "8"},
+        ),
+        FakeResponse(200, {"choices": [{"message": {"content": json.dumps(valid_result())}}]}),
+    ]
+
+    def fake_post(_url, *, json, **_kwargs):
+        captured.append(json)
+        return responses.pop(0)
+
+    monkeypatch.setattr(script_writer.requests, "post", fake_post)
+    monkeypatch.setattr(script_writer.time, "sleep", sleeps.append)
+
+    result = script_writer._request("openai/gpt-oss-20b", "Write one script as JSON", "evidence")
+
+    assert result == valid_result()
+    assert len(captured) == 2
+    assert sleeps == [8.0]
