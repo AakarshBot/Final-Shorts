@@ -2062,8 +2062,16 @@ def _crop_visual_dialog(
                 "test_top5_card_studio_crops": "test_top5_visual_assignments",
             }.get(crop_store)
             if assignment_key:
+                card_studio_crop = crop_store in {
+                    "card_studio_crops",
+                    "live_card_studio_crops",
+                    "test_top5_card_studio_visual_crops",
+                    "test_top5_card_studio_crops",
+                }
                 for assignment in (st.session_state.get(assignment_key) or {}).values():
-                    if assignment.get("asset_key") == asset_key:
+                    if assignment.get("asset_key") == asset_key and (
+                        not card_studio_crop or assignment.get("result_key") == "card-studio-photo"
+                    ):
                         assignment["bytes"] = bytes(image_bytes)
             if crop_store in {"live_visual_crops", "live_card_studio_crops"}:
                 st.session_state.live_visuals_approved = False
@@ -2108,8 +2116,16 @@ def _crop_visual_dialog(
                 "test_top5_card_studio_crops": "test_top5_visual_assignments",
             }.get(crop_store)
             if assignment_key:
+                card_studio_crop = crop_store in {
+                    "card_studio_crops",
+                    "live_card_studio_crops",
+                    "test_top5_card_studio_visual_crops",
+                    "test_top5_card_studio_crops",
+                }
                 for assignment in (st.session_state.get(assignment_key) or {}).values():
-                    if assignment.get("asset_key") == asset_key:
+                    if assignment.get("asset_key") == asset_key and (
+                        not card_studio_crop or assignment.get("result_key") == "card-studio-photo"
+                    ):
                         assignment["bytes"] = crop_bytes
             if crop_store in {"live_visual_crops", "live_card_studio_crops"}:
                 st.session_state.live_visuals_approved = False
