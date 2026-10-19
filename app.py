@@ -6782,10 +6782,10 @@ def render_live_dashboard():
             return
         live_audio_engine_choice = st.pills(
             "Voice Engine",
-            ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
-            default="Chatterbox Turbo (Voice Cloning)",
+            ["Chatterbox (Voice Cloning)", "Edge-TTS Neural"],
+            default="Chatterbox (Voice Cloning)",
             key="live_audio_engine_choice_v2",
-        ) or "Chatterbox Turbo (Voice Cloning)"
+        ) or "Chatterbox (Voice Cloning)"
         live_language = str(script.get("language_used") or "english").strip().casefold()
         is_live_chatterbox = "Chatterbox" in live_audio_engine_choice
         live_chatterbox_model_choice = st.selectbox(
@@ -7354,7 +7354,7 @@ def render_longform_audio(live: bool = False):
         st.info("No approved script found. Please approve a script in **02 · Scriptwriter** first.")
         return
 
-    stage_title = "LONG-FORM · LIVE · 04 · AUDIO ENGINE" if live else "04 · LONG-FORM AUDIO ENGINE · CHATTERBOX TURBO"
+    stage_title = "LONG-FORM · LIVE · 04 · AUDIO ENGINE" if live else "04 · LONG-FORM AUDIO ENGINE · CHATTERBOX FULL / TURBO"
     st.markdown(
         f'<div class="canvas-head"><div><div class="eyebrow">{stage_title}</div>'
         '<div class="canvas-title">Voice Cloning & Paced Narration</div>'
@@ -7740,7 +7740,7 @@ def render_longform_live():
             '<div class="live-product-head">'
             '<div><div class="eyebrow">LONG-FORM · LIVE PRODUCTION</div>'
             '<div class="live-product-title">8-Minute Documentary Studio</div>'
-            '<div class="hero-subtitle">Broadcast 16:9 documentary production line with Chatterbox Turbo and monetization packaging.</div></div>'
+            '<div class="hero-subtitle">Broadcast 16:9 documentary production line with Chatterbox Full or Turbo and monetization packaging.</div></div>'
             '<div class="live-status"><span></span> Live Production Active</div>'
             '</div>',
             unsafe_allow_html=True,
@@ -9285,10 +9285,10 @@ def render_audio():
     with left:
         engine_choice = st.pills(
             "Voice Engine",
-            ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
-            default="Chatterbox Turbo (Voice Cloning)",
+            ["Chatterbox (Voice Cloning)", "Edge-TTS Neural"],
+            default="Chatterbox (Voice Cloning)",
             key="audio_engine_choice_v2",
-        ) or "Chatterbox Turbo (Voice Cloning)"
+        ) or "Chatterbox (Voice Cloning)"
         col_l, col_g = st.columns(2)
         with col_l:
             language=st.pills("Language",languages,default=default_language.title(),key="audio_language") or default_language.title()
@@ -10142,10 +10142,10 @@ elif st.session_state.app_mode == "test":
                 default_t5_lang = stored_t5_lang if stored_t5_lang in {"english", "hindi", "telugu"} else "english"
                 t5_engine_choice = st.pills(
                     "Voice Engine",
-                    ["Chatterbox Turbo (Voice Cloning)", "Edge-TTS Neural"],
-                    default="Chatterbox Turbo (Voice Cloning)",
+                    ["Chatterbox (Voice Cloning)", "Edge-TTS Neural"],
+                    default="Chatterbox (Voice Cloning)",
                     key="test_top5_audio_engine_choice_v2",
-                ) or "Chatterbox Turbo (Voice Cloning)"
+                ) or "Chatterbox (Voice Cloning)"
                 col_t5_lang, col_t5_gender = st.columns(2)
                 with col_t5_lang:
                     t5_language = st.pills("Language", top5_languages, default=default_t5_lang.title(), key="test_top5_audio_language") or default_t5_lang.title()
