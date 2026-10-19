@@ -1300,7 +1300,7 @@ def test_final_renderer_quality_contract():
     assert renderer._motion_profile("same") == renderer._motion_profile("same")
     assert renderer._motion_profile("visual-a") != renderer._motion_profile("visual-b")
     for setting in (
-        '" -preset", "veryfast"',
+        '"-preset", "veryfast"',
         '"-crf", "18"',
         '"-profile:v", "high"',
         '"-bf", "2"',
