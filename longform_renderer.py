@@ -240,15 +240,29 @@ class LongformRenderer:
         # Frame Generator
         def frame_generator():
             total_frames = int(math.ceil(total_duration * FPS))
+            scene_index = 0
             for frame_idx in range(total_frames):
                 current_time = frame_idx / FPS
 
-                # Find active scene
-                active_scene = prepared_bases[-1]
-                for sc in prepared_bases:
-                    if sc["start"] <= current_time < (sc["start"] + sc["duration"] + 0.15):
-                        active_scene = sc
-                        break
+                # Scene starts are chronological. Advance a cursor rather than
+                # scanning the full scene list for every frame of an 8-minute render.
+                while (
+                    scene_index < len(prepared_bases) - 1
+                    and current_time
+                    >= prepared_bases[scene_index]["start"]
+                    + prepared_bases[scene_index]["duration"]
+                    + 0.15
+                ):
+                    scene_index += 1
+
+                active_scene = prepared_bases[scene_index]
+                # Keep the previous fallback for any timing gap in the audio handoff.
+                if not (
+                    active_scene["start"]
+                    <= current_time
+                    < active_scene["start"] + active_scene["duration"] + 0.15
+                ):
+                    active_scene = prepared_bases[-1]
 
                 sc_start = active_scene["start"]
                 sc_dur = max(0.1, active_scene["duration"])
