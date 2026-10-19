@@ -1,18 +1,69 @@
 $ErrorActionPreference = "Stop"
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$PackageUrl = "https://mirror.msys2.org/mingw/ucrt64/mingw-w64-ucrt-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst"
+
+$PackageFileName = "mingw-w64-ucrt-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst"
 $ExpectedSha256 = "3581ee03cf83a9bb0e98bf688c4f532a29553500e317532d90746de295b0f8a8"
+$PackageSources = @(
+    [pscustomobject]@{
+        Name = "MSYS2 primary repository"
+        Url = "https://repo.msys2.org/mingw/ucrt64/$PackageFileName"
+    },
+    [pscustomobject]@{
+        Name = "MSYS2 mirror redirect"
+        Url = "https://mirror.msys2.org/mingw/ucrt64/$PackageFileName"
+    },
+    [pscustomobject]@{
+        Name = "MSYS2 Tier 1 mirror (ftp.nluug.nl)"
+        Url = "https://ftp.nluug.nl/pub/os/windows/msys2/builds/mingw/ucrt64/$PackageFileName"
+    },
+    [pscustomobject]@{
+        Name = "MSYS2 Tier 1 mirror (mirror.accum.se)"
+        Url = "https://mirror.accum.se/mirror/msys2.org/mingw/ucrt64/$PackageFileName"
+    }
+)
+
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $DllDirectory = Join-Path $RepoRoot "dlls"
 $TemporaryRoot = Join-Path $env:TEMP ("final-shorts-fribidi-" + [guid]::NewGuid().ToString("N"))
-$PackagePath = Join-Path $TemporaryRoot "fribidi.pkg.tar.zst"
+$PackagePath = Join-Path $TemporaryRoot $PackageFileName
 $ExtractRoot = Join-Path $TemporaryRoot "extracted"
 New-Item -ItemType Directory -Force -Path $TemporaryRoot, $ExtractRoot | Out-Null
+
 try {
-    Write-Host "Downloading the official MSYS2 FriBiDi package..."
-    Invoke-WebRequest -Uri $PackageUrl -OutFile $PackagePath
-    $ActualSha256 = (Get-FileHash -Path $PackagePath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($ActualSha256 -ne $ExpectedSha256) { throw "FriBiDi package checksum did not match. Nothing was installed." }
+    $VerifiedPackage = $false
+    $AttemptErrors = [System.Collections.Generic.List[string]]::new()
+
+    foreach ($PackageSource in $PackageSources) {
+        Remove-Item -LiteralPath $PackagePath -Force -ErrorAction SilentlyContinue
+        try {
+            Write-Host "Downloading the official MSYS2 FriBiDi package from $($PackageSource.Name)..."
+            Invoke-WebRequest -Uri $PackageSource.Url -OutFile $PackagePath
+
+            if (-not (Test-Path -LiteralPath $PackagePath -PathType Leaf)) {
+                throw "The download did not create a package file."
+            }
+
+            $ActualSha256 = (Get-FileHash -Path $PackagePath -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($ActualSha256 -eq $ExpectedSha256) {
+                Write-Host "FriBiDi package checksum verified."
+                $VerifiedPackage = $true
+                break
+            }
+
+            $AttemptErrors.Add("$($PackageSource.Name): SHA-256 mismatch ($ActualSha256).")
+            Write-Warning "The downloaded package did not match the trusted SHA-256. Trying the next official MSYS2 source."
+        } catch {
+            $AttemptErrors.Add("$($PackageSource.Name): $($_.Exception.Message)")
+            Write-Warning "Could not download and verify the package from $($PackageSource.Name). Trying the next official MSYS2 source."
+        }
+    }
+
+    if (-not $VerifiedPackage) {
+        throw (
+            "No checksum-verified FriBiDi package was obtained. Nothing was installed. " +
+            "Expected SHA-256: $ExpectedSha256. Attempts: $($AttemptErrors -join ' | ')"
+        )
+    }
 
     # Use Windows' built-in tar/libarchive instead of pip. This deliberately
     # avoids modifying or relying on the user's Python installation.
