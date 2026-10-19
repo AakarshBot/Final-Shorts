@@ -1949,13 +1949,13 @@ def _is_valid_image_payload(value: bytes) -> bool:
 
 
 def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
-    """Return streamlit-cropper coordinates in (left, top, right, bottom) order."""
+    """Return streamlit-cropper coordinates in its required (left, right, top, bottom) order."""
     aspect = 9 / 16
     width = min(image.width, max(1, int(image.height * aspect)))
     height = min(image.height, max(1, int(width / aspect)))
     left = max(0, (image.width - width) // 2)
     top = max(0, (image.height - height) // 2)
-    return (left, top, left + width, top + height)
+    return (left, left + width, top, top + height)
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
