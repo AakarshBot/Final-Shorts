@@ -82,3 +82,32 @@ def test_longform_scriptwriter_calls_groq(monkeypatch):
     assert res["subject_name"] == "Jasprit Bumrah"
     assert len(res["acts"]) == 6
     assert len(res["scenes"]) == 18
+
+def test_format_normalizes_act_and_scene_ids_and_entity_fallback():
+    story = sample_longform_story()
+    raw = sample_raw_llm_script()
+    raw["acts"][0]["act_number"] = 6
+    raw["acts"][1]["act_number"] = 6
+    raw["acts"][0]["scenes"][0]["scene_number"] = 18
+    raw["acts"][0]["scenes"][0].pop("primary_entity")
+    raw["acts"][0]["scenes"][0].pop("search_query")
+
+    formatted = LongformScriptWriter.validate_and_format(raw, story)
+
+    assert [act["act_number"] for act in formatted["acts"]] == [1, 2, 3, 4, 5, 6]
+    assert [scene["scene_number"] for scene in formatted["scenes"]] == list(range(1, 19))
+    assert formatted["scenes"][0]["chapter_title"] == formatted["chapters"][0]["title"]
+    assert formatted["scenes"][0]["primary_entity"] == story["title"]
+    assert formatted["scenes"][0]["search_query"] == f'{story["title"]} cricket'
+    assert all("None cricket" not in scene["search_query"] for scene in formatted["scenes"])
+
+
+def test_description_only_claims_publishers_present_in_story_handoff():
+    raw = sample_raw_llm_script()
+    story = {"title": "Cricket leadership change", "publisher": "", "reports": []}
+
+    formatted = LongformScriptWriter.validate_and_format(raw, story)
+
+    assert "CHAPTERS:" in formatted["seo_description"]
+    assert "Sources:" not in formatted["seo_description"]
+    assert "verified wire reports" not in formatted["seo_description"].casefold()
