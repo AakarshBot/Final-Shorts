@@ -117,3 +117,58 @@ def test_description_only_claims_publishers_present_in_story_handoff():
 def test_prompt_does_not_request_unimplemented_footage():
     assert '"ncr_broll"' not in LONGFORM_SYSTEM_PROMPT
     assert "never request or imply match clips" in LONGFORM_SYSTEM_PROMPT.casefold()
+
+
+def test_longform_research_fetches_sources_concurrently_and_deduplicates_urls(monkeypatch):
+    import threading
+    import time
+
+    import longform_script_writer as writer
+
+    story = {
+        "title": "Research concurrency regression",
+        "url": "https://example.com/primary-story",
+        "summary": "Discovery summary.",
+        "reports": [
+            {"url": "https://example.com/primary-story?utm_source=news#article"},
+            {"url": "https://example.com/report-one"},
+            {"url": "https://example.com/report-two"},
+            {"url": "https://example.com/report-three"},
+        ],
+    }
+
+    lock = threading.Lock()
+    active = 0
+    peak_active = 0
+    fetched_urls = []
+
+    def fake_extract(url):
+        nonlocal active, peak_active
+        with lock:
+            active += 1
+            peak_active = max(peak_active, active)
+            fetched_urls.append(url)
+        time.sleep(0.04)
+        with lock:
+            active -= 1
+        return f"Evidence captured from {url}"
+
+    class FakeDDGS:
+        def __init__(self, timeout):
+            assert timeout == 5
+
+        def text(self, query, max_results):
+            return [{"title": "Supporting report", "body": "Search context."}]
+
+    monkeypatch.setattr(writer, "_extract_article_text", fake_extract)
+    monkeypatch.setattr(writer, "DDGS", FakeDDGS)
+
+    packet = writer._research_longform_story(story)
+
+    assert peak_active >= 2
+    assert len(fetched_urls) == 4
+    assert len(set(fetched_urls)) == 4
+    assert packet.index("[PRIMARY SOURCE") < packet.index("[RELATED REPORT 1")
+    assert packet.index("[RELATED REPORT 1") < packet.index("[RELATED REPORT 2")
+    assert "BACKGROUND CONTEXT & SEARCH SNIPPETS" in packet
+    assert "Search context." in packet
