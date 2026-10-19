@@ -2056,6 +2056,10 @@ def _crop_visual_dialog(
                 "visual_crops": "visual_assignments",
                 "live_visual_crops": "live_visual_assignments",
                 "test_top5_visual_crops": "test_top5_visual_assignments",
+                "card_studio_crops": "visual_assignments",
+                "live_card_studio_crops": "live_visual_assignments",
+                "test_top5_card_studio_visual_crops": "test_top5_visual_assignments",
+                "test_top5_card_studio_crops": "test_top5_visual_assignments",
             }.get(crop_store)
             if assignment_key:
                 for assignment in (st.session_state.get(assignment_key) or {}).values():
@@ -2094,6 +2098,10 @@ def _crop_visual_dialog(
                 "visual_crops": "visual_assignments",
                 "live_visual_crops": "live_visual_assignments",
                 "test_top5_visual_crops": "test_top5_visual_assignments",
+                "card_studio_crops": "visual_assignments",
+                "live_card_studio_crops": "live_visual_assignments",
+                "test_top5_card_studio_visual_crops": "test_top5_visual_assignments",
+                "test_top5_card_studio_crops": "test_top5_visual_assignments",
             }.get(crop_store)
             if assignment_key:
                 for assignment in (st.session_state.get(assignment_key) or {}).values():
