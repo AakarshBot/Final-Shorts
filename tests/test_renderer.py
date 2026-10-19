@@ -1519,100 +1519,63 @@ def test_production_render_does_not_fail_when_windows_locks_silent_intermediate(
     assert locked_paths[0].name != f"{output.stem}.silent.mp4"
 
 
-def _fake_fribidi_package_bytes(dll_bytes=b"M" * 20_000, license_bytes=b"LGPL-2.1-or-later\n"):
-    import tarfile
-    from io import BytesIO
-    import zstandard
+def test_windows_fribidi_bootstrap_runs_existing_no_pip_powershell_installer(monkeypatch, tmp_path):
+    script = tmp_path / "setup_windows_indic_rendering.ps1"
+    script.write_text("# mocked setup script", encoding="utf-8")
+    captured = {}
 
-    buffer = BytesIO()
-    with tarfile.open(fileobj=buffer, mode="w") as archive:
-        for name, data in (
-            (renderer._FRIBIDI_DLL_MEMBER, dll_bytes),
-            (renderer._FRIBIDI_LICENSE_MEMBER, license_bytes),
-        ):
-            info = tarfile.TarInfo(name=name)
-            info.size = len(data)
-            archive.addfile(info, BytesIO(data))
-    return zstandard.ZstdCompressor().compress(buffer.getvalue())
+    class ProcessResult:
+        returncode = 0
+        stdout = "FriBiDi package checksum verified."
+        stderr = ""
 
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        dll_dir = tmp_path / "dlls"
+        license_dir = dll_dir
+        dll_dir.mkdir(parents=True, exist_ok=True)
+        (dll_dir / "libfribidi-0.dll").write_bytes(b"D" * 20_000)
+        (license_dir / "FRIBIDI-COPYING.txt").write_text("LGPL-2.1-or-later", encoding="ascii")
+        return ProcessResult()
 
-def test_windows_fribidi_bootstrap_downloads_only_verified_dll_and_license(monkeypatch, tmp_path):
-    import hashlib
+    monkeypatch.setattr(renderer.shutil, "which", lambda name: "powershell.exe" if name == "powershell.exe" else None)
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
 
-    dll_bytes = b"verified fake FriBiDi DLL" * 1000
-    license_bytes = b"LGPL-2.1-or-later\n"
-    package = _fake_fribidi_package_bytes(dll_bytes, license_bytes)
-    monkeypatch.setattr(
-        renderer,
-        "_FRIBIDI_PACKAGE_SHA256",
-        hashlib.sha256(package).hexdigest(),
-    )
+    renderer._install_windows_fribidi_via_powershell(tmp_path)
 
-    requested = {}
-
-    def fake_urlopen(request, timeout):
-        requested["url"] = request.full_url
-        requested["timeout"] = timeout
-        return BytesIO(package)
-
-    monkeypatch.setattr(renderer.urllib.request, "urlopen", fake_urlopen)
-
-    installed = renderer._install_fribidi_from_official_package(tmp_path)
-
-    assert installed == tmp_path / "dlls" / "libfribidi-0.dll"
-    assert installed.read_bytes() == dll_bytes
-    assert (tmp_path / "dlls" / "licenses" / "fribidi-COPYING.txt").read_bytes() == license_bytes
-    assert requested["url"] == renderer._FRIBIDI_PACKAGE_URL
-    assert requested["timeout"] == 25
+    command = captured["command"]
+    assert command[0] == "powershell.exe"
+    assert command[1:5] == ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File"]
+    assert command[5] == str(script)
+    assert "pip" not in " ".join(command).casefold()
+    assert captured["kwargs"]["timeout"] == 180
+    assert (tmp_path / "dlls" / "libfribidi-0.dll").stat().st_size == 20_000
+    assert (tmp_path / "dlls" / "FRIBIDI-COPYING.txt").is_file()
 
 
-def test_windows_fribidi_bootstrap_rejects_checksum_mismatch_without_installing(monkeypatch, tmp_path):
-    package = _fake_fribidi_package_bytes()
-    monkeypatch.setattr(renderer, "_FRIBIDI_PACKAGE_SHA256", "0" * 64)
-    monkeypatch.setattr(
-        renderer.urllib.request,
-        "urlopen",
-        lambda *_args, **_kwargs: BytesIO(package),
-    )
+def test_windows_fribidi_bootstrap_surfaces_checksum_failure_without_accepting_dll(monkeypatch, tmp_path):
+    script = tmp_path / "setup_windows_indic_rendering.ps1"
+    script.write_text("# mocked setup script", encoding="utf-8")
 
-    with pytest.raises(RuntimeError, match="checksum-verified FriBiDi package"):
-        renderer._install_fribidi_from_official_package(tmp_path)
+    class ProcessResult:
+        returncode = 1
+        stdout = "Trying trusted MSYS2 mirrors"
+        stderr = "No checksum-verified FriBiDi package was obtained."
+
+    monkeypatch.setattr(renderer.shutil, "which", lambda name: "powershell.exe" if name == "powershell.exe" else None)
+    monkeypatch.setattr(renderer.subprocess, "run", lambda *_args, **_kwargs: ProcessResult())
+
+    with pytest.raises(RuntimeError, match="No checksum-verified FriBiDi package was obtained"):
+        renderer._install_windows_fribidi_via_powershell(tmp_path)
 
     assert not (tmp_path / "dlls" / "libfribidi-0.dll").exists()
-    assert not (tmp_path / "dlls" / "licenses" / "fribidi-COPYING.txt").exists()
-
-
-def test_windows_fribidi_bootstrap_retries_after_mirror_checksum_mismatch(monkeypatch, tmp_path):
-    import hashlib
-
-    dll_bytes = b"verified fallback mirror DLL" * 1000
-    license_bytes = b"LGPL-2.1-or-later\\n"
-    package = _fake_fribidi_package_bytes(dll_bytes, license_bytes)
-    monkeypatch.setattr(
-        renderer,
-        "_FRIBIDI_PACKAGE_SHA256",
-        hashlib.sha256(package).hexdigest(),
-    )
-    requested_urls = []
-
-    def fake_urlopen(request, timeout):
-        requested_urls.append(request.full_url)
-        if len(requested_urls) == 1:
-            return BytesIO(b"proxy error page masquerading as the download")
-        return BytesIO(package)
-
-    monkeypatch.setattr(renderer.urllib.request, "urlopen", fake_urlopen)
-    installed = renderer._install_fribidi_from_official_package(tmp_path)
-
-    assert requested_urls[0] == renderer._FRIBIDI_PACKAGE_URL
-    assert requested_urls[1] == renderer._FRIBIDI_PACKAGE_SOURCES[1]
-    assert installed.read_bytes() == dll_bytes
 
 
 def test_indic_raqm_error_explains_verified_automatic_bootstrap(monkeypatch):
     monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
     monkeypatch.setattr(renderer.os, "name", "posix")
-    with pytest.raises(RuntimeError, match="attempts to download and verify FriBiDi automatically"):
+    with pytest.raises(RuntimeError, match="automatically runs the existing checksum-verified, no-pip PowerShell installer"):
         renderer._require_raqm("hindi")
 
 
@@ -1625,7 +1588,7 @@ def test_windows_raqm_bootstrap_rechecks_pillow_after_install(monkeypatch):
     monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: next(checks))
     monkeypatch.setattr(
         renderer,
-        "_install_fribidi_from_official_package",
+        "_install_windows_fribidi_via_powershell",
         lambda: calls.append("installed"),
     )
 
@@ -1634,15 +1597,15 @@ def test_windows_raqm_bootstrap_rechecks_pillow_after_install(monkeypatch):
     assert calls == ["installed"]
 
 
-def test_windows_raqm_bootstrap_does_not_mask_missing_zstandard_details(monkeypatch):
+def test_windows_raqm_bootstrap_surfaces_the_setup_failure_details(monkeypatch):
     monkeypatch.setattr(renderer.os, "name", "nt")
     monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
     monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
     monkeypatch.setattr(
         renderer,
-        "_install_fribidi_from_official_package",
-        lambda: (_ for _ in ()).throw(RuntimeError("updated factory requirements")),
+        "_install_windows_fribidi_via_powershell",
+        lambda: (_ for _ in ()).throw(RuntimeError("all trusted MSYS2 sources failed checksum verification")),
     )
 
-    with pytest.raises(RuntimeError, match="Automatic FriBiDi setup could not complete: updated factory requirements"):
+    with pytest.raises(RuntimeError, match="Automatic FriBiDi setup could not complete: all trusted MSYS2 sources failed checksum verification"):
         renderer._require_raqm("hindi")
