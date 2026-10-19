@@ -76,15 +76,27 @@ def _register_windows_dll_paths() -> None:
 # Official MSYS2 x64 FriBiDi package. The SHA-256 is pinned to the package
 # metadata published at packages.msys2.org; the archive is never blindly extracted.
 _FRIBIDI_PACKAGE_URL = (
-    "https://mirror.msys2.org/mingw/mingw64/"
+    "https://repo.msys2.org/mingw/mingw64/"
     "mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst"
+)
+_FRIBIDI_PACKAGE_SOURCES = (
+    _FRIBIDI_PACKAGE_URL,
+    "https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst",
+    "https://ftp.nluug.nl/pub/os/windows/msys2/builds/mingw/mingw64/mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst",
+    "https://mirror.accum.se/mirror/msys2.org/mingw/mingw64/mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst",
 )
 _FRIBIDI_PACKAGE_SHA256 = (
     "707f6a2f9a49c83938271bfd92a11f80bd4c18c4837210173fcb39e9d841e5ac"
 )
 _FRIBIDI_ARM64_PACKAGE_URL = (
-    "https://mirror.msys2.org/mingw/clangarm64/"
+    "https://repo.msys2.org/mingw/clangarm64/"
     "mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst"
+)
+_FRIBIDI_ARM64_PACKAGE_SOURCES = (
+    _FRIBIDI_ARM64_PACKAGE_URL,
+    "https://mirror.msys2.org/mingw/clangarm64/mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst",
+    "https://ftp.nluug.nl/pub/os/windows/msys2/builds/mingw/clangarm64/mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst",
+    "https://mirror.accum.se/mirror/msys2.org/mingw/clangarm64/mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst",
 )
 _FRIBIDI_ARM64_PACKAGE_SHA256 = (
     "85e3a9d74124676618081c2d8a57548342d83a76ac8e4f7daaa0263d0caecbef"
@@ -94,18 +106,18 @@ _FRIBIDI_DLL_MEMBER = "mingw64/bin/libfribidi-0.dll"
 _FRIBIDI_LICENSE_MEMBER = "mingw64/share/licenses/fribidi/COPYING"
 
 
-def _fribidi_package_for_current_arch() -> tuple[str, str, str, str]:
+def _fribidi_package_for_current_arch() -> tuple[tuple[str, ...], str, str, str]:
     machine = platform.machine().strip().casefold()
     if machine in {"amd64", "x86_64", "x64"}:
         return (
-            _FRIBIDI_PACKAGE_URL,
+            _FRIBIDI_PACKAGE_SOURCES,
             _FRIBIDI_PACKAGE_SHA256,
             _FRIBIDI_DLL_MEMBER,
             _FRIBIDI_LICENSE_MEMBER,
         )
     if machine in {"arm64", "aarch64"}:
         return (
-            _FRIBIDI_ARM64_PACKAGE_URL,
+            _FRIBIDI_ARM64_PACKAGE_SOURCES,
             _FRIBIDI_ARM64_PACKAGE_SHA256,
             "clangarm64/bin/libfribidi-0.dll",
             "clangarm64/share/licenses/fribidi/COPYING",
@@ -149,7 +161,7 @@ def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
     dll_path = dll_dir / "libfribidi-0.dll"
     license_path = dll_dir / "licenses" / "fribidi-COPYING.txt"
     marker_path = dll_dir / ".fribidi-package.sha256"
-    package_url, expected_sha256, dll_member, license_member = _fribidi_package_for_current_arch()
+    package_urls, expected_sha256, dll_member, license_member = _fribidi_package_for_current_arch()
     if (
         dll_path.is_file()
         and 10_000 <= dll_path.stat().st_size <= 2 * 1024 * 1024
@@ -159,27 +171,33 @@ def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
     ):
         return dll_path
 
-    request = urllib.request.Request(
-        package_url,
-        headers={"User-Agent": "Final-Shorts/RAQM-runtime-bootstrap"},
-    )
-    try:
-        with urllib.request.urlopen(request, timeout=25) as response:
-            package_bytes = response.read(_FRIBIDI_PACKAGE_MAX_BYTES + 1)
-    except (OSError, urllib.error.URLError, TimeoutError) as exc:
-        raise RuntimeError(
-            "Could not download the official FriBiDi runtime package. "
-            "Check the internet connection or set FRIBIDI_DLL_PATH / FRIBIDI_DLL_DIR "
-            "to an already-installed compatible DLL."
-        ) from exc
+    package_bytes = None
+    source_errors = []
+    for package_url in package_urls:
+        request = urllib.request.Request(
+            package_url,
+            headers={"User-Agent": "Final-Shorts/RAQM-runtime-bootstrap"},
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=25) as response:
+                candidate = response.read(_FRIBIDI_PACKAGE_MAX_BYTES + 1)
+            if len(candidate) > _FRIBIDI_PACKAGE_MAX_BYTES:
+                source_errors.append(f"{package_url}: package exceeds the 2 MB safety limit")
+                continue
+            actual_sha256 = hashlib.sha256(candidate).hexdigest()
+            if actual_sha256 != expected_sha256:
+                source_errors.append(f"{package_url}: SHA-256 mismatch ({actual_sha256})")
+                continue
+            package_bytes = candidate
+            break
+        except (OSError, urllib.error.URLError, TimeoutError) as exc:
+            source_errors.append(f"{package_url}: {exc}")
 
-    if len(package_bytes) > _FRIBIDI_PACKAGE_MAX_BYTES:
-        raise RuntimeError("The FriBiDi package exceeded the expected 2 MB safety limit.")
-    actual_sha256 = hashlib.sha256(package_bytes).hexdigest()
-    if actual_sha256 != expected_sha256:
+    if package_bytes is None:
+        attempted = " | ".join(source_errors)
         raise RuntimeError(
-            "The downloaded FriBiDi package failed its pinned SHA-256 check; "
-            "no DLL was installed."
+            "Could not obtain a checksum-verified FriBiDi package from any trusted MSYS2 source. "
+            "Nothing was installed. " + attempted
         )
 
     extracted: dict[str, bytes] = {}
