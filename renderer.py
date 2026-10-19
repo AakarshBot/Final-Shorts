@@ -2059,7 +2059,7 @@ def write_preview_video(frames, path: Path) -> Path:
             "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS), "-i", "-",
             "-an",
             "-c:v", "libx264",
-            "-preset", "fast",
+            "-preset", "veryfast",
             "-crf", "18",
             "-profile:v", "high",
             "-bf", "2",
