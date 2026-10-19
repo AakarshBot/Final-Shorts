@@ -1215,6 +1215,49 @@ def test_mux_audio_uses_one_continuous_chatterbox_master_when_available(monkeypa
     assert "concat=n=" not in filter_value
 
 
+def test_mux_audio_falls_back_to_scene_files_when_one_continuous_slice_is_overridden(monkeypatch, tmp_path):
+    silent_video = tmp_path / "silent.mp4"
+    silent_video.write_bytes(b"video")
+    master = tmp_path / "full.wav"
+    master.write_bytes(b"continuous master")
+    generated_slice = tmp_path / "slide_01.wav"
+    human_override = tmp_path / "human_override.mp3"
+    generated_slice.write_bytes(b"generated slice")
+    human_override.write_bytes(b"human audio")
+    output = tmp_path / "output.mp4"
+    seen = {}
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        return Result()
+
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+
+    renderer._mux_audio(
+        silent_video,
+        [
+            {"scene": 1, "path": str(generated_slice), "continuous_master_path": str(master)},
+            {"scene": 2, "path": str(human_override), "human_recorded": True},
+        ],
+        output,
+    )
+
+    command = seen["command"]
+    input_paths = [
+        command[index + 1]
+        for index, value in enumerate(command[:-1])
+        if value == "-i"
+    ]
+    assert input_paths == [str(silent_video), str(generated_slice), str(human_override)]
+    filter_value = command[command.index("-filter_complex") + 1]
+    assert "concat=n=2:v=0:a=1,loudnorm=I=-14:TP=-1.5:LRA=11[a]" in filter_value
+    assert str(master) not in input_paths
+
+
 def test_top5_card_preview_honors_logo_enabled(monkeypatch):
     calls = []
     monkeypatch.setattr(renderer, "_paste_logo", lambda *_args: calls.append("logo"))
