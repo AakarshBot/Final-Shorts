@@ -255,8 +255,12 @@ class LongformScriptWriter:
     def validate_and_format(data: dict, story: dict) -> dict:
         """Validates schema, calculates word pacing, and computes chapter timestamps."""
         acts = list(data.get("acts") or [])
-        if not acts:
-            raise ValueError("Script generation failed to produce acts.")
+        if len(acts) != 6:
+            raise ValueError(
+                f"Long-form Scriptwriter must return exactly six acts; received {len(acts)}."
+            )
+        if any(not isinstance(act, dict) for act in acts):
+            raise ValueError("Long-form Scriptwriter returned a malformed act.")
 
         total_words = 0
         all_scenes = []
@@ -287,8 +291,16 @@ class LongformScriptWriter:
             })
 
             scenes = list(act.get("scenes") or [])
-            for scene in scenes:
+            if not scenes:
+                raise ValueError(f"Long-form Act {act_num} contains no scenes.")
+            for scene_index, scene in enumerate(scenes, 1):
+                if not isinstance(scene, dict):
+                    raise ValueError(f"Long-form Act {act_num} scene {scene_index} is malformed.")
                 vo = _clean(scene.get("voiceover"))
+                if not vo:
+                    raise ValueError(
+                        f"Long-form Act {act_num} scene {scene_index} has no voiceover narration."
+                    )
                 w_count = _words(vo)
                 total_words += w_count
                 scene_duration = round((w_count / WORDS_PER_MINUTE) * 60.0, 1)
