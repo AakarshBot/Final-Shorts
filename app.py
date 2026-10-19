@@ -2047,31 +2047,32 @@ def _crop_visual_dialog(
             args=(asset_key,),
             width="stretch",
         )
-    if asset_key in store:
-        with original_col:
-            if st.button("Use original image", key=f"crop-original-button-{digest}", width="stretch"):
-                store.pop(asset_key, None)
-                assignment_key = {
-                    "visual_crops": "visual_assignments",
-                    "live_visual_crops": "live_visual_assignments",
-                    "test_top5_visual_crops": "test_top5_visual_assignments",
-                }.get(crop_store)
-                if assignment_key:
-                    for assignment in (st.session_state.get(assignment_key) or {}).values():
-                        if assignment.get("asset_key") == asset_key:
-                            assignment["bytes"] = bytes(image_bytes)
-                if crop_store == "live_visual_crops":
-                    st.session_state.live_visuals_approved = False
-                elif crop_store == "visual_crops":
-                    st.session_state.visuals_approved = False
-                    st.session_state.approved_visuals = None
-                elif crop_store == "test_top5_visual_crops":
-                    st.session_state.test_top5_visual_handoff = None
-                    st.session_state.test_top5_rendered_video_path = None
-                if card_selector:
-                    from card_studio import invalidate_card_studio_results_for_source
-                    invalidate_card_studio_results_for_source(st.session_state, asset_key)
-                st.rerun()
+    with original_col:
+        if asset_key in store and st.button(
+            "Use original image", key=f"crop-original-button-{digest}", width="stretch"
+        ):
+            store.pop(asset_key, None)
+            assignment_key = {
+                "visual_crops": "visual_assignments",
+                "live_visual_crops": "live_visual_assignments",
+                "test_top5_visual_crops": "test_top5_visual_assignments",
+            }.get(crop_store)
+            if assignment_key:
+                for assignment in (st.session_state.get(assignment_key) or {}).values():
+                    if assignment.get("asset_key") == asset_key:
+                        assignment["bytes"] = bytes(image_bytes)
+            if crop_store == "live_visual_crops":
+                st.session_state.live_visuals_approved = False
+            elif crop_store == "visual_crops":
+                st.session_state.visuals_approved = False
+                st.session_state.approved_visuals = None
+            elif crop_store == "test_top5_visual_crops":
+                st.session_state.test_top5_visual_handoff = None
+                st.session_state.test_top5_rendered_video_path = None
+            if card_selector:
+                from card_studio import invalidate_card_studio_results_for_source
+                invalidate_card_studio_results_for_source(st.session_state, asset_key)
+            st.rerun()
 
     final_preview = cropped.convert("RGB").resize((1080, 1920), Image.Resampling.LANCZOS)
     left, right = st.columns([1.2, .8], gap="large")
