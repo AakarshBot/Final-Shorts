@@ -3300,7 +3300,7 @@ def _render_card_studio(
             if not isinstance(source_script, dict):
                 source_script = {}
             source_topics = st.session_state.get("test_top5_handoff") or st.session_state.get("test_top5_topics") or []
-            source_index = active_slide - 1 if active_slide else 0
+            source_index = max(0, active_slide - 2) if active_slide else 0
             source_story = source_topics[source_index] if source_topics and source_index < len(source_topics) else {}
             slides = source_script.get("slides") or []
             selected_slide = slides[active_slide - 1] if active_slide and active_slide <= len(slides) else None
