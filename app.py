@@ -3295,10 +3295,11 @@ def _render_card_studio(
             source_script = (
                 st.session_state.get("test_top5_script_handoff")
                 or st.session_state.get("test_top5_script_data")
-                or st.session_state.get("test_top5_handoff")
                 or {}
             )
-            source_topics = st.session_state.get("test_top5_topics") or []
+            if not isinstance(source_script, dict):
+                source_script = {}
+            source_topics = st.session_state.get("test_top5_handoff") or st.session_state.get("test_top5_topics") or []
             source_index = active_slide - 1 if active_slide else 0
             source_story = source_topics[source_index] if source_topics and source_index < len(source_topics) else {}
             slides = source_script.get("slides") or []
@@ -3321,7 +3322,7 @@ def _render_card_studio(
 
         return {
             "title": _story_value("title") or source_script.get("source_title") or source_script.get("headline") or "",
-            "description": _story_value("description") or _story_value("summary") or "",
+            "description": _story_value("description") or _story_value("summary") or _story_value("article") or "",
             "source": _story_value("source") or _story_value("publisher") or "",
             "url": _story_value("url") or "",
             "script": source_script,
@@ -3359,8 +3360,15 @@ def _render_card_studio(
         if st.button("Auto-fill this card from story", type="secondary", width="stretch", key=f"{state_id}-autofill-{card_type}"):
             try:
                 from script_writer import generate_card_copy
+                story_context = _card_story_context()
+                if not (
+                    story_context.get("title")
+                    or story_context.get("description")
+                    or story_context.get("script")
+                ):
+                    raise ValueError("Select a story or generate its Scriptwriter result before auto-filling a card.")
                 with st.spinner("Writing story-backed card copy…"):
-                    generated = generate_card_copy(card_type, _card_story_context(), target_language=card_language)
+                    generated = generate_card_copy(card_type, story_context, target_language=card_language)
                 _set_generated_card_fields(generated)
                 st.session_state[f"{state_id}-result"] = None
                 st.rerun()
@@ -3379,9 +3387,16 @@ def _render_card_studio(
             else:
                 try:
                     from script_writer import generate_card_copy
+                    story_context = _card_story_context()
+                    if not (
+                        story_context.get("title")
+                        or story_context.get("description")
+                        or story_context.get("script")
+                    ):
+                        raise ValueError("Select a story or generate its Scriptwriter result before using a card prompt.")
                     with st.spinner("Generating prompted card copy…"):
                         generated = generate_card_copy(
-                            card_type, _card_story_context(),
+                            card_type, story_context,
                             target_language=card_language, manual_prompt=manual_prompt.strip(),
                         )
                     _set_generated_card_fields(generated)
