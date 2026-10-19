@@ -58,8 +58,18 @@ def test_longform_visual_matcher_runs(monkeypatch):
     }
 
     monkeypatch.setattr("longform_visuals.search_images", lambda q: {"assets": [mock_asset]})
+    fallback_prompts = []
+
+    def no_ai_fallback(prompt):
+        fallback_prompts.append(prompt)
+        return None
+
+    monkeypatch.setattr("longform_visuals._fetch_pollinations_ai_image", no_ai_fallback)
 
     result = LongformVisualMatcher.match_and_collect(script, story)
+
+    # Repeated scene prompts should not trigger repeated remote image-generation calls.
+    assert len(fallback_prompts) == len(set(fallback_prompts))
 
     assert result["total_scenes"] == 18
     assert len(result["scenes_visuals"]) == 18
