@@ -1171,6 +1171,50 @@ def test_mux_audio_loudnorm_is_inside_complex_filtergraph(monkeypatch, tmp_path)
     assert "-af" not in command
 
 
+def test_mux_audio_uses_one_continuous_chatterbox_master_when_available(monkeypatch, tmp_path):
+    silent_video = tmp_path / "silent.mp4"
+    silent_video.write_bytes(b"video")
+    master = tmp_path / "full.wav"
+    master.write_bytes(b"continuous master")
+    slide_one = tmp_path / "slide_01.wav"
+    slide_two = tmp_path / "slide_02.wav"
+    slide_one.write_bytes(b"slice one")
+    slide_two.write_bytes(b"slice two")
+    output = tmp_path / "output.mp4"
+    seen = {}
+
+    class Result:
+        returncode = 0
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        seen["command"] = command
+        return Result()
+
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+
+    result = renderer._mux_audio(
+        silent_video,
+        [
+            {"scene": 1, "path": str(slide_one), "continuous_master_path": str(master)},
+            {"scene": 2, "path": str(slide_two), "continuous_master_path": str(master)},
+        ],
+        output,
+    )
+
+    assert result == output
+    command = seen["command"]
+    input_paths = [
+        command[index + 1]
+        for index, value in enumerate(command[:-1])
+        if value == "-i"
+    ]
+    assert input_paths == [str(silent_video), str(master)]
+    filter_value = command[command.index("-filter_complex") + 1]
+    assert filter_value == "[1:a]loudnorm=I=-14:TP=-1.5:LRA=11[a]"
+    assert "concat=n=" not in filter_value
+
+
 def test_top5_card_preview_honors_logo_enabled(monkeypatch):
     calls = []
     monkeypatch.setattr(renderer, "_paste_logo", lambda *_args: calls.append("logo"))
