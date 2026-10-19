@@ -105,6 +105,7 @@ def test_crop_assignment_store_is_pipeline_specific():
     assert 'elif crop_store in {"visual_crops", "card_studio_crops"}' in crop_source
     assert 'assignment["bytes"] = crop_bytes' in crop_source
     assert 'assignment["bytes"] = bytes(image_bytes)' in crop_source
+    assert crop_source.count('not card_studio_crop or assignment.get("result_key") == "card-studio-photo"') == 2
 
 
 def test_visual_pool_work_uses_cached_validation_and_thumbnails():
