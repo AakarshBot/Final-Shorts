@@ -793,6 +793,14 @@ def _words(value) -> int:
     return len(re.findall(r"\b[\w]+(?:['’][\w]+)?\b", str(value or ""), flags=re.UNICODE))
 
 
+def _spoken_word_count(value, language: str | None = None) -> int:
+    """Use whitespace-separated words for Hindi/Telugu, whose vowel marks split regex tokens."""
+    language_key = str(language or "english").strip().casefold()
+    if language_key in {"hindi", "telugu", "hi", "te"}:
+        return len(_clean(value).split())
+    return _words(value)
+
+
 def _normalise(value) -> str:
     return re.sub(r"[^\w ]+", " ", str(value or "").casefold(), flags=re.UNICODE).strip()
 
@@ -955,8 +963,9 @@ def evaluate_flow(script: dict) -> dict:
         }
 
     voiceovers = [str(s.get("voiceover") or "").strip() for s in scenes if isinstance(s, dict)]
-    slide_one_words = _words(voiceovers[0]) if voiceovers else 0
-    total_words = _words(" ".join(voiceovers))
+    language_key = str(script.get("language_used") or "english").strip().casefold()
+    slide_one_words = _spoken_word_count(voiceovers[0], language_key) if voiceovers else 0
+    total_words = _spoken_word_count(" ".join(voiceovers), language_key)
     est_seconds = round(total_words / 2.5, 1)
 
     connective_markers = (
@@ -1699,7 +1708,10 @@ def _finish_result(
         result["story_angle"] = angle_text
     result["provider_used"] = model
     result["language_used"] = language_key
-    result["word_count"] = _words(" ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or []))
+    result["word_count"] = _spoken_word_count(
+        " ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or []),
+        language_key,
+    )
     result["source_title"] = _story_value(story, "title")
     if search_query:
         result["search_query"] = search_query
@@ -1896,10 +1908,11 @@ def validate_universal_script(
         return False, "The Scriptwriter must identify the main subject."
 
     language_key = str(language or result.get("language_used") or "english").strip().casefold()
-    first_words = _words(
+    first_words = _spoken_word_count(
         scenes[0].get("voiceover")
         if isinstance(scenes[0], dict)
-        else ""
+        else "",
+        language_key,
     )
     if language_key not in {"hindi", "telugu", "hi", "te"} and first_words > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
@@ -1926,7 +1939,7 @@ def validate_universal_script(
         if _normalise(phrase) in narration_normalised:
             return False, "The narration contains filler or retention bait."
 
-    total_words = _words(narration)
+    total_words = _spoken_word_count(narration, language_key)
     if total_words < MIN_WORDS:
         return False, "Narration is too short to reach the 18-second minimum without padding."
     if total_words > MAX_WORDS:
