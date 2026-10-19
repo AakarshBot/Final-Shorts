@@ -23,6 +23,7 @@ try {
         $PythonPrefix = @()
     }
 
+    $env:PIP_CACHE_DIR = Join-Path $TemporaryRoot "pip-cache"
     Write-Host "Preparing a temporary archive reader..."
     & $PythonCommand @PythonPrefix -m pip install --disable-pip-version-check --quiet --target $ExtractorPath zstandard
     if ($LASTEXITCODE -ne 0) { throw "Could not prepare the temporary package extractor." }
