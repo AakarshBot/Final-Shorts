@@ -12,6 +12,7 @@ from typing import Any
 from audio import (
     _chatterbox_audio_texts,
     _file_sha256,
+    _join_narration_texts,
     _generate_chatterbox_take,
     _normalise_chatterbox_model_version,
     _prepare_chatterbox_reference,
@@ -267,7 +268,7 @@ class LongformAudioEngine:
 
         generated_chunks = []
         for chunk_number, (start, end) in enumerate(chunk_ranges, 1):
-            chunk_text = " ".join(audio_texts[start:end])
+            chunk_text = _join_narration_texts(audio_texts[start:end])
             wav = _generate_chatterbox_take(
                 model,
                 chunk_text,
