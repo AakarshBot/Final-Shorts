@@ -644,6 +644,7 @@ def _chatterbox_result_from_manifest(
 
     total_duration = float(manifest["total_duration"])
     result = {
+        "engine": "chatterbox",
         "full_path": str(output_dir / "full.wav"),
         "slide_paths": paths,
         "duration": round(total_duration, 3),
@@ -994,6 +995,7 @@ def generate_audio(
 
     _validate_indic_first_scene_duration(results, language)
     return {
+        "engine": "edge-tts",
         "language": language,
         "voice": selected_voice,
         "rate_percent": rate_percent,
@@ -1092,6 +1094,7 @@ def generate_top5_audio(
     return {
         "schema": "final-shorts.top5-audio.v1",
         "source_schema": "final-shorts.top5-script.v1",
+        "engine": "edge-tts",
         "language": language,
         "voice": selected_voice,
         "rate_percent": rate_percent,
