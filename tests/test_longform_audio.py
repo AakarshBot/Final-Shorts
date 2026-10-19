@@ -92,6 +92,82 @@ def test_longform_audio_generates_with_mock_model(monkeypatch, tmp_path):
     assert result["total_duration"] > 0
 
 
+def test_longform_groups_same_act_scenes_into_one_generation(monkeypatch, tmp_path):
+    import longform_audio
+
+    class FakeChatterbox:
+        sr = 24000
+
+        def __init__(self):
+            self.calls = []
+
+        def generate(self, text, temperature=0.8):
+            self.calls.append((text, temperature))
+            return torch.zeros((1, int(self.sr * 4)))
+
+    model = FakeChatterbox()
+    monkeypatch.setattr(
+        longform_audio,
+        "get_chatterbox_model",
+        lambda model_version="turbo": model,
+    )
+    script = sample_script()
+    script["scenes"][1]["act_number"] = 1
+
+    result = LongformAudioEngine.generate(script, output_dir=tmp_path)
+
+    expected_text = " ".join(scene["voiceover"] for scene in script["scenes"])
+    assert len(model.calls) == 1
+    assert model.calls[0] == (expected_text, 0.80)
+    assert result["continuous_audio"] is True
+    assert result["model_version"] == "turbo"
+    assert len(result["scenes"]) == 2
+    assert result["scenes"][1]["start_seconds"] == result["scenes"][0]["duration"]
+
+
+def test_longform_full_model_uses_controlled_settings_and_chunking(monkeypatch, tmp_path):
+    import longform_audio
+
+    class FakeFullChatterbox:
+        sr = 24000
+
+        def __init__(self):
+            self.calls = []
+            self.conds = "builtin"
+
+        def generate(self, text, **kwargs):
+            self.calls.append((text, kwargs))
+            return torch.zeros((1, int(self.sr * 4)))
+
+    model = FakeFullChatterbox()
+    monkeypatch.setattr(
+        longform_audio,
+        "get_chatterbox_model",
+        lambda model_version="turbo": model,
+    )
+    script = sample_script()
+    script["scenes"][1]["act_number"] = 1
+
+    result = LongformAudioEngine.generate(
+        script,
+        output_dir=tmp_path,
+        model_version="full",
+    )
+
+    assert len(model.calls) == 1
+    assert model.calls[0][0] == " ".join(scene["voiceover"] for scene in script["scenes"])
+    assert model.calls[0][1] == {
+        "temperature": 0.75,
+        "cfg_weight": 0.35,
+        "exaggeration": 0.35,
+        "min_p": 0.05,
+        "top_p": 1.0,
+        "repetition_penalty": 1.2,
+    }
+    assert result["engine"] == "Chatterbox-Full"
+    assert result["model_version"] == "full"
+
+
 def test_longform_serious_story_keeps_clear_temperature_in_opening_act(monkeypatch, tmp_path):
     import longform_audio
 
