@@ -517,6 +517,21 @@ def _chatterbox_audio_texts(texts: list[str]) -> list[str]:
     return list(texts)
 
 
+def _join_narration_texts(texts: list[str]) -> str:
+    """Join slide narration into continuous speech while preserving sentence boundaries."""
+    joined = ""
+    for item in texts:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        if joined:
+            if not re.search(r"[.!?]$", joined):
+                joined = re.sub(r"[,;:]$", "", joined) + "."
+            joined += " "
+        joined += text
+    return joined
+
+
 def _chatterbox_delivery(text: str, scene_number: int, scene_count: int) -> tuple[str, float]:
     """Use one stable sampling temperature; do not vary delivery by slide keywords."""
     return text, 0.80
@@ -526,13 +541,16 @@ def _scene_duration_weights(texts: list[str]) -> list[float]:
     """Estimate visual/subtitle boundaries inside a continuous narration take."""
     weights = []
     for text in texts:
-        words = re.findall(r"\w+", str(text or ""), flags=re.UNICODE)
+        value = str(text or "")
+        words = re.findall(r"\w+", value, flags=re.UNICODE)
         lexical_weight = sum(0.65 + 0.20 * min(len(word), 10) for word in words)
         punctuation_weight = (
-            0.35 * str(text or "").count(",")
-            + 0.9 * sum(str(text or "").count(mark) for mark in ".!?")
-            + 0.25 * str(text or "").count(":")
+            0.35 * value.count(",")
+            + 0.9 * sum(value.count(mark) for mark in ".!?")
+            + 0.25 * value.count(":")
         )
+        if not re.search(r"[.!?]$", value.strip()):
+            punctuation_weight += 0.9
         weights.append(max(1.0, lexical_weight + punctuation_weight))
     return weights
 
@@ -689,7 +707,7 @@ def generate_chatterbox_audio(
             raise ValueError(f"Slide {number} has no voiceover.")
 
     selected_model = _normalise_chatterbox_model_version(requested_version)
-    full_text = " ".join(texts)
+    full_text = _join_narration_texts(texts)
 
     if reference is not None:
         actual_ref = Path(reference)
@@ -782,7 +800,7 @@ def generate_chatterbox_audio(
     manifest_path.unlink(missing_ok=True)
 
     audio_text = _chatterbox_audio_texts(texts)
-    full_text = " ".join(audio_text)
+    full_text = _join_narration_texts(audio_text)
     full_wave = _generate_chatterbox_take(
         model, full_text, selected_model, seed=run_number * 100 + 1
     )
