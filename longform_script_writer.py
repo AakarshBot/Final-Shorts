@@ -75,7 +75,7 @@ For every scene, specify:
 - `primary_entity`: The EXACT person/team that MUST appear in the visual (e.g., "Jasprit Bumrah", "Ajit Agarkar", "Wankhede Stadium").
 - `secondary_entity`: Any secondary person/context.
 - `visual_intent`: One of "match_action", "press_conference", "player_portrait", "stadium_atmosphere", "training_nets", "trophy_celebration", "controversy_walkoff".
-- `visual_type`: "card" (for Stat/Quote/H2H/Milestone/Chapter cards), "photo_kenburns" (for high-res photos), or "ncr_broll" (for action footage).
+- `visual_type`: "card" (for evidence-backed Stat/Quote/H2H/Milestone/Chapter cards) or "photo_kenburns" (for still images). This factory has no B-roll/video-footage handoff; never request or imply match clips.
 - `card_type`: "none" if not a card, or one of "Stat Highlight", "Quote / Reaction", "Head-to-Head", "Key Fact / Milestone", "Chapter / Act", "Timeline / Chronology".
 - `card_required_subject`: Exact person whose portrait is needed on the card.
 - `card_payload`: Evidence-backed content only. Stat cards need a real metric and value; comparison cards need two named subjects and sourced comparable metrics; quote cards need exact quoted words plus a named speaker; timelines need at least two supported event nodes; milestones need a supported title and label. Leave unsupported payload fields empty and use `Chapter / Act` or `none` when the evidence is insufficient. Never fill these fields with plausible-looking defaults.
