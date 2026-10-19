@@ -1100,25 +1100,33 @@ async def _browser_page(context, request):
         direct_invalid_images = 0
         network_fallback_hits = 0
         max_images = int(request.get("max_images") or IMAGES_PER_PAGE)
-        for candidate in unique[: max_images * 4]:
+        max_candidates = min(len(unique), max_images * 4)
+        download_headers = {
+            "Referer": base_url,
+            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+        }
+
+        async def download_candidate(candidate):
+            # Download in a small parallel batch while keeping the final ranked
+            # asset order deterministic (asyncio.gather preserves input order).
+            direct_failure = 0
+            invalid_direct = 0
+            fallback_hit = 0
             try:
                 response = await page.request.get(
                     candidate["url"],
                     timeout=min(7500, PAGE_TIMEOUT_MS),
-                    headers={
-                        "Referer": base_url,
-                        "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-                    },
+                    headers=download_headers,
                 )
                 data_bytes = await response.body() if response.ok else b""
             except Exception:
-                direct_download_failures += 1
+                direct_failure = 1
                 data_bytes = b""
 
             if not _image_bytes_ok(data_bytes):
-                direct_invalid_images += 1
-                for key in (candidate["url"], _network_image_key(candidate["url"])):
-                    network_response = network_responses.get(key)
+                invalid_direct = 1
+                for image_key in (candidate["url"], _network_image_key(candidate["url"])):
+                    network_response = network_responses.get(image_key)
                     if network_response is None:
                         continue
                     try:
@@ -1127,18 +1135,15 @@ async def _browser_page(context, request):
                         fallback_bytes = b""
                     if _image_bytes_ok(fallback_bytes):
                         data_bytes = fallback_bytes
-                        network_fallback_hits += 1
+                        fallback_hit = 1
                         break
 
             if not _image_bytes_ok(data_bytes):
-                continue
+                return None, direct_failure, invalid_direct, fallback_hit
 
             digest = _visual_hash(data_bytes)
-            if digest in seen_hashes:
-                continue
-            seen_hashes.add(digest)
             width, height = _image_dimensions(data_bytes)
-            assets.append({
+            asset = {
                 "bytes": data_bytes,
                 "hash": digest,
                 "source_page_url": base_url,
@@ -1162,7 +1167,26 @@ async def _browser_page(context, request):
                         for k in ("alt", "title", "context")
                     )) & ACTION_TERMS
                 ),
-            })
+            }
+            return asset, direct_failure, invalid_direct, fallback_hit
+
+        # Previously each of up to 24 image candidates was downloaded serially,
+        # incurring a separate network wait for every broken thumbnail. Small
+        # batches reduce wall time without flooding publishers or downloading all
+        # candidates after enough assets have already been found.
+        for batch_start in range(0, max_candidates, 4):
+            batch = unique[batch_start : batch_start + 4]
+            batch_results = await asyncio.gather(
+                *(download_candidate(candidate) for candidate in batch)
+            )
+            for asset, direct_failure, invalid_direct, fallback_hit in batch_results:
+                direct_download_failures += direct_failure
+                direct_invalid_images += invalid_direct
+                network_fallback_hits += fallback_hit
+                if asset is None or asset["hash"] in seen_hashes or len(assets) >= max_images:
+                    continue
+                seen_hashes.add(asset["hash"])
+                assets.append(asset)
             if len(assets) >= max_images:
                 break
 
