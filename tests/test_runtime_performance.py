@@ -197,7 +197,9 @@ def test_motion_profile_is_cached_by_visual_seed():
 def test_render_loop_does_not_rebuild_motion_seed_or_hash_image_each_frame():
     source = (ROOT / "renderer.py").read_text(encoding="utf-8")
     render_start = source.index("def render_production_video(")
-    render_end = source.index("\ndef ", render_start + 5)
+    render_end = source.find("\ndef ", render_start + 5)
+    if render_end < 0:
+        render_end = len(source)
     render_source = source[render_start:render_end]
     preparation_end = render_source.index("    def frames():")
     preparation = render_source[:preparation_end]
