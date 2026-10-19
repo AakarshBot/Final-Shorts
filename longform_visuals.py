@@ -171,6 +171,7 @@ class LongformVisualMatcher:
         # 3. Match and Assign Assets Scene-by-Scene
         assigned_scenes = []
         used_hashes: set[str] = set()
+        ai_fallback_cache: dict[str, bytes | None] = {}
 
         for sc in scenes:
             sc_num = sc["scene_number"]
@@ -261,7 +262,12 @@ class LongformVisualMatcher:
 
             # Fallback if no real photo found and not a card: generate AI photo or default card
             if not chosen_bytes and not rendered_frame_bytes:
-                ai_data = _fetch_pollinations_ai_image(f"{entity} {intent} cricket")
+                # Repeated entity/intent pairs share one generated fallback within
+                # this run; do not call the image service repeatedly for the same prompt.
+                ai_prompt = f"{entity} {intent} cricket"
+                if ai_prompt not in ai_fallback_cache:
+                    ai_fallback_cache[ai_prompt] = _fetch_pollinations_ai_image(ai_prompt)
+                ai_data = ai_fallback_cache[ai_prompt]
                 if ai_data:
                     chosen_bytes = ai_data
                 else:
