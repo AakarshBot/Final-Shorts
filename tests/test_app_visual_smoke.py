@@ -566,6 +566,11 @@ def test_card_studio_story_autofill_populates_fields_for_selected_language(monke
         url="https://example.com/gill-123",
     )]
     at.session_state["selected_topic"] = 0
+    at.session_state["script_data"] = {
+        "headline": "Gill reaches 123",
+        "language_used": "hindi",
+        "script": [{"voiceover": "Gill scores 123 runs."}] * 4,
+    }
     at.session_state["visual_test_mode"] = "Option 5 · Card Studio"
     at.session_state["visual_result"] = {"assets": [{
         "bytes": _image_bytes(), "source": "Test Source",
