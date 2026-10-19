@@ -1468,7 +1468,7 @@ def test_production_render_does_not_fail_when_windows_locks_silent_intermediate(
         result = renderer.render_production_video(
             {"approved_for_audio": True, "script": [{"voiceover": "A spoken line."}]},
             {"approved_for_visuals": True, "scenes": [{"scene": 1, "duration": 1.0, "path": str(audio_file)}]},
-            None,
+            TEST_SUBTITLE_DATA,
             [{"bytes": visual_buffer.getvalue()}],
             output,
         )
