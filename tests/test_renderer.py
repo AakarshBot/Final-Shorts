@@ -1587,3 +1587,35 @@ def test_indic_raqm_error_explains_verified_automatic_bootstrap(monkeypatch):
     monkeypatch.setattr(renderer.os, "name", "posix")
     with pytest.raises(RuntimeError, match="attempts to download and verify FriBiDi automatically"):
         renderer._require_raqm("hindi")
+
+
+def test_windows_raqm_bootstrap_rechecks_pillow_after_install(monkeypatch):
+    checks = iter([False, True])
+    calls = []
+
+    monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
+    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: next(checks))
+    monkeypatch.setattr(
+        renderer,
+        "_install_fribidi_from_official_package",
+        lambda: calls.append("installed"),
+    )
+
+    renderer._require_raqm("hindi")
+
+    assert calls == ["installed"]
+
+
+def test_windows_raqm_bootstrap_does_not_mask_missing_zstandard_details(monkeypatch):
+    monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
+    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
+    monkeypatch.setattr(
+        renderer,
+        "_install_fribidi_from_official_package",
+        lambda: (_ for _ in ()).throw(RuntimeError("updated factory requirements")),
+    )
+
+    with pytest.raises(RuntimeError, match="Automatic FriBiDi setup could not complete: updated factory requirements"):
+        renderer._require_raqm("hindi")
