@@ -96,6 +96,7 @@ def test_format_normalizes_act_and_scene_ids_and_entity_fallback():
 
     assert [act["act_number"] for act in formatted["acts"]] == [1, 2, 3, 4, 5, 6]
     assert [scene["scene_number"] for scene in formatted["scenes"]] == list(range(1, 19))
+    assert [scene["scene_number"] for act in formatted["acts"] for scene in act["scenes"]] == list(range(1, 19))
     assert formatted["scenes"][0]["chapter_title"] == formatted["chapters"][0]["title"]
     assert formatted["scenes"][0]["primary_entity"] == story["title"]
     assert formatted["scenes"][0]["search_query"] == f'{story["title"]} cricket'
