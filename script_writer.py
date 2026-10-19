@@ -16,6 +16,7 @@ import os
 from pathlib import Path
 import re
 import time
+import unicodedata
 from urllib.parse import urlparse
 
 from ddgs import DDGS
@@ -315,7 +316,7 @@ Do not replace facts with generic empty hype.
 
 NAMING THE SUBJECT
 - Identify the exact main player/person/team in `subject_name`.
-- The exact subject name must appear verbatim in a spoken voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
+- The exact `subject_name` must appear in the spoken narration, using the same script and spelling as the name in a voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
 - Never describe the main player only as "the 35-year-old", "the player", "the batter", "the bowler", "the captain", or with a pronoun when the exact name is available.
 - For a story about a specific player, name that player in the first two slides whenever the evidence supports the name.
 
@@ -443,7 +444,7 @@ Do not force a fixed event template. A transfer, injury, retirement, qualifying 
 
 NAMING PEOPLE AND ENTITIES
 - Identify the exact main subject in subject_name.
-- The exact subject name must appear verbatim in a spoken voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
+- The exact `subject_name` must appear in the spoken narration, using the same script and spelling as the name in a voiceover.\n- `subject_name` must use the same script and spelling as the name is spoken in a voiceover, and that exact value must appear verbatim in at least one `voiceover`. For Hindi use Devanagari and for Telugu use Telugu script when the narration names the subject in that script; do not leave `subject_name` in Latin letters while spelling the spoken name in native script.
 - If the source or headline uses a descriptor such as "legend", "champion", "star", "former champion", "defending champion" or "world number one", resolve that descriptor to the actual named person or team from the story before writing.
 - Never make the viewer guess who a descriptor refers to when the research identifies the person.
 - Prefer the exact name early when the identity is central to the story.
@@ -792,8 +793,33 @@ def _words(value) -> int:
     return len(re.findall(r"\b[\w]+(?:['’][\w]+)?\b", str(value or ""), flags=re.UNICODE))
 
 
+def _spoken_word_count(value, language: str | None = None) -> int:
+    """Use whitespace-separated words for Hindi/Telugu, whose vowel marks split regex tokens."""
+    language_key = str(language or "english").strip().casefold()
+    if language_key in {"hindi", "telugu", "hi", "te"}:
+        return len(_clean(value).split())
+    return _words(value)
+
+
 def _normalise(value) -> str:
     return re.sub(r"[^\w ]+", " ", str(value or "").casefold(), flags=re.UNICODE).strip()
+
+
+def _normalise_name(value) -> str:
+    """Normalise names without dropping Indic-script vowel or diacritic marks."""
+    text = unicodedata.normalize("NFKC", str(value or "")).casefold()
+    characters = []
+    for character in text:
+        category = unicodedata.category(character)
+        if category == "Cf":
+            continue
+        if character.isspace():
+            characters.append(" ")
+        elif character.isalnum() or category.startswith("M") or character == "_":
+            characters.append(character)
+        else:
+            characters.append(" ")
+    return " ".join("".join(characters).split())
 
 
 def _normalize_profile(profile: str | None) -> str:
@@ -815,6 +841,113 @@ def _normalize_profile(profile: str | None) -> str:
 
 
 
+def _prepare_generated_script(result, language_key: str):
+    """Recover safe output-shape issues before editorial validation; never changes Top-5."""
+    if not isinstance(result, dict):
+        return result
+
+    language = str(language_key or "english").strip().casefold()
+    scenes = result.get("script")
+    if language in {"hindi", "telugu", "hi", "te"} and isinstance(scenes, list):
+        narration = _normalise_name(" ".join(
+            _clean(scene.get("voiceover"))
+            for scene in scenes
+            if isinstance(scene, dict)
+        ))
+        subject = _normalise_name(result.get("subject_name"))
+        if not subject or subject not in narration:
+            # In native-script output, the first slide's primary entity is the
+            # strongest grounded alternative spelling for the spoken subject.
+            for scene in scenes[:2]:
+                if not isinstance(scene, dict):
+                    continue
+                candidate = _clean(scene.get("primary_entity"))
+                voiceover = _normalise_name(scene.get("voiceover"))
+                candidate_normalised = _normalise_name(candidate)
+                same_name_shape = (
+                    not subject
+                    or len(candidate_normalised.split()) == len(subject.split())
+                )
+                if candidate_normalised and candidate_normalised in voiceover and same_name_shape:
+                    result["subject_name"] = candidate
+                    break
+
+    raw_titles = result.get("titles")
+    if isinstance(raw_titles, list):
+        supplied_titles = raw_titles
+    elif isinstance(raw_titles, str):
+        supplied_titles = [line.strip(" -*\t") for line in raw_titles.splitlines() if line.strip()]
+        if not supplied_titles and raw_titles.strip():
+            supplied_titles = [raw_titles]
+    else:
+        supplied_titles = []
+
+    titles = []
+    title_keys = set()
+
+    def add_title(value):
+        if not isinstance(value, str):
+            return
+        candidate = _clean(value).strip(" \t\r\n\"'“”‘’")
+        candidate = re.sub(r"^[*•-]+\s*", "", candidate)
+        candidate = candidate.rstrip(" .。;；")
+        if not candidate:
+            return
+        if len(candidate) > 110:
+            shortened = candidate[:107]
+            if " " in shortened:
+                shortened = shortened.rsplit(" ", 1)[0]
+            candidate = shortened.rstrip(" ,:;") + "…"
+        key = _normalise_name(candidate)
+        if key and key not in title_keys:
+            title_keys.add(key)
+            titles.append(candidate)
+
+    for title in supplied_titles:
+        add_title(title)
+        if len(titles) == 3:
+            break
+
+    # If the model omitted or duplicated a title, reuse story-specific metadata
+    # already present in the same response before constructing a localized variant.
+    candidates = [
+        result.get("headline"),
+        result.get("seo_description"),
+    ]
+    if isinstance(scenes, list):
+        candidates.extend(
+            scene.get("voiceover")
+            for scene in scenes[:2]
+            if isinstance(scene, dict)
+        )
+    candidates.append(result.get("comment"))
+    for candidate in candidates:
+        if len(titles) == 3:
+            break
+        text_value = _clean(candidate)
+        if text_value:
+            sentence = re.split(r"(?<=[.!?。！？])\s+", text_value, maxsplit=1)[0]
+            add_title(sentence)
+
+    suffixes = {
+        "hindi": ["यह क्यों अहम है?", "अब आगे क्या होगा?", "सबसे बड़ा सवाल"],
+        "hi": ["यह क्यों अहम है?", "अब आगे क्या होगा?", "सबसे बड़ा सवाल"],
+        "telugu": ["ఇది ఎందుకు కీలకం?", "తర్వాత ఏమవుతుంది?", "అసలు ప్రశ్న ఇదే"],
+        "te": ["ఇది ఎందుకు కీలకం?", "తర్వాత ఏమవుతుంది?", "అసలు ప్రశ్న ఇదే"],
+    }.get(language, ["Why It Matters", "What Happens Next", "The Bigger Question"])
+    base = _clean(result.get("headline")) or _clean(result.get("subject_name"))
+    if not base and titles:
+        base = titles[0]
+    for suffix in suffixes:
+        if len(titles) == 3:
+            break
+        if base:
+            add_title(f"{base}: {suffix}")
+
+    result["titles"] = titles[:3]
+    return result
+
+
 def evaluate_flow(script: dict) -> dict:
     """Analyze the broadcast narrative flow and speech timing of a script."""
     scenes = script.get("script") or []
@@ -830,8 +963,9 @@ def evaluate_flow(script: dict) -> dict:
         }
 
     voiceovers = [str(s.get("voiceover") or "").strip() for s in scenes if isinstance(s, dict)]
-    slide_one_words = _words(voiceovers[0]) if voiceovers else 0
-    total_words = _words(" ".join(voiceovers))
+    language_key = str(script.get("language_used") or "english").strip().casefold()
+    slide_one_words = _spoken_word_count(voiceovers[0], language_key) if voiceovers else 0
+    total_words = _spoken_word_count(" ".join(voiceovers), language_key)
     est_seconds = round(total_words / 2.5, 1)
 
     connective_markers = (
@@ -1179,6 +1313,7 @@ def _request(
             },
         }
 
+    response = None
     for attempt in range(3):
         try:
             response = requests.post(
@@ -1198,12 +1333,29 @@ def _request(
                 },
                 timeout=TIMEOUT,
             )
-            break
         except (requests.exceptions.SSLError, requests.exceptions.ConnectionError, requests.exceptions.Timeout):
             if attempt == 2:
                 raise
             time.sleep(2 ** attempt)
+            continue
 
+        if response.status_code == 429 and attempt < 2:
+            rate_limit_error = _groq_http_error(response)
+            try:
+                wait_seconds = float(rate_limit_error.retry_after) if rate_limit_error.retry_after else float(2 ** attempt)
+            except (TypeError, ValueError):
+                wait_seconds = float(2 ** attempt)
+            # Respect Groq's retry window rather than immediately spending a
+            # backup-model call against the same organisation TPM limit. If the
+            # provider asks for a long wait, surface the error instead of sleeping
+            # for an unbounded period or retrying too early.
+            if 0 <= wait_seconds <= 30:
+                time.sleep(max(1.0, wait_seconds))
+                continue
+        break
+
+    if response is None:
+        raise RuntimeError("Groq request ended without a response.")
     if response.status_code >= 400:
         error = _groq_http_error(response)
         if (
@@ -1482,8 +1634,12 @@ def validate_cricket_script(
     if language_key not in {"hindi", "telugu", "hi", "te"} and first_words > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
 
-    narration = _normalise(" ".join(_clean(scene.get("voiceover")) for scene in scenes))
-    subject_normalised = _normalise(subject)
+    narration = _normalise_name(" ".join(
+        _clean(scene.get("voiceover"))
+        for scene in scenes
+        if isinstance(scene, dict)
+    ))
+    subject_normalised = _normalise_name(subject)
     if subject_normalised and subject_normalised not in narration:
         if language_key in {"hindi", "telugu", "hi", "te"}:
             return (
@@ -1552,7 +1708,10 @@ def _finish_result(
         result["story_angle"] = angle_text
     result["provider_used"] = model
     result["language_used"] = language_key
-    result["word_count"] = _words(" ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or []))
+    result["word_count"] = _spoken_word_count(
+        " ".join(_clean(scene.get("voiceover")) for scene in result.get("script") or []),
+        language_key,
+    )
     result["source_title"] = _story_value(story, "title")
     if search_query:
         result["search_query"] = search_query
@@ -1638,7 +1797,7 @@ def write_script(
 
     def fresh_backup(first_error: Exception) -> dict:
         try:
-            backup = _request(MODELS[1], instruction, source)
+            backup = _prepare_generated_script(_request(MODELS[1], instruction, source), language_key)
         except Exception as second_error:
             raise RuntimeError(
                 "Script generation failed before a valid draft was available. "
@@ -1654,7 +1813,7 @@ def write_script(
         return finish(backup, MODELS[1])
 
     try:
-        result = _request(MODELS[0], instruction, source)
+        result = _prepare_generated_script(_request(MODELS[0], instruction, source), language_key)
     except GroqAPIError as first_error:
         if 400 <= first_error.status_code < 500 and first_error.status_code != 429:
             raise RuntimeError(
@@ -1684,7 +1843,7 @@ def write_script(
     )
 
     try:
-        rewritten = _request(MODELS[1], rewrite_instruction, source)
+        rewritten = _prepare_generated_script(_request(MODELS[1], rewrite_instruction, source), language_key)
     except Exception as second_error:
         raise RuntimeError(
             "Script generation failed after one hidden rewrite: "
@@ -1749,10 +1908,11 @@ def validate_universal_script(
         return False, "The Scriptwriter must identify the main subject."
 
     language_key = str(language or result.get("language_used") or "english").strip().casefold()
-    first_words = _words(
+    first_words = _spoken_word_count(
         scenes[0].get("voiceover")
         if isinstance(scenes[0], dict)
-        else ""
+        else "",
+        language_key,
     )
     if language_key not in {"hindi", "telugu", "hi", "te"} and first_words > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
@@ -1773,19 +1933,20 @@ def validate_universal_script(
 
     narration = " ".join(narration_parts)
     narration_normalised = _normalise(narration)
+    narration_name_normalised = _normalise_name(narration)
 
     for phrase in FILLER_PHRASES:
         if _normalise(phrase) in narration_normalised:
             return False, "The narration contains filler or retention bait."
 
-    total_words = _words(narration)
+    total_words = _spoken_word_count(narration, language_key)
     if total_words < MIN_WORDS:
         return False, "Narration is too short to reach the 18-second minimum without padding."
     if total_words > MAX_WORDS:
         return False, "Narration must stay under 30 seconds."
 
-    subject_normalised = _normalise(subject)
-    if subject_normalised and subject_normalised not in narration_normalised:
+    subject_normalised = _normalise_name(subject)
+    if subject_normalised and subject_normalised not in narration_name_normalised:
         if language_key in {"hindi", "telugu", "hi", "te"}:
             return (
                 False,
@@ -1978,7 +2139,7 @@ def write_universal_script(
                 f"Validation failure: {recovery_reason}"
             )
         try:
-            result = _request(model, model_instruction, source)
+            result = _prepare_generated_script(_request(model, model_instruction, source), language_key)
         except GroqAPIError as exc:
             errors.append(f"{model}: {exc}")
             if 400 <= exc.status_code < 500 and exc.status_code != 429:

@@ -225,6 +225,8 @@ def test_top5_request_retries_transient_groq_connection_errors(monkeypatch):
     import script_writer as top5_script_writer
 
     class FakeResponse:
+        status_code = 200
+
         def raise_for_status(self):
             return None
 

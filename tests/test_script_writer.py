@@ -827,3 +827,145 @@ def _contains_array_length_constraints(value):
     if isinstance(value, list):
         return any(_contains_array_length_constraints(child) for child in value)
     return False
+
+
+@pytest.mark.parametrize(
+    ("language", "native_name", "lead"),
+    [
+        ("hindi", "शुभमन गिल", "शुभमन गिल की फिटनेस पर सवाल उठ रहे हैं।"),
+        ("telugu", "శుభ్‌మన్ గిల్", "శుభ్‌మన్ గిల్ ఫిట్‌నెస్‌పై ప్రశ్నలు కొనసాగుతున్నాయి."),
+    ],
+)
+def test_generated_script_recovery_normalises_title_count_and_native_subject(
+    language, native_name, lead
+):
+    result = valid_result()
+    result["subject_name"] = "Shubman Gill"
+    result["titles"] = result["titles"][:2]
+    result["script"][0]["voiceover"] = lead
+    result["script"][0]["primary_entity"] = native_name
+
+    prepared = script_writer._prepare_generated_script(result, language)
+
+    assert prepared["subject_name"] == native_name
+    assert len(prepared["titles"]) == 3
+    assert len({script_writer._normalise_name(title) for title in prepared["titles"]}) == 3
+    valid, reason = script_writer.validate_cricket_script(prepared, language=language)
+    assert valid, reason
+
+
+@pytest.mark.parametrize(
+    "titles",
+    [
+        ["First title", "Second title"],
+        ["First title", "Second title", "Third title", "Fourth title"],
+        ["First title", "First title", "Second title"],
+    ],
+)
+def test_generated_script_titles_are_always_three_distinct_candidates(titles):
+    result = valid_result()
+    result["titles"] = titles
+
+    prepared = script_writer._prepare_generated_script(result, "hindi")
+
+    assert len(prepared["titles"]) == 3
+    assert len({script_writer._normalise_name(title) for title in prepared["titles"]}) == 3
+
+
+def test_name_normalisation_preserves_indic_marks_and_ignores_zero_width_formatting():
+    assert script_writer._normalise_name("శుభ్‌మన్ గిల్") == script_writer._normalise_name(
+        "శుభ్‌మన్ గిల్".replace("\u200c", "")
+    )
+    assert script_writer._normalise_name("शुभमन गिल") == script_writer._normalise_name("शुभमन गिल")
+
+
+def test_groq_request_retries_rate_limit_after_retry_after(monkeypatch):
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    captured = []
+    sleeps = []
+
+    class FakeResponse:
+        def __init__(self, status_code, payload, headers=None):
+            self.status_code = status_code
+            self._payload = payload
+            self.headers = headers or {}
+            self.text = json.dumps(payload, ensure_ascii=False)
+
+        def json(self):
+            return self._payload
+
+    responses = [
+        FakeResponse(
+            429,
+            {"error": {"message": "TPM rate limit reached", "code": "rate_limit_exceeded"}},
+            {"Retry-After": "8"},
+        ),
+        FakeResponse(200, {"choices": [{"message": {"content": json.dumps(valid_result())}}]}),
+    ]
+
+    def fake_post(_url, *, json, **_kwargs):
+        captured.append(json)
+        return responses.pop(0)
+
+    monkeypatch.setattr(script_writer.requests, "post", fake_post)
+    monkeypatch.setattr(script_writer.time, "sleep", sleeps.append)
+
+    result = script_writer._request("openai/gpt-oss-20b", "Write one script as JSON", "evidence")
+
+    assert result == valid_result()
+    assert len(captured) == 2
+    assert sleeps == [8.0]
+
+
+@pytest.mark.parametrize(
+    ("language", "subject", "voiceovers"),
+    [
+        (
+            "hindi",
+            "शुभमन गिल",
+            [
+                "शुभमन गिल की फिटनेस पर टीम अभी भी फैसला नहीं कर पाई है",
+                "रिपोर्ट के मुताबिक अभ्यास के दौरान उन्हें परेशानी हुई और बाद में जांच की गई",
+                "टीम प्रबंधन अगला फैसला मेडिकल रिपोर्ट मिलने के बाद ही करेगा जिससे चयन पर असर पड़ सकता है",
+                "अगर वह समय पर फिट नहीं होते तो अगले मुकाबले में भारत को नए विकल्प पर भरोसा करना पड़ सकता है",
+            ],
+        ),
+        (
+            "telugu",
+            "శుభ్‌మన్ గిల్",
+            [
+                "శుభ్‌మన్ గిల్ ఫిట్‌నెస్‌పై జట్టు ఇంకా తుది నిర్ణయం తీసుకోలేకపోయింది",
+                "నివేదిక ప్రకారం సాధన సమయంలో అతనికి ఇబ్బంది ఎదురైంది తరువాత వైద్య పరీక్ష కూడా జరిగింది",
+                "వైద్య నివేదిక అందిన తర్వాతే జట్టు యాజమాన్యం నిర్ణయం తీసుకుంటుంది దీంతో ఎంపికపై ప్రభావం పడవచ్చు",
+                "అతను సమయానికి ఫిట్ కాకపోతే తదుపరి మ్యాచ్‌లో భారత్ కొత్త ఆటగాడిపై ఆధారపడాల్సి రావచ్చు దీంతో వ్యూహం కూడా మారే అవకాశం ఉంది కోచ్‌లు దీనిని గమనిస్తున్నారు",
+            ],
+        ),
+    ],
+)
+def test_universal_validator_counts_hindi_telugu_words_without_splitting_script_marks(
+    language, subject, voiceovers
+):
+    result = valid_result()
+    result["subject_name"] = subject
+    result["headline"] = "Story headline"
+    result["titles"] = [
+        "కథ శీర్షిక ఒకటి" if language == "telugu" else "कहानी शीर्षक एक",
+        "ఇది ఎందుకు ముఖ్యం" if language == "telugu" else "यह क्यों महत्वपूर्ण है",
+        "తర్వాత ఏమవుతుంది" if language == "telugu" else "अब आगे क्या होगा",
+    ]
+    result["seo_description"] = "Story-specific description."
+    result["quote"] = ""
+    result["quote_attribution"] = ""
+    result["quote_slide"] = 0
+    for scene, voiceover in zip(result["script"], voiceovers):
+        scene["voiceover"] = voiceover
+        scene["primary_entity"] = subject
+    narration = " ".join(voiceovers)
+
+    valid, reason = script_writer.validate_universal_script(result, language=language)
+
+    assert script_writer._spoken_word_count(narration, language) == len(narration.split())
+    assert script_writer.MIN_WORDS <= script_writer._spoken_word_count(narration, language) <= script_writer.MAX_WORDS
+    assert valid, reason
+    metrics = script_writer.evaluate_flow({**result, "language_used": language})
+    assert metrics["total_words"] == len(narration.split())

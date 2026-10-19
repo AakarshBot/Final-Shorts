@@ -4,12 +4,72 @@ from __future__ import annotations
 
 from io import BytesIO
 import hashlib
+import os
 from pathlib import Path
 import math
 import shutil
 import subprocess
+import sys
+import tempfile
+import time
+import warnings
 from functools import lru_cache
 from itertools import combinations
+
+
+_DLL_DIRECTORY_HANDLES = []
+
+
+def _windows_dll_search_directories(root: Path | None = None) -> tuple[Path, ...]:
+    """Find conventional Windows dependency folders, including FriBiDi locations."""
+    root = Path(root or Path(__file__).resolve().parent)
+    prefix = Path(sys.prefix)
+    configured = os.environ.get("FRIBIDI_DLL_PATH") or os.environ.get("FRIBIDI_DLL_DIR") or ""
+    paths = []
+    if configured.strip():
+        configured_path = Path(configured.strip().strip('"'))
+        paths.append(configured_path.parent if configured_path.suffix.casefold() == ".dll" else configured_path)
+    paths.extend((
+        root / "dlls",
+        root / ".deps",
+        root / "vendor" / "dlls",
+        root / "vendor",
+        root,
+        prefix / "Library" / "bin",
+        prefix / "DLLs",
+        prefix / "Lib" / "site-packages" / "PIL",
+        Path("C:/msys64/mingw64/bin"),
+        Path("C:/msys64/ucrt64/bin"),
+        Path("C:/msys64/usr/bin"),
+    ))
+    unique = []
+    seen = set()
+    for path in paths:
+        try:
+            key = str(path.resolve()).casefold()
+        except OSError:
+            key = str(path).casefold()
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return tuple(unique)
+
+
+def _register_windows_dll_paths() -> None:
+    """Register known DLL folders before Pillow asks Windows to load FriBiDi."""
+    if os.name != "nt" or not hasattr(os, "add_dll_directory"):
+        return
+    for directory in _windows_dll_search_directories():
+        if not directory.is_dir():
+            continue
+        try:
+            handle = os.add_dll_directory(str(directory))
+        except (OSError, ValueError):
+            continue
+        _DLL_DIRECTORY_HANDLES.append(handle)
+
+
+_register_windows_dll_paths()
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
 
@@ -118,6 +178,9 @@ def _indic_language_for_text(text: str) -> str | None:
 
 
 def _require_raqm(language: str) -> None:
+    # Re-check paths at call time too, in case the DLL was installed/configured
+    # after this module was first imported during the Streamlit session.
+    _register_windows_dll_paths()
     try:
         available = features.check_feature("raqm")
     except (AttributeError, ValueError):
@@ -126,8 +189,11 @@ def _require_raqm(language: str) -> None:
         raise RuntimeError(
             f"{language.title()} text needs Pillow's RAQM text-shaping engine. "
             "Rendering has been stopped rather than producing incorrectly joined letters. "
-            "On Windows, make sure the FriBiDi runtime DLL (fribidi.dll or fribidi-0.dll) "
-            "is installed in the DLL search path, then restart the factory."
+            "On Windows, Pillow needs FriBiDi (fribidi.dll, fribidi-0.dll, or "
+            "libfribidi-0.dll). The renderer checks the factory's dlls/.deps folders, "
+            "the active Python environment, and common MSYS2 folders automatically. "
+            "You can also set FRIBIDI_DLL_PATH to the DLL file or FRIBIDI_DLL_DIR to its "
+            "folder, then restart the factory."
         )
 
 
@@ -2212,7 +2278,16 @@ def render_production_video(
     total_duration = sum(durations)
     output = Path(output_path)
     output.parent.mkdir(parents=True, exist_ok=True)
-    silent_video = output.with_name(f"{output.stem}.silent.mp4")
+    # A fixed intermediate filename collides when Streamlit reruns or two renders
+    # overlap. Give every render its own file so one run cannot lock another run's
+    # intermediate video during cleanup.
+    with tempfile.NamedTemporaryFile(
+        prefix=f"{output.stem}.",
+        suffix=".silent.mp4",
+        dir=output.parent,
+        delete=False,
+    ) as silent_handle:
+        silent_video = Path(silent_handle.name)
 
 
     def frames():
@@ -2269,8 +2344,25 @@ def render_production_video(
         write_preview_video(frames(), silent_video)
         return _mux_audio(silent_video, audio_scenes, output)
     finally:
-        try:
-            silent_video.unlink()
-        except FileNotFoundError:
-            pass
+        # Windows antivirus/indexing or a media reader can briefly hold an MP4
+        # handle. Cleanup is best-effort: never turn an already completed final
+        # render into a reported failure merely because a temporary file is locked.
+        for attempt in range(4):
+            try:
+                silent_video.unlink(missing_ok=True)
+                break
+            except PermissionError:
+                if attempt < 3:
+                    time.sleep(0.15 * (attempt + 1))
+                else:
+                    warnings.warn(
+                        f"Render succeeded, but the temporary silent video could not be deleted: {silent_video}",
+                        RuntimeWarning,
+                    )
+            except OSError as exc:
+                warnings.warn(
+                    f"Render succeeded, but temporary video cleanup failed for {silent_video}: {exc}",
+                    RuntimeWarning,
+                )
+                break
 
