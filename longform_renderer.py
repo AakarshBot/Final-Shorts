@@ -234,7 +234,6 @@ class LongformRenderer:
                 "start": sc_start,
                 "duration": sc_dur,
                 "base_image": base_img,
-                "is_card": vis_info.get("visual_type") == "card",
             })
 
         # Frame Generator
@@ -271,7 +270,7 @@ class LongformRenderer:
                 sc_prog = min(1.0, max(0.0, (current_time - sc_start) / sc_dur))
 
                 base = active_scene["base_image"]
-                # Apply Ken Burns if it's a photo, subtle push if card
+                # Apply the existing subtle Ken Burns motion to each scene visual.
                 frame = _apply_ken_burns(base, sc_prog)
 
                 # Billboards and subtitles are in timeline order. Advance cursors
