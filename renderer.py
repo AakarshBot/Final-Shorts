@@ -7,15 +7,11 @@ import hashlib
 import os
 from pathlib import Path
 import math
-import platform
 import shutil
 import subprocess
 import sys
-import tarfile
 import tempfile
 import time
-import urllib.error
-import urllib.request
 import warnings
 from functools import lru_cache
 from itertools import combinations
@@ -73,168 +69,73 @@ def _register_windows_dll_paths() -> None:
         _DLL_DIRECTORY_HANDLES.append(handle)
 
 
-# Official MSYS2 x64 FriBiDi package. The SHA-256 is pinned to the package
-# metadata published at packages.msys2.org; the archive is never blindly extracted.
-_FRIBIDI_PACKAGE_URL = (
-    "https://repo.msys2.org/mingw/mingw64/"
-    "mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst"
-)
-_FRIBIDI_PACKAGE_SOURCES = (
-    _FRIBIDI_PACKAGE_URL,
-    "https://mirror.msys2.org/mingw/mingw64/mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst",
-    "https://ftp.nluug.nl/pub/os/windows/msys2/builds/mingw/mingw64/mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst",
-    "https://mirror.accum.se/mirror/msys2.org/mingw/mingw64/mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst",
-)
-_FRIBIDI_PACKAGE_SHA256 = (
-    "707f6a2f9a49c83938271bfd92a11f80bd4c18c4837210173fcb39e9d841e5ac"
-)
-_FRIBIDI_ARM64_PACKAGE_URL = (
-    "https://repo.msys2.org/mingw/clangarm64/"
-    "mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst"
-)
-_FRIBIDI_ARM64_PACKAGE_SOURCES = (
-    _FRIBIDI_ARM64_PACKAGE_URL,
-    "https://mirror.msys2.org/mingw/clangarm64/mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst",
-    "https://ftp.nluug.nl/pub/os/windows/msys2/builds/mingw/clangarm64/mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst",
-    "https://mirror.accum.se/mirror/msys2.org/mingw/clangarm64/mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst",
-)
-_FRIBIDI_ARM64_PACKAGE_SHA256 = (
-    "85e3a9d74124676618081c2d8a57548342d83a76ac8e4f7daaa0263d0caecbef"
-)
-_FRIBIDI_PACKAGE_MAX_BYTES = 2 * 1024 * 1024
-_FRIBIDI_DLL_MEMBER = "mingw64/bin/libfribidi-0.dll"
-_FRIBIDI_LICENSE_MEMBER = "mingw64/share/licenses/fribidi/COPYING"
-
-
-def _fribidi_package_for_current_arch() -> tuple[tuple[str, ...], str, str, str]:
-    machine = platform.machine().strip().casefold()
-    if machine in {"amd64", "x86_64", "x64"}:
-        return (
-            _FRIBIDI_PACKAGE_SOURCES,
-            _FRIBIDI_PACKAGE_SHA256,
-            _FRIBIDI_DLL_MEMBER,
-            _FRIBIDI_LICENSE_MEMBER,
-        )
-    if machine in {"arm64", "aarch64"}:
-        return (
-            _FRIBIDI_ARM64_PACKAGE_SOURCES,
-            _FRIBIDI_ARM64_PACKAGE_SHA256,
-            "clangarm64/bin/libfribidi-0.dll",
-            "clangarm64/share/licenses/fribidi/COPYING",
-        )
-    raise RuntimeError(
-        f"Automatic FriBiDi setup does not have a verified package for Windows architecture {machine!r}. "
-        "Place a compatible FriBiDi DLL in the factory's dlls/ folder or set FRIBIDI_DLL_PATH."
-    )
-
-
-def _atomic_write_bytes(destination: Path, content: bytes) -> None:
-    """Replace one runtime file atomically so an interrupted download cannot leave a partial DLL."""
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    fd, temp_name = tempfile.mkstemp(
-        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
-    )
-    temp_path = Path(temp_name)
-    try:
-        with os.fdopen(fd, "wb") as stream:
-            stream.write(content)
-        os.replace(temp_path, destination)
-    finally:
-        try:
-            temp_path.unlink(missing_ok=True)
-        except OSError:
-            pass
-
-
-def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
-    """Download a pinned official MSYS2 package and extract only FriBiDi + its licence."""
-    try:
-        import zstandard
-    except ImportError as exc:
+def _install_windows_fribidi_via_powershell() -> None:
+    """Run the repo's checksum-verified no-pip installer, then validate its DLL output."""
+    root = Path(__file__).resolve().parent
+    setup_script = root / "setup_windows_indic_rendering.ps1"
+    if not setup_script.is_file():
         raise RuntimeError(
-            "Automatic Hindi/Telugu text-shaping setup needs the new 'zstandard' dependency. "
-            "Install the updated factory requirements and restart the dashboard."
+            "The factory's setup_windows_indic_rendering.ps1 file is missing; "
+            "cannot install the verified FriBiDi runtime automatically."
+        )
+
+    powershell = (
+        shutil.which("powershell.exe")
+        or shutil.which("powershell")
+        or shutil.which("pwsh.exe")
+        or shutil.which("pwsh")
+    )
+    if not powershell:
+        raise RuntimeError(
+            "PowerShell was not found. The factory's automatic FriBiDi setup could not start."
+        )
+
+    try:
+        process = subprocess.run(
+            [
+                powershell,
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(setup_script),
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=180,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            "The automatic FriBiDi setup exceeded 180 seconds while trying the trusted mirrors."
         ) from exc
+    except OSError as exc:
+        raise RuntimeError(f"Could not start the automatic FriBiDi setup: {exc}") from exc
 
-    root = Path(root or Path(__file__).resolve().parent)
-    dll_dir = root / "dlls"
-    dll_path = dll_dir / "libfribidi-0.dll"
-    license_path = dll_dir / "licenses" / "fribidi-COPYING.txt"
-    marker_path = dll_dir / ".fribidi-package.sha256"
-    package_urls, expected_sha256, dll_member, license_member = _fribidi_package_for_current_arch()
-    if (
-        dll_path.is_file()
-        and 10_000 <= dll_path.stat().st_size <= 2 * 1024 * 1024
-        and license_path.is_file()
-        and marker_path.is_file()
-        and marker_path.read_text(encoding="ascii").strip() == expected_sha256
-    ):
-        return dll_path
-
-    package_bytes = None
-    source_errors = []
-    for package_url in package_urls:
-        request = urllib.request.Request(
-            package_url,
-            headers={"User-Agent": "Final-Shorts/RAQM-runtime-bootstrap"},
+    if process.returncode != 0:
+        details = "\n".join(
+            part.strip() for part in (process.stdout, process.stderr) if part and part.strip()
         )
-        try:
-            with urllib.request.urlopen(request, timeout=25) as response:
-                candidate = response.read(_FRIBIDI_PACKAGE_MAX_BYTES + 1)
-            if len(candidate) > _FRIBIDI_PACKAGE_MAX_BYTES:
-                source_errors.append(f"{package_url}: package exceeds the 2 MB safety limit")
-                continue
-            actual_sha256 = hashlib.sha256(candidate).hexdigest()
-            if actual_sha256 != expected_sha256:
-                source_errors.append(f"{package_url}: SHA-256 mismatch ({actual_sha256})")
-                continue
-            package_bytes = candidate
-            break
-        except (OSError, urllib.error.URLError, TimeoutError) as exc:
-            source_errors.append(f"{package_url}: {exc}")
-
-    if package_bytes is None:
-        attempted = " | ".join(source_errors)
+        if len(details) > 3500:
+            details = details[-3500:]
         raise RuntimeError(
-            "Could not obtain a checksum-verified FriBiDi package from any trusted MSYS2 source. "
-            "Nothing was installed. " + attempted
+            f"The checksum-verified FriBiDi setup failed with exit code {process.returncode}. "
+            "No unverified DLL was accepted. "
+            + (details or "PowerShell did not return a diagnostic message.")
         )
 
-    extracted: dict[str, bytes] = {}
-    try:
-        decompressor = zstandard.ZstdDecompressor()
-        with decompressor.stream_reader(BytesIO(package_bytes)) as unpacked:
-            with tarfile.open(fileobj=unpacked, mode="r|") as archive:
-                for member in archive:
-                    member_name = member.name.replace("\\", "/").lstrip("./")
-                    if member_name not in {dll_member, license_member}:
-                        continue
-                    if not member.isfile():
-                        raise RuntimeError(
-                            f"FriBiDi archive entry {member_name!r} is not a regular file."
-                        )
-                    fileobj = archive.extractfile(member)
-                    if fileobj is None:
-                        raise RuntimeError(
-                            f"FriBiDi archive entry {member_name!r} could not be read."
-                        )
-                    extracted[member_name] = fileobj.read()
-                    if set(extracted) == {dll_member, license_member}:
-                        break
-    except (OSError, tarfile.TarError, zstandard.ZstdError) as exc:
-        raise RuntimeError("The checksum-verified FriBiDi package could not be unpacked.") from exc
-
-    dll_bytes = extracted.get(dll_member)
-    license_bytes = extracted.get(license_member)
-    if not dll_bytes or not (10_000 <= len(dll_bytes) <= 2 * 1024 * 1024):
-        raise RuntimeError("The verified MSYS2 package did not contain a valid-size FriBiDi DLL.")
-    if not license_bytes:
-        raise RuntimeError("The verified MSYS2 package did not contain the FriBiDi licence.")
-
-    _atomic_write_bytes(dll_path, dll_bytes)
-    _atomic_write_bytes(license_path, license_bytes)
-    _atomic_write_bytes(marker_path, (expected_sha256 + "\\n").encode("ascii"))
-    return dll_path
+    dll_path = root / "dlls" / "libfribidi-0.dll"
+    license_path = root / "dlls" / "FRIBIDI-COPYING.txt"
+    if not dll_path.is_file() or not (10_000 <= dll_path.stat().st_size <= 2 * 1024 * 1024):
+        raise RuntimeError(
+            "The FriBiDi setup reported success but did not create a valid dlls/libfribidi-0.dll."
+        )
+    if not license_path.is_file():
+        raise RuntimeError(
+            "The FriBiDi setup reported success but did not save the DLL's LGPL licence."
+        )
 
 
 _register_windows_dll_paths()
@@ -343,7 +244,7 @@ def _require_raqm(language: str) -> None:
     bootstrap_error = None
     if not available and os.name == "nt":
         try:
-            _install_fribidi_from_official_package()
+            _install_windows_fribidi_via_powershell()
             _register_windows_dll_paths()
             # Pillow's Windows wheels load FriBiDi at runtime; check again after
             # the DLL has been installed and its folder registered.
@@ -360,8 +261,8 @@ def _require_raqm(language: str) -> None:
         raise RuntimeError(
             f"{language.title()} text needs Pillow's RAQM text-shaping engine. "
             "Rendering has been stopped rather than producing incorrectly joined letters. "
-            "On Windows the factory now attempts to download and verify FriBiDi automatically "
-            "into dlls/ (including its LGPL licence) when the DLL is missing. "
+            "On Windows the factory automatically runs the existing checksum-verified, "
+            "no-pip PowerShell installer when FriBiDi is missing, then re-checks Pillow in this process. "
             "You can also set FRIBIDI_DLL_PATH to a compatible DLL or FRIBIDI_DLL_DIR to its "
             f"folder, then restart the factory.{detail}"
         )
