@@ -186,3 +186,68 @@ def test_format_rejects_empty_voiceover_before_audio_or_visuals():
     raw["acts"][2]["scenes"][1]["voiceover"] = "   "
     with pytest.raises(ValueError, match="has no voiceover narration"):
         LongformScriptWriter.validate_and_format(raw, sample_longform_story())
+
+
+def test_groq_400_falls_back_immediately_without_repeating_same_model(monkeypatch):
+    import json as json_module
+    import requests
+
+    import longform_script_writer as writer
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    requested_models = []
+
+    class FakeResponse:
+        def __init__(self, status_code, body):
+            self.status_code = status_code
+            self.text = body
+
+        def raise_for_status(self):
+            if self.status_code >= 400:
+                raise requests.HTTPError(
+                    f"HTTP {self.status_code}",
+                    response=self,
+                )
+
+        def json(self):
+            return {"choices": [{"message": {"content": json_module.dumps({"ok": True})}}]}
+
+    def fake_post(_url, headers, json, timeout):
+        requested_models.append(json["model"])
+        if len(requested_models) == 1:
+            return FakeResponse(400, '{"error":"invalid response format"}')
+        return FakeResponse(200, '{"choices":[]}')
+
+    monkeypatch.setattr(writer.requests, "post", fake_post)
+
+    result = writer._request_groq("test system prompt", "test payload")
+
+    assert result == {"ok": True}
+    assert requested_models == [writer.MODELS[0], writer.MODELS[1]]
+
+
+def test_groq_auth_error_fails_fast_without_retry(monkeypatch):
+    import requests
+
+    import longform_script_writer as writer
+
+    monkeypatch.setenv("GROQ_API_KEY", "test-key")
+    calls = []
+
+    class FakeResponse:
+        status_code = 401
+        text = '{"error":"unauthorized"}'
+
+        def raise_for_status(self):
+            raise requests.HTTPError("HTTP 401", response=self)
+
+    def fake_post(*_args, **_kwargs):
+        calls.append(1)
+        return FakeResponse()
+
+    monkeypatch.setattr(writer.requests, "post", fake_post)
+
+    with pytest.raises(RuntimeError, match="HTTP 401"):
+        writer._request_groq("test system prompt", "test payload")
+
+    assert len(calls) == 1
