@@ -12,7 +12,6 @@ from typing import Any
 SCHEMA = "final-shorts.longform-subtitles.v1"
 MAX_WORDS_PER_LOWER_THIRD = 7
 MAX_CUE_SECONDS = 3.2
-MIN_CUE_SECONDS = 1.0
 
 
 def _clean(value: Any) -> str:
