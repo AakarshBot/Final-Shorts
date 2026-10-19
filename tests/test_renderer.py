@@ -226,64 +226,20 @@ def test_renderer_frame_is_vertical_and_independent():
     assert frame is not base
 
 
-def test_headline_is_large_and_dynamic():
-    short_font, short_text, short_lines = renderer._fit_headline_font(
-        "GAME CHANGED",
-    )
-    long_font, long_text, long_lines = renderer._fit_headline_font(
-        "THIS IS A MUCH LONGER HEADLINE",
-    )
-
-    assert short_text.split() == ["GAME", "CHANGED"]
-    assert long_text.split() == ["THIS", "IS", "A", "MUCH", "LONGER", "HEADLINE"]
-    assert renderer.HEADLINE_MAX_SIZE >= 250
-    assert renderer.HEADLINE_MIN_SIZE >= 120
-    assert renderer.HEADLINE_LINE_GAP > 0
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "Oswald-Bold.ttf"
-    assert font_path.name == "Oswald-Bold.ttf"
-    assert font_path.exists()
-    assert 1 <= len(renderer._fit_headline_font(renderer.HEADLINE_TEXT)[2]) <= renderer.HEADLINE_MAX_LINES
-    assert renderer._fit_headline_font(renderer.HEADLINE_TEXT)[0].size >= 150
-    assert len(long_lines) >= len(short_lines)
-
-
-def test_dashboard_headline_is_not_part_of_rendering_contract(monkeypatch):
+def test_dashboard_headline_is_not_part_of_rendering_contract():
     assert "headline_text" not in inspect.signature(renderer.render_frame).parameters
     assert "headline_enabled" not in inspect.signature(renderer.render_frame).parameters
     assert "headline_text" not in inspect.signature(renderer.render_production_video).parameters
     assert "headline_enabled" not in inspect.signature(renderer.render_production_video).parameters
+    assert not hasattr(renderer, "_draw_headline")
 
-    seen = []
-    monkeypatch.setattr(renderer, "_draw_headline", lambda *args: seen.append("headline"))
+    renderer_source = Path(renderer.__file__).read_text(encoding="utf-8")
+    assert "_draw_headline" not in renderer_source
+    assert "HEADLINE_SECONDS" not in renderer_source
+
     base = _test_base()
     frame = renderer.render_frame(base, 0.30, source_enabled=False)
-
-    assert seen == []
     assert ImageChops.difference(base, frame).getbbox() is None
-
-
-def test_headline_wraps_three_and_six_word_inputs_without_overflow():
-    for text in ("BIG CRICKET NEWS", "BIG CRICKET NEWS FROM INDIA TODAY"):
-        font, clean, lines = renderer._fit_headline_font(text)
-        assert 3 <= len(clean.split()) <= 6
-        assert 1 <= len(lines) <= renderer.HEADLINE_MAX_LINES
-        probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-        width = max(
-            probe.textbbox(
-                (0, 0),
-                " ".join(line),
-                font=font,
-                stroke_width=renderer.HEADLINE_STROKE_WIDTH,
-            )[2]
-            - probe.textbbox(
-                (0, 0),
-                " ".join(line),
-                font=font,
-                stroke_width=renderer.HEADLINE_STROKE_WIDTH,
-            )[0]
-            for line in lines
-        )
-        assert width <= renderer.HEADLINE_MAX_WIDTH
 
 
 def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
@@ -319,7 +275,7 @@ def test_subtitle_render_stays_inside_safe_screen_bounds(monkeypatch):
     assert bbox[2] <= renderer.WIDTH - renderer.SUBTITLE_SAFE_MARGIN
 
 
-def test_subtitles_remain_visible_during_headline(monkeypatch):
+def test_subtitles_follow_requested_frame_time_without_headline_delay(monkeypatch):
     seen = []
 
     def fake_draw(base, subtitle_data, t):
@@ -329,17 +285,12 @@ def test_subtitles_remain_visible_during_headline(monkeypatch):
     base = _test_base()
 
     renderer.render_frame(base, 0.30)
-    renderer.render_frame(
-        base,
-        renderer.HEADLINE_SECONDS + 0.30,
-    )
+    renderer.render_frame(base, 1.65)
 
-    assert seen == [0.30, renderer.HEADLINE_SECONDS + 0.30]
+    assert seen == [0.30, 1.65]
 
 
-def test_headline_marker_and_subtitle_style_are_brand_consistent():
-    assert renderer.HEADLINE_MARKER_WIDTH > 0
-    assert renderer.HEADLINE_MARKER_HEIGHT > 0
+def test_subtitle_style_and_brand_colors_remain_consistent():
     assert renderer.BRAND_BLUE != renderer.ACCENT
     assert renderer.SUBTITLE_MAX_SIZE > 58
     assert renderer.SUBTITLE_MAX_WIDTH >= 860
@@ -1349,7 +1300,7 @@ def test_final_renderer_quality_contract():
     assert renderer._motion_profile("same") == renderer._motion_profile("same")
     assert renderer._motion_profile("visual-a") != renderer._motion_profile("visual-b")
     for setting in (
-        '"-preset", "fast"',
+        '"-preset", "veryfast"',
         '"-crf", "18"',
         '"-profile:v", "high"',
         '"-bf", "2"',
@@ -1369,10 +1320,10 @@ def test_final_renderer_quality_contract():
 def test_indic_renderer_font_paths_use_bundled_noto_and_raqm(language, sample, font_name):
     if not renderer.features.check_feature("raqm"):
         with pytest.raises(RuntimeError, match="RAQM text-shaping engine"):
-            renderer._headline_font_stack(96, language)
+            renderer._renderer_font_for_text(sample, 96, language)
         return
 
-    font = renderer._headline_font_stack(96, language)[0]
+    font = renderer._renderer_font_for_text(sample, 96, language)
     assert Path(font.path).name == font_name
     assert font.layout_engine == ImageFont.Layout.RAQM
     assert font.getmask(sample).getbbox() is not None

@@ -116,3 +116,71 @@ def test_longform_render_short_clip(tmp_path):
 
     assert rendered.is_file()
     assert rendered.stat().st_size > 1000
+
+
+def test_longform_render_uses_unique_temp_and_cleans_it_when_frame_generation_fails(tmp_path, monkeypatch):
+    import longform_renderer
+
+    master_audio = tmp_path / "master.wav"
+    master_audio.write_bytes(b"test-audio-placeholder")
+    output = tmp_path / "documentary.mp4"
+    captured = {}
+
+    class FakePipe:
+        def write(self, _data):
+            return None
+
+        def close(self):
+            return None
+
+    class FakeStderr:
+        def read(self):
+            return b""
+
+    class FakeProcess:
+        def __init__(self):
+            self.stdin = FakePipe()
+            self.stderr = FakeStderr()
+            self.killed = False
+
+        def poll(self):
+            return None if not self.killed else -9
+
+        def kill(self):
+            self.killed = True
+
+        def wait(self, timeout=None):
+            return -9
+
+    process = FakeProcess()
+
+    def fake_popen(command, **_kwargs):
+        captured["temp_path"] = Path(command[-1])
+        return process
+
+    monkeypatch.setattr(longform_renderer, "_ffmpeg_available", lambda: True)
+    monkeypatch.setattr(longform_renderer.subprocess, "Popen", fake_popen)
+
+    def fail_motion(*_args, **_kwargs):
+        raise RuntimeError("injected frame failure")
+
+    monkeypatch.setattr(longform_renderer, "_apply_ken_burns", fail_motion)
+
+    with pytest.raises(RuntimeError, match="injected frame failure"):
+        LongformRenderer.render_video(
+            approved_script=sample_script(),
+            approved_audio={
+                "master_path": str(master_audio),
+                "total_duration": 1.0,
+                "scenes": [{"scene": 1, "act": 1, "start_seconds": 0.0, "duration": 1.0}],
+            },
+            approved_visuals={"scenes_visuals": [{"scene_number": 1, "image_bytes": _dummy_image_bytes()}]},
+            subtitle_data={"cues": [], "act_billboards": []},
+            output_path=output,
+        )
+
+    temp_path = captured["temp_path"]
+    assert temp_path != output.with_name(f"{output.stem}_silent.mp4")
+    assert ".silent.mp4" in temp_path.name
+    assert not temp_path.exists()
+    assert process.killed

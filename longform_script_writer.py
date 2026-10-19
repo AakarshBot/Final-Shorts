@@ -30,7 +30,6 @@ TIMEOUT = 45
 RESEARCH_TIMEOUT = 10
 MAX_SOURCE_CHARS = 32000
 WORDS_PER_MINUTE = 145.0
-TARGET_DURATION_SECONDS = 480.0  # 8 minutes
 
 LONGFORM_SYSTEM_PROMPT = """You are the lead cricket documentary director and investigative sports journalist for an authoritative, monetized YouTube channel.
 
@@ -56,16 +55,16 @@ You must divide the story into exactly six narrative acts, each advancing the st
    - Provide historical depth that casual fans do not know.
 
 3. ACT 03: THE CATALYST & TURNING POINT (~210 words, 4 scenes)
-   - The private meeting, selector controversy, locker-room clash, tactical dispute, or fateful injury.
-   - The human drama behind the decision.
+   - Identify the best-documented turning point in the research packet. Never imply a private meeting, locker-room clash, injury, or selector dispute unless the packet contains evidence for it.
+   - Explain what is confirmed, what is a reported allegation, and what is analysis.
 
 4. ACT 04: STATISTICAL & TACTICAL DEEP-DIVE (~210 words, 4 scenes)
-   - The analytical proof: career splits, bowling averages, strike rates against pace/spin, or financial realities.
-   - Integrate at least one Stat Highlight Card and/or Head-to-Head comparison card here.
+   - Use only statistics, comparisons, and financial details present in the research packet.
+   - Use a Stat Highlight or Head-to-Head card only when its displayed values and labels are supported by that evidence. If the data is missing, use a chapter card or photo instead; never invent numbers to fill a layout.
 
 5. ACT 05: THE CLIMAX & IMMEDIATE FALLOUT (~210 words, 4 scenes)
-   - Press conference reactions, pundit debates, on-field consequences, and immediate fan response.
-   - Integrate a Quote / Reaction Card here featuring official statements.
+   - Include only reactions, decisions, match consequences, or fan response documented in the research packet.
+   - Use a Quote / Reaction card only when the packet contains the exact quote and identifies the speaker. Never put a paraphrase in quotation marks or invent an official statement; if no verified quote exists, use a non-quote card or photo.
 
 6. ACT 06: LEGACY & THE ROAD AHEAD (~140 words, 3 scenes)
    - Long-term implications for the team, player legacy, or world cricket governance.
@@ -76,10 +75,10 @@ For every scene, specify:
 - `primary_entity`: The EXACT person/team that MUST appear in the visual (e.g., "Jasprit Bumrah", "Ajit Agarkar", "Wankhede Stadium").
 - `secondary_entity`: Any secondary person/context.
 - `visual_intent`: One of "match_action", "press_conference", "player_portrait", "stadium_atmosphere", "training_nets", "trophy_celebration", "controversy_walkoff".
-- `visual_type`: "card" (for Stat/Quote/H2H/Milestone/Chapter cards), "photo_kenburns" (for high-res photos), or "ncr_broll" (for action footage).
+- `visual_type`: "card" (for evidence-backed Stat/Quote/H2H/Milestone/Chapter cards) or "photo_kenburns" (for still images). This factory has no B-roll/video-footage handoff; never request or imply match clips.
 - `card_type`: "none" if not a card, or one of "Stat Highlight", "Quote / Reaction", "Head-to-Head", "Key Fact / Milestone", "Chapter / Act", "Timeline / Chronology".
 - `card_required_subject`: Exact person whose portrait is needed on the card.
-- `card_payload`: Required numbers/quotes/text for the card.
+- `card_payload`: Evidence-backed content only. Stat cards need a real metric and value; comparison cards need two named subjects and sourced comparable metrics; quote cards need exact quoted words plus a named speaker; timelines need at least two supported event nodes; milestones need a supported title and label. Leave unsupported payload fields empty and use `Chapter / Act` or `none` when the evidence is insufficient. Never fill these fields with plausible-looking defaults.
 - `search_query`: High-precision search query for the visual engine (e.g., "Jasprit Bumrah bowling action Test match high resolution").
 
 TONE & STYLE:
@@ -115,8 +114,33 @@ def _extract_article_text(url: str) -> str:
     return ""
 
 
+def _background_context_snippets(main_title: str) -> str:
+    """Fetch supporting search snippets without blocking article extraction."""
+    try:
+        ddg_results = DDGS(timeout=5).text(
+            f"{main_title} cricket details quotes",
+            max_results=4,
+        ) or []
+        return "\n".join(
+            f"- {item.get('title')}: {item.get('body')}"
+            for item in ddg_results
+            if isinstance(item, dict) and item.get("body")
+        )
+    except Exception:
+        return ""
+
+
+def _article_url_key(value: object) -> tuple[str, str, str]:
+    parsed = urlparse(_clean(value))
+    return (
+        parsed.scheme.casefold(),
+        parsed.netloc.casefold(),
+        parsed.path.rstrip("/").casefold(),
+    )
+
+
 def _research_longform_story(story: dict) -> str:
-    """Gathers comprehensive multi-source factual evidence for the long-form story."""
+    """Gathers primary, clustered and search evidence concurrently."""
     sections: list[str] = []
     main_title = _clean(story.get("title"))
     main_url = _clean(story.get("url"))
@@ -126,28 +150,48 @@ def _research_longform_story(story: dict) -> str:
     if summary:
         sections.append(f"DISCOVERY SUMMARY: {summary}")
 
-    # 1. Primary article extraction
-    if main_url:
-        main_text = _extract_article_text(main_url)
-        if main_text:
-            sections.append(f"[PRIMARY SOURCE — {main_url}]\n{main_text[:12000]}")
+    # Duplicate report links often differ only by tracking query/fragment. Avoid
+    # downloading the same article twice; keep the main source first and preserve
+    # report order in the evidence packet.
+    main_key = _article_url_key(main_url)
+    alt_urls = []
+    seen_urls = {main_key} if main_url else set()
+    for report in story.get("reports") or []:
+        if not isinstance(report, dict):
+            continue
+        url = _clean(report.get("url"))
+        key = _article_url_key(url)
+        if not url or key in seen_urls:
+            continue
+        seen_urls.add(key)
+        alt_urls.append(url)
+        if len(alt_urls) >= 3:
+            break
 
-    # 2. Clustered reports extraction (up to 3 alternate reports)
-    reports = list(story.get("reports") or [])
-    alt_urls = [r.get("url") for r in reports if r.get("url") and r.get("url") != main_url][:3]
-    for idx, r_url in enumerate(alt_urls, 1):
-        r_text = _extract_article_text(r_url)
-        if r_text:
-            sections.append(f"[RELATED REPORT {idx} — {r_url}]\n{r_text[:6000]}")
+    # These network requests used to run serially (up to four 10-second article
+    # fetches plus the search request). Run independently, but assemble results in
+    # a fixed order so the prompt remains deterministic.
+    with ThreadPoolExecutor(max_workers=max(1, len(alt_urls) + bool(main_url) + 1)) as executor:
+        primary_future = executor.submit(_extract_article_text, main_url) if main_url else None
+        related_futures = [
+            executor.submit(_extract_article_text, url)
+            for url in alt_urls
+        ]
+        context_future = executor.submit(_background_context_snippets, main_title)
 
-    # 3. Targeted DuckDuckGo News & Context Queries
-    try:
-        ddg_results = DDGS(timeout=5).text(f"{main_title} cricket details quotes", max_results=4) or []
-        ddg_snippets = "\n".join(f"- {r.get('title')}: {r.get('body')}" for r in ddg_results if r.get("body"))
-        if ddg_snippets:
-            sections.append(f"[BACKGROUND CONTEXT & QUOTES]\n{ddg_snippets}")
-    except Exception:
-        pass
+        if primary_future is not None:
+            main_text = primary_future.result()
+            if main_text:
+                sections.append(f"[PRIMARY SOURCE — {main_url}]\n{main_text[:12000]}")
+
+        for idx, (url, future) in enumerate(zip(alt_urls, related_futures), 1):
+            report_text = future.result()
+            if report_text:
+                sections.append(f"[RELATED REPORT {idx} — {url}]\n{report_text[:6000]}")
+
+        context_snippets = context_future.result()
+        if context_snippets:
+            sections.append(f"[BACKGROUND CONTEXT & SEARCH SNIPPETS]\n{context_snippets}")
 
     return "\n\n".join(sections)[:MAX_SOURCE_CHARS]
 
@@ -179,9 +223,28 @@ def _request_groq(prompt: str, user_payload: str, model: str = MODELS[0]) -> dic
             data = response.json()
             content = data["choices"][0]["message"]["content"]
             return json.loads(content)
+        except requests.exceptions.HTTPError as exc:
+            response = exc.response
+            status = getattr(response, "status_code", None)
+            detail = _clean(getattr(response, "text", ""))[:500]
+            # Deterministic client errors will not improve by sending the same
+            # request again. Try the alternate model once for a 400; fail fast
+            # for auth, permission and other non-retryable client errors.
+            if status is not None and 400 <= status < 500 and status != 429:
+                if status == 400 and model != MODELS[1]:
+                    return _request_groq(prompt, user_payload, model=MODELS[1])
+                message = f"Groq API rejected Long-form Scriptwriter request (HTTP {status})"
+                if detail:
+                    message += f": {detail}"
+                raise RuntimeError(message) from exc
+            if attempt == 2:
+                if model != MODELS[1]:
+                    return _request_groq(prompt, user_payload, model=MODELS[1])
+                raise RuntimeError(f"Groq API call failed for Long-form Scriptwriter: {exc}") from exc
+            time.sleep(2 ** attempt)
         except (requests.exceptions.RequestException, json.JSONDecodeError, KeyError) as exc:
             if attempt == 2:
-                # Try fallback model if first model failed
+                # Network errors and malformed model output may be transient.
                 if model != MODELS[1]:
                     return _request_groq(prompt, user_payload, model=MODELS[1])
                 raise RuntimeError(f"Groq API call failed for Long-form Scriptwriter: {exc}") from exc
@@ -211,17 +274,30 @@ class LongformScriptWriter:
     def validate_and_format(data: dict, story: dict) -> dict:
         """Validates schema, calculates word pacing, and computes chapter timestamps."""
         acts = list(data.get("acts") or [])
-        if not acts:
-            raise ValueError("Script generation failed to produce acts.")
+        if len(acts) != 6:
+            raise ValueError(
+                f"Long-form Scriptwriter must return exactly six acts; received {len(acts)}."
+            )
+        if any(not isinstance(act, dict) for act in acts):
+            raise ValueError("Long-form Scriptwriter returned a malformed act.")
 
         total_words = 0
         all_scenes = []
         chapters = []
         cumulative_seconds = 0.0
 
-        for act in acts:
-            act_num = act.get("act_number", len(chapters) + 1)
-            ch_title = act.get("chapter_title") or f"Chapter {act_num}"
+        normalized_acts = []
+        for act_index, act in enumerate(acts, 1):
+            # Scene/act IDs are structural ordering, not model-authored content.
+            # Reassign them from the actual list order to prevent duplicate or
+            # contradictory IDs from misaligning visuals, audio and chapters.
+            act_num = act_index
+            ch_title = _clean(act.get("chapter_title")) or f"Chapter {act_num}"
+            normalized_act = dict(act)
+            normalized_act["act_number"] = act_num
+            normalized_act["chapter_title"] = ch_title
+            normalized_act["scenes"] = []
+            normalized_acts.append(normalized_act)
             mins = int(cumulative_seconds // 60)
             secs = int(cumulative_seconds % 60)
             timestamp_str = f"{mins:02d}:{secs:02d}"
@@ -234,51 +310,81 @@ class LongformScriptWriter:
             })
 
             scenes = list(act.get("scenes") or [])
-            for scene in scenes:
+            if not scenes:
+                raise ValueError(f"Long-form Act {act_num} contains no scenes.")
+            for scene_index, scene in enumerate(scenes, 1):
+                if not isinstance(scene, dict):
+                    raise ValueError(f"Long-form Act {act_num} scene {scene_index} is malformed.")
                 vo = _clean(scene.get("voiceover"))
+                if not vo:
+                    raise ValueError(
+                        f"Long-form Act {act_num} scene {scene_index} has no voiceover narration."
+                    )
                 w_count = _words(vo)
                 total_words += w_count
                 scene_duration = round((w_count / WORDS_PER_MINUTE) * 60.0, 1)
 
+                primary_entity = _clean(
+                    scene.get("primary_entity")
+                    or story.get("primary_entity")
+                    or story.get("subject_name")
+                    or story.get("title")
+                )
                 scene_formatted = {
-                    "scene_number": scene.get("scene_number", len(all_scenes) + 1),
+                    "scene_number": len(all_scenes) + 1,
                     "act_number": act_num,
+                    "chapter_title": ch_title,
                     "voiceover": vo,
                     "word_count": w_count,
                     "estimated_seconds": scene_duration,
                     "start_seconds": round(cumulative_seconds, 1),
-                    "primary_entity": _clean(scene.get("primary_entity") or story.get("title")),
+                    "primary_entity": primary_entity,
                     "secondary_entity": _clean(scene.get("secondary_entity")),
                     "visual_intent": _clean(scene.get("visual_intent") or "match_action"),
                     "visual_type": _clean(scene.get("visual_type") or "photo_kenburns"),
                     "card_type": _clean(scene.get("card_type") or "none"),
-                    "card_required_subject": _clean(scene.get("card_required_subject") or scene.get("primary_entity")),
-                    "card_payload": scene.get("card_payload") or {},
-                    "search_query": _clean(scene.get("search_query") or f"{scene.get('primary_entity')} cricket"),
+                    "card_required_subject": _clean(scene.get("card_required_subject") or primary_entity),
+                    "card_payload": scene.get("card_payload") if isinstance(scene.get("card_payload"), dict) else {},
+                    "search_query": _clean(scene.get("search_query") or f"{primary_entity} cricket"),
                 }
                 all_scenes.append(scene_formatted)
+                normalized_act["scenes"].append(scene_formatted)
                 cumulative_seconds += scene_duration
 
-        # Generate YouTube Description with Chapter Timestamps
+        # Generate a description from verified metadata only. Do not claim wire
+        # reporting unless publishers are actually present in the handoff.
         timestamp_lines = "\n".join(f"{ch['timestamp']} - {ch['title']}" for ch in chapters)
+        source_names = []
+        publisher = _clean(story.get("publisher"))
+        if publisher:
+            source_names.append(publisher)
+        for report in story.get("reports") or []:
+            if not isinstance(report, dict):
+                continue
+            report_source = _clean(report.get("publisher") or report.get("source"))
+            if report_source and report_source.casefold() not in {name.casefold() for name in source_names}:
+                source_names.append(report_source)
+        sources_line = f"Sources: {', '.join(source_names)}\n" if source_names else ""
+        seo_subject = _clean(data.get("subject_name") or story.get("primary_entity") or story.get("title") or "Cricket")
+        seo_tag = re.sub(r"[^A-Za-z0-9]+", "", seo_subject) or "Cricket"
         desc = (
             f"{_clean(data.get('seo_description') or story.get('title'))}\n\n"
             f"CHAPTERS:\n{timestamp_lines}\n\n"
-            f"Sources: {story.get('publisher', 'Cricket Desk')} & verified wire reports.\n"
-            f"#Cricket #{data.get('subject_name', 'Cricket').replace(' ', '')} #VideoEssay"
+            f"{sources_line}"
+            f"#Cricket #{seo_tag} #VideoEssay"
         )
 
         return {
             "title": _clean(data.get("title") or story.get("title")),
             "titles": list(data.get("titles") or [story.get("title")]),
-            "subject_name": _clean(data.get("subject_name") or story.get("title")),
+            "subject_name": _clean(data.get("subject_name") or story.get("primary_entity") or story.get("title")),
             "core_conflict": _clean(data.get("core_conflict")),
             "seo_description": desc,
-            "hashtags": list(data.get("hashtags") or ["#Cricket", "#TestCricket", "#Documentary"]),
-            "pinned_comment": _clean(data.get("pinned_comment") or "What is your take on this decision? Share your thoughts below."),
+            "hashtags": list(data.get("hashtags") or ["#Cricket", "#CricketDocumentary", "#VideoEssay"]),
+            "pinned_comment": _clean(data.get("pinned_comment") or "Which detail from this story matters most to you? Share your view below."),
             "total_words": total_words,
             "estimated_duration_seconds": round(cumulative_seconds, 1),
-            "acts": acts,
+            "acts": normalized_acts,
             "chapters": chapters,
             "scenes": all_scenes,
             "scene_count": len(all_scenes),

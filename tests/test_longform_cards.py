@@ -108,3 +108,43 @@ def test_render_longform_timeline_card():
     }
     img = render_longform_timeline_card(None, data)
     assert img.size == (1920, 1080)
+
+def test_stat_card_requires_source_grounded_values():
+    with pytest.raises(LongformCardError, match="source-grounded"):
+        render_longform_stat_card(_sample_image_bytes(), {"player_name": "Jasprit Bumrah"})
+
+
+def test_zero_is_a_valid_source_grounded_stat_value():
+    image = render_longform_stat_card(
+        _sample_image_bytes(),
+        {
+            "player_name": "Example Player",
+            "hero_stat": 0,
+            "stat_label": "Runs in this sample",
+            "tiles": [{"label": "Wickets", "value": 0}],
+        },
+    )
+    assert image.size == (WIDTH, HEIGHT)
+
+
+def test_quote_card_requires_named_speaker():
+    with pytest.raises(LongformCardError, match="speaker attribution"):
+        render_longform_quote_card(_sample_image_bytes(), {"quote": "We will win."})
+
+
+def test_head_to_head_card_does_not_invent_default_statistics():
+    with pytest.raises(LongformCardError, match="source-grounded comparison metrics"):
+        render_longform_h2h_card(
+            _sample_image_bytes(),
+            {"left_name": "Player One", "right_name": "Player Two"},
+        )
+
+
+def test_milestone_card_requires_evidence_backed_labels():
+    with pytest.raises(LongformCardError, match="source-grounded"):
+        render_longform_milestone_card(_sample_image_bytes(), {})
+
+
+def test_timeline_card_requires_supported_event_nodes():
+    with pytest.raises(LongformCardError, match="at least two source-grounded"):
+        render_longform_timeline_card(_sample_image_bytes(), {"nodes": []})

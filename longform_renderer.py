@@ -12,6 +12,8 @@ import math
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
+import warnings
 from typing import Any
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
@@ -206,7 +208,6 @@ class LongformRenderer:
 
         out_file = Path(output_path)
         out_file.parent.mkdir(parents=True, exist_ok=True)
-        temp_silent = out_file.with_name(f"{out_file.stem}_silent.mp4")
 
         # Map scene number to prepared visual base image
         scene_visual_map: dict[int, dict[str, Any]] = {}
@@ -234,48 +235,82 @@ class LongformRenderer:
                 "start": sc_start,
                 "duration": sc_dur,
                 "base_image": base_img,
-                "is_card": vis_info.get("visual_type") == "card",
             })
 
         # Frame Generator
         def frame_generator():
             total_frames = int(math.ceil(total_duration * FPS))
+            scene_index = 0
+            cue_index = 0
+            billboard_index = 0
             for frame_idx in range(total_frames):
                 current_time = frame_idx / FPS
 
-                # Find active scene
-                active_scene = prepared_bases[-1]
-                for sc in prepared_bases:
-                    if sc["start"] <= current_time < (sc["start"] + sc["duration"] + 0.15):
-                        active_scene = sc
-                        break
+                # Scene starts are chronological. Advance a cursor rather than
+                # scanning the full scene list for every frame of an 8-minute render.
+                while (
+                    scene_index < len(prepared_bases) - 1
+                    and current_time
+                    >= prepared_bases[scene_index]["start"]
+                    + prepared_bases[scene_index]["duration"]
+                    + 0.15
+                ):
+                    scene_index += 1
+
+                active_scene = prepared_bases[scene_index]
+                # Keep the previous fallback for any timing gap in the audio handoff.
+                if not (
+                    active_scene["start"]
+                    <= current_time
+                    < active_scene["start"] + active_scene["duration"] + 0.15
+                ):
+                    active_scene = prepared_bases[-1]
 
                 sc_start = active_scene["start"]
                 sc_dur = max(0.1, active_scene["duration"])
                 sc_prog = min(1.0, max(0.0, (current_time - sc_start) / sc_dur))
 
                 base = active_scene["base_image"]
-                # Apply Ken Burns if it's a photo, subtle push if card
+                # Apply the existing subtle Ken Burns motion to each scene visual.
                 frame = _apply_ken_burns(base, sc_prog)
 
-                # Check for active Act Title Billboard
-                for bb in act_billboards:
+                # Billboards and subtitles are in timeline order. Advance cursors
+                # monotonically rather than scanning every cue on every video frame.
+                while billboard_index < len(act_billboards):
+                    bb = act_billboards[billboard_index]
                     b_start = float(bb.get("start_time", 0))
                     b_dur = float(bb.get("duration", 3.5))
-                    if b_start <= current_time < (b_start + b_dur):
+                    if current_time < b_start + b_dur:
+                        break
+                    billboard_index += 1
+                if billboard_index < len(act_billboards):
+                    bb = act_billboards[billboard_index]
+                    b_start = float(bb.get("start_time", 0))
+                    b_dur = float(bb.get("duration", 3.5))
+                    if b_start <= current_time < b_start + b_dur:
                         b_prog = (current_time - b_start) / b_dur
                         frame = _draw_act_billboard(frame, int(bb["act_number"]), str(bb["title"]), b_prog)
-                        break
 
-                # Check for active Lower-Third Subtitle Cue
-                for c in cues:
-                    c_start = float(c.get("start", 0))
-                    c_end = float(c.get("end", 0))
+                while cue_index < len(cues) and current_time > float(cues[cue_index].get("end", 0)):
+                    cue_index += 1
+                if cue_index < len(cues):
+                    cue = cues[cue_index]
+                    c_start = float(cue.get("start", 0))
+                    c_end = float(cue.get("end", 0))
                     if c_start <= current_time <= c_end:
-                        frame = _draw_lower_third_subtitle(frame, str(c.get("text", "")))
-                        break
+                        frame = _draw_lower_third_subtitle(frame, str(cue.get("text", "")))
 
                 yield frame
+
+        # Allocate the temporary file only after input preparation succeeds.
+        # This is unique per render and is cleaned for every FFmpeg/mux outcome.
+        with tempfile.NamedTemporaryFile(
+            prefix=f"{out_file.stem}.",
+            suffix=".silent.mp4",
+            dir=out_file.parent,
+            delete=False,
+        ) as temp_handle:
+            temp_silent = Path(temp_handle.name)
 
         # Pipe frames into FFmpeg for rawvideo video stream
         cmd = [
@@ -290,39 +325,48 @@ class LongformRenderer:
             "-movflags", "+faststart",
             str(temp_silent),
         ]
-        proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
-        assert proc.stdin is not None
-
+        proc = None
         try:
-            for fr in frame_generator():
-                raw = fr.tobytes() if fr.mode == "RGB" else fr.convert("RGB").tobytes()
-                proc.stdin.write(raw)
-            proc.stdin.close()
-        except BrokenPipeError as exc:
-            proc.kill()
-            raise RuntimeError("FFmpeg pipe broke while generating video stream.") from exc
+            proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=subprocess.PIPE)
+            assert proc.stdin is not None
 
-        err = proc.stderr.read().decode("utf-8", "replace") if proc.stderr else ""
-        code = proc.wait()
-        if code != 0:
-            raise RuntimeError(f"FFmpeg failed to create silent video: {err.strip()}")
+            try:
+                for fr in frame_generator():
+                    raw = fr.tobytes() if fr.mode == "RGB" else fr.convert("RGB").tobytes()
+                    proc.stdin.write(raw)
+                proc.stdin.close()
+            except BrokenPipeError as exc:
+                raise RuntimeError("FFmpeg pipe broke while generating video stream.") from exc
 
-        # Mux master audio track with silent video
-        try:
+            err = proc.stderr.read().decode("utf-8", "replace") if proc.stderr else ""
+            code = proc.wait()
+            if code != 0:
+                raise RuntimeError(f"FFmpeg failed to create silent video: {err.strip()}")
+
+            # Mux master audio track with silent video.
             cls._mux_audio_track(
                 temp_silent=temp_silent,
                 master_audio=master_audio_path,
                 output_file=out_file,
                 background_music=Path(background_music_path) if background_music_path else None,
             )
+            return out_file
         finally:
-            if temp_silent.is_file():
+            # Any failure during frame generation or muxing must release the
+            # intermediate file. Never let cleanup mask the original render error.
+            if proc is not None and proc.poll() is None:
                 try:
-                    temp_silent.unlink()
-                except OSError:
+                    proc.kill()
+                    proc.wait(timeout=5)
+                except (OSError, subprocess.SubprocessError):
                     pass
-
-        return out_file
+            try:
+                temp_silent.unlink(missing_ok=True)
+            except OSError as exc:
+                warnings.warn(
+                    f"Long-form render finished or failed, but temporary video cleanup failed for {temp_silent}: {exc}",
+                    RuntimeWarning,
+                )
 
     @classmethod
     def _mux_audio_track(

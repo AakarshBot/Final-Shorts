@@ -539,3 +539,110 @@ def test_global_publisher_subdomains_are_recognized():
     assert visual_fetcher._global_publisher("https://www.bbc.co.uk/sport/tennis/example")
     assert visual_fetcher._global_publisher("https://sports.espn.com/tennis/example")
     assert not visual_fetcher._global_publisher("https://example.com/sports/example")
+
+
+def test_browser_image_downloads_run_in_bounded_parallel_batches(monkeypatch):
+    import asyncio
+    from io import BytesIO
+
+    from PIL import Image
+
+    # Distinct valid images ensure deduplication does not hide downloaded candidates.
+    image_bytes = {}
+    image_candidates = []
+    for index in range(8):
+        image = Image.new("RGB", (900, 600), (index * 25, 90, 140))
+        buffer = BytesIO()
+        image.save(buffer, format="JPEG")
+        image_bytes[f"https://cdn.example.com/gill-{index}.jpg"] = buffer.getvalue()
+        image_candidates.append({
+            "src": f"https://cdn.example.com/gill-{index}.jpg",
+            "currentSrc": f"https://cdn.example.com/gill-{index}.jpg",
+            "alt": f"Shubman Gill cricket action {index}",
+            "title": f"Shubman Gill cricket action {index}",
+            "context": "Shubman Gill during cricket practice",
+            "width": 900,
+            "height": 600,
+            "inArticle": True,
+            "inFigure": True,
+        })
+
+    data = {
+        "finalUrl": "https://example.com/gill-profile",
+        "title": "Shubman Gill cricket profile",
+        "meta": {"og:site_name": "Example Sports"},
+        "jsonLd": [],
+        "linkImages": [],
+        "backgrounds": [],
+        "noscripts": [],
+        "images": image_candidates,
+        "articleText": "Shubman Gill cricket practice and match images.",
+    }
+
+    active = 0
+    peak_active = 0
+
+    class FakeResponse:
+        ok = True
+
+        def __init__(self, body):
+            self._body = body
+
+        async def body(self):
+            return self._body
+
+    class FakeRequest:
+        async def get(self, url, **_kwargs):
+            nonlocal active, peak_active
+            index = int(url.rsplit("-", 1)[1].split(".")[0])
+            active += 1
+            peak_active = max(peak_active, active)
+            await asyncio.sleep(0.03)
+            active -= 1
+            return FakeResponse(image_bytes[f"https://cdn.example.com/gill-{index}.jpg"])
+
+    class FakePage:
+        request = FakeRequest()
+        url = "https://example.com/gill-profile"
+
+        def on(self, *_args):
+            return None
+
+        async def goto(self, *_args, **_kwargs):
+            return None
+
+        async def wait_for_load_state(self, *_args, **_kwargs):
+            return None
+
+        async def wait_for_timeout(self, *_args, **_kwargs):
+            return None
+
+        async def evaluate(self, script):
+            if script == "mock-browser-script":
+                return data
+            return None
+
+        async def close(self):
+            return None
+
+    class FakeContext:
+        async def new_page(self):
+            return FakePage()
+
+    monkeypatch.setattr(visual_fetcher, "_browser_script", lambda: "mock-browser-script")
+
+    result = asyncio.run(visual_fetcher._browser_page(
+        FakeContext(),
+        {
+            "url": "https://example.com/gill-profile",
+            "title": "Shubman Gill cricket profile",
+            "query": "Shubman Gill cricket profile",
+            "entity": "Shubman Gill",
+            "story_title": "Shubman Gill cricket profile",
+            "max_images": 6,
+        },
+    ))
+
+    assert peak_active > 1
+    assert peak_active <= 4
+    assert len(result["assets"]) == 6

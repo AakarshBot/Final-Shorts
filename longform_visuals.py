@@ -107,7 +107,6 @@ def _score_asset(asset: dict, required_entity: str, intent: str) -> float:
 def _fetch_pollinations_ai_image(prompt: str) -> bytes | None:
     """Zero-cost fallback: generates a 16:9 cinematic photo via Pollinations Flux."""
     try:
-        from visual_generator import _pollinations
         res = _pollinations(f"Cinematic 16:9 documentary broadcast photo: {prompt}, 8k stadium lighting", seed=42)
         if res and res.get("bytes"):
             return res["bytes"]
@@ -172,6 +171,7 @@ class LongformVisualMatcher:
         # 3. Match and Assign Assets Scene-by-Scene
         assigned_scenes = []
         used_hashes: set[str] = set()
+        ai_fallback_cache: dict[str, bytes | None] = {}
 
         for sc in scenes:
             sc_num = sc["scene_number"]
@@ -189,63 +189,85 @@ class LongformVisualMatcher:
             if chosen_asset:
                 used_hashes.add(chosen_asset["hash"])
 
-            # If card type requested, render with longform_cards.py
+            # Render only evidence-backed card payloads. If a requested card lacks
+            # its factual inputs, show a chapter card instead of invented values,
+            # an invented quotation, or a generic controversy narrative.
             rendered_frame_bytes = None
             if v_type == "card" or c_type != "none":
                 card_data = sc.get("card_payload") or {}
+                if not isinstance(card_data, dict):
+                    card_data = {}
                 card_img = None
+                card_error = None
                 try:
                     if c_type == "Stat Highlight":
                         card_img = render_longform_stat_card(chosen_bytes, {
                             "player_name": entity,
-                            "eyebrow": "DEEP-DIVE TELEMETRY",
-                            "hero_stat": card_data.get("hero_stat", "52.8"),
-                            "stat_label": card_data.get("stat_label", "CAREER TEST AVERAGE"),
-                            "context_note": card_data.get("context_note", ""),
-                            "tiles": [
-                                {"label": "WICKETS", "value": card_data.get("sec_1", "44")},
-                                {"label": "STRIKE RATE", "value": card_data.get("sec_2", "42.1")},
-                            ],
+                            "eyebrow": card_data.get("eyebrow") or "MATCH DATA",
+                            "hero_stat": card_data.get("hero_stat") if card_data.get("hero_stat") is not None else card_data.get("stat"),
+                            "stat_label": card_data.get("stat_label") or card_data.get("metric"),
+                            "context_note": card_data.get("context_note") or card_data.get("note") or "",
+                            "tiles": card_data.get("tiles") or card_data.get("metrics") or [],
                         })
                     elif c_type == "Quote / Reaction":
                         card_img = render_longform_quote_card(chosen_bytes, {
-                            "quote": card_data.get("quote_text") or sc.get("voiceover", ""),
-                            "speaker": card_data.get("speaker") or entity,
-                            "role": card_data.get("speaker_role", "PRESS STATEMENT"),
+                            "quote": card_data.get("quote_text") or card_data.get("quote") or "",
+                            "speaker": card_data.get("speaker") or card_data.get("attribution") or "",
+                            "role": card_data.get("speaker_role") or card_data.get("role") or "",
+                            "eyebrow": card_data.get("eyebrow") or "QUOTED STATEMENT",
                         })
                     elif c_type == "Head-to-Head":
                         card_img = render_longform_h2h_card(chosen_bytes, {
-                            "headline": "TACTICAL SHOWDOWN",
-                            "left_name": card_data.get("h2h_left_name") or entity,
-                            "right_name": card_data.get("h2h_right_name") or sc.get("secondary_entity", "OPPONENT"),
+                            "headline": card_data.get("headline") or "HEAD-TO-HEAD COMPARISON",
+                            "left_name": card_data.get("h2h_left_name") or card_data.get("left_name") or "",
+                            "right_name": card_data.get("h2h_right_name") or card_data.get("right_name") or "",
+                            "metrics": card_data.get("metrics") or card_data.get("comparisons") or [],
                         })
                     elif c_type == "Key Fact / Milestone":
                         card_img = render_longform_milestone_card(chosen_bytes, {
-                            "title": card_data.get("milestone_title", "CAREER BENCHMARK"),
-                            "milestone": card_data.get("milestone_badge", "HISTORIC RECORD"),
-                            "bullets": [card_data.get("bullet_1", "Decisive series performance")],
+                            "title": card_data.get("milestone_title") or card_data.get("title") or "",
+                            "milestone": card_data.get("milestone_badge") or card_data.get("milestone") or "",
+                            "subtitle": card_data.get("subtitle") or "",
+                            "bullets": card_data.get("bullets") or ([card_data["bullet_1"]] if card_data.get("bullet_1") else []),
                         })
                     elif c_type == "Timeline / Chronology":
                         card_img = render_longform_timeline_card(chosen_bytes, {
-                            "headline": "HOW THE CONTROVERSY UNFOLDED",
+                            "headline": card_data.get("headline") or "CHRONOLOGY OF EVENTS",
+                            "nodes": card_data.get("nodes") or card_data.get("events") or [],
                         })
                     elif c_type == "Chapter / Act":
                         card_img = render_longform_chapter_card(chosen_bytes, {
                             "act": f"ACT {sc.get('act_number', 1):02d}",
-                            "title": sc.get("chapter_title", "KEY CHAPTER"),
+                            "title": sc.get("chapter_title") or entity or story.get("title") or "CHAPTER",
                             "premise": sc.get("voiceover", "")[:120],
                         })
-                except Exception:
-                    pass
+                except Exception as exc:
+                    card_error = exc
 
-                if card_img:
-                    buf = io.BytesIO()
-                    card_img.save(buf, format="JPEG", quality=95)
-                    rendered_frame_bytes = buf.getvalue()
+                if card_img is None:
+                    if card_error is not None:
+                        log(
+                            f"Scene {sc_num}: {type(card_error).__name__} while preparing "
+                            f"{c_type or 'visual'}; using an evidence-safe chapter card."
+                        )
+                    card_img = render_longform_chapter_card(chosen_bytes, {
+                        "act": f"ACT {sc.get('act_number', 1):02d}",
+                        "title": sc.get("chapter_title") or entity or story.get("title") or "CHAPTER",
+                        "premise": sc.get("voiceover", "")[:120],
+                    })
+
+                buf = io.BytesIO()
+                card_img.save(buf, format="JPEG", quality=95)
+                rendered_frame_bytes = buf.getvalue()
 
             # Fallback if no real photo found and not a card: generate AI photo or default card
             if not chosen_bytes and not rendered_frame_bytes:
-                ai_data = _fetch_pollinations_ai_image(f"{entity} {intent} cricket")
+                # Repeated entity/intent pairs share one generated fallback within
+                # this run; do not call the image service repeatedly for the same prompt.
+                ai_prompt = f"{entity} {intent} cricket"
+                if ai_prompt not in ai_fallback_cache:
+                    ai_fallback_cache[ai_prompt] = _fetch_pollinations_ai_image(ai_prompt)
+                ai_data = ai_fallback_cache[ai_prompt]
                 if ai_data:
                     chosen_bytes = ai_data
                 else:
@@ -267,7 +289,7 @@ class LongformVisualMatcher:
                 "visual_type": "card" if rendered_frame_bytes else "photo_kenburns",
                 "card_type": c_type,
                 "image_bytes": rendered_frame_bytes or chosen_bytes,
-                "image_source": "Card Studio" if rendered_frame_bytes else (chosen_asset.get("source") if chosen_asset else "AI Flux"),
+                "image_source": "Long-form card renderer" if rendered_frame_bytes else (chosen_asset.get("source") if chosen_asset else "AI Flux"),
                 "image_title": chosen_asset.get("title") if chosen_asset else f"Scene {sc_num} visual",
             })
 

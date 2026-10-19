@@ -78,20 +78,7 @@ WIDTH = 1080
 HEIGHT = 1920
 FPS = 30
 
-HEADLINE_SECONDS = 1.35
-HEADLINE_TEXT = "THE GAME JUST CHANGED"
 SOURCE_LABEL = "SPORTS DESK"
-
-HEADLINE_SAFE_MARGIN = 60
-HEADLINE_MAX_WIDTH = WIDTH - (HEADLINE_SAFE_MARGIN * 2)
-HEADLINE_MAX_SIZE = 260
-HEADLINE_MIN_SIZE = 120
-HEADLINE_STROKE_WIDTH = 6
-HEADLINE_MAX_LINES = 3
-HEADLINE_MARKER_WIDTH = 56
-HEADLINE_MARKER_HEIGHT = 8
-HEADLINE_MARKER_GAP = 16
-HEADLINE_LINE_GAP = 8
 
 SUBTITLE_SAFE_MARGIN = 64
 SUBTITLE_MAX_WIDTH = WIDTH - (SUBTITLE_SAFE_MARGIN * 2)
@@ -117,7 +104,6 @@ TOP5_EDITORIAL_MARGIN_X = 60
 TOP5_EDITORIAL_SAFE_TOP = 150
 TOP5_EDITORIAL_SAFE_BOTTOM = 1780
 TOP5_EDITORIAL_HEADLINE_DEFAULT_SIZE = 118
-TOP5_EDITORIAL_HEADLINE_MAX_SIZE = 200
 TOP5_EDITORIAL_HEADLINE_MIN_SIZE = 60
 TOP5_EDITORIAL_HEADLINE_MAX_LINES = 2
 TOP5_EDITORIAL_HEADLINE_LINE_GAP = 8
@@ -248,64 +234,6 @@ def _font_candidates(role: str, language: str) -> tuple[Path, ...]:
     return (root / "Oswald-Bold.ttf",)
 
 
-@lru_cache(maxsize=64)
-def _headline_font_stack(size: int, language: str) -> tuple[object, ...]:
-    language_key = _normalise_indic_language(language)
-    is_indic = language_key in {"hindi", "telugu"}
-    if is_indic:
-        _require_raqm(language_key)
-        path = _font_candidates("headline", language_key)[0]
-        if not path.is_file():
-            raise RuntimeError(
-                f"The bundled Indic headline font {path.name} is missing; rendering will not use a substitute."
-            )
-        try:
-            return (
-                ImageFont.truetype(
-                    str(path),
-                    size,
-                    layout_engine=ImageFont.Layout.RAQM,
-                ),
-            )
-        except (OSError, ValueError) as exc:
-            raise RuntimeError(
-                f"The bundled Indic headline font {path.name} could not be loaded with RAQM."
-            ) from exc
-    candidates = list(_font_candidates("headline", language_key))
-    candidates.extend(
-        [
-            Path("C:/Windows/Fonts/seguiemj.ttf"),
-            Path("C:/Windows/Fonts/seguisym.ttf"),
-            Path("C:/Windows/Fonts/Nirmala.ttf"),
-            Path("C:/Windows/Fonts/NirmalaUI.ttf"),
-            Path("C:/Windows/Fonts/msyh.ttc"),
-            Path("C:/Windows/Fonts/msgothic.ttc"),
-            Path("C:/Windows/Fonts/malgun.ttf"),
-            Path("C:/Windows/Fonts/arialuni.ttf"),
-            Path("C:/Windows/Fonts/seguisb.ttf"),
-            Path("C:/Windows/Fonts/arial.ttf"),
-            Path("/usr/share/fonts/truetype/noto/NotoSansSymbols2-Regular.ttf"),
-            Path("/usr/share/fonts/opentype/noto/NotoSansSymbols2-Regular.ttf"),
-            Path("/usr/share/fonts/truetype/noto/NotoSans-Regular.ttf"),
-            Path("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"),
-        ]
-    )
-    fonts = []
-    seen = set()
-    for path in candidates:
-        key = str(path).casefold()
-        if key in seen or not path.exists():
-            continue
-        seen.add(key)
-        try:
-            fonts.append(ImageFont.truetype(str(path), size))
-        except OSError:
-            continue
-    if not fonts:
-        fonts.append(ImageFont.load_default())
-    return tuple(fonts)
-
-
 def _headline_font_supports(font, char: str) -> bool:
     if not char or char in "\n\r\t":
         return True
@@ -336,28 +264,6 @@ def _headline_runs(text: str, fonts: tuple[object, ...]) -> list[tuple[str, obje
     return runs
 
 
-def _measure_headline_text(
-    draw: ImageDraw.ImageDraw,
-    text: str,
-    fonts: tuple[object, ...],
-) -> tuple[int, int]:
-    runs = _headline_runs(text, fonts)
-    if not runs:
-        return 0, 0
-    widths = []
-    heights = []
-    for run, font in runs:
-        box = draw.textbbox(
-            (0, 0),
-            run,
-            font=font,
-            stroke_width=HEADLINE_STROKE_WIDTH,
-        )
-        widths.append(box[2] - box[0])
-        heights.append(box[3] - box[1])
-    return sum(widths), max(heights)
-
-
 def _measure(
     draw: ImageDraw.ImageDraw,
     text: str,
@@ -373,68 +279,6 @@ def _measure(
     return box[2] - box[0], box[3] - box[1]
 
 
-def _headline_lines(
-    text: str,
-    draw: ImageDraw.ImageDraw,
-    fonts: tuple[object, ...],
-) -> list[list[str]]:
-    words = text.split()
-    if not words:
-        return []
-
-    measurements = [
-        _measure_headline_text(draw, word, fonts)[0]
-        for word in words
-    ]
-    max_line_width = HEADLINE_MAX_WIDTH - HEADLINE_MARKER_WIDTH - HEADLINE_MARKER_GAP
-
-    lines: list[list[str]] = []
-    current: list[str] = []
-    current_width = 0
-
-    for word, word_width in zip(words, measurements):
-        if word_width > max_line_width:
-            raise ValueError("Headline contains a word that is too wide to fit.")
-        next_width = (
-            current_width
-            + word_width
-            + (HEADLINE_MARKER_GAP if current else 0)
-        )
-        if current and next_width > max_line_width:
-            lines.append(current)
-            current = [word]
-            current_width = word_width
-        else:
-            current.append(word)
-            current_width = next_width
-
-    if current:
-        lines.append(current)
-
-    if len(lines) > HEADLINE_MAX_LINES:
-        raise ValueError("Headline is too long to fit on screen.")
-
-    return lines
-
-
-@lru_cache(maxsize=256)
-def _fit_headline_font(
-    text: str,
-    language: str = "english",
-):
-    clean = " ".join(str(text or "").upper().split()) or HEADLINE_TEXT
-    detected_language = _indic_language_for_text(clean) or _normalise_indic_language(language)
-    probe = ImageDraw.Draw(Image.new("RGB", (1, 1)))
-
-    for size in range(HEADLINE_MAX_SIZE, HEADLINE_MIN_SIZE - 1, -1):
-        fonts = _headline_font_stack(size, detected_language)
-        try:
-            lines = _headline_lines(clean, probe, fonts)
-        except ValueError:
-            continue
-        return fonts[0], clean, lines
-
-    raise ValueError("Headline is too long to fit on screen.")
 @lru_cache(maxsize=1)
 def _load_logo():
     path = Path(__file__).resolve().parent / "logo.png"
@@ -1632,101 +1476,9 @@ def build_top5_card_preview(
     return buffer.getvalue()
 
 
-def _draw_headline(base: Image.Image, text: str, t: float, language: str) -> None:
-    primary_font, clean, lines = _fit_headline_font(text, language)
-    fonts = _headline_font_stack(primary_font.size, language)
-    layer = Image.new("RGBA", base.size, (0, 0, 0, 0))
-    draw = ImageDraw.Draw(layer)
-
-    line_boxes = [
-        (
-            0,
-            0,
-            *_measure_headline_text(
-                draw,
-                " ".join(line),
-                fonts,
-            ),
-        )
-        for line in lines
-    ]
-    line_widths = [box[2] for box in line_boxes]
-    line_heights = [box[3] for box in line_boxes]
-
-    text_block_width = max(line_widths)
-    group_width = HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP + text_block_width
-
-    progress = min(1.0, max(0.0, t / 0.45))
-    eased = 1 - (1 - progress) ** 3
-    start_group_x = -group_width - 80
-    final_group_x = (WIDTH - group_width) // 2
-    group_x = int(
-        start_group_x + (final_group_x - start_group_x) * eased
-    )
-
-    marker_x = group_x
-    text_x = group_x + HEADLINE_MARKER_WIDTH + HEADLINE_MARKER_GAP
-    y = 560
-
-    first_height = line_heights[0]
-    line_y = y + max(8, (first_height - HEADLINE_MARKER_HEIGHT) // 2)
-    split = int(HEADLINE_MARKER_WIDTH * 0.58)
-    draw.rectangle(
-        (
-            marker_x,
-            line_y,
-            marker_x + split,
-            line_y + HEADLINE_MARKER_HEIGHT,
-        ),
-        fill=BRAND_BLUE,
-    )
-    draw.rectangle(
-        (
-            marker_x + split,
-            line_y,
-            marker_x + HEADLINE_MARKER_WIDTH,
-            line_y + HEADLINE_MARKER_HEIGHT,
-        ),
-        fill=ACCENT,
-    )
-
-    cursor_y = y
-    for row, line in enumerate(lines):
-        line_text = " ".join(line)
-        line_width = line_widths[row]
-        line_x = text_x + (text_block_width - line_width) // 2
-        runs = _headline_runs(line_text, fonts)
-        cursor_x = line_x
-        for run, font in runs:
-            box = draw.textbbox(
-                (0, 0),
-                run,
-                font=font,
-                stroke_width=HEADLINE_STROKE_WIDTH,
-            )
-            run_height = box[3] - box[1]
-            run_y = cursor_y + (line_heights[row] - run_height) // 2
-            draw.text(
-                (cursor_x - box[0], run_y - box[1]),
-                run,
-                font=font,
-                fill=WHITE,
-                stroke_width=HEADLINE_STROKE_WIDTH,
-                stroke_fill=DARK,
-            )
-            cursor_x += box[2] - box[0]
-        cursor_y += line_heights[row] + HEADLINE_LINE_GAP
-
-    if t < 0.68 and progress < 1.0:
-        layer = layer.filter(
-            ImageFilter.GaussianBlur(radius=max(0.0, 2.5 * (1 - progress)))
-        )
-
-    base.paste(layer, (0, 0), layer)
-
-
-
+@lru_cache(maxsize=512)
 def _motion_profile(seed: str) -> tuple[int, float, float, int, int]:
+    """Calculate each deterministic Ken Burns profile once per visual seed."""
     digest = hashlib.sha1(str(seed or "visual").encode("utf-8")).digest()
     return (
         digest[0] % 5,
@@ -2057,7 +1809,7 @@ def write_preview_video(frames, path: Path) -> Path:
             "-s", f"{WIDTH}x{HEIGHT}", "-r", str(FPS), "-i", "-",
             "-an",
             "-c:v", "libx264",
-            "-preset", "fast",
+            "-preset", "veryfast",
             "-crf", "18",
             "-profile:v", "high",
             "-bf", "2",
@@ -2256,6 +2008,23 @@ def render_production_video(
                     str(visual.get("source") or source_label or "Commons").strip() or "Commons",
                 )
 
+        motion_seed = ""
+        if static_frame is None and not isinstance(top5_card, dict) and not manual_subject_cutout and not card_studio:
+            motion_seed = "|".join(
+                str(visual.get(key) or "")
+                for key in (
+                    "primary_entity",
+                    "visual_intent",
+                    "specific_search_prompt",
+                    "sport_or_topic_category",
+                    "source",
+                )
+            ).strip("|")
+            if not motion_seed:
+                # Image bytes are stable for this scene; hashing them per frame is
+                # pure repeated work, so derive the fallback seed only once here.
+                motion_seed = hashlib.sha1(image.tobytes()).hexdigest()
+
         prepared_visuals.append({
             "image": image,
             "static_frame": static_frame,
@@ -2263,6 +2032,7 @@ def render_production_video(
             "top5_card": top5_card,
             "manual_subject_cutout": manual_subject_cutout,
             "card_studio": card_studio,
+            "motion_seed": motion_seed,
         })
 
     durations = []
@@ -2308,25 +2078,9 @@ def render_production_video(
                 continue
 
             base_image = visual["image"]
-            if not (
-                visual.get("is_top5_card")
-                or visual.get("manual_subject_cutout")
-                or visual.get("card_studio")
-            ):
-                visual_seed = "|".join(
-                    str(visual.get(key) or "")
-                    for key in (
-                        "primary_entity",
-                        "visual_intent",
-                        "specific_search_prompt",
-                        "sport_or_topic_category",
-                        "source",
-                    )
-                ).strip("|")
-                if not visual_seed:
-                    visual_seed = hashlib.sha1(base_image.tobytes()).hexdigest()
+            if visual.get("motion_seed"):
                 base_image = _animate_visual(
-                    base_image, scene_time, scene_duration, visual_seed
+                    base_image, scene_time, scene_duration, visual["motion_seed"]
                 )
 
             yield render_frame(

@@ -173,3 +173,54 @@ def test_live_rendered_video_path_survives_upload_qc_reruns():
     assert 'stored_video_path = st.session_state.get("live_rendered_video_path")' in upload_source
     assert "if video_path is not None and not video_path.is_absolute():" in upload_source
     assert "video_path.stat().st_size <= 0" in upload_source
+
+def test_shorts_renderer_uses_faster_encode_preset_without_changing_quality_target():
+    renderer_source = (ROOT / "renderer.py").read_text(encoding="utf-8")
+    assert '"-preset", "veryfast"' in renderer_source
+    assert '"-crf", "18"' in renderer_source
+    assert renderer.FPS == 30
+
+
+def test_motion_profile_is_cached_by_visual_seed():
+    renderer._motion_profile.cache_clear()
+
+    first = renderer._motion_profile("performance-regression-seed")
+    second = renderer._motion_profile("performance-regression-seed")
+    info = renderer._motion_profile.cache_info()
+
+    assert first == second
+    assert info.misses == 1
+    assert info.hits == 1
+    renderer._motion_profile.cache_clear()
+
+
+def test_render_loop_does_not_rebuild_motion_seed_or_hash_image_each_frame():
+    source = (ROOT / "renderer.py").read_text(encoding="utf-8")
+    render_start = source.index("def render_production_video(")
+    render_end = source.find("\ndef ", render_start + 5)
+    if render_end < 0:
+        render_end = len(source)
+    render_source = source[render_start:render_end]
+    preparation_end = render_source.index("    def frames():")
+    preparation = render_source[:preparation_end]
+    frame_loop = render_source[preparation_end:]
+
+    assert '"motion_seed": motion_seed' in preparation
+    assert "hashlib.sha1(image.tobytes()).hexdigest()" in preparation
+    assert "hashlib.sha1(base_image.tobytes()).hexdigest()" not in frame_loop
+    assert 'visual["motion_seed"]' in frame_loop
+
+
+def test_longform_render_uses_monotonic_scene_cursor():
+    source = (ROOT / "longform_renderer.py").read_text(encoding="utf-8")
+    start = source.index("        def frame_generator():")
+    end = source.index("\n        # Pipe frames", start)
+    frame_source = source[start:end]
+
+    assert "scene_index = 0" in frame_source
+    assert "while (" in frame_source
+    assert "for sc in prepared_bases" not in frame_source
+    assert "cue_index = 0" in frame_source
+    assert "billboard_index = 0" in frame_source
+    assert "for c in cues" not in frame_source
+    assert "for bb in act_billboards" not in frame_source
