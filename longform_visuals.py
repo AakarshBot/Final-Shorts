@@ -107,7 +107,6 @@ def _score_asset(asset: dict, required_entity: str, intent: str) -> float:
 def _fetch_pollinations_ai_image(prompt: str) -> bytes | None:
     """Zero-cost fallback: generates a 16:9 cinematic photo via Pollinations Flux."""
     try:
-        from visual_generator import _pollinations
         res = _pollinations(f"Cinematic 16:9 documentary broadcast photo: {prompt}, 8k stadium lighting", seed=42)
         if res and res.get("bytes"):
             return res["bytes"]
