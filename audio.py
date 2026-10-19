@@ -529,6 +529,8 @@ def _join_narration_texts(texts: list[str]) -> str:
                 joined = re.sub(r"[,;:]$", "", joined) + "."
             joined += " "
         joined += text
+    if joined and not re.search(r"[.!?]$", joined):
+        joined = re.sub(r"[,;:]$", "", joined) + "."
     return joined
 
 
