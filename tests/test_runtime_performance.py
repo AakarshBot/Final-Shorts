@@ -174,6 +174,13 @@ def test_live_rendered_video_path_survives_upload_qc_reruns():
     assert "if video_path is not None and not video_path.is_absolute():" in upload_source
     assert "video_path.stat().st_size <= 0" in upload_source
 
+def test_shorts_renderer_uses_faster_encode_preset_without_changing_quality_target():
+    renderer_source = (ROOT / "renderer.py").read_text(encoding="utf-8")
+    assert '"-preset", "veryfast"' in renderer_source
+    assert '"-crf", "18"' in renderer_source
+    assert renderer.FPS == 30
+
+
 def test_motion_profile_is_cached_by_visual_seed():
     renderer._motion_profile.cache_clear()
 
