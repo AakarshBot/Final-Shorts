@@ -1,5 +1,5 @@
 import pytest
-from longform_script_writer import LongformScriptWriter
+from longform_script_writer import LONGFORM_SYSTEM_PROMPT, LongformScriptWriter
 
 
 def sample_longform_story():
@@ -112,3 +112,8 @@ def test_description_only_claims_publishers_present_in_story_handoff():
     assert "CHAPTERS:" in formatted["seo_description"]
     assert "Sources:" not in formatted["seo_description"]
     assert "verified wire reports" not in formatted["seo_description"].casefold()
+
+
+def test_prompt_does_not_request_unimplemented_footage():
+    assert '"ncr_broll"' not in LONGFORM_SYSTEM_PROMPT
+    assert "never request or imply match clips" in LONGFORM_SYSTEM_PROMPT.casefold()
