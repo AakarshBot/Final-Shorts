@@ -4543,19 +4543,25 @@ def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | 
     image = _asset_to_image(value)
     if image is None:
         return None
-
-    target_ratio = width / height
+    image = image.convert("RGB")
     current_ratio = image.width / image.height
-    if current_ratio > target_ratio:
-        crop_width = max(1, int(image.height * target_ratio))
-        left = (image.width - crop_width) // 2
-        image = image.crop((left, 0, left + crop_width, image.height))
-    elif current_ratio < target_ratio:
-        crop_height = max(1, int(image.width / target_ratio))
-        top = (image.height - crop_height) // 2
-        image = image.crop((0, top, image.width, top + crop_height))
-
-    preview = image.resize((width, height), Image.Resampling.LANCZOS)
+    if abs(current_ratio - (9 / 16)) < 0.005:
+        # Applied crops are already the final 9:16 frame: show the entire frame
+        # inside the thumbnail rather than trimming its top and bottom again.
+        fitted = ImageOps.contain(image, (width, height), method=Image.Resampling.LANCZOS)
+        preview = Image.new("RGB", (width, height), (18, 20, 24))
+        preview.paste(fitted, ((width - fitted.width) // 2, (height - fitted.height) // 2))
+    else:
+        target_ratio = width / height
+        if current_ratio > target_ratio:
+            crop_width = max(1, int(image.height * target_ratio))
+            left = (image.width - crop_width) // 2
+            image = image.crop((left, 0, left + crop_width, image.height))
+        elif current_ratio < target_ratio:
+            crop_height = max(1, int(image.width / target_ratio))
+            top = (image.height - crop_height) // 2
+            image = image.crop((0, top, image.width, top + crop_height))
+        preview = image.resize((width, height), Image.Resampling.LANCZOS)
     buffer = BytesIO()
     preview.save(buffer, format="JPEG", quality=84, optimize=True)
     return buffer.getvalue()
@@ -4564,8 +4570,13 @@ def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | 
 def _fit_visual_preview(value, width=360, height=640):
     if isinstance(value, Image.Image):
         image = value.convert("RGB")
-        target_ratio = width / height
         current_ratio = image.width / image.height
+        if abs(current_ratio - (9 / 16)) < 0.005:
+            fitted = ImageOps.contain(image, (width, height), method=Image.Resampling.LANCZOS)
+            preview = Image.new("RGB", (width, height), (18, 20, 24))
+            preview.paste(fitted, ((width - fitted.width) // 2, (height - fitted.height) // 2))
+            return preview
+        target_ratio = width / height
         if current_ratio > target_ratio:
             crop_width = max(1, int(image.height * target_ratio))
             left = (image.width - crop_width) // 2
