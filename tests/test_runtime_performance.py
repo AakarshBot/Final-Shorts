@@ -76,6 +76,19 @@ def test_card_studio_receives_original_visuals_and_uses_an_independent_crop_stor
     assert 'setdefault("test_top5_card_studio_crops", {})' in delete_source
 
 
+def test_card_studio_offers_explicit_story_and_manual_prompt_generation():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    studio_source = app_source[app_source.index("def _render_card_studio("):]
+    assert "Auto-fill this card from story" in studio_source
+    assert "Generate card from prompt" in studio_source
+    assert "generate_card_copy(card_type, story_context, target_language=card_language)" in studio_source
+    assert "manual_prompt=manual_prompt.strip()" in studio_source
+    script_source = (ROOT / "script_writer.py").read_text(encoding="utf-8")
+    assert "def generate_card_copy(" in script_source
+    assert "natural, concise Hindi using Devanagari script" in script_source
+    assert "natural, concise Telugu using Telugu script" in script_source
+
+
 def test_crop_assignment_store_is_pipeline_specific():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     start = app_source.index('@st.dialog("Crop visual"')
