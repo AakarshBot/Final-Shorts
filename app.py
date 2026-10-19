@@ -1959,23 +1959,13 @@ def _largest_9x16_crop_coords(image: Image.Image) -> tuple[int, int, int, int]:
 
 
 @st.cache_data(max_entries=4, show_spinner=False)
-def _prepare_crop_dialog_canvas(image_bytes: bytes, max_canvas_width: int = 1600):
-    """Show the entire original image without a blurred or pre-cropped background."""
+def _prepare_crop_dialog_canvas(image_bytes: bytes):
+    """Return original-resolution pixels; streamlit-cropper scales only its display."""
     image = _asset_to_image(image_bytes)
     if image is None:
         return None, None, (0, 0)
     original_size = (image.width, image.height)
-    scale = min(
-        1.0,
-        max_canvas_width / max(1, image.width),
-        max_canvas_width / max(1, image.height),
-    )
     image = image.convert("RGB")
-    if scale < 1.0:
-        image = image.resize(
-            (max(1, int(round(image.width * scale))), max(1, int(round(image.height * scale)))),
-            Image.Resampling.LANCZOS,
-        )
     return image, _largest_9x16_crop_coords(image), original_size
 
 
@@ -2004,9 +1994,7 @@ def _crop_visual_dialog(
     crop_store: str = "visual_crops",
     card_selector: bool = False,
 ):
-    canvas, default_coords, original_size = _prepare_crop_dialog_canvas(
-        bytes(image_bytes), max_canvas_width=1600
-    )
+    canvas, default_coords, original_size = _prepare_crop_dialog_canvas(bytes(image_bytes))
     if canvas is None:
         st.error("This visual could not be opened for cropping.")
         return
