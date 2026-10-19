@@ -45,6 +45,16 @@ def test_crop_dialog_shows_full_source_and_applies_free_crop_to_9x16():
     assert "card_selector=True" in app_source
 
 
+def test_applied_9x16_crop_thumbnails_preserve_the_entire_final_frame():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    start = app_source.index("def _fit_visual_preview_bytes(")
+    end = app_source.index("def _delete_visual_asset(", start)
+    preview_source = app_source[start:end]
+    assert preview_source.count("abs(current_ratio - (9 / 16)) < 0.005") == 2
+    assert preview_source.count("ImageOps.contain(image, (width, height)") == 2
+    assert "preview.paste(fitted" in preview_source
+
+
 def test_card_studio_receives_original_visuals_and_uses_an_independent_crop_store():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     start = app_source.index("def _visual_pool_entries(")
