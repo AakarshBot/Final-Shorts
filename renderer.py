@@ -10,8 +10,10 @@ import math
 import shutil
 import subprocess
 import sys
+import tarfile
 import tempfile
 import time
+import urllib.request
 import warnings
 from functools import lru_cache
 from itertools import combinations
@@ -67,6 +69,112 @@ def _register_windows_dll_paths() -> None:
         except (OSError, ValueError):
             continue
         _DLL_DIRECTORY_HANDLES.append(handle)
+
+
+# Official MSYS2 x64 FriBiDi package. The SHA-256 is pinned to the package
+# metadata published at packages.msys2.org; the archive is never blindly extracted.
+_FRIBIDI_PACKAGE_URL = (
+    "https://mirror.msys2.org/mingw/mingw64/"
+    "mingw-w64-x86_64-fribidi-1.0.17-1-any.pkg.tar.zst"
+)
+_FRIBIDI_PACKAGE_SHA256 = (
+    "707f6a2f9a49c83938271bfd92a11f80bd4c18c4837210173fcb39e9d841e5ac"
+)
+_FRIBIDI_PACKAGE_MAX_BYTES = 2 * 1024 * 1024
+_FRIBIDI_DLL_MEMBER = "mingw64/bin/libfribidi-0.dll"
+_FRIBIDI_LICENSE_MEMBER = "mingw64/share/licenses/fribidi/COPYING"
+
+
+def _atomic_write_bytes(destination: Path, content: bytes) -> None:
+    """Replace one runtime file atomically so an interrupted download cannot leave a partial DLL."""
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    fd, temp_name = tempfile.mkstemp(
+        prefix=f".{destination.name}.", suffix=".tmp", dir=destination.parent
+    )
+    temp_path = Path(temp_name)
+    try:
+        with os.fdopen(fd, "wb") as stream:
+            stream.write(content)
+        os.replace(temp_path, destination)
+    finally:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+
+
+def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
+    """Download a pinned official MSYS2 package and extract only FriBiDi + its licence."""
+    try:
+        import zstandard
+    except ImportError as exc:
+        raise RuntimeError(
+            "Automatic Hindi/Telugu text-shaping setup needs the new 'zstandard' dependency. "
+            "Install the updated factory requirements and restart the dashboard."
+        ) from exc
+
+    root = Path(root or Path(__file__).resolve().parent)
+    dll_dir = root / "dlls"
+    dll_path = dll_dir / "libfribidi-0.dll"
+    license_path = dll_dir / "licenses" / "fribidi-COPYING.txt"
+
+    request = urllib.request.Request(
+        _FRIBIDI_PACKAGE_URL,
+        headers={"User-Agent": "Final-Shorts/RAQM-runtime-bootstrap"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=25) as response:
+            package_bytes = response.read(_FRIBIDI_PACKAGE_MAX_BYTES + 1)
+    except (OSError, urllib.error.URLError, TimeoutError) as exc:
+        raise RuntimeError(
+            "Could not download the official FriBiDi runtime package. "
+            "Check the internet connection or set FRIBIDI_DLL_PATH / FRIBIDI_DLL_DIR "
+            "to an already-installed compatible DLL."
+        ) from exc
+
+    if len(package_bytes) > _FRIBIDI_PACKAGE_MAX_BYTES:
+        raise RuntimeError("The FriBiDi package exceeded the expected 2 MB safety limit.")
+    actual_sha256 = hashlib.sha256(package_bytes).hexdigest()
+    if actual_sha256 != _FRIBIDI_PACKAGE_SHA256:
+        raise RuntimeError(
+            "The downloaded FriBiDi package failed its pinned SHA-256 check; "
+            "no DLL was installed."
+        )
+
+    extracted: dict[str, bytes] = {}
+    try:
+        decompressor = zstandard.ZstdDecompressor()
+        with decompressor.stream_reader(BytesIO(package_bytes)) as unpacked:
+            with tarfile.open(fileobj=unpacked, mode="r|") as archive:
+                for member in archive:
+                    member_name = member.name.replace("\\\\", "/").lstrip("./")
+                    if member_name not in {_FRIBIDI_DLL_MEMBER, _FRIBIDI_LICENSE_MEMBER}:
+                        continue
+                    if not member.isfile():
+                        raise RuntimeError(
+                            f"FriBiDi archive entry {member_name!r} is not a regular file."
+                        )
+                    fileobj = archive.extractfile(member)
+                    if fileobj is None:
+                        raise RuntimeError(
+                            f"FriBiDi archive entry {member_name!r} could not be read."
+                        )
+                    extracted[member_name] = fileobj.read()
+                    if set(extracted) == {_FRIBIDI_DLL_MEMBER, _FRIBIDI_LICENSE_MEMBER}:
+                        break
+    except (OSError, tarfile.TarError, zstandard.ZstdError) as exc:
+        raise RuntimeError("The checksum-verified FriBiDi package could not be unpacked.") from exc
+
+    dll_bytes = extracted.get(_FRIBIDI_DLL_MEMBER)
+    license_bytes = extracted.get(_FRIBIDI_LICENSE_MEMBER)
+    if not dll_bytes or not (10_000 <= len(dll_bytes) <= 2 * 1024 * 1024):
+        raise RuntimeError("The verified MSYS2 package did not contain a valid-size FriBiDi DLL.")
+    if not license_bytes:
+        raise RuntimeError("The verified MSYS2 package did not contain the FriBiDi licence.")
+
+    _atomic_write_bytes(dll_path, dll_bytes)
+    _atomic_write_bytes(license_path, license_bytes)
+    return dll_path
 
 
 _register_windows_dll_paths()
@@ -171,15 +279,35 @@ def _require_raqm(language: str) -> None:
         available = features.check_feature("raqm")
     except (AttributeError, ValueError):
         available = False
+
+    bootstrap_error = None
+    if not available and os.name == "nt":
+        try:
+            if sys.maxsize <= 2**32:
+                raise RuntimeError(
+                    "Automatic FriBiDi setup currently targets 64-bit Windows Python."
+                )
+            _install_fribidi_from_official_package()
+            _register_windows_dll_paths()
+            # Pillow's Windows wheels load FriBiDi at runtime; check again after
+            # the DLL has been installed and its folder registered.
+            available = bool(features.check_feature("raqm"))
+        except Exception as exc:
+            bootstrap_error = str(exc)
+
     if not available:
+        detail = (
+            f" Automatic FriBiDi setup could not complete: {bootstrap_error}"
+            if bootstrap_error
+            else " FriBiDi was installed or found, but this Pillow build still does not expose RAQM."
+        )
         raise RuntimeError(
             f"{language.title()} text needs Pillow's RAQM text-shaping engine. "
             "Rendering has been stopped rather than producing incorrectly joined letters. "
-            "On Windows, Pillow needs FriBiDi (fribidi.dll, fribidi-0.dll, or "
-            "libfribidi-0.dll). The renderer checks the factory's dlls/.deps folders, "
-            "the active Python environment, and common MSYS2 folders automatically. "
-            "You can also set FRIBIDI_DLL_PATH to the DLL file or FRIBIDI_DLL_DIR to its "
-            "folder, then restart the factory."
+            "On Windows the factory now attempts to download and verify FriBiDi automatically "
+            "into dlls/ (including its LGPL licence) when the DLL is missing. "
+            "You can also set FRIBIDI_DLL_PATH to a compatible DLL or FRIBIDI_DLL_DIR to its "
+            f"folder, then restart the factory.{detail}"
         )
 
 
