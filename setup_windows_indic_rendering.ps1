@@ -6,64 +6,33 @@ $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 $DllDirectory = Join-Path $RepoRoot "dlls"
 $TemporaryRoot = Join-Path $env:TEMP ("final-shorts-fribidi-" + [guid]::NewGuid().ToString("N"))
 $PackagePath = Join-Path $TemporaryRoot "fribidi.pkg.tar.zst"
-$ExtractorPath = Join-Path $TemporaryRoot "python-tools"
-New-Item -ItemType Directory -Force -Path $TemporaryRoot | Out-Null
+$ExtractRoot = Join-Path $TemporaryRoot "extracted"
+New-Item -ItemType Directory -Force -Path $TemporaryRoot, $ExtractRoot | Out-Null
 try {
     Write-Host "Downloading the official MSYS2 FriBiDi package..."
     Invoke-WebRequest -Uri $PackageUrl -OutFile $PackagePath
     $ActualSha256 = (Get-FileHash -Path $PackagePath -Algorithm SHA256).Hash.ToLowerInvariant()
     if ($ActualSha256 -ne $ExpectedSha256) { throw "FriBiDi package checksum did not match. Nothing was installed." }
 
-    $Launcher = Get-Command py -ErrorAction SilentlyContinue
-    if ($Launcher) { $PythonCommand = $Launcher.Source; $PythonPrefix = @("-3") }
-    else {
-        $Launcher = Get-Command python -ErrorAction SilentlyContinue
-        if (-not $Launcher) { throw "Python 3 was not found. Install Python 3, then rerun this setup file." }
-        $PythonCommand = $Launcher.Source
-        $PythonPrefix = @()
+    # Use Windows' built-in tar/libarchive instead of pip. This deliberately
+    # avoids modifying or relying on the user's Python installation.
+    $Tar = Get-Command tar.exe -ErrorAction SilentlyContinue
+    if (-not $Tar) { throw "Windows tar.exe was not found. Install a current Windows build with tar/libarchive support, then rerun this setup file." }
+
+    Write-Host "Extracting the verified FriBiDi package with Windows tar..."
+    & $Tar.Source -xf $PackagePath -C $ExtractRoot "ucrt64/bin/libfribidi-0.dll" "ucrt64/share/licenses/fribidi/COPYING"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Windows tar could not read the .tar.zst package. Update Windows or install 7-Zip with Zstandard support, then rerun this setup file. No Python packages were installed."
     }
 
-    $env:PIP_CACHE_DIR = Join-Path $TemporaryRoot "pip-cache"
-    Write-Host "Preparing a temporary archive reader..."
-    & $PythonCommand @PythonPrefix -m pip install --disable-pip-version-check --quiet --target $ExtractorPath zstandard
-    if ($LASTEXITCODE -ne 0) { throw "Could not prepare the temporary package extractor." }
-    $env:PYTHONPATH = $ExtractorPath
-
-    $ExtractScript = @'
-import pathlib, sys, tarfile, zstandard
-
-package_path = pathlib.Path(sys.argv[1])
-destination = pathlib.Path(sys.argv[2])
-destination.mkdir(parents=True, exist_ok=True)
-wanted = {
-    "ucrt64/bin/libfribidi-0.dll": destination / "libfribidi-0.dll",
-    "ucrt64/share/licenses/fribidi/COPYING": destination / "FRIBIDI-COPYING.txt",
-}
-found = set()
-with package_path.open("rb") as package:
-    with zstandard.ZstdDecompressor().stream_reader(package) as stream:
-        with tarfile.open(fileobj=stream, mode="r|") as archive:
-            for member in archive:
-                name = member.name.replace("\\", "/").lstrip("./")
-                for suffix, target in wanted.items():
-                    if name.endswith(suffix) and member.isfile():
-                        source = archive.extractfile(member)
-                        if source is not None:
-                            with source, target.open("wb") as output:
-                                output.write(source.read())
-                            found.add(suffix)
-                if len(found) == len(wanted):
-                    break
-missing = set(wanted) - found
-if missing:
-    raise SystemExit("Official package is missing required file(s): " + ", ".join(sorted(missing)))
-print("Installed libfribidi-0.dll and its license in " + str(destination))
-'@
+    $SourceDll = Join-Path $ExtractRoot "ucrt64/bin/libfribidi-0.dll"
+    $SourceLicense = Join-Path $ExtractRoot "ucrt64/share/licenses/fribidi/COPYING"
+    if (-not (Test-Path -LiteralPath $SourceDll -PathType Leaf)) { throw "The verified archive did not contain the expected FriBiDi DLL." }
+    if (-not (Test-Path -LiteralPath $SourceLicense -PathType Leaf)) { throw "The verified archive did not contain the FriBiDi license." }
 
     New-Item -ItemType Directory -Force -Path $DllDirectory | Out-Null
-    Write-Host "Installing FriBiDi into the factory's dlls folder..."
-    & $PythonCommand @PythonPrefix -c $ExtractScript $PackagePath $DllDirectory
-    if ($LASTEXITCODE -ne 0) { throw "Could not extract FriBiDi from the verified package." }
+    Copy-Item -LiteralPath $SourceDll -Destination (Join-Path $DllDirectory "libfribidi-0.dll") -Force
+    Copy-Item -LiteralPath $SourceLicense -Destination (Join-Path $DllDirectory "FRIBIDI-COPYING.txt") -Force
     Write-Host ""
     Write-Host "Finished. Close Final-Shorts / Streamlit, then restart the factory."
     Write-Host "The renderer will find dlls\libfribidi-0.dll automatically."

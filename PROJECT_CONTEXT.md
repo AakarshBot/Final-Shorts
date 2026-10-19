@@ -215,7 +215,7 @@ Renderer v2 is the single shared Test/Live renderer:
 - Stereo AAC audio at 192 kbps normalized to -14 LUFS / -1.5 dBTP.
 - Photo motion uses deterministic push/pan; Card Studio and Top-5 cards render as static frames.
 - Suppresses subtitle overlay automatically for Card Studio and Text Subject Cutout frames.
-- Windows Indic rendering: run `setup_windows_indic_rendering.bat` once after pulling the fix. It downloads the official MSYS2 FriBiDi package, verifies a pinned SHA-256 checksum, and puts `libfribidi-0.dll` plus its license in the locally ignored `dlls/` directory. The shared renderer already registers that folder before checking Pillow RAQM, and refuses unsafe Hindi/Telugu basic-layout fallback. Restart Streamlit after setup.
+- Windows Indic rendering: run `setup_windows_indic_rendering.bat` once after pulling the fix. It downloads the official MSYS2 FriBiDi package, verifies a pinned SHA-256 checksum, and extracts only `libfribidi-0.dll` plus its license using Windows `tar.exe` into the locally ignored `dlls/` directory. It must not invoke `python -m pip`: the first version failed on this user's broken global Python 3.12 pip installation (`pip._vendor.rich._emoji_codes` missing). The updated setup avoids pip and does not install Python packages. The shared renderer registers that folder before checking Pillow RAQM and refuses unsafe Hindi/Telugu basic-layout fallback. Restart Streamlit after setup. Actual Windows execution of the updated archive extraction remains to be confirmed.
 - Does not render the standard root-level Scriptwriter headline. That field is dashboard-only metadata; editorial card text and Top-5's six-slide card/headline flow remain separate.
 
 Status: **Active / Shared Test + Live renderer.**
