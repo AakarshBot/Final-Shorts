@@ -9416,6 +9416,8 @@ def render_audio():
                             cur_scenes.sort(key=lambda x: int(x.get("scene", 0)))
                             st.session_state.audio_data["scenes"] = cur_scenes
                             st.session_state.audio_data["total_duration"] = round(sum(float(s["duration"]) for s in cur_scenes), 3)
+                            st.session_state.audio_data.pop("full_path", None)
+                            st.session_state.audio_data["continuous_audio"] = False
                         else:
                             st.session_state.audio_data = {
                                 "language": language.casefold(),
@@ -10243,6 +10245,8 @@ elif st.session_state.app_mode == "test":
                                             break
                                     st.session_state.test_top5_audio_data["scenes"] = curr
                                     st.session_state.test_top5_audio_data["total_duration"] = round(sum(float(sc["duration"]) for sc in curr), 3)
+                                    st.session_state.test_top5_audio_data.pop("full_path", None)
+                                    st.session_state.test_top5_audio_data["continuous_audio"] = False
                                     st.session_state.test_top5_audio_handoff = None
                                     st.success(f"Line {override_line_num} overridden with human audio!")
                                     st.rerun()
