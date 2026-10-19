@@ -7,12 +7,14 @@ import hashlib
 import os
 from pathlib import Path
 import math
+import platform
 import shutil
 import subprocess
 import sys
 import tarfile
 import tempfile
 import time
+import urllib.error
 import urllib.request
 import warnings
 from functools import lru_cache
@@ -80,9 +82,38 @@ _FRIBIDI_PACKAGE_URL = (
 _FRIBIDI_PACKAGE_SHA256 = (
     "707f6a2f9a49c83938271bfd92a11f80bd4c18c4837210173fcb39e9d841e5ac"
 )
+_FRIBIDI_ARM64_PACKAGE_URL = (
+    "https://mirror.msys2.org/mingw/clangarm64/"
+    "mingw-w64-clang-aarch64-fribidi-1.0.17-1-any.pkg.tar.zst"
+)
+_FRIBIDI_ARM64_PACKAGE_SHA256 = (
+    "85e3a9d74124676618081c2d8a57548342d83a76ac8e4f7daaa0263d0caecbef"
+)
 _FRIBIDI_PACKAGE_MAX_BYTES = 2 * 1024 * 1024
 _FRIBIDI_DLL_MEMBER = "mingw64/bin/libfribidi-0.dll"
 _FRIBIDI_LICENSE_MEMBER = "mingw64/share/licenses/fribidi/COPYING"
+
+
+def _fribidi_package_for_current_arch() -> tuple[str, str, str, str]:
+    machine = platform.machine().strip().casefold()
+    if machine in {"amd64", "x86_64", "x64"}:
+        return (
+            _FRIBIDI_PACKAGE_URL,
+            _FRIBIDI_PACKAGE_SHA256,
+            _FRIBIDI_DLL_MEMBER,
+            _FRIBIDI_LICENSE_MEMBER,
+        )
+    if machine in {"arm64", "aarch64"}:
+        return (
+            _FRIBIDI_ARM64_PACKAGE_URL,
+            _FRIBIDI_ARM64_PACKAGE_SHA256,
+            "clangarm64/bin/libfribidi-0.dll",
+            "clangarm64/share/licenses/fribidi/COPYING",
+        )
+    raise RuntimeError(
+        f"Automatic FriBiDi setup does not have a verified package for Windows architecture {machine!r}. "
+        "Place a compatible FriBiDi DLL in the factory's dlls/ folder or set FRIBIDI_DLL_PATH."
+    )
 
 
 def _atomic_write_bytes(destination: Path, content: bytes) -> None:
@@ -117,9 +148,19 @@ def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
     dll_dir = root / "dlls"
     dll_path = dll_dir / "libfribidi-0.dll"
     license_path = dll_dir / "licenses" / "fribidi-COPYING.txt"
+    marker_path = dll_dir / ".fribidi-package.sha256"
+    package_url, expected_sha256, dll_member, license_member = _fribidi_package_for_current_arch()
+    if (
+        dll_path.is_file()
+        and 10_000 <= dll_path.stat().st_size <= 2 * 1024 * 1024
+        and license_path.is_file()
+        and marker_path.is_file()
+        and marker_path.read_text(encoding="ascii").strip() == expected_sha256
+    ):
+        return dll_path
 
     request = urllib.request.Request(
-        _FRIBIDI_PACKAGE_URL,
+        package_url,
         headers={"User-Agent": "Final-Shorts/RAQM-runtime-bootstrap"},
     )
     try:
@@ -135,7 +176,7 @@ def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
     if len(package_bytes) > _FRIBIDI_PACKAGE_MAX_BYTES:
         raise RuntimeError("The FriBiDi package exceeded the expected 2 MB safety limit.")
     actual_sha256 = hashlib.sha256(package_bytes).hexdigest()
-    if actual_sha256 != _FRIBIDI_PACKAGE_SHA256:
+    if actual_sha256 != expected_sha256:
         raise RuntimeError(
             "The downloaded FriBiDi package failed its pinned SHA-256 check; "
             "no DLL was installed."
@@ -148,7 +189,7 @@ def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
             with tarfile.open(fileobj=unpacked, mode="r|") as archive:
                 for member in archive:
                     member_name = member.name.replace("\\", "/").lstrip("./")
-                    if member_name not in {_FRIBIDI_DLL_MEMBER, _FRIBIDI_LICENSE_MEMBER}:
+                    if member_name not in {dll_member, license_member}:
                         continue
                     if not member.isfile():
                         raise RuntimeError(
@@ -160,13 +201,13 @@ def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
                             f"FriBiDi archive entry {member_name!r} could not be read."
                         )
                     extracted[member_name] = fileobj.read()
-                    if set(extracted) == {_FRIBIDI_DLL_MEMBER, _FRIBIDI_LICENSE_MEMBER}:
+                    if set(extracted) == {dll_member, license_member}:
                         break
     except (OSError, tarfile.TarError, zstandard.ZstdError) as exc:
         raise RuntimeError("The checksum-verified FriBiDi package could not be unpacked.") from exc
 
-    dll_bytes = extracted.get(_FRIBIDI_DLL_MEMBER)
-    license_bytes = extracted.get(_FRIBIDI_LICENSE_MEMBER)
+    dll_bytes = extracted.get(dll_member)
+    license_bytes = extracted.get(license_member)
     if not dll_bytes or not (10_000 <= len(dll_bytes) <= 2 * 1024 * 1024):
         raise RuntimeError("The verified MSYS2 package did not contain a valid-size FriBiDi DLL.")
     if not license_bytes:
@@ -174,6 +215,7 @@ def _install_fribidi_from_official_package(root: Path | None = None) -> Path:
 
     _atomic_write_bytes(dll_path, dll_bytes)
     _atomic_write_bytes(license_path, license_bytes)
+    _atomic_write_bytes(marker_path, (expected_sha256 + "\\n").encode("ascii"))
     return dll_path
 
 
@@ -283,10 +325,6 @@ def _require_raqm(language: str) -> None:
     bootstrap_error = None
     if not available and os.name == "nt":
         try:
-            if sys.maxsize <= 2**32:
-                raise RuntimeError(
-                    "Automatic FriBiDi setup currently targets 64-bit Windows Python."
-                )
             _install_fribidi_from_official_package()
             _register_windows_dll_paths()
             # Pillow's Windows wheels load FriBiDi at runtime; check again after
