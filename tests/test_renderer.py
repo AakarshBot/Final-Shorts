@@ -1575,11 +1575,38 @@ def test_windows_fribidi_bootstrap_rejects_checksum_mismatch_without_installing(
         lambda *_args, **_kwargs: BytesIO(package),
     )
 
-    with pytest.raises(RuntimeError, match="pinned SHA-256 check"):
+    with pytest.raises(RuntimeError, match="checksum-verified FriBiDi package"):
         renderer._install_fribidi_from_official_package(tmp_path)
 
     assert not (tmp_path / "dlls" / "libfribidi-0.dll").exists()
     assert not (tmp_path / "dlls" / "licenses" / "fribidi-COPYING.txt").exists()
+
+
+def test_windows_fribidi_bootstrap_retries_after_mirror_checksum_mismatch(monkeypatch, tmp_path):
+    import hashlib
+
+    dll_bytes = b"verified fallback mirror DLL" * 1000
+    license_bytes = b"LGPL-2.1-or-later\\n"
+    package = _fake_fribidi_package_bytes(dll_bytes, license_bytes)
+    monkeypatch.setattr(
+        renderer,
+        "_FRIBIDI_PACKAGE_SHA256",
+        hashlib.sha256(package).hexdigest(),
+    )
+    requested_urls = []
+
+    def fake_urlopen(request, timeout):
+        requested_urls.append(request.full_url)
+        if len(requested_urls) == 1:
+            return BytesIO(b"proxy error page masquerading as the download")
+        return BytesIO(package)
+
+    monkeypatch.setattr(renderer.urllib.request, "urlopen", fake_urlopen)
+    installed = renderer._install_fribidi_from_official_package(tmp_path)
+
+    assert requested_urls[0] == renderer._FRIBIDI_PACKAGE_URL
+    assert requested_urls[1] == renderer._FRIBIDI_PACKAGE_SOURCES[1]
+    assert installed.read_bytes() == dll_bytes
 
 
 def test_indic_raqm_error_explains_verified_automatic_bootstrap(monkeypatch):
