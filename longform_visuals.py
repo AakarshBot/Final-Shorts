@@ -202,8 +202,8 @@ class LongformVisualMatcher:
                     if c_type == "Stat Highlight":
                         card_img = render_longform_stat_card(chosen_bytes, {
                             "player_name": entity,
-                            "eyebrow": card_data.get("eyebrow") or "VERIFIED MATCH DATA",
-                            "hero_stat": card_data.get("hero_stat") or card_data.get("stat"),
+                            "eyebrow": card_data.get("eyebrow") or "MATCH DATA",
+                            "hero_stat": card_data.get("hero_stat") if card_data.get("hero_stat") is not None else card_data.get("stat"),
                             "stat_label": card_data.get("stat_label") or card_data.get("metric"),
                             "context_note": card_data.get("context_note") or card_data.get("note") or "",
                             "tiles": card_data.get("tiles") or card_data.get("metrics") or [],
