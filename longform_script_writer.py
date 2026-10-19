@@ -56,16 +56,16 @@ You must divide the story into exactly six narrative acts, each advancing the st
    - Provide historical depth that casual fans do not know.
 
 3. ACT 03: THE CATALYST & TURNING POINT (~210 words, 4 scenes)
-   - The private meeting, selector controversy, locker-room clash, tactical dispute, or fateful injury.
-   - The human drama behind the decision.
+   - Identify the best-documented turning point in the research packet. Never imply a private meeting, locker-room clash, injury, or selector dispute unless the packet contains evidence for it.
+   - Explain what is confirmed, what is a reported allegation, and what is analysis.
 
 4. ACT 04: STATISTICAL & TACTICAL DEEP-DIVE (~210 words, 4 scenes)
-   - The analytical proof: career splits, bowling averages, strike rates against pace/spin, or financial realities.
-   - Integrate at least one Stat Highlight Card and/or Head-to-Head comparison card here.
+   - Use only statistics, comparisons, and financial details present in the research packet.
+   - Use a Stat Highlight or Head-to-Head card only when its displayed values and labels are supported by that evidence. If the data is missing, use a chapter card or photo instead; never invent numbers to fill a layout.
 
 5. ACT 05: THE CLIMAX & IMMEDIATE FALLOUT (~210 words, 4 scenes)
-   - Press conference reactions, pundit debates, on-field consequences, and immediate fan response.
-   - Integrate a Quote / Reaction Card here featuring official statements.
+   - Include only reactions, decisions, match consequences, or fan response documented in the research packet.
+   - Use a Quote / Reaction card only when the packet contains the exact quote and identifies the speaker. Never put a paraphrase in quotation marks or invent an official statement; if no verified quote exists, use a non-quote card or photo.
 
 6. ACT 06: LEGACY & THE ROAD AHEAD (~140 words, 3 scenes)
    - Long-term implications for the team, player legacy, or world cricket governance.
@@ -79,7 +79,7 @@ For every scene, specify:
 - `visual_type`: "card" (for Stat/Quote/H2H/Milestone/Chapter cards), "photo_kenburns" (for high-res photos), or "ncr_broll" (for action footage).
 - `card_type`: "none" if not a card, or one of "Stat Highlight", "Quote / Reaction", "Head-to-Head", "Key Fact / Milestone", "Chapter / Act", "Timeline / Chronology".
 - `card_required_subject`: Exact person whose portrait is needed on the card.
-- `card_payload`: Required numbers/quotes/text for the card.
+- `card_payload`: Evidence-backed content only. Stat cards need a real metric and value; comparison cards need two named subjects and sourced comparable metrics; quote cards need exact quoted words plus a named speaker; timelines need at least two supported event nodes; milestones need a supported title and label. Leave unsupported payload fields empty and use `Chapter / Act` or `none` when the evidence is insufficient. Never fill these fields with plausible-looking defaults.
 - `search_query`: High-precision search query for the visual engine (e.g., "Jasprit Bumrah bowling action Test match high resolution").
 
 TONE & STYLE:
@@ -219,9 +219,17 @@ class LongformScriptWriter:
         chapters = []
         cumulative_seconds = 0.0
 
-        for act in acts:
-            act_num = act.get("act_number", len(chapters) + 1)
-            ch_title = act.get("chapter_title") or f"Chapter {act_num}"
+        normalized_acts = []
+        for act_index, act in enumerate(acts, 1):
+            # Scene/act IDs are structural ordering, not model-authored content.
+            # Reassign them from the actual list order to prevent duplicate or
+            # contradictory IDs from misaligning visuals, audio and chapters.
+            act_num = act_index
+            ch_title = _clean(act.get("chapter_title")) or f"Chapter {act_num}"
+            normalized_act = dict(act)
+            normalized_act["act_number"] = act_num
+            normalized_act["chapter_title"] = ch_title
+            normalized_acts.append(normalized_act)
             mins = int(cumulative_seconds // 60)
             secs = int(cumulative_seconds % 60)
             timestamp_str = f"{mins:02d}:{secs:02d}"
@@ -240,45 +248,66 @@ class LongformScriptWriter:
                 total_words += w_count
                 scene_duration = round((w_count / WORDS_PER_MINUTE) * 60.0, 1)
 
+                primary_entity = _clean(
+                    scene.get("primary_entity")
+                    or story.get("primary_entity")
+                    or story.get("subject_name")
+                    or story.get("title")
+                )
                 scene_formatted = {
-                    "scene_number": scene.get("scene_number", len(all_scenes) + 1),
+                    "scene_number": len(all_scenes) + 1,
                     "act_number": act_num,
+                    "chapter_title": ch_title,
                     "voiceover": vo,
                     "word_count": w_count,
                     "estimated_seconds": scene_duration,
                     "start_seconds": round(cumulative_seconds, 1),
-                    "primary_entity": _clean(scene.get("primary_entity") or story.get("title")),
+                    "primary_entity": primary_entity,
                     "secondary_entity": _clean(scene.get("secondary_entity")),
                     "visual_intent": _clean(scene.get("visual_intent") or "match_action"),
                     "visual_type": _clean(scene.get("visual_type") or "photo_kenburns"),
                     "card_type": _clean(scene.get("card_type") or "none"),
-                    "card_required_subject": _clean(scene.get("card_required_subject") or scene.get("primary_entity")),
-                    "card_payload": scene.get("card_payload") or {},
-                    "search_query": _clean(scene.get("search_query") or f"{scene.get('primary_entity')} cricket"),
+                    "card_required_subject": _clean(scene.get("card_required_subject") or primary_entity),
+                    "card_payload": scene.get("card_payload") if isinstance(scene.get("card_payload"), dict) else {},
+                    "search_query": _clean(scene.get("search_query") or f"{primary_entity} cricket"),
                 }
                 all_scenes.append(scene_formatted)
                 cumulative_seconds += scene_duration
 
-        # Generate YouTube Description with Chapter Timestamps
+        # Generate a description from verified metadata only. Do not claim wire
+        # reporting unless publishers are actually present in the handoff.
         timestamp_lines = "\n".join(f"{ch['timestamp']} - {ch['title']}" for ch in chapters)
+        source_names = []
+        publisher = _clean(story.get("publisher"))
+        if publisher:
+            source_names.append(publisher)
+        for report in story.get("reports") or []:
+            if not isinstance(report, dict):
+                continue
+            report_source = _clean(report.get("publisher") or report.get("source"))
+            if report_source and report_source.casefold() not in {name.casefold() for name in source_names}:
+                source_names.append(report_source)
+        sources_line = f"Sources: {', '.join(source_names)}\n" if source_names else ""
+        seo_subject = _clean(data.get("subject_name") or story.get("primary_entity") or story.get("title") or "Cricket")
+        seo_tag = re.sub(r"[^A-Za-z0-9]+", "", seo_subject) or "Cricket"
         desc = (
             f"{_clean(data.get('seo_description') or story.get('title'))}\n\n"
             f"CHAPTERS:\n{timestamp_lines}\n\n"
-            f"Sources: {story.get('publisher', 'Cricket Desk')} & verified wire reports.\n"
-            f"#Cricket #{data.get('subject_name', 'Cricket').replace(' ', '')} #VideoEssay"
+            f"{sources_line}"
+            f"#Cricket #{seo_tag} #VideoEssay"
         )
 
         return {
             "title": _clean(data.get("title") or story.get("title")),
             "titles": list(data.get("titles") or [story.get("title")]),
-            "subject_name": _clean(data.get("subject_name") or story.get("title")),
+            "subject_name": _clean(data.get("subject_name") or story.get("primary_entity") or story.get("title")),
             "core_conflict": _clean(data.get("core_conflict")),
             "seo_description": desc,
-            "hashtags": list(data.get("hashtags") or ["#Cricket", "#TestCricket", "#Documentary"]),
-            "pinned_comment": _clean(data.get("pinned_comment") or "What is your take on this decision? Share your thoughts below."),
+            "hashtags": list(data.get("hashtags") or ["#Cricket", "#CricketDocumentary", "#VideoEssay"]),
+            "pinned_comment": _clean(data.get("pinned_comment") or "Which detail from this story matters most to you? Share your view below."),
             "total_words": total_words,
             "estimated_duration_seconds": round(cumulative_seconds, 1),
-            "acts": acts,
+            "acts": normalized_acts,
             "chapters": chapters,
             "scenes": all_scenes,
             "scene_count": len(all_scenes),
