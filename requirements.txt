@@ -4,7 +4,6 @@ python-dotenv>=1,<2
 edge-tts>=7.3.1,<8
 pytest>=8,<9
 Pillow>=10,<12
-zstandard>=0.23,<1
 playwright>=1.50,<2
 ddgs>=9.16,<10
 huggingface_hub>=0.33,<2
