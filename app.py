@@ -3181,10 +3181,7 @@ def _render_card_studio(
                                     st.caption("Crop applied")
                             with details_col:
                                 st.caption(str(asset.get("source") or "Image source"))
-                                st.markdown(
-                                    f'<div class="live-source-title">{asset["label"]}</div>',
-                                    unsafe_allow_html=True,
-                                )
+                                st.markdown(f'**{str(asset.get("label") or "Selected visual")}**')
                                 if st.button("Crop image", width="stretch", key=f"{state_id}-crop-{key}"):
                                     raw = asset.get("bytes")
                                     if isinstance(raw, (bytes, bytearray)):
@@ -5001,7 +4998,7 @@ def _render_visual_board(slide_count: int, live: bool = False):
                         with copy_col:
                             if voiceover:
                                 excerpt = voiceover[:92] + ("…" if len(voiceover) > 92 else "")
-                                st.markdown(f'<div class="live-slide-script">{excerpt}</div>', unsafe_allow_html=True)
+                                st.caption(excerpt)
                                 with st.expander("Full slide script", expanded=False):
                                     st.write(voiceover)
                             else:
