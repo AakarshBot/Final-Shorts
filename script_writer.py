@@ -856,7 +856,11 @@ def _prepare_generated_script(result, language_key: str):
                 candidate = _clean(scene.get("primary_entity"))
                 voiceover = _normalise_name(scene.get("voiceover"))
                 candidate_normalised = _normalise_name(candidate)
-                if candidate_normalised and candidate_normalised in voiceover:
+                same_name_shape = (
+                    not subject
+                    or len(candidate_normalised.split()) == len(subject.split())
+                )
+                if candidate_normalised and candidate_normalised in voiceover and same_name_shape:
                     result["subject_name"] = candidate
                     break
 
