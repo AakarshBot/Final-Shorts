@@ -601,3 +601,27 @@ def test_chatterbox_voice_variant_outputs_do_not_overwrite_each_other(monkeypatc
     assert first["full_path"] == again["full_path"]
     assert all(s["from_cache"] for s in again["scenes"])
     assert model.generated == 2
+
+
+
+def test_dashboard_exposes_full_and_turbo_for_every_chatterbox_audio_route():
+    app_source = (Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8")
+
+    # Standard Shorts (Test/Live), Top-5 (Test/Live), and shared Long-form (Test/Live).
+    assert app_source.count('"Chatterbox model"') == 5
+    for key in (
+        "audio_chatterbox_model_choice",
+        "live_audio_chatterbox_model",
+        "test_top5_chatterbox_model",
+        "live_top5_chatterbox_model",
+        '{prefix}audio_chatterbox_model',
+    ):
+        assert key in app_source
+
+    assert app_source.count('["Turbo", "Full"]') == 5
+    assert 'model_version=chatterbox_model_choice.casefold()' in app_source
+    assert 'model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold()' in app_source
+    assert 'model_version=t5_chatterbox_model_choice.casefold()' in app_source
+    assert 'model_version=live_top5_chatterbox_model_choice.casefold()' in app_source
+    assert 'model_version=longform_chatterbox_model_choice.casefold()' in app_source
+    assert "Chatterbox Turbo (Voice Cloning)" not in app_source
