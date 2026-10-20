@@ -527,3 +527,60 @@ def test_channel_seed_keeps_existing_factory_uploads_after_older_metadata(tmp_pa
     assert seeded["seeded_count"] == 2
     entries = uploader._read_upload_history(history_path)
     assert [item["video_id"] for item in entries] == ["old-old", "old-new", "factory-latest"]
+
+
+def test_upload_originality_audit_reviews_reused_editorial_angle_with_new_narration(tmp_path):
+    history_path = tmp_path / "history.json"
+    first = uploader.build_upload_originality_record(
+        {
+            "story_angle": "selection consequences",
+            "script": [{"voiceover": "Gill's fitness assessment may alter India's XI before the next ODI."}],
+        },
+        "Gill fitness and India's next ODI",
+        source_url="https://example.com/story-gill",
+    )
+    uploader.record_upload_success(
+        first,
+        {"video_id": "angle-old", "url": "https://youtube.com/watch?v=angle-old", "privacy_status": "public"},
+        history_path,
+    )
+
+    second = uploader.build_upload_originality_record(
+        {
+            "story_angle": "selection consequences",
+            "script": [{"voiceover": "A new bowling combination exposed the opposition's weakness."}],
+        },
+        "The tactical move that changed the match",
+        source_url="https://example.com/story-bowling",
+    )
+    report = uploader.assess_upload_distinctiveness(second, history_path)
+
+    assert report["level"] == "review"
+    assert report["closest"]["story_angle_similarity"] == 1.0
+    assert report["closest"]["narration_similarity"] < 0.62
+
+
+def test_upload_originality_audit_reviews_repeated_title_with_different_narration(tmp_path):
+    history_path = tmp_path / "history.json"
+    title = "The decision that changed the game"
+    first = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "The captain changed the field to target a specific weakness."}]},
+        title,
+        source_url="https://example.com/story-a",
+    )
+    uploader.record_upload_success(
+        first,
+        {"video_id": "title-old", "url": "https://youtube.com/watch?v=title-old", "privacy_status": "public"},
+        history_path,
+    )
+
+    second = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "A young sprinter broke the championship record with a powerful finish."}]},
+        title,
+        source_url="https://example.com/story-b",
+    )
+    report = uploader.assess_upload_distinctiveness(second, history_path)
+
+    assert report["level"] == "review"
+    assert report["closest"]["title_similarity"] == 1.0
+    assert report["closest"]["narration_similarity"] < 0.62
