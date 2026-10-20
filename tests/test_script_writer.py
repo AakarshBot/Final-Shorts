@@ -227,6 +227,54 @@ def test_prompt_contains_three_title_angles():
     assert "Curiosity" in prompt
 
 
+def test_indic_generation_preflight_catches_long_lead_without_changing_public_validator():
+    result = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's next ODI against England"
+    )
+
+    valid, reason = script_writer.validate_cricket_script(result, language="hindi")
+    generation_valid, generation_reason = script_writer._validate_generated_cricket_draft(
+        result, "hindi"
+    )
+
+    assert valid, reason
+    assert not generation_valid
+    assert "Slide 1" in generation_reason
+    assert "nine or fewer" in generation_reason
+
+
+def test_indic_generation_preflight_targets_total_length_without_padding():
+    result = valid_result("Shubman Gill is facing an injury concern.")
+    result["script"][1]["voiceover"] += " " + " ".join(["context"] * 30)
+
+    issue = script_writer._indic_generation_delivery_issue(result, "telugu")
+
+    assert "narration has" in issue
+    assert "62 or fewer" in issue
+    assert "without dropping essential facts or adding filler" in issue
+
+
+def test_writer_hidden_rewrite_fixes_indic_timing_preflight(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+    too_long = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's next ODI against England"
+    )
+    concise = valid_result("Shubman Gill faces an injury scare before India's next ODI.")
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt))
+        return too_long if len(calls) == 1 else concise
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.write_script(Story(), language="hindi")
+
+    assert len(calls) == 2
+    assert "Indic generation timing preflight" in calls[1][1]
+    assert "no more than nine compact" in calls[1][1]
+    assert result["script"][0]["voiceover"] == concise["script"][0]["voiceover"]
+
+
 def test_generation_prompts_cover_validator_requirements():
     cricket = script_writer.SYSTEM_PROMPT
     universal = script_writer.UNIVERSAL_SYSTEM_PROMPT
