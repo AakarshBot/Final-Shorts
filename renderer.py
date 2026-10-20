@@ -2171,25 +2171,41 @@ def render_production_video(
     ):
         raise ValueError("Script, audio and visual scene counts must match.")
 
+    durations = []
+    for number, scene in enumerate(audio_scenes, 1):
+        try:
+            duration = float(scene.get("duration") or 0.0)
+        except (AttributeError, TypeError, ValueError):
+            duration = 0.0
+        if not math.isfinite(duration) or duration <= 0.0:
+            raise ValueError(f"Audio scene {number} has no valid measured duration.")
+        durations.append(duration)
+
+    scene_total_duration = sum(durations)
+    declared_total = approved_audio.get("total_duration")
+    if declared_total is None:
+        declared_total_duration = scene_total_duration
+    else:
+        try:
+            declared_total_duration = float(declared_total)
+        except (TypeError, ValueError):
+            raise ValueError("Audio handoff has an invalid total duration.")
+        if not math.isfinite(declared_total_duration) or declared_total_duration <= 0.0:
+            raise ValueError("Audio handoff has an invalid total duration.")
+
+    # Use the more conservative value so a stale/rounded master-duration field
+    # cannot let an overlength render through when per-scene sums differ slightly.
+    total_duration = max(scene_total_duration, declared_total_duration)
+    if total_duration >= 30.0:
+        raise ValueError(
+            f"Renderer refuses a {total_duration:.2f}-second Short: the factory limit is strictly under 30 seconds. "
+            "Regenerate Audio with the timing correction or shorten the narration."
+        )
+
     if not is_top5:
         language = _normalise_indic_language(
             approved_script.get("language_used") or approved_audio.get("language")
         )
-        durations = []
-        for number, scene in enumerate(audio_scenes, 1):
-            try:
-                duration = float(scene.get("duration") or 0.0)
-            except (AttributeError, TypeError, ValueError):
-                duration = 0.0
-            if duration <= 0.0:
-                raise ValueError(f"Audio scene {number} has no valid measured duration.")
-            durations.append(duration)
-        total_duration = sum(durations)
-        if total_duration >= 30.0:
-            raise ValueError(
-                f"Renderer refuses a {total_duration:.2f}-second Short: the factory limit is strictly under 30 seconds. "
-                "Regenerate Audio with the timing correction or shorten the narration."
-            )
         if language in {"hindi", "telugu"} and durations[0] > 5.2:
             raise ValueError(
                 f"{language.title()} Slide 1 audio is {durations[0]:.2f}s; it must be no more than 5.2 seconds. "
