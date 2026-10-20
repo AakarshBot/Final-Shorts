@@ -2122,6 +2122,93 @@ def write_script(
         ) from second_error
 
     valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+    if (
+        not valid
+        and reason == "Slide 1 must contain fewer than 14 words."
+        and norm_profile != "top_5"
+        and language_key not in {"hindi", "telugu", "hi", "te"}
+    ):
+        repair_errors = []
+        for repair_attempt, repair_model in enumerate((MODELS[0], MODELS[1]), start=1):
+            current_scenes = rewritten.get("script") if isinstance(rewritten, dict) else None
+            if (
+                not isinstance(current_scenes, list)
+                or not current_scenes
+                or not isinstance(current_scenes[0], dict)
+            ):
+                break
+
+            current_word_count = _words(current_scenes[0].get("voiceover"))
+            targeted_instruction = (
+                instruction
+                + "\n\nTARGETED SLIDE 1 WORD-COUNT RECOVERY "
+                + f"(ATTEMPT {repair_attempt}/2)\n"
+                + "The primary draft and full-script rewrite both failed this exact validation rule. "
+                + f"Slide 1 currently contains {current_word_count} words according to the same counter used by the validator; the absolute maximum is {MAX_SLIDE_ONE_WORDS}. "
+                + "Rewrite only script[0].voiceover as one complete, natural sentence in the requested language. "
+                + "Keep the exact subject_name text verbatim in that opening sentence. "
+                + "Preserve the main confirmed point and add no facts. "
+                + "Do not alter any other field, slide, slide count, metadata, or JSON key. "
+                + "Aim for 8–11 counted words to leave a safety margin; never exceed 13. "
+                + "Return the complete JSON package only, without Markdown or explanation.\n"
+            )
+            targeted_source = (
+                source
+                + "\n\nCURRENT SCRIPT PACKAGE TO REPAIR (JSON; edit only script[0].voiceover):\n"
+                + json.dumps(rewritten, ensure_ascii=False)
+            )
+            try:
+                repaired = _prepare_generated_script(
+                    _request(repair_model, targeted_instruction, targeted_source),
+                    language_key,
+                )
+            except Exception as repair_error:
+                repair_errors.append(
+                    f"{repair_model}: {type(repair_error).__name__}: {repair_error}"
+                )
+                continue
+
+            repaired_scenes = repaired.get("script") if isinstance(repaired, dict) else None
+            if (
+                not isinstance(repaired_scenes, list)
+                or not repaired_scenes
+                or not isinstance(repaired_scenes[0], dict)
+                or not _clean(repaired_scenes[0].get("voiceover"))
+            ):
+                repair_errors.append(
+                    f"{repair_model}: response did not contain a usable Slide 1 voiceover"
+                )
+                continue
+
+            # Apply only the repaired opening. Preserve every other field from the
+            # last validly structured draft instead of trusting model-side changes.
+            rewritten["script"][0]["voiceover"] = _clean(repaired_scenes[0]["voiceover"])
+            valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+            if valid:
+                return finish(rewritten, repair_model)
+            if reason != "Slide 1 must contain fewer than 14 words.":
+                break
+
+        if not valid and reason == "Slide 1 must contain fewer than 14 words.":
+            final_scenes = rewritten.get("script") if isinstance(rewritten, dict) else None
+            final_count = (
+                _words(final_scenes[0].get("voiceover"))
+                if isinstance(final_scenes, list)
+                and final_scenes
+                and isinstance(final_scenes[0], dict)
+                else 0
+            )
+            detail = (
+                f"Slide 1 still contains {final_count} counted words after two targeted repairs; "
+                f"it must contain {MAX_SLIDE_ONE_WORDS} or fewer."
+            )
+            if repair_errors:
+                detail += " Targeted repair request errors: " + " | ".join(repair_errors)
+            raise RuntimeError(
+                "Script generation failed after hidden rewrite and targeted Slide 1 recovery: "
+                + detail
+            )
+
     if not valid and _is_indic_timing_issue(reason, language_key):
         timing_instruction = (
             instruction

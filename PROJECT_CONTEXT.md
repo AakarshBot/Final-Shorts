@@ -497,8 +497,9 @@ Unified Generation & Validation Architecture:
 2. For Deep-Dive and YT Trends, generates 3 distinct editorial angles first. The chosen angle guides script generation.
 3. Generates complete script draft with `openai/gpt-oss-120b`.
 4. Performs strict local validation (scene count, word limits, duration bounds, filler/bait prohibition).
-5. If validation fails, performs exactly one hidden complete rewrite with `openai/gpt-oss-20b` targeting the exact validation error.
-6. Never exposes an invalid draft to Manual QC.
+5. If validation fails, performs one hidden complete rewrite with `openai/gpt-oss-20b` targeting the exact validation error.
+6. If a non-Top-5 English Slide 1 still exceeds 13 counted words, performs up to two additional, bounded, count-aware repairs of Slide 1 only; all other script fields stay intact, and the same local validator must pass before the draft is returned.
+7. Never exposes an invalid draft to Manual QC.
 
 Publish Metadata Handoff:
 - Standard non-Top-5 `headline`: crisp dashboard-only metadata with no word-count limit; never attached to the Short. Top-5's six-slide package headlines and cards remain unchanged.
