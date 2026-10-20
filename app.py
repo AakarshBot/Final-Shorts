@@ -3,6 +3,7 @@ import base64
 import hashlib
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from dataclasses import replace
 from PIL import Image, ImageOps
@@ -15,6 +16,13 @@ load_dotenv(Path(__file__).resolve().with_name(".env"), override=False)
 
 
 st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
+
+
+@st.cache_resource(show_spinner=False)
+def _live_background_executor():
+    """Reuse the Live worker pool across Streamlit reruns."""
+    return ThreadPoolExecutor(max_workers=6, thread_name_prefix="final-shorts-live")
+
 
 VISUAL_OPTIONS = (
     "Option 1 · Automatic Scraper",
@@ -4205,6 +4213,13 @@ def _live_story_key(topic) -> str:
         f"{topic.title}|{topic.url}".encode("utf-8")
     ).hexdigest()[:12]
 
+def _live_current_story_key():
+    topics = st.session_state.get("live_topics") or []
+    selected_index = st.session_state.get("live_selected_topic")
+    if selected_index is None or not 0 <= selected_index < len(topics):
+        return None
+    return _live_story_key(topics[selected_index])
+
 
 def _live_reset_downstream():
     for key, value in {
@@ -4224,10 +4239,33 @@ def _live_reset_downstream():
         "live_approved_audio": None,
         "live_subtitle_data": None,
         "live_handoff_error": "",
+        "live_audio_future": None,
+        "live_audio_status": "idle",
+        "live_audio_error": "",
+        "live_audio_job_story_key": None,
         "live_visual_result": None,
+        "live_visual_future": None,
+        "live_visual_status": "idle",
+        "live_visual_error": "",
+        "live_visual_job_story_key": None,
         "live_manual_visual_result": None,
+        "live_manual_visual_future": None,
+        "live_manual_visual_status": "idle",
+        "live_manual_visual_error": "",
+        "live_manual_visual_job_query": "",
+        "live_manual_visual_job_story_key": None,
         "live_real_image_result": None,
+        "live_real_image_future": None,
+        "live_real_image_status": "idle",
+        "live_real_image_error": "",
+        "live_real_image_job_query": "",
+        "live_real_image_job_story_key": None,
         "live_ai_image_result": None,
+        "live_ai_image_future": None,
+        "live_ai_image_status": "idle",
+        "live_ai_image_error": "",
+        "live_ai_image_job_query": "",
+        "live_ai_image_job_story_key": None,
         "live_manual_subject_cutout": {},
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
@@ -4686,60 +4724,100 @@ def _live_generate_script(
 
 
 def _live_scrape_automatic_visuals():
+    """Queue the selected-story scraper once; never wait for browser/network work in Streamlit."""
     selected_index = st.session_state.get("live_selected_topic")
     topics = st.session_state.get("live_topics") or []
     script = st.session_state.get("live_script_data")
+    result = st.session_state.get("live_visual_result")
+    status = st.session_state.get("live_visual_status", "idle")
+    if result is not None or status == "running":
+        return result
     if selected_index is None or not 0 <= selected_index < len(topics):
         raise ValueError("No valid Live story is selected.")
     if not isinstance(script, dict):
         raise ValueError("Generate the Live Scriptwriter result before scraping visuals.")
 
-    story = _visual_story_for_topic(
-        topics[selected_index],
-        script,
-    )
+    story = _visual_story_for_topic(topics[selected_index], script)
     from visual_fetcher import crawl_visuals
 
-    st.session_state.live_visual_result = crawl_visuals(story)
-    return st.session_state.live_visual_result
+    st.session_state.live_visual_error = ""
+    st.session_state.live_visual_status = "running"
+    st.session_state.live_visual_job_story_key = _live_story_key(topics[selected_index])
+    st.session_state.live_visual_future = _live_background_executor().submit(crawl_visuals, story)
+    return None
 
 
-def _live_generate_audio_and_subtitles():
-    approved_script = st.session_state.live_approved_script
-    if not isinstance(approved_script, dict):
-        return
-
-    st.session_state.live_handoff_error = ""
-    st.session_state.live_audio_data = None
-    st.session_state.live_approved_audio = None
-    st.session_state.live_subtitle_data = None
-
-    from audio import approve_audio, generate_audio, resolve_chatterbox_reference
+def _live_generate_audio_and_subtitles(approved_script, selected_engine, reference, model_version):
+    """Background worker: create the audio and subtitle handoffs without touching Streamlit state."""
+    from audio import approve_audio, generate_audio
     from subtitles import generate_subtitles
 
-    selected_engine = (
-        "edge"
-        if st.session_state.get("live_audio_engine_choice_v2") == "Edge-TTS Neural"
-        else "chatterbox"
-    )
-    reference = (
-        resolve_chatterbox_reference(st.session_state.get("live_audio_voice_reference"))
-        if selected_engine == "chatterbox"
-        else None
-    )
     audio = generate_audio(
         approved_script,
         output_dir="output/live/audio",
         engine=selected_engine,
         reference=reference,
-        model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold(),
+        model_version=model_version,
     )
     approved_audio = approve_audio(audio)
     subtitles = generate_subtitles(approved_script, approved_audio)
+    return {
+        "audio": audio,
+        "approved_audio": approved_audio,
+        "subtitles": subtitles,
+    }
 
-    st.session_state.live_audio_data = audio
-    st.session_state.live_approved_audio = approved_audio
-    st.session_state.live_subtitle_data = subtitles
+
+def _poll_live_background_jobs():
+    """Collect finished Live work only during ordinary dashboard runs; never poll/rerun on a timer."""
+    topics = st.session_state.get("live_topics") or []
+    selected_index = st.session_state.get("live_selected_topic")
+    active_story_key = None
+    if selected_index is not None and 0 <= selected_index < len(topics):
+        active_story_key = _live_story_key(topics[selected_index])
+
+    jobs = (
+        ("live_audio_future", "live_audio_status", "live_audio_error", "live_audio_job_story_key", "audio"),
+        ("live_visual_future", "live_visual_status", "live_visual_error", "live_visual_job_story_key", "live_visual_result"),
+        ("live_manual_visual_future", "live_manual_visual_status", "live_manual_visual_error", "live_manual_visual_job_story_key", "live_manual_visual_result"),
+        ("live_real_image_future", "live_real_image_status", "live_real_image_error", "live_real_image_job_story_key", "live_real_image_result"),
+        ("live_ai_image_future", "live_ai_image_status", "live_ai_image_error", "live_ai_image_job_story_key", "live_ai_image_result"),
+    )
+    for future_key, status_key, error_key, story_key_key, destination in jobs:
+        future = st.session_state.get(future_key)
+        if future is None or not future.done():
+            continue
+        if st.session_state.get(story_key_key) and st.session_state.get(story_key_key) != active_story_key:
+            st.session_state[future_key] = None
+            st.session_state[status_key] = "idle"
+            continue
+        try:
+            result = future.result()
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+            st.session_state[error_key] = message
+            if destination == "audio":
+                st.session_state.live_handoff_error = message
+                st.session_state.live_audio_status = "failed"
+            else:
+                st.session_state[destination] = {"error": message}
+                st.session_state[status_key] = "failed"
+        else:
+            st.session_state[error_key] = ""
+            if destination == "audio":
+                st.session_state.live_audio_data = result["audio"]
+                st.session_state.live_approved_audio = result["approved_audio"]
+                st.session_state.live_subtitle_data = result["subtitles"]
+                st.session_state.live_handoff_error = ""
+                st.session_state.live_audio_status = "complete"
+            else:
+                st.session_state[destination] = result
+                st.session_state[status_key] = "failed" if (
+                    isinstance(result, dict) and result.get("error")
+                ) else "complete"
+        st.session_state[future_key] = None
+
+
 
 
 @st.cache_data(max_entries=128, show_spinner=False)
@@ -5226,15 +5304,27 @@ def _render_two_pane_visual_workspace(
             if live:
                 if fetcher_mode.startswith("Option 1"):
                     result = st.session_state.get("live_visual_result") or {}
-                    if result.get("error"):
+                    status = st.session_state.get("live_visual_status", "idle")
+                    if not result:
+                        if status == "running":
+                            st.info("Automatic scrape is running in the background. Continue with Real Image Search, Manual Scraper or Card Studio; its pool will appear here when you return.")
+                        elif status == "failed":
+                            st.error(st.session_state.get("live_visual_error") or "Automatic scraping failed.")
+                            if st.button("Retry automatic scrape", type="primary", width="stretch", key="live-retry-auto-visuals"):
+                                st.session_state.live_visual_result = None
+                                st.session_state.live_visual_future = None
+                                st.session_state.live_visual_status = "idle"
+                                st.session_state.live_visual_error = ""
+                                st.rerun()
+                        else:
+                            st.info("Automatic scraper is ready to start. It will run in the background.")
+                    elif result.get("error"):
                         st.error(result["error"])
-                        if st.button(
-                            "Retry automatic scrape",
-                            type="primary",
-                            width="stretch",
-                            key="live-retry-auto-visuals",
-                        ):
+                        if st.button("Retry automatic scrape", type="primary", width="stretch", key="live-retry-auto-visuals"):
                             st.session_state.live_visual_result = None
+                            st.session_state.live_visual_future = None
+                            st.session_state.live_visual_status = "idle"
+                            st.session_state.live_visual_error = ""
                             st.rerun()
                     else:
                         asset_count = len(result.get("assets") or [])
@@ -5250,6 +5340,9 @@ def _render_two_pane_visual_workspace(
                                 key="live-retry-auto-visuals-underfilled",
                             ):
                                 st.session_state.live_visual_result = None
+                                st.session_state.live_visual_future = None
+                                st.session_state.live_visual_status = "idle"
+                                st.session_state.live_visual_error = ""
                                 st.rerun()
                         st.caption(
                             f'{len(result.get("assets") or [])} images · '
@@ -5262,7 +5355,7 @@ def _render_two_pane_visual_workspace(
                             live=True,
                         )
                 elif fetcher_mode.startswith("Option 2"):
-                    st.caption("Manual query only. This searches publisher pages and scrapes their images.")
+                    st.caption("Manual query only. The query is expanded carefully and publisher-page search is limited to the last five years.")
                     with st.form("live-manual-crawler-form"):
                         query = st.text_input(
                             "Manual query",
@@ -5273,27 +5366,31 @@ def _render_two_pane_visual_workspace(
                             "Run manual scrape",
                             type="primary",
                             width="stretch",
+                            disabled=st.session_state.get("live_manual_visual_status") == "running",
                         )
                     if run:
                         query = query.strip()
                         if not query:
                             st.warning("Enter a query first.")
                         else:
-                            with st.spinner("Searching and scraping publisher pages…"):
-                                try:
-                                    from visual_fetcher import manual_crawl_visuals
-                                    st.session_state.live_manual_visual_result = manual_crawl_visuals(query)
-                                except Exception as exc:
-                                    st.session_state.live_manual_visual_result = {
-                                        "error": f"{type(exc).__name__}: {exc}"
-                                    }
+                            from visual_fetcher import manual_crawl_visuals
+                            st.session_state.live_manual_visual_result = None
+                            st.session_state.live_manual_visual_error = ""
+                            st.session_state.live_manual_visual_job_query = query
+                            st.session_state.live_manual_visual_job_story_key = _live_current_story_key()
+                            st.session_state.live_manual_visual_future = _live_background_executor().submit(
+                                manual_crawl_visuals, query
+                            )
+                            st.session_state.live_manual_visual_status = "running"
                     result = st.session_state.get("live_manual_visual_result") or {}
-                    if result.get("error"):
+                    if st.session_state.get("live_manual_visual_status") == "running":
+                        st.info(f"Manual scraper is searching publisher pages for '{st.session_state.get('live_manual_visual_job_query')}'. You can continue editing cards while it runs.")
+                    elif result.get("error"):
                         st.error(result["error"])
                     elif result:
                         st.caption(
                             f'{len(result.get("assets") or [])} images · '
-                            f'{int(result.get("pages_scraped") or 0)} pages'
+                            f'{int(result.get("pages_scraped") or 0)} pages · last five years'
                         )
                         _render_visual_asset_pool(
                             list(result.get("assets") or []),
@@ -5302,7 +5399,7 @@ def _render_two_pane_visual_workspace(
                             live=True,
                         )
                 elif fetcher_mode.startswith("Option 3"):
-                    st.caption("Manual query only. Searches the configured real-image providers.")
+                    st.caption("Manual query only. Searches the configured real-image providers in the background.")
                     with st.form("live-real-image-form"):
                         query = st.text_input(
                             "Manual query",
@@ -5313,22 +5410,26 @@ def _render_two_pane_visual_workspace(
                             "Search real images",
                             type="primary",
                             width="stretch",
+                            disabled=st.session_state.get("live_real_image_status") == "running",
                         )
                     if run:
                         query = query.strip()
                         if not query:
                             st.warning("Enter a query first.")
                         else:
-                            with st.spinner("Searching real-image sources…"):
-                                try:
-                                    from visual_search import search_images
-                                    st.session_state.live_real_image_result = search_images(query)
-                                except Exception as exc:
-                                    st.session_state.live_real_image_result = {
-                                        "error": f"{type(exc).__name__}: {exc}"
-                                    }
+                            from visual_search import search_images
+                            st.session_state.live_real_image_result = None
+                            st.session_state.live_real_image_error = ""
+                            st.session_state.live_real_image_job_query = query
+                            st.session_state.live_real_image_job_story_key = _live_current_story_key()
+                            st.session_state.live_real_image_future = _live_background_executor().submit(
+                                search_images, query
+                            )
+                            st.session_state.live_real_image_status = "running"
                     result = st.session_state.get("live_real_image_result") or {}
-                    if result.get("error"):
+                    if st.session_state.get("live_real_image_status") == "running":
+                        st.info(f"Real-image search is running for '{st.session_state.get('live_real_image_job_query')}'. Continue card design; results will appear here when ready.")
+                    elif result.get("error"):
                         st.error(result["error"])
                     elif result:
                         st.caption(f'{len(result.get("assets") or [])} images')
@@ -5379,15 +5480,18 @@ def _render_two_pane_visual_workspace(
                             last_query = query if run else str(result.get("query") or "").strip()
                             if last_query:
                                 if st.button("Search Real Images for this query instead →", type="primary", key="live-ai-fallback-to-real-search"):
-                                    with st.spinner(f"Searching real photography for '{last_query}'…"):
-                                        try:
-                                            from visual_search import search_images
-                                            st.session_state.live_real_image_result = search_images(last_query)
-                                            st.session_state.live_visual_mode = "Option 3 · Real Image Search"
-                                            st.session_state.live_ai_image_result = None
-                                            st.rerun()
-                                        except Exception as exc:
-                                            st.error(f"Search failed: {exc}")
+                                    from visual_search import search_images
+                                    st.session_state.live_real_image_result = None
+                                    st.session_state.live_real_image_error = ""
+                                    st.session_state.live_real_image_job_query = last_query
+                                    st.session_state.live_real_image_job_story_key = _live_current_story_key()
+                                    st.session_state.live_real_image_future = _live_background_executor().submit(
+                                        search_images, last_query
+                                    )
+                                    st.session_state.live_real_image_status = "running"
+                                    st.session_state.live_visual_option = "Option 3 · Real Image Search"
+                                    st.session_state.live_ai_image_result = None
+                                    st.rerun()
                         else:
                             st.caption(f'{len(assets)} images')
                             _render_visual_asset_pool(
@@ -5469,6 +5573,24 @@ def _render_live_visuals(slide_count: int):
         </style>""",
         unsafe_allow_html=True,
     )
+    audio_ready = (
+        isinstance(st.session_state.get("live_approved_audio"), dict)
+        and isinstance(st.session_state.get("live_subtitle_data"), dict)
+    )
+    audio_status = st.session_state.get("live_audio_status", "idle")
+    if audio_status == "running":
+        st.info("Audio + Subtitles are still being generated in the background. Visual QC is independent; final rendering will unlock when the handoff is ready.")
+    elif audio_status == "failed":
+        st.error("Background Audio + Subtitles failed: " + str(st.session_state.get("live_audio_error") or st.session_state.get("live_handoff_error") or "Unknown error"))
+        if st.button("Return to Audio + Subs to retry", key="live-visuals-return-audio-retry"):
+            st.session_state.live_stage = "03 · Audio + Subs"
+            st.rerun()
+    elif not audio_ready:
+        st.info("Visual QC is available now. Start Audio + Subtitles from the Audio stage before final rendering.")
+        if st.button("Open Audio + Subs", key="live-visuals-open-audio"):
+            st.session_state.live_stage = "03 · Audio + Subs"
+            st.rerun()
+
     if st.session_state.live_visuals_approved:
         st.success("Visuals approved and final render completed.")
         st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
@@ -5516,6 +5638,7 @@ def _render_live_visuals(slide_count: int):
                 type="primary",
                 width="stretch",
                 key="live-approve-visuals-top",
+                disabled=not audio_ready,
             ):
                 assigned_items = [
                     st.session_state.live_visual_assignments[slide]
@@ -5562,6 +5685,7 @@ def _render_live_visuals(slide_count: int):
                 type="primary",
                 width="stretch",
                 key="live-approve-visuals",
+                disabled=not audio_ready,
             ):
                 assigned = [
                     st.session_state.live_visual_assignments[slide]
@@ -6890,6 +7014,7 @@ def render_live_top5():
 
 
 def render_live_dashboard():
+    _poll_live_background_jobs()
     left, right = st.columns([1.4, .45], gap="large")
     with left:
         st.markdown(
@@ -7267,7 +7392,7 @@ def render_live_dashboard():
         ) or "Chatterbox (Voice Cloning)"
         live_language = str(script.get("language_used") or "english").strip().casefold()
         is_live_chatterbox = "Chatterbox" in live_audio_engine_choice
-        live_chatterbox_model_choice = st.selectbox(
+        st.selectbox(
             "Chatterbox model",
             ["Turbo", "Full"],
             index=0,
@@ -7275,12 +7400,13 @@ def render_live_dashboard():
             disabled=not is_live_chatterbox,
         )
         if is_live_chatterbox:
-            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
+            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take. Model weights stay in Hugging Face's disk cache between runs; only uncached files need downloading.")
         if is_live_chatterbox and live_language not in {"english", "en"}:
             st.warning("Chatterbox Full and Turbo are English-only. Select Edge-TTS Neural for Hindi or Telugu narration.")
         live_reference_ready = True
+        reference = None
         if is_live_chatterbox:
-            from audio import CHATTERBOX_VOICE_REFERENCES
+            from audio import CHATTERBOX_VOICE_REFERENCES, resolve_chatterbox_reference
             live_reference_label = st.selectbox(
                 "Narrator voice",
                 list(CHATTERBOX_VOICE_REFERENCES),
@@ -7293,54 +7419,77 @@ def render_live_dashboard():
                 + (f"reference ready ({live_reference_path.name})" if live_reference_ready
                    else f"missing {live_reference_path.name} — place it in the factory root")
             )
-        if not isinstance(st.session_state.live_approved_audio, dict) or not isinstance(st.session_state.live_subtitle_data, dict):
-            if st.session_state.live_handoff_error:
-                st.error(st.session_state.live_handoff_error)
-            if st.button(
-                "Retry Audio / Subtitles" if st.session_state.live_handoff_error else "Generate Audio + Subtitles",
-                type="primary",
-                width="stretch",
-                key="live-generate-handoffs-stage",
-                disabled=(is_live_chatterbox and live_language not in {"english", "en"}) or (is_live_chatterbox and not live_reference_ready),
-            ):
-                st.session_state.live_handoff_error = ""
-                st.session_state.live_approved_audio = None
-                st.session_state.live_subtitle_data = None
-                try:
-                    with st.spinner(
-                        "Preparing Chatterbox if needed, then generating Audio and Subtitles…"
-                        if is_live_chatterbox else "Generating Audio and Subtitles…"
-                    ):
-                        _live_generate_audio_and_subtitles()
-                    st.session_state.live_stage = "04 · Visuals + Render"
-                    st.session_state.live_pipeline_notice = {
-                        "confirmed": "Audio + Subtitles ready",
-                        "next": "Moving to Visuals + Render.",
-                    }
-                except (RuntimeError, ValueError, OSError) as exc:
-                    st.session_state.live_handoff_error = str(exc)
+            if live_reference_ready:
+                reference = resolve_chatterbox_reference(live_reference_label)
+
+        audio_ready = (
+            isinstance(st.session_state.get("live_approved_audio"), dict)
+            and isinstance(st.session_state.get("live_subtitle_data"), dict)
+        )
+        audio_status = st.session_state.get("live_audio_status", "idle")
+        if audio_status == "running":
+            st.info("Audio + Subtitles are generating in the background. You can continue in Visuals + Render; this page will pick up the completed handoff the next time the dashboard runs.")
+            if st.button("Continue to Visual QC", type="primary", width="stretch", key="live-audio-continue-visuals"):
+                st.session_state.live_stage = "04 · Visuals + Render"
                 st.rerun()
             return
-        st.success("Audio and subtitles are approved. Moving to Visuals.")
+        if audio_ready:
+            st.success("Audio and subtitles are ready.")
+            if st.button("Continue to Visual QC", type="primary", width="stretch", key="live-audio-ready-visuals"):
+                st.session_state.live_stage = "04 · Visuals + Render"
+                st.rerun()
+            return
+
+        audio_error = st.session_state.get("live_audio_error") or st.session_state.get("live_handoff_error")
+        if audio_error:
+            st.error(audio_error)
+        button_label = "Retry Audio + Subtitles in Background" if audio_status == "failed" else "Start Audio + Subtitles in Background"
+        if st.button(
+            button_label,
+            type="primary",
+            width="stretch",
+            key="live-generate-handoffs-stage",
+            disabled=(is_live_chatterbox and live_language not in {"english", "en"}) or (is_live_chatterbox and not live_reference_ready),
+        ):
+            from copy import deepcopy
+            st.session_state.live_audio_error = ""
+            st.session_state.live_handoff_error = ""
+            st.session_state.live_audio_data = None
+            st.session_state.live_approved_audio = None
+            st.session_state.live_subtitle_data = None
+            approved_script = deepcopy(st.session_state.live_approved_script)
+            selected_engine = "chatterbox" if is_live_chatterbox else "edge"
+            model_version = str(st.session_state.get("live_audio_chatterbox_model", "Turbo")).casefold()
+            selected_topic = st.session_state.live_topics[st.session_state.live_selected_topic]
+            st.session_state.live_audio_job_story_key = _live_story_key(selected_topic)
+            st.session_state.live_audio_future = _live_background_executor().submit(
+                _live_generate_audio_and_subtitles,
+                approved_script,
+                selected_engine,
+                reference,
+                model_version,
+            )
+            st.session_state.live_audio_status = "running"
+            st.session_state.live_stage = "04 · Visuals + Render"
+            st.session_state.live_pipeline_notice = {
+                "confirmed": "Audio + Subtitles started in the background",
+                "next": "Continue Visual QC while narration is produced; rendering will unlock automatically when audio and subtitles are ready.",
+            }
+            st.rerun()
         return
 
     if st.session_state.live_stage == "04 · Visuals + Render":
-        script = st.session_state.live_approved_script
-        audio_ready = isinstance(st.session_state.live_approved_audio, dict)
-        subtitle_ready = isinstance(st.session_state.live_subtitle_data, dict)
-        if not audio_ready or not subtitle_ready:
-            st.warning("Audio and subtitle handoffs are not ready yet.")
-            return
-
-        visual_result = st.session_state.get("live_visual_result")
-        if visual_result is None:
-            with st.spinner("Scraping the selected story and related publisher pages…"):
-                try:
-                    _live_scrape_automatic_visuals()
-                except Exception as exc:
-                    st.session_state.live_visual_result = {
-                        "error": f"{type(exc).__name__}: {exc}"
-                    }
+        script = st.session_state.live_approved_script or st.session_state.live_script_data
+        if (
+            st.session_state.get("live_visual_result") is None
+            and st.session_state.get("live_visual_status", "idle") == "idle"
+        ):
+            try:
+                _live_scrape_automatic_visuals()
+            except Exception as exc:
+                st.session_state.live_visual_error = f"{type(exc).__name__}: {exc}"
+                st.session_state.live_visual_result = {"error": st.session_state.live_visual_error}
+                st.session_state.live_visual_status = "failed"
         _render_live_visuals(len(script.get("script") or []) if isinstance(script, dict) else 0)
         return
 
