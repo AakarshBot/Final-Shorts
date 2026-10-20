@@ -1,6 +1,17 @@
 import uploader
 
 
+def test_youtube_oauth_requests_readonly_scope_for_upload_history():
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[1] / "authorize_youtube.py"
+    oauth_code = source.read_text(encoding="utf-8")
+
+    assert '"https://www.googleapis.com/auth/youtube.upload"' in oauth_code
+    assert '"https://www.googleapis.com/auth/youtube.force-ssl"' in oauth_code
+    assert '"https://www.googleapis.com/auth/youtube.readonly"' in oauth_code
+
+
 def test_compose_description_adds_hashtags():
     result = uploader.compose_description(
         "A quick cricket update.",
@@ -17,6 +28,200 @@ def test_compose_description_accepts_editable_text():
     )
 
     assert result.endswith("#Cricket #IndiaCricket")
+
+
+def test_upload_originality_audit_starts_with_clear_baseline(tmp_path):
+    record = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "A specific and original sports explanation."}]},
+        "A specific title",
+    )
+
+    report = uploader.assess_upload_distinctiveness(record, tmp_path / "history.json")
+
+    assert report["level"] == "baseline"
+    assert "cannot assess older videos" in report["message"]
+
+
+def test_upload_originality_audit_warns_on_repeated_narration_and_source(tmp_path):
+    history_path = tmp_path / "history.json"
+    script = {
+        "source_title": "Confirmed player fitness update",
+        "story_angle": "selection consequences",
+        "script": [
+            {"voiceover": "Shubman Gill's fitness now affects India's next selection decision."},
+            {"voiceover": "The medical review will determine whether he is available for the next ODI."},
+        ],
+    }
+    first = uploader.build_upload_originality_record(
+        script,
+        "Shubman Gill fitness and India selection",
+        source_url="https://example.com/cricket/story?id=1",
+        visuals=[{"bytes": b"same visual bytes"}],
+    )
+    assert uploader.record_upload_success(
+        first,
+        {"video_id": "previous123", "url": "https://youtube.com/watch?v=previous123", "privacy_status": "public"},
+        history_path,
+    )
+
+    second = uploader.build_upload_originality_record(
+        script,
+        "India selection after Gill fitness update",
+        source_url="https://example.com/cricket/story?id=2",
+        visuals=[{"bytes": b"same visual bytes"}],
+    )
+    report = uploader.assess_upload_distinctiveness(second, history_path)
+
+    assert report["level"] == "warning"
+    assert report["closest"]["video_id"] == "previous123"
+    assert report["closest"]["narration_similarity"] == 1.0
+    assert report["closest"]["visual_overlap"] == 1.0
+
+
+def test_upload_originality_audit_does_not_flag_materially_different_story(tmp_path):
+    history_path = tmp_path / "history.json"
+    first = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "The captain changed the field to target a specific weakness."}]},
+        "The tactical switch that decided the contest",
+        source_url="https://example.com/story-a",
+    )
+    uploader.record_upload_success(
+        first,
+        {"video_id": "previous456", "url": "https://youtube.com/watch?v=previous456", "privacy_status": "private"},
+        history_path,
+    )
+    second = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "A young sprinter broke the championship record with a powerful finish."}]},
+        "A new championship record",
+        source_url="https://example.com/story-b",
+    )
+
+    report = uploader.assess_upload_distinctiveness(second, history_path)
+
+    assert report["level"] == "ok"
+    assert "advisory" in report["message"]
+
+
+def test_upload_originality_audit_reviews_metadata_only_channel_import(tmp_path):
+    history_path = tmp_path / "history.json"
+    existing = {
+        "title": "Gill injury update and India selection decision",
+        "source_title": "Gill injury update and India selection decision",
+        "source_url": "",
+        "story_angle": "",
+        "narration": "",
+        "metadata_text": "Gill injury update and India selection decision. The fitness report could decide India's next ODI selection.",
+        "visual_hashes": [],
+        "format": "existing-channel-metadata",
+        "video_id": "old001",
+        "url": "https://www.youtube.com/watch?v=old001",
+    }
+    assert uploader.record_upload_success(
+        existing,
+        {"video_id": "old001", "url": "https://www.youtube.com/watch?v=old001", "privacy_status": "public"},
+        history_path,
+    )
+
+    current = uploader.build_upload_originality_record(
+        {
+            "source_title": "Gill injury report shapes India's ODI selection",
+            "seo_description": "The fitness report could decide India's next ODI selection.",
+            "script": [{"voiceover": "A completely new tactical explanation with fresh context."}],
+        },
+        "Gill injury update and India selection decision",
+        description="The fitness report could decide India's next ODI selection.",
+    )
+    report = uploader.assess_upload_distinctiveness(current, history_path)
+
+    assert report["level"] == "review"
+    assert report["closest"]["metadata_only_history"] is True
+    assert "metadata-only review signal" in report["message"]
+
+
+def test_seed_existing_channel_upload_history_imports_latest_fifty_oldest_to_newest(tmp_path):
+    history_path = tmp_path / "history.json"
+
+    class Request:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self, num_retries=0):
+            return self.payload
+
+    class Channels:
+        def list(self, **kwargs):
+            assert kwargs["mine"] is True
+            assert kwargs["maxResults"] == 1
+            return Request({
+                "items": [{
+                    "contentDetails": {
+                        "relatedPlaylists": {"uploads": "uploads123"}
+                    }
+                }]
+            })
+
+    class PlaylistItems:
+        def list(self, **kwargs):
+            assert kwargs["playlistId"] == "uploads123"
+            assert kwargs["maxResults"] == 50
+            return Request({
+                "items": [
+                    {
+                        "snippet": {
+                            "title": "Newest upload",
+                            "description": "A detailed and unique description.",
+                            "publishedAt": "2026-10-19T10:00:00Z",
+                            "resourceId": {"videoId": "new001"},
+                        },
+                        "contentDetails": {"videoId": "new001"},
+                    },
+                    {
+                        "snippet": {
+                            "title": "Oldest upload",
+                            "description": "Another detailed description.",
+                            "publishedAt": "2026-08-01T10:00:00Z",
+                            "resourceId": {"videoId": "old001"},
+                        },
+                        "contentDetails": {"videoId": "old001"},
+                    },
+                ]
+            })
+
+    class FakeYoutube:
+        def channels(self):
+            return Channels()
+
+        def playlistItems(self):
+            return PlaylistItems()
+
+    result = uploader.seed_existing_channel_upload_history(history_path, youtube=FakeYoutube())
+
+    assert result["seeded_count"] == 2
+    entries = uploader._read_upload_history(history_path)
+    assert [entry["video_id"] for entry in entries] == ["old001", "new001"]
+    assert all(entry["format"] == "existing-channel-metadata" for entry in entries)
+    assert all(not entry["narration"] for entry in entries)
+    assert "metadata only" in result["message"]
+
+
+def test_seed_existing_channel_upload_history_is_idempotent(tmp_path):
+    history_path = tmp_path / "history.json"
+
+    class FakeYoutube:
+        def channels(self):
+            raise AssertionError("The channel should not be queried again after seed.")
+
+    history = [{
+        "video_id": "already-seeded",
+        "format": "existing-channel-metadata",
+        "title": "Existing upload",
+    }]
+    history_path.write_text(__import__("json").dumps(history), encoding="utf-8")
+
+    result = uploader.seed_existing_channel_upload_history(history_path, youtube=FakeYoutube())
+
+    assert result["seeded_count"] == 1
+    assert "already included" in result["message"]
 
 
 def test_upload_rejects_unlisted(tmp_path):
@@ -219,3 +424,174 @@ def test_public_upload_without_comment_does_not_require_comment_scope(monkeypatc
 
     assert result["video_id"] == "abc123"
     assert captured["require_comments"] is False
+
+
+def test_upload_originality_audit_catches_resized_reencoded_image_repeat(tmp_path):
+    from io import BytesIO
+    from PIL import Image, ImageDraw
+
+    source = Image.new("RGB", (360, 640), "black")
+    draw = ImageDraw.Draw(source)
+    draw.rectangle((28, 82, 330, 515), fill="white")
+    draw.rectangle((75, 140, 285, 465), fill="black")
+    draw.rectangle((110, 180, 250, 420), fill="white")
+    original = BytesIO()
+    source.save(original, format="PNG")
+
+    changed_size = source.resize((180, 320), Image.Resampling.LANCZOS)
+    recompressed = BytesIO()
+    changed_size.save(recompressed, format="JPEG", quality=72)
+
+    first = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "A tactical analysis of one match."}]},
+        "Tactical breakdown of the match",
+        visuals=[{"bytes": original.getvalue()}],
+    )
+    history_path = tmp_path / "history.json"
+    uploader.record_upload_success(
+        first,
+        {"video_id": "visual-old", "url": "https://youtube.com/watch?v=visual-old", "privacy_status": "public"},
+        history_path,
+    )
+
+    second = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "A young runner breaks a championship record."}]},
+        "A record-breaking sprint",
+        visuals=[{"bytes": recompressed.getvalue()}],
+    )
+    assert second["visual_hashes"] != first["visual_hashes"]
+    distance = sum(
+        left != right
+        for left, right in zip(
+            second["perceptual_visual_hashes"][0],
+            first["perceptual_visual_hashes"][0],
+        )
+    )
+    assert distance <= 6
+
+    report = uploader.assess_upload_distinctiveness(second, history_path)
+
+    assert report["level"] == "review"
+    assert report["closest"]["visual_overlap"] == 0.0
+    assert report["closest"]["perceptual_visual_overlap"] == 1.0
+
+
+def test_channel_seed_keeps_existing_factory_uploads_after_older_metadata(tmp_path):
+    history_path = tmp_path / "history.json"
+    uploader.record_upload_success(
+        {"title": "Latest factory story", "narration": "Latest factory narration"},
+        {"video_id": "factory-latest", "url": "https://youtube.com/watch?v=factory-latest", "privacy_status": "public"},
+        history_path,
+    )
+
+    class Request:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self, num_retries=0):
+            return self.payload
+
+    class Channels:
+        def list(self, **kwargs):
+            return Request({
+                "items": [{
+                    "contentDetails": {
+                        "relatedPlaylists": {"uploads": "uploads-seed"}
+                    }
+                }]
+            })
+
+    class PlaylistItems:
+        def list(self, **kwargs):
+            return Request({
+                "items": [
+                    {
+                        "snippet": {
+                            "title": "Newest old channel video",
+                            "description": "Existing channel description.",
+                            "publishedAt": "2026-10-10T00:00:00Z",
+                            "resourceId": {"videoId": "old-new"},
+                        },
+                        "contentDetails": {"videoId": "old-new"},
+                    },
+                    {
+                        "snippet": {
+                            "title": "Oldest channel video",
+                            "description": "Older channel description.",
+                            "publishedAt": "2026-08-01T00:00:00Z",
+                            "resourceId": {"videoId": "old-old"},
+                        },
+                        "contentDetails": {"videoId": "old-old"},
+                    },
+                ]
+            })
+
+    class FakeYoutube:
+        def channels(self):
+            return Channels()
+
+        def playlistItems(self):
+            return PlaylistItems()
+
+    seeded = uploader.seed_existing_channel_upload_history(history_path, youtube=FakeYoutube())
+
+    assert seeded["seeded_count"] == 2
+    entries = uploader._read_upload_history(history_path)
+    assert [item["video_id"] for item in entries] == ["old-old", "old-new", "factory-latest"]
+
+
+def test_upload_originality_audit_reviews_reused_editorial_angle_with_new_narration(tmp_path):
+    history_path = tmp_path / "history.json"
+    first = uploader.build_upload_originality_record(
+        {
+            "story_angle": "selection consequences",
+            "script": [{"voiceover": "Gill's fitness assessment may alter India's XI before the next ODI."}],
+        },
+        "Gill fitness and India's next ODI",
+        source_url="https://example.com/story-gill",
+    )
+    uploader.record_upload_success(
+        first,
+        {"video_id": "angle-old", "url": "https://youtube.com/watch?v=angle-old", "privacy_status": "public"},
+        history_path,
+    )
+
+    second = uploader.build_upload_originality_record(
+        {
+            "story_angle": "selection consequences",
+            "script": [{"voiceover": "A new bowling combination exposed the opposition's weakness."}],
+        },
+        "The tactical move that changed the match",
+        source_url="https://example.com/story-bowling",
+    )
+    report = uploader.assess_upload_distinctiveness(second, history_path)
+
+    assert report["level"] == "review"
+    assert report["closest"]["story_angle_similarity"] == 1.0
+    assert report["closest"]["narration_similarity"] < 0.62
+
+
+def test_upload_originality_audit_reviews_repeated_title_with_different_narration(tmp_path):
+    history_path = tmp_path / "history.json"
+    title = "The decision that changed the game"
+    first = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "The captain changed the field to target a specific weakness."}]},
+        title,
+        source_url="https://example.com/story-a",
+    )
+    uploader.record_upload_success(
+        first,
+        {"video_id": "title-old", "url": "https://youtube.com/watch?v=title-old", "privacy_status": "public"},
+        history_path,
+    )
+
+    second = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "A young sprinter broke the championship record with a powerful finish."}]},
+        title,
+        source_url="https://example.com/story-b",
+    )
+    report = uploader.assess_upload_distinctiveness(second, history_path)
+
+    assert report["level"] == "review"
+    assert report["closest"]["title_similarity"] == 1.0
+    assert report["closest"]["narration_similarity"] < 0.62

@@ -192,10 +192,10 @@ class LongformAudioEngine:
             {"temperature": 0.75, "cfg_weight": 0.35, "exaggeration": 0.35,
              "min_p": 0.05, "top_p": 1.0, "repetition_penalty": 1.2}
             if selected_model == "full"
-            else {"temperature": 0.80}
+            else {"temperature": 0.90, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.15}
         )
         signature_payload = {
-            "cache_version": "longform-chatterbox-grouped-continuous-v4",
+            "cache_version": "longform-chatterbox-grouped-continuous-v5-expressive-turbo",
             "model_version": selected_model,
             "texts": texts,
             "audio_texts": audio_texts,
@@ -269,11 +269,15 @@ class LongformAudioEngine:
         generated_chunks = []
         for chunk_number, (start, end) in enumerate(chunk_ranges, 1):
             chunk_text = _join_narration_texts(audio_texts[start:end])
+            chunk_seed = int(
+                hashlib.sha256(f"{signature}:{chunk_number}".encode("utf-8")).hexdigest()[:8],
+                16,
+            ) & 0x7FFFFFFF
             wav = _generate_chatterbox_take(
                 model,
                 chunk_text,
                 selected_model,
-                seed=run_number * 1000 + chunk_number,
+                seed=chunk_seed,
             )
             generated_chunks.append((start, end, wav))
 

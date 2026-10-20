@@ -34,7 +34,10 @@ MAX_CONCURRENCY = 2
 MAX_ATTEMPTS = 2
 MAX_DURATION_SECONDS = 30.0
 FIRST_SCENE_MAX_DURATION_SECONDS = 5.2
+INDIC_LEAD_CORRECTION_TARGET_SECONDS = 4.8
 CORRECTION_TARGET_SECONDS = 29.6
+MAX_CORRECTION_RATE_PERCENT = 45.0
+MAX_DELIVERY_CORRECTIONS = 3
 TOP5_SCENE_COUNT = 6
 TOP5_MAX_TOTAL_DURATION_SECONDS = 30.0
 TOP5_TOTAL_CORRECTION_TARGET_SECONDS = 29.6
@@ -408,7 +411,7 @@ def _normalise_chatterbox_model_version(value: str | None = None) -> str:
 
 
 def get_chatterbox_model(model_version: str = "turbo"):
-    """Load and reuse the chosen Chatterbox model, keeping only one model resident."""
+    """Load and reuse the chosen model; Hugging Face caches completed weights on disk."""
     global _CHATTERBOX_MODEL, _CHATTERBOX_MODEL_VERSION
     global _CHATTERBOX_CONDITIONALS_MODEL_ID, _CHATTERBOX_DEFAULT_CONDITIONALS
     global _CHATTERBOX_CONDITIONALS_CACHE
@@ -436,7 +439,47 @@ def get_chatterbox_model(model_version: str = "turbo"):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if selected == "full":
             from chatterbox.tts import ChatterboxTTS
-            loaded_model = ChatterboxTTS.from_pretrained(device=device)
+            import huggingface_hub.constants as hf_constants
+
+            previous_xet_setting = hf_constants.HF_HUB_DISABLE_XET
+            # Full's upstream loader downloads five artifacts individually but lacks
+            # Turbo's Xet recovery. Prefer the normal HTTPS/LFS cache path on the
+            # first attempt; it still reuses completed Hugging Face cache files.
+            hf_constants.HF_HUB_DISABLE_XET = True
+            try:
+                try:
+                    loaded_model = ChatterboxTTS.from_pretrained(device=device)
+                except Exception as download_error:
+                    detail = str(download_error).casefold()
+                    retryable_transfer = any(
+                        marker in detail
+                        for marker in (
+                            "xet",
+                            "unable to parse string as hex hash",
+                            "timed out",
+                            "timeout",
+                            "connection reset",
+                            "connection aborted",
+                            "remote end closed",
+                            "incomplete read",
+                        )
+                    )
+                    if not retryable_transfer:
+                        raise
+
+                    # A failed standard HTTPS/LFS transfer can be retried through
+                    # Xet, which may recover when the issue is transport-specific.
+                    hf_constants.HF_HUB_DISABLE_XET = previous_xet_setting
+                    try:
+                        loaded_model = ChatterboxTTS.from_pretrained(device=device)
+                    except Exception as retry_error:
+                        raise RuntimeError(
+                            "The Full model download/load failed through both the "
+                            "standard HTTPS/LFS path and the Xet retry. "
+                            f"First error: {download_error}. Retry error: {retry_error}"
+                        ) from retry_error
+            finally:
+                hf_constants.HF_HUB_DISABLE_XET = previous_xet_setting
         else:
             from chatterbox.tts_turbo import ChatterboxTurboTTS
             loaded_model = ChatterboxTurboTTS.from_pretrained(device=device)
@@ -535,8 +578,8 @@ def _join_narration_texts(texts: list[str]) -> str:
 
 
 def _chatterbox_delivery(text: str, scene_number: int, scene_count: int) -> tuple[str, float]:
-    """Use one stable sampling temperature; do not vary delivery by slide keywords."""
-    return text, 0.80
+    """Use one moderately expressive sampling temperature, never per-slide keyword rules."""
+    return text, 0.90
 
 
 def _scene_duration_weights(texts: list[str]) -> list[float]:
@@ -606,7 +649,31 @@ def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
             repetition_penalty=1.2,
         )
     else:
-        wav = model.generate(text, temperature=0.80)
+        # Turbo has no CFG/exaggeration controls; slightly warmer sampling helps
+        # reduce flat delivery without inserting fake acting cues. Filter settings
+        # by the installed model signature so older compatible package versions
+        # still receive the temperature setting instead of failing on new kwargs.
+        turbo_controls = {
+            "temperature": 0.90,
+            "top_p": 0.95,
+            "top_k": 1000,
+            "repetition_penalty": 1.15,
+        }
+        try:
+            import inspect
+            parameters = inspect.signature(model.generate).parameters
+            accepts_kwargs = any(
+                item.kind == inspect.Parameter.VAR_KEYWORD
+                for item in parameters.values()
+            )
+            if not accepts_kwargs:
+                turbo_controls = {
+                    key: value for key, value in turbo_controls.items()
+                    if key in parameters
+                }
+        except (TypeError, ValueError):
+            turbo_controls = {"temperature": 0.90}
+        wav = model.generate(text, **turbo_controls)
 
     wav = wav.detach().cpu()
     if wav.ndim == 1:
@@ -726,16 +793,16 @@ def generate_chatterbox_audio(
             "sha256": _file_sha256(actual_ref),
         }
 
-    # Full model supports the same controlled settings on every run. Turbo does
-    # not support CFG/exaggeration, so it receives only its actual temperature control.
+    # Full supports CFG/exaggeration. Turbo uses its supported sampling controls;
+    # its modestly warmer temperature is intended to avoid flat, robotic cadence.
     settings = (
         {"temperature": 0.75, "cfg_weight": 0.35, "exaggeration": 0.35,
          "min_p": 0.05, "top_p": 1.0, "repetition_penalty": 1.2}
         if selected_model == "full"
-        else {"temperature": 0.80}
+        else {"temperature": 0.90, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.15}
     )
     signature_payload = {
-        "cache_version": "chatterbox-continuous-take-v4-flat-delivery",
+        "cache_version": "chatterbox-continuous-take-v5-expressive-turbo",
         "model_version": selected_model,
         "text": full_text,
         "scene_texts": texts,
@@ -804,13 +871,16 @@ def generate_chatterbox_audio(
 
     audio_text = _chatterbox_audio_texts(texts)
     full_text = _join_narration_texts(audio_text)
+    # Seed by the exact take signature: same input remains reproducible, while
+    # different stories no longer all start with the same random sequence.
+    take_seed = int(signature[:8], 16) & 0x7FFFFFFF
     full_wave = _generate_chatterbox_take(
-        model, full_text, selected_model, seed=run_number * 100 + 1
+        model, full_text, selected_model, seed=take_seed
     )
 
     raw_duration = full_wave.shape[-1] / model.sr
     corrected = False
-    if raw_duration > 30.0:
+    if raw_duration >= 30.0:
         try:
             import librosa
             rate = min(1.05, raw_duration / 29.7)
@@ -825,7 +895,7 @@ def generate_chatterbox_audio(
         corrected = True
 
     total_duration = full_wave.shape[-1] / model.sr
-    if total_duration > 30.0:
+    if total_duration >= 30.0:
         raise RuntimeError(
             "The generated narration is too long to fit the 30-second Short, "
             "even after one slight pitch-preserving speed adjustment."
@@ -978,22 +1048,52 @@ def generate_audio(
     results = _call_rate(scenes, language, rate_percent, output_path, selected_voice)
     total = round(sum(float(item["duration"]) for item in results), 3)
     corrected = False
+    is_indic = language in {"hindi", "telugu"}
 
-    if total > MAX_DURATION_SECONDS:
-        multiplier = total / CORRECTION_TARGET_SECONDS
+    # Re-measure after every synthesis. A Hindi/Telugu lead can break 5.2s even
+    # when the full track is under 30s, so correct both constraints together.
+    for _attempt in range(MAX_DELIVERY_CORRECTIONS):
+        try:
+            first_duration = float(results[0].get("duration") or 0.0)
+        except (IndexError, TypeError, ValueError, AttributeError):
+            first_duration = 0.0
+        needs_total_correction = total > CORRECTION_TARGET_SECONDS
+        needs_lead_correction = (
+            is_indic and first_duration > INDIC_LEAD_CORRECTION_TARGET_SECONDS
+        )
+        if not needs_total_correction and not needs_lead_correction:
+            break
+
+        factors = [1.0]
+        if needs_total_correction:
+            factors.append(total / CORRECTION_TARGET_SECONDS)
+        if needs_lead_correction:
+            factors.append(first_duration / INDIC_LEAD_CORRECTION_TARGET_SECONDS)
+        multiplier = max(factors)
         adjusted = (
             (1.0 + rate_percent / 100.0) * multiplier - 1.0
         ) * 100.0
-        adjusted = min(100.0, max(rate_percent + 1.0, adjusted))
-        results = _call_rate(scenes, language, adjusted, output_path, selected_voice)
-        total = round(sum(float(item["duration"]) for item in results), 3)
+        adjusted = min(
+            MAX_CORRECTION_RATE_PERCENT,
+            max(rate_percent + 1.0, adjusted),
+        )
+        if adjusted <= rate_percent:
+            break
+
+        results = _call_rate(
+            scenes, language, round(adjusted, 2), output_path, selected_voice
+        )
         rate_percent = round(adjusted, 2)
+        total = round(sum(float(item["duration"]) for item in results), 3)
         corrected = True
-        if total > MAX_DURATION_SECONDS:
-            raise RuntimeError(
-                "Audio remains over 30 seconds after one measured speed correction "
-                f"({total:.2f}s)."
-            )
+
+    if total >= MAX_DURATION_SECONDS:
+        raise RuntimeError(
+            "Audio remains at or above the 30-second limit after "
+            f"{MAX_DELIVERY_CORRECTIONS} measured delivery corrections ({total:.2f}s). "
+            "The factory has kept the hard limit and stopped this take rather than exporting an overlength Short. "
+            "Reduce narration in Scriptwriter, then regenerate Audio."
+        )
 
     _validate_indic_first_scene_duration(results, language)
     return {
@@ -1075,7 +1175,7 @@ def generate_top5_audio(
 
     total_duration = sum(float(scene["duration"]) for scene in results)
     max_duration = max(float(scene["duration"]) for scene in results)
-    if total_duration > TOP5_MAX_TOTAL_DURATION_SECONDS:
+    if total_duration >= TOP5_MAX_TOTAL_DURATION_SECONDS:
         multiplier = total_duration / TOP5_TOTAL_CORRECTION_TARGET_SECONDS
         adjusted = (
             (1.0 + rate_percent / 100.0) * multiplier - 1.0
@@ -1140,8 +1240,8 @@ def approve_audio(audio: dict[str, Any]) -> dict[str, Any]:
         audio.get("scenes") or [],
         audio.get("language") or audio.get("language_used"),
     )
-    if total <= 0 or total > MAX_DURATION_SECONDS:
-        raise ValueError("Audio duration is outside the factory limit.")
+    if total <= 0 or total >= MAX_DURATION_SECONDS:
+        raise ValueError("Audio duration must be positive and strictly under 30 seconds.")
     for scene in audio["scenes"]:
         path = Path(scene.get("path", ""))
         if not path.exists() or path.stat().st_size <= 500:

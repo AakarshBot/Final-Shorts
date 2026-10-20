@@ -1378,6 +1378,58 @@ def test_production_renderer_uses_card_studio_static_preview_and_overlays(monkey
     assert calls == ["logo", "source"]
 
 
+def test_final_renderer_refuses_audio_at_30_seconds(tmp_path):
+    import renderer
+
+    audio_path = tmp_path / "lead.mp3"
+    audio_path.write_bytes(b"x" * 700)
+    visual_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual_buffer, format="PNG")
+
+    with pytest.raises(ValueError, match="strictly under 30 seconds"):
+        renderer.render_production_video(
+            {
+                "approved_for_audio": True,
+                "language_used": "english",
+                "script": [{"voiceover": "The Short must stay within its limit."}],
+            },
+            {
+                "approved_for_visuals": True,
+                "language": "english",
+                "scenes": [{"scene": 1, "path": str(audio_path), "duration": 30.0}],
+            },
+            TEST_SUBTITLE_DATA,
+            [{"bytes": visual_buffer.getvalue()}],
+            tmp_path / "too-long.mp4",
+        )
+
+
+def test_final_renderer_refuses_hindi_lead_over_5_2_seconds(tmp_path):
+    import renderer
+
+    audio_path = tmp_path / "lead.mp3"
+    audio_path.write_bytes(b"x" * 700)
+    visual_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual_buffer, format="PNG")
+
+    with pytest.raises(ValueError, match="Hindi Slide 1 audio is 5.21s"):
+        renderer.render_production_video(
+            {
+                "approved_for_audio": True,
+                "language_used": "hindi",
+                "script": [{"voiceover": "भारत की टीम तैयार है।"}],
+            },
+            {
+                "approved_for_visuals": True,
+                "language": "hindi",
+                "scenes": [{"scene": 1, "path": str(audio_path), "duration": 5.21}],
+            },
+            TEST_SUBTITLE_DATA,
+            [{"bytes": visual_buffer.getvalue()}],
+            tmp_path / "long-indic-lead.mp4",
+        )
+
+
 def test_final_renderer_quality_contract():
     import inspect
     import renderer
@@ -1572,20 +1624,67 @@ def test_windows_fribidi_bootstrap_surfaces_checksum_failure_without_accepting_d
     assert not (tmp_path / "dlls" / "libfribidi-0.dll").exists()
 
 
-def test_indic_raqm_error_explains_verified_automatic_bootstrap(monkeypatch):
+def test_raqm_runtime_probe_catches_true_feature_flag_with_broken_font_load(monkeypatch):
+    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: True)
+
+    def broken_font(*_args, **_kwargs):
+        raise OSError("libfribidi DLL load failed")
+
+    monkeypatch.setattr(renderer.ImageFont, "truetype", broken_font)
+
+    available, reason = renderer._raqm_runtime_probe("hindi")
+
+    assert not available
+    assert "real RAQM font-load/shaping test failed" in reason
+    assert "libfribidi DLL load failed" in reason
+
+
+def test_windows_fribidi_installer_has_checksum_verified_zstd_fallback():
+    script_path = Path(renderer.__file__).resolve().with_name("setup_windows_indic_rendering.ps1")
+    source = script_path.read_text(encoding="utf-8")
+
+    assert "zstd-v1.5.7-win64.zip" in source
+    assert "Get-FileHash -Path $ZstdZipPath -Algorithm SHA512" in source
+    assert "$ExpectedSha256 = " in source
+    assert "$ZstdZipSha512 = " in source
+    assert "if (-not $Extracted)" in source
+    assert "No Python packages were installed" in source
+
+
+def test_windows_indic_installer_has_a_checksum_pinned_zstd_fallback():
+    script_path = Path(renderer.__file__).resolve().parent / "setup_windows_indic_rendering.ps1"
+    script = script_path.read_text(encoding="utf-8")
+
+    # Older Windows tar.exe builds cannot always unpack .tar.zst. The fallback
+    # must remain pinned and verified; do not silently accept a downloaded tool.
+    assert '$ExpectedSha256 = "3581ee03cf83a9bb0e98bf688c4f532a29553500e317532d90746de295b0f8a8"' in script
+    assert '$ZstdZipSha512 = "a96dc5417943c03fa231bf2d6a586b7ae7254fa52fdc15d302f296b5ff88e1ff0f07120a720149eb82ea0f0c65444393ebf05d2ee1bd1db341b803ff65a2e675"' in script
+    assert "Get-FileHash -Path $ZstdZipPath -Algorithm SHA512" in script
+    assert "Get-FileHash -Path $PackagePath -Algorithm SHA256" in script
+    assert "& $ZstdExe.FullName -d -q -f -o $TarPath $PackagePath" in script
+
+
+def test_indic_raqm_error_explains_actual_shaping_and_automatic_bootstrap(monkeypatch):
     monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
     monkeypatch.setattr(renderer.os, "name", "posix")
-    with pytest.raises(RuntimeError, match="automatically runs the existing checksum-verified, no-pip PowerShell installer"):
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: (False, "Pillow reports no RAQM"))
+    with pytest.raises(RuntimeError, match="automatically runs the checksum-verified, no-pip FriBiDi installer"):
         renderer._require_raqm("hindi")
 
 
-def test_windows_raqm_bootstrap_rechecks_pillow_after_install(monkeypatch):
-    checks = iter([False, True])
+def test_windows_raqm_bootstrap_rechecks_real_font_after_install(monkeypatch):
     calls = []
+    probes = iter([
+        (False, "FriBiDi could not be loaded by Pillow"),
+        (True, ""),
+    ])
 
     monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ERROR", "")
     monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
-    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: next(checks))
+    monkeypatch.setattr(renderer, "_activate_windows_fribidi", lambda: "")
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: next(probes))
     monkeypatch.setattr(
         renderer,
         "_install_windows_fribidi_via_powershell",
@@ -1597,15 +1696,69 @@ def test_windows_raqm_bootstrap_rechecks_pillow_after_install(monkeypatch):
     assert calls == ["installed"]
 
 
+def test_windows_raqm_bootstraps_when_feature_flag_is_true_but_real_font_fails(monkeypatch):
+    calls = []
+    probes = iter([
+        (False, "RAQM font-load/shaping test failed: cannot load FriBiDi"),
+        (True, ""),
+    ])
+    monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ERROR", "")
+    monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
+    monkeypatch.setattr(renderer, "_activate_windows_fribidi", lambda: "")
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: next(probes))
+    monkeypatch.setattr(
+        renderer,
+        "_install_windows_fribidi_via_powershell",
+        lambda: calls.append("installed"),
+    )
+
+    renderer._require_raqm("telugu")
+
+    assert calls == ["installed"]
+
+
 def test_windows_raqm_bootstrap_surfaces_the_setup_failure_details(monkeypatch):
     monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ERROR", "")
     monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
-    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
+    monkeypatch.setattr(renderer, "_activate_windows_fribidi", lambda: "")
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: (False, "Pillow reports no RAQM"))
     monkeypatch.setattr(
         renderer,
         "_install_windows_fribidi_via_powershell",
         lambda: (_ for _ in ()).throw(RuntimeError("all trusted MSYS2 sources failed checksum verification")),
     )
 
-    with pytest.raises(RuntimeError, match="Automatic FriBiDi setup could not complete: all trusted MSYS2 sources failed checksum verification"):
+    with pytest.raises(RuntimeError, match="all trusted MSYS2 sources failed checksum verification"):
         renderer._require_raqm("hindi")
+
+
+def test_final_renderer_refuses_overlength_top5_handoff_before_preparing_visuals(tmp_path):
+    import renderer
+
+    script = {
+        "schema": "final-shorts.top5-script.v1",
+        "approved_for_audio": True,
+        "slides": [{"slide_number": number} for number in range(1, 7)],
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "total_duration": 30.1,
+        "scenes": [
+            {"scene": number, "duration": 5.0, "path": "unused"}
+            for number in range(1, 7)
+        ],
+    }
+
+    with pytest.raises(ValueError, match="strictly under 30 seconds"):
+        renderer.render_production_video(
+            script,
+            audio,
+            None,
+            [{} for _ in range(6)],
+            tmp_path / "overlength-top5.mp4",
+        )
+

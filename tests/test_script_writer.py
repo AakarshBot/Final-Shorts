@@ -37,7 +37,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "Gill was struck during training and returned after treatment.",
+                "voiceover": "Gill was struck during training and returned after treatment, while doctors review his recovery before selection.",
                 "narrative_role": "development",
                 "primary_entity": "Shubman Gill",
                 "visual_intent": "Gill at India training",
@@ -45,7 +45,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "The team is assessing him before the next ODI.",
+                "voiceover": "The team is assessing him before the next ODI, and his place remains uncertain until the review is complete and doctors provide a clear recommendation.",
                 "narrative_role": "context",
                 "primary_entity": "India cricket team",
                 "visual_intent": "India team training",
@@ -53,7 +53,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "His availability will depend on the next medical assessment.",
+                "voiceover": "His availability depends on the medical report and India's selection call.",
                 "narrative_role": "consequence",
                 "primary_entity": "Shubman Gill",
                 "visual_intent": "Gill fitness assessment",
@@ -227,6 +227,55 @@ def test_prompt_contains_three_title_angles():
     assert "Curiosity" in prompt
 
 
+def test_indic_generation_preflight_catches_long_lead_without_changing_public_validator():
+    result = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's next ODI against England"
+    )
+
+    valid, reason = script_writer.validate_cricket_script(result, language="hindi")
+    generation_valid, generation_reason = script_writer._validate_generated_cricket_draft(
+        result, "hindi"
+    )
+
+    assert valid, reason
+    assert not generation_valid
+    assert "Slide 1" in generation_reason
+    assert "7 or fewer" in generation_reason
+
+
+def test_indic_generation_preflight_targets_total_length_without_padding():
+    result = valid_result("Shubman Gill is facing an injury concern.")
+    result["script"][1]["voiceover"] += " " + " ".join(["context"] * 30)
+
+    issue = script_writer._indic_generation_delivery_issue(result, "telugu")
+
+    assert "narration has" in issue
+    assert "55 or fewer" in issue
+    assert "without dropping essential facts or adding filler" in issue
+
+
+def test_writer_hidden_rewrite_fixes_indic_timing_preflight(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+    too_long = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's next ODI against England"
+    )
+    concise = valid_result("Shubman Gill faces an injury scare.")
+    concise["script"][3]["voiceover"] = "Availability depends on the medical report and selection."
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt))
+        return too_long if len(calls) == 1 else concise
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.write_script(Story(), language="hindi")
+
+    assert len(calls) == 2
+    assert "Indic generation timing preflight" in calls[1][1]
+    assert "never more than 7" in calls[1][1]
+    assert result["script"][0]["voiceover"] == concise["script"][0]["voiceover"]
+
+
 def test_generation_prompts_cover_validator_requirements():
     cricket = script_writer.SYSTEM_PROMPT
     universal = script_writer.UNIVERSAL_SYSTEM_PROMPT
@@ -301,7 +350,7 @@ def test_universal_validator_allows_long_dashboard_headline_and_duration_based_l
         "Shubman Gill injury update explains what India's next ODI selection decision depends on"
     )
     result["script"][3]["voiceover"] += (
-        " The selection decision will follow the medical review and the team's final assessment before match day."
+        " Final selection follows the medical review and report."
     )
 
     valid, reason = script_writer.validate_universal_script(result, language=language)
@@ -314,7 +363,7 @@ def test_universal_validator_keeps_english_13_word_limit():
         "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
     )
     result["script"][3]["voiceover"] += (
-        " The selection decision will follow the medical review and the team's final assessment before match day."
+        " Final selection follows the medical review and report."
     )
 
     valid, reason = script_writer.validate_universal_script(result, language="english")
@@ -396,6 +445,40 @@ def test_manual_edits_are_not_rejected_by_editorial_validation(apply_edits):
     assert approved["headline"] == "A much longer human-written headline is acceptable"
     assert approved["script"][0]["voiceover"] == edited_voiceovers[0]
     assert "Shubman Gill" not in " ".join(scene["voiceover"] for scene in approved["script"])
+
+
+def test_cricket_validator_keeps_normal_script_inside_word_budget():
+    result = valid_result()
+    narration = " ".join(scene["voiceover"] for scene in result["script"])
+    total = script_writer._spoken_word_count(narration, "english")
+    assert script_writer.MIN_WORDS <= total <= script_writer.MAX_CRICKET_WORDS
+
+    valid, reason = script_writer.validate_cricket_script(result, language="english")
+    assert valid, reason
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_fragment"),
+    [
+        ("short", "target at least 50 useful words"),
+        ("long", "at or below 70"),
+    ],
+)
+def test_cricket_validator_rejects_narration_outside_duration_budget(mutation, expected_fragment):
+    result = valid_result()
+    if mutation == "short":
+        result["script"][1]["voiceover"] = "Gill was struck."
+        result["script"][2]["voiceover"] = "India is assessing him."
+        result["script"][3]["voiceover"] = "Selection remains pending."
+    else:
+        result["script"][3]["voiceover"] += (
+            " This additional background explains the selection context and the practical consequence "
+            "before the next match, without changing the confirmed facts or adding any new result."
+        )
+
+    valid, reason = script_writer.validate_cricket_script(result, language="english")
+    assert not valid
+    assert expected_fragment in reason
 
 
 def test_valid_script_passes():
@@ -757,15 +840,25 @@ def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatc
         calls.append((model, prompt))
         if len(calls) == 1:
             raise script_writer.GroqAPIError(429, "Rate limit reached", "15")
-        return valid_result()
+        if len(calls) == 2:
+            return valid_result()
+        corrected = valid_result("Shubman Gill faces an injury scare.")
+        corrected["script"][3]["voiceover"] = "Availability depends on the medical report and selection."
+        return corrected
 
     monkeypatch.setattr(script_writer, "_request", fake_request)
     result = script_writer.write_script(Story(), language="hindi")
 
-    assert [call[0] for call in calls] == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    assert [call[0] for call in calls] == [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-120b",
+    ]
     assert "HIDDEN REWRITE" not in calls[1][1]
     assert "RECOVERY" not in calls[1][1]
-    assert result["provider_used"] == "openai/gpt-oss-20b"
+    assert "MANDATORY INDIC TIMING REWRITE" in calls[2][1]
+    assert result["provider_used"] == "openai/gpt-oss-120b"
+    assert result["script"][0]["voiceover"] == "Shubman Gill faces an injury scare."
 
 
 def test_writer_stops_on_groq_400_without_spending_another_request(monkeypatch):

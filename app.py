@@ -2584,8 +2584,9 @@ def _render_manual_subject_cutout(
         state["layout_signature"] = layout_signature
 
     st.caption(
-        "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
-        "Polygon is the full text field from one end to the other: text spans left to right and aligns top to bottom inside the polygon boundaries. "
+        "English, Hindi and Telugu are supported. Hindi/Telugu use the bundled Noto font with a verified Pillow RAQM shaping check. "
+        "Negative Space does not detect subjects; Behind Subject uses BiRefNet. "
+        "The polygon is the full text field from one end to the other: text spans left to right and aligns top to bottom inside its boundaries. "
         "Render Now replaces the rendered frame."
     )
 
@@ -4303,6 +4304,54 @@ def _upload_metadata(script: dict) -> dict:
         "hashtags": " ".join(str(item) for item in (script.get("hashtags") or [])),
         "comment": str(script.get("comment") or ""),
     }
+
+
+def _show_upload_originality_audit(
+    script: dict,
+    title: str,
+    *,
+    source_url: str = "",
+    description: str = "",
+    hashtags: str | list[str] = "",
+    visuals: list[dict] | None = None,
+) -> dict:
+    from uploader import (
+        assess_upload_distinctiveness,
+        build_upload_originality_record,
+        seed_existing_channel_upload_history,
+    )
+
+    seed_key = "_factory_upload_history_seed_report"
+    if seed_key not in st.session_state:
+        st.session_state[seed_key] = seed_existing_channel_upload_history()
+    seed_report = st.session_state.get(seed_key) or {}
+
+    record = build_upload_originality_record(
+        script,
+        title,
+        source_url=source_url,
+        description=description,
+        hashtags=hashtags,
+        visuals=visuals or [],
+    )
+    report = assess_upload_distinctiveness(record)
+    st.markdown("**Factory repeat-content check · recent upload history**")
+    if report["level"] == "warning":
+        st.warning(report["message"])
+    elif report["level"] == "review":
+        st.info(report["message"])
+    else:
+        st.caption(report["message"])
+    if seed_report.get("seeded_count"):
+        st.caption(str(seed_report.get("message") or "Existing channel metadata was added to the comparison."))
+    elif seed_report.get("message") and seed_report.get("seeded_count") == 0:
+        st.caption(str(seed_report.get("message")))
+    st.caption(
+        "This is advisory QC, not a YouTube verdict. Existing channel imports compare titles/descriptions only; "
+        "factory-recorded uploads also compare narration, source/angle metadata, exact image hashes and perceptual hashes "
+        "that tolerate some resizing/re-encoding. The visual check is not semantic and major crops or similar AI-generated images may evade it."
+    )
+    return record
 
 
 def _visual_story_for_topic(topic, script: dict | None = None) -> dict:
@@ -6035,6 +6084,8 @@ def _render_live_upload():
     result = st.session_state.live_upload_result
     if result:
         st.success(f"Upload successful · Video ID: {result.get('video_id')}")
+        if result.get("originality_history_saved") is False:
+            st.warning("The upload succeeded, but the factory could not save its local repeat-content history entry.")
         if result.get("url"):
             st.link_button("Open YouTube video", result["url"], width="stretch")
         if result.get("requested_privacy") == "public":
@@ -6046,6 +6097,24 @@ def _render_live_upload():
                     + str(result["comment_error"])
                 )
         return
+
+    if is_top5:
+        originality_visuals = list(st.session_state.get("live_top5_visual_handoff") or [])
+        originality_source_url = ""
+    else:
+        originality_visuals = list((st.session_state.get("live_visual_assignments") or {}).values())
+        originality_source_url = str(
+            getattr(story, "url", "") or
+            (story.get("url", "") if isinstance(story, dict) else "")
+        )
+    originality_record = _show_upload_originality_audit(
+        script,
+        (qc.get("title") or title),
+        source_url=originality_source_url,
+        description=qc.get("description", ""),
+        hashtags=qc.get("hashtags", ""),
+        visuals=originality_visuals,
+    )
 
     left, right = st.columns(2, gap="medium")
     with left:
@@ -6067,7 +6136,7 @@ def _render_live_upload():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading video as {privacy}…"):
-            from uploader import upload_video
+            from uploader import record_upload_success, upload_video
             st.session_state.live_upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -6075,6 +6144,9 @@ def _render_live_upload():
                 qc.get("hashtags", ""),
                 qc.get("comment", ""),
                 privacy,
+            )
+            st.session_state.live_upload_result["originality_history_saved"] = record_upload_success(
+                originality_record, st.session_state.live_upload_result
             )
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
@@ -6392,7 +6464,7 @@ def render_live_top5():
                 disabled=not is_live_top5_chatterbox,
             )
             if is_live_top5_chatterbox:
-                st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings.")
+                st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
             live_top5_reference = None
             live_top5_reference_ready = True
             if is_live_top5_chatterbox:
@@ -7203,7 +7275,7 @@ def render_live_dashboard():
             disabled=not is_live_chatterbox,
         )
         if is_live_chatterbox:
-            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take.")
+            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
         if is_live_chatterbox and live_language not in {"english", "en"}:
             st.warning("Chatterbox Full and Turbo are English-only. Select Edge-TTS Neural for Hindi or Telugu narration.")
         live_reference_ready = True
@@ -7235,7 +7307,10 @@ def render_live_dashboard():
                 st.session_state.live_approved_audio = None
                 st.session_state.live_subtitle_data = None
                 try:
-                    with st.spinner("Generating Audio and Subtitles…"):
+                    with st.spinner(
+                        "Preparing Chatterbox if needed, then generating Audio and Subtitles…"
+                        if is_live_chatterbox else "Generating Audio and Subtitles…"
+                    ):
                         _live_generate_audio_and_subtitles()
                     st.session_state.live_stage = "04 · Visuals + Render"
                     st.session_state.live_pipeline_notice = {
@@ -7790,7 +7865,7 @@ def render_longform_audio(live: bool = False):
         index=0,
         key=f"{prefix}audio_chatterbox_model",
     )
-    st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Long-form narration is grouped into paragraph-sized chunks to respect model limits, with brief gaps between chunks and the existing act pauses.")
+    st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading. Long-form narration is grouped into paragraph-sized chunks to respect model limits, with brief gaps between chunks and the existing act pauses.")
 
     st.markdown(
         f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 14px 0;">'
@@ -7808,7 +7883,9 @@ def render_longform_audio(live: bool = False):
         col_btn, col_info = st.columns([1, 2])
         with col_btn:
             if st.button("Synthesize Full Narration", type="primary", width="stretch", key=f"{k_prefix}gen-audio", disabled=not ref_ready):
-                with st.spinner(f"Synthesizing ~8-minute documentary narration with Chatterbox {longform_chatterbox_model_choice}..."):
+                with st.spinner(
+                    f"Preparing Chatterbox {longform_chatterbox_model_choice} if needed, then synthesizing the documentary…"
+                ):
                     try:
                         from longform_audio import LongformAudioEngine
                         out_dir = Path("output/live/longform_audio") if live else Path("output/longform_audio")
@@ -9460,6 +9537,8 @@ def render_top5_upload_qc():
 
     result = st.session_state.get("test_top5_upload_result")
     if result:
+        if result.get("originality_history_saved") is False:
+            st.warning("The upload succeeded, but the factory could not save its local repeat-content history entry.")
         st.success(
             f"Uploaded as {result.get('privacy_status') or result.get('requested_privacy')} · "
             f"{result.get('url')}"
@@ -9479,6 +9558,13 @@ def render_top5_upload_qc():
         st.link_button("Open YouTube video", result["url"], width="stretch")
         return
 
+    originality_record = _show_upload_originality_audit(
+        script,
+        title,
+        description=qc.get("description", ""),
+        hashtags=qc.get("hashtags", ""),
+        visuals=list(st.session_state.get("test_top5_visual_handoff") or []),
+    )
     st.subheader("Upload")
     col1, col2 = st.columns(2, gap="medium")
     with col1:
@@ -9501,7 +9587,7 @@ def render_top5_upload_qc():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading Top-5 video as {privacy}…"):
-            from uploader import upload_video
+            from uploader import record_upload_success, upload_video
             st.session_state.test_top5_upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -9509,6 +9595,9 @@ def render_top5_upload_qc():
                 qc.get("hashtags", ""),
                 qc.get("comment", ""),
                 privacy,
+            )
+            st.session_state.test_top5_upload_result["originality_history_saved"] = record_upload_success(
+                originality_record, st.session_state.test_top5_upload_result
             )
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
@@ -9629,6 +9718,8 @@ def render_upload_qc():
 
     result = st.session_state.get("upload_result")
     if result:
+        if result.get("originality_history_saved") is False:
+            st.warning("The upload succeeded, but the factory could not save its local repeat-content history entry.")
         st.success(
             f"Uploaded as {result.get('privacy_status') or result.get('requested_privacy')} · "
             f"{result.get('url')}"
@@ -9652,6 +9743,23 @@ def render_upload_qc():
         st.caption("Upload choices become available after a rendered video is present.")
         return
 
+    selected_topic = st.session_state.get("selected_topic")
+    topics = st.session_state.get("topics") or []
+    originality_source_url = ""
+    if isinstance(selected_topic, int) and 0 <= selected_topic < len(topics):
+        topic = topics[selected_topic]
+        originality_source_url = str(
+            getattr(topic, "url", "") or
+            (topic.get("url", "") if isinstance(topic, dict) else "")
+        )
+    originality_record = _show_upload_originality_audit(
+        script,
+        qc.get("title", ""),
+        source_url=originality_source_url,
+        description=qc.get("description", ""),
+        hashtags=qc.get("hashtags", ""),
+        visuals=list(st.session_state.get("approved_visuals") or []),
+    )
     st.subheader("Upload")
     col1, col2 = st.columns(2, gap="medium")
     with col1:
@@ -9672,7 +9780,7 @@ def render_upload_qc():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading video as {privacy}…"):
-            from uploader import upload_video
+            from uploader import record_upload_success, upload_video
             st.session_state.upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -9680,6 +9788,9 @@ def render_upload_qc():
                 qc.get("hashtags", ""),
                 qc.get("comment", ""),
                 privacy,
+            )
+            st.session_state.upload_result["originality_history_saved"] = record_upload_success(
+                originality_record, st.session_state.upload_result
             )
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
@@ -9762,7 +9873,7 @@ def render_audio():
             disabled=not is_cb,
         )
         if is_cb:
-            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take.")
+            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
         selected_reference_label = None
         selected_reference = None
         selected_reference_ready = True
@@ -9797,7 +9908,7 @@ def render_audio():
                 f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">🎙️ {ref_info}</span>'
                 f'</div>'
                 f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Chatterbox {chatterbox_model_choice} Voice Cloning</div>'
-                f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led delivery cues · Reusable voice conditioning · Cached exact takes</div>'
+                f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Continuous script-led delivery · Reusable voice conditioning · Exact takes cached · Model files kept on disk</div>'
                 f'</div>',
                 unsafe_allow_html=True,
             )
@@ -9825,7 +9936,10 @@ def render_audio():
             selected["voice_gender"]=gender.casefold()
             selected["voice"]="chatterbox" if is_cb else selected_voice
             selected["voice_engine"]="chatterbox" if is_cb else "edge"
-            with st.spinner("Generating voiceover…"):
+            with st.spinner(
+                "Preparing Chatterbox if needed, then generating voiceover…"
+                if is_cb else "Generating voiceover…"
+            ):
                 try:
                     st.session_state.audio_data=generate_audio(
                         selected,
@@ -10635,7 +10749,7 @@ elif st.session_state.app_mode == "test":
                     disabled=not is_t5_chatterbox,
                 )
                 if is_t5_chatterbox:
-                    st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings.")
+                    st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
                 t5_voice = "chatterbox" if is_t5_chatterbox else resolve_voice(t5_language.casefold(), t5_gender.casefold())
                 t5_reference = None
                 t5_reference_ready = True

@@ -48,6 +48,7 @@ MAX_HASHTAGS = 5
 # Shared non-Top-5 spoken-script constants
 MIN_WORDS = 50
 MAX_WORDS = 74
+MAX_CRICKET_WORDS = 70
 MIN_SCENES = 3
 MAX_SCENES = 5
 
@@ -388,14 +389,19 @@ CRICKET_ANGLE_PROMPT = """You are the senior editorial planning desk for a viral
 
 Read the entire research packet and propose exactly three genuinely different, high-retention story angles for the same story.
 
-VIRAL ANGLE ARCHETYPES
-Propose exactly three distinct creative angles corresponding to these proven YouTube formats:
-1. THE HIGH-STAKES DEBATE / PROVOCATION:
-   Frame the event as a polarizing question or tactical debate (e.g., "Is a 33-ball duck better than a golden duck?", "Masterclass or total collapse?", "Did the captain make the right call?").
-2. THE ANOMALY / FREAK STAT / HISTORICAL RECORD:
-   Focus on the extreme numbers, where this ranks in history, or a statistical contrast that shocks the viewer.
-3. THE HIDDEN DRAMA / NARRATIVE INVERSION:
-   Reveal the untold story, tactical sacrifice, or behind-the-scenes tension that proves the scorecard doesn't tell the whole truth.
+EDITORIAL ANGLE SELECTION — STORY FIRST, NOT A FIXED TEMPLATE
+Propose exactly three evidence-supported angles for THIS story. The familiar formats below are options, not mandatory slots:
+- A tactical decision or turning point that changed the contest.
+- A verified statistical anomaly, record, or revealing comparison.
+- A selection, strategy, discipline, fitness, or accountability question with evidence.
+- A consequential reaction or quote, with the speaker and context central.
+- A historical contrast or precedent that changes how the event is understood.
+- A career, team, tournament, or future-selection consequence.
+- A technical explanation of how or why a confirmed development happened.
+- A contradiction, overlooked detail, or under-reported context supported by sources.
+- A human or team impact that is more informative than the scoreline.
+
+Do not force a debate, record, or behind-the-scenes narrative when the source does not support it. Do not invent tension. Do not present the same three angle categories in the same order for every story. Let the evidence determine the angle types and ordering, and make each option lead to a materially different Short rather than three versions of the same headline.
 
 RULES
 - Each angle must be grounded in the research packet.
@@ -561,14 +567,17 @@ UNIVERSAL_ANGLE_PROMPT = """You are the senior editorial planning desk for a vir
 
 Read the entire research packet and propose exactly three genuinely different, high-retention story angles for the same story.
 
-VIRAL ANGLE ARCHETYPES
-Propose exactly three distinct creative angles corresponding to these proven YouTube formats:
-1. THE HIGH-STAKES DEBATE / PROVOCATION:
-   Frame the event as a polarizing question or tactical debate (e.g. "Did they make the right call?", "Masterclass or total collapse?", "Tactical genius or pure luck?").
-2. THE ANOMALY / FREAK STAT / HISTORICAL RECORD:
-   Focus on the extreme numbers, where this ranks in history, or a statistical contrast that shocks the viewer.
-3. THE HIDDEN DRAMA / NARRATIVE INVERSION:
-   Reveal the untold story, tactical sacrifice, or behind-the-scenes tension that proves the headline doesn't tell the whole truth.
+EDITORIAL ANGLE SELECTION — STORY FIRST, NOT A FIXED TEMPLATE
+Propose exactly three evidence-supported angles for THIS story. Select from different approaches such as:
+- a tactical or technical explanation;
+- a turning point or decision and its verified consequence;
+- a surprising confirmed statistic or historical comparison;
+- a supported quote/reaction and what it changes;
+- an injury, transfer, selection, discipline, or career consequence;
+- an overlooked detail, contradiction, or timeline;
+- a rules, strategy, or performance breakdown;
+- a meaningful human/team impact grounded in the research.
+These are options, not mandatory slots. Do not force controversy, hidden drama, a record, or an underdog narrative if the evidence does not support it. Do not place the same three angle types in the same order for every story. Each angle must produce a materially different Short, with a specific evidence basis, not three paraphrases of the headline.
 
 RULES
 - Each angle must be grounded in the research packet.
@@ -799,6 +808,99 @@ def _spoken_word_count(value, language: str | None = None) -> int:
     if language_key in {"hindi", "telugu", "hi", "te"}:
         return len(_clean(value).split())
     return _words(value)
+
+
+INDIC_GENERATION_MAX_LEAD_TOKENS = 7
+INDIC_GENERATION_MAX_TOTAL_TOKENS = 55
+
+
+def _is_indic_language(language: str | None) -> bool:
+    return str(language or "").strip().casefold() in {"hindi", "telugu", "hi", "te"}
+
+
+def _indic_generation_delivery_issue(result: dict, language: str | None) -> str:
+    """Preflight Indic narration conservatively; measured audio remains the hard gate."""
+    if not _is_indic_language(language):
+        return ""
+    scenes = result.get("script")
+    if not isinstance(scenes, list) or not scenes:
+        return ""
+    voiceovers = [
+        _clean(scene.get("voiceover"))
+        for scene in scenes
+        if isinstance(scene, dict)
+    ]
+    if not voiceovers:
+        return ""
+
+    issues = []
+    lead_tokens = len(voiceovers[0].split())
+    total_tokens = sum(len(text.split()) for text in voiceovers)
+    if lead_tokens > INDIC_GENERATION_MAX_LEAD_TOKENS:
+        issues.append(
+            f"Slide 1 has {lead_tokens} whitespace-separated tokens; rewrite it to "
+            f"{INDIC_GENERATION_MAX_LEAD_TOKENS} or fewer short tokens, keeping the named subject "
+            "and strongest confirmed development while moving background to later slides"
+        )
+    if total_tokens > INDIC_GENERATION_MAX_TOTAL_TOKENS:
+        issues.append(
+            f"the narration has {total_tokens} whitespace-separated tokens; tighten it to "
+            f"{INDIC_GENERATION_MAX_TOTAL_TOKENS} or fewer without dropping essential facts or adding filler"
+        )
+    if not issues:
+        return ""
+    return "Indic generation timing preflight: " + "; ".join(issues) + (
+        ". These are conservative drafting targets only. Do not claim that token counts prove compliance: "
+        "actual generated audio must measure Slide 1 at no more than 5.2 seconds and the full Short under 30 seconds."
+    )
+
+
+def _indic_timing_guidance(language: str | None) -> str:
+    if not _is_indic_language(language):
+        return ""
+    return (
+        "\n\nMEASURED-AUDIO TIMING GUIDANCE (HARD REQUIREMENTS):\n"
+        "- Hindi/Telugu Slide 1 must be one short direct lead with the subject and strongest confirmed development. "
+        "Target 5–7 compact whitespace-separated tokens (never more than 7), about 4.0–4.7 seconds of natural speech. "
+        "Avoid subordinate clauses, scene-setting and background in Slide 1; move those facts to later slides.\n"
+        "- Keep the complete narration factual and tight, preferably 50–55 whitespace-separated tokens where the story permits. "
+        "Do not pad to reach a minimum and never sacrifice an essential fact merely to hit a token target.\n"
+        "- The numbers above are only drafting margins, not the compliance test. The Audio stage measures the actual selected voice: "
+        "Slide 1 must be at most 5.2 seconds and total audio must be strictly under 30 seconds. "
+        "Write with enough headroom that ordinary voice speed does not sit on either limit.\n"
+    )
+
+
+def _is_indic_timing_issue(reason: str, language: str | None) -> bool:
+    """Recognise measured-timing and native-script word-budget failures for recovery."""
+    if not _is_indic_language(language):
+        return False
+    detail = str(reason or "")
+    return any(
+        marker in detail
+        for marker in (
+            "Indic generation timing preflight:",
+            "Narration must stay under 30 seconds",
+            "Cricket narration has",
+            "Narration is too short to reach the 18-second minimum",
+        )
+    )
+
+
+def _validate_generated_cricket_draft(result: dict, language: str) -> tuple[bool, str]:
+    valid, reason = validate_cricket_script(result, language=language)
+    if valid:
+        reason = _indic_generation_delivery_issue(result, language)
+        valid = not reason
+    return valid, reason
+
+
+def _validate_generated_universal_draft(result: dict, language: str) -> tuple[bool, str]:
+    valid, reason = validate_universal_script(result, language=language)
+    if valid:
+        reason = _indic_generation_delivery_issue(result, language)
+        valid = not reason
+    return valid, reason
 
 
 def _normalise(value) -> str:
@@ -1811,12 +1913,26 @@ def validate_cricket_script(
     if not _clean(result.get("comment")):
         return False, "The Scriptwriter must produce the upload comment."
 
+    narration_text = []
     for number, scene in enumerate(scenes, 1):
         if not isinstance(scene, dict) or not _clean(scene.get("voiceover")):
             return False, f"Slide {number} is empty or malformed."
         for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category"):
             if not _clean(scene.get(key)):
                 return False, f"Slide {number} is missing {key}."
+        narration_text.append(_clean(scene.get("voiceover")))
+
+    total_words = _spoken_word_count(" ".join(narration_text), language_key)
+    if total_words < MIN_WORDS:
+        return False, (
+            f"Cricket narration has {total_words} spoken words; target at least {MIN_WORDS} "
+            "useful words to preserve the existing 18-second minimum without padding."
+        )
+    if total_words > MAX_CRICKET_WORDS:
+        return False, (
+            f"Cricket narration has {total_words} spoken words; it must stay at or below "
+            f"{MAX_CRICKET_WORDS} so Audio has headroom to remain strictly under 30 seconds."
+        )
 
     return True, ""
 
@@ -1914,6 +2030,7 @@ def write_script(
         + DESK_PROMPTS.get(norm_profile, DESK_PROMPTS["cricket_india_asia"])
         + "\nLANGUAGE:\n"
         + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
+        + _indic_timing_guidance(language_key)
     )
     if angle_text:
         instruction += (
@@ -1943,10 +2060,25 @@ def write_script(
                 f"Primary request: {first_error} | Fresh backup request: {second_error}. "
                 "No hidden rewrite was attempted because the primary request did not produce a draft."
             ) from second_error
-        backup_valid, backup_reason = validate_cricket_script(backup, language=language_key)
+        backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
+        if not backup_valid and _is_indic_timing_issue(backup_reason, language_key):
+            timing_instruction = (
+                instruction
+                + "\n\nMANDATORY INDIC TIMING REWRITE\n"
+                "Rewrite the complete script from the supplied evidence. Fix Slide 1 and, if needed, total length. "
+                "Use a single short lead of no more than seven compact whitespace-separated tokens, name the subject, "
+                "move background to later slides, and preserve the story's essential facts without padding. "
+                "Actual audio must remain <=5.2 seconds for Slide 1 and strictly under 30 seconds overall. "
+                "Return the full JSON package only.\n"
+                + backup_reason
+            )
+            backup = _prepare_generated_script(_request(MODELS[0], timing_instruction, source), language_key)
+            backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
+            if backup_valid:
+                return finish(backup, MODELS[0])
         if not backup_valid:
             raise RuntimeError(
-                "The backup model returned an invalid script after the primary request failed: "
+                "The backup model returned an invalid script after generation preflight: "
                 + backup_reason
             )
         return finish(backup, MODELS[1])
@@ -1964,7 +2096,7 @@ def write_script(
     except Exception as first_error:
         return fresh_backup(first_error)
     else:
-        valid, reason = validate_cricket_script(result, language=language_key)
+        valid, reason = _validate_generated_cricket_draft(result, language_key)
         if valid:
             return finish(result, MODELS[0])
         first_reason = reason
@@ -1989,9 +2121,24 @@ def write_script(
             + f"{first_reason} | {type(second_error).__name__}: {second_error}"
         ) from second_error
 
-    valid, reason = validate_cricket_script(rewritten, language=language_key)
+    valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+    if not valid and _is_indic_timing_issue(reason, language_key):
+        timing_instruction = (
+            instruction
+            + "\n\nMANDATORY INDIC TIMING REWRITE\n"
+            "The prior rewrite still missed the measured-audio drafting margins. Rewrite the complete 3–5-slide package. "
+            "Keep Slide 1 to seven or fewer compact whitespace-separated tokens, ideally five to seven, and move context to later slides. "
+            "Target 50–55 total tokens where supported by the story. Do not remove essential facts, add filler, or alter factual claims. "
+            "The actual Audio stage still enforces <=5.2 seconds for Slide 1 and strictly under 30 seconds overall. "
+            "Return full JSON only.\n"
+            + reason
+        )
+        rewritten = _prepare_generated_script(_request(MODELS[0], timing_instruction, source), language_key)
+        valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+        if valid:
+            return finish(rewritten, MODELS[0])
     if not valid:
-        raise RuntimeError("Script generation failed after one hidden rewrite: " + reason)
+        raise RuntimeError("Script generation failed after hidden rewrite and any applicable timing correction: " + reason)
 
     return finish(rewritten, MODELS[1])
 
@@ -2245,6 +2392,7 @@ def write_universal_script(
         + DESK_PROMPTS.get(norm_profile, DESK_PROMPTS["niche_sports"])
         + "\nLANGUAGE:\n"
         + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
+        + _indic_timing_guidance(language_key)
     )
     if str(search_query or "").strip():
         instruction += (
@@ -2266,6 +2414,8 @@ def write_universal_script(
 
     errors = []
     recovery_reason = ""
+    last_result = None
+    last_model = None
     for model in MODELS:
         model_instruction = instruction
         if recovery_reason:
@@ -2293,7 +2443,7 @@ def write_universal_script(
 
         if angle_text:
             result["story_angle"] = angle_text
-        valid, reason = validate_universal_script(result, language=language_key)
+        valid, reason = _validate_generated_universal_draft(result, language_key)
         if valid:
             return _finish_result(
                 result,
@@ -2311,7 +2461,46 @@ def write_universal_script(
                 desk_profile=norm_profile,
             )
         recovery_reason = reason
+        last_result = result
+        last_model = model
         errors.append(f"{model}: {reason}")
+
+    if _is_indic_timing_issue(recovery_reason, language_key) and last_result is not None:
+        timing_instruction = (
+            instruction
+            + "\n\nMANDATORY INDIC TIMING REWRITE\n"
+            "Rewrite the full package, not just metadata. Use a short direct Slide 1 with no more than seven compact "
+            "whitespace-separated tokens (ideally five to seven), keep the exact subject, move background/context to later slides, "
+            "and target 50–55 total tokens where the evidence supports that length. Never pad or omit essential facts. "
+            "Actual generated audio must measure Slide 1 at <=5.2 seconds and the full Short strictly under 30 seconds. "
+            "Return only complete JSON.\n"
+            + recovery_reason
+        )
+        model = MODELS[0] if last_model != MODELS[0] else MODELS[1]
+        try:
+            corrected = _prepare_generated_script(_request(model, timing_instruction, source), language_key)
+            if angle_text:
+                corrected["story_angle"] = angle_text
+            corrected_valid, corrected_reason = _validate_generated_universal_draft(corrected, language_key)
+            if corrected_valid:
+                return _finish_result(
+                    corrected,
+                    story,
+                    source,
+                    model,
+                    language_key,
+                    angle_text=angle_text,
+                    search_query=search_query,
+                    delivery_profile=(
+                        "UNIVERSAL SPORTS"
+                        if norm_profile in {"niche_sports", "universal"}
+                        else DESK_PROFILES.get(norm_profile, "UNIVERSAL SPORTS")
+                    ),
+                    desk_profile=norm_profile,
+                )
+            errors.append(f"{model}: targeted timing rewrite: {corrected_reason}")
+        except Exception as exc:
+            errors.append(f"{model}: targeted timing rewrite: {type(exc).__name__}: {exc}")
 
     raise RuntimeError(
         "Universal sports script generation failed: " + " | ".join(errors)

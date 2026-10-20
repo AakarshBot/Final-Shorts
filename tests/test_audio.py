@@ -41,6 +41,44 @@ def test_chatterbox_turbo_stack_imports_without_loading_weights():
     assert callable(ChatterboxTurboTTS.from_pretrained)
 
 
+def test_chatterbox_full_tries_https_first_then_xet_and_keeps_loaded_model(monkeypatch):
+    import sys
+    import types
+    import audio
+    import huggingface_hub.constants as hf_constants
+
+    calls = []
+    model = object()
+
+    class FakeFullChatterbox:
+        @classmethod
+        def from_pretrained(cls, device):
+            calls.append((device, hf_constants.HF_HUB_DISABLE_XET))
+            if len(calls) == 1:
+                raise RuntimeError("hf_xet transfer timed out while downloading a checkpoint")
+            return model
+
+    package = types.ModuleType("chatterbox")
+    package.__path__ = []
+    full_module = types.ModuleType("chatterbox.tts")
+    full_module.ChatterboxTTS = FakeFullChatterbox
+    monkeypatch.setitem(sys.modules, "chatterbox", package)
+    monkeypatch.setitem(sys.modules, "chatterbox.tts", full_module)
+    monkeypatch.setattr(audio, "_CHATTERBOX_MODEL", None)
+    monkeypatch.setattr(audio, "_CHATTERBOX_MODEL_VERSION", None)
+    monkeypatch.setattr(hf_constants, "HF_HUB_DISABLE_XET", False)
+
+    loaded = audio.get_chatterbox_model("full")
+
+    assert loaded is model
+    assert len(calls) == 2
+    assert calls[0][1] is True
+    assert calls[1][1] is False
+    assert hf_constants.HF_HUB_DISABLE_XET is False
+    assert audio.get_chatterbox_model("full") is model
+    assert len(calls) == 2
+
+
 def test_chatterbox_reference_conditioning_failure_is_reported(monkeypatch, tmp_path):
     import audio
 
@@ -159,6 +197,35 @@ def test_audio_uses_measured_lead_duration_for_hindi_telugu(
         assert result["scenes"][0]["duration"] == first_duration
 
 
+def test_audio_auto_corrects_hindi_lead_before_applying_the_hard_limit(monkeypatch, tmp_path):
+    import audio
+
+    rates = []
+
+    async def fake_generate(scenes, requested_language, rate_percent, output_dir):
+        rates.append(rate_percent)
+        first_duration = 5.55 if len(rates) == 1 else 4.65
+        return [
+            {
+                "scene": index,
+                "path": str(tmp_path / f"voiceover_{index}.mp3"),
+                "duration": first_duration if index == 1 else 1.0,
+                "timings": [{"word": "sample", "start": 0.0, "end": 0.5}],
+                "from_cache": False,
+            }
+            for index, _scene in enumerate(scenes, 1)
+        ]
+
+    monkeypatch.setattr(audio, "_generate_at_rate", fake_generate)
+    result = generate_audio(approved_script("hindi"), tmp_path, engine="edge")
+
+    assert result["duration_corrected"] is True
+    assert len(rates) == 2
+    assert rates[1] > rates[0]
+    assert result["scenes"][0]["duration"] <= audio.FIRST_SCENE_MAX_DURATION_SECONDS
+    assert result["total_duration"] < audio.MAX_DURATION_SECONDS
+
+
 def test_audio_approval_cannot_bypass_hindi_lead_duration_limit(tmp_path):
     import audio
 
@@ -238,6 +305,35 @@ def test_top5_audio_corrects_total_duration(monkeypatch, tmp_path):
     assert len(rates) == 2
     assert rates[1] > rates[0]
     assert result["total_duration"] == 24.0
+
+
+def test_top5_audio_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch, tmp_path):
+    import audio
+
+    rates = []
+
+    async def fake_generate(scenes, language, rate_percent, output_dir):
+        rates.append(rate_percent)
+        total = 30.0 if len(rates) == 1 else 29.4
+        duration = total / 6
+        return [
+            {
+                "scene": index,
+                "path": str(tmp_path / f"voiceover_{index}.mp3"),
+                "duration": duration,
+                "timings": [{"word": "Story", "start": 0.0, "end": 0.5}],
+                "from_cache": False,
+            }
+            for index in range(1, 7)
+        ]
+
+    monkeypatch.setattr(audio, "_generate_at_rate", fake_generate)
+    result = generate_top5_audio(approved_top5_script(), tmp_path, engine="edge")
+
+    assert result["duration_corrected"] is True
+    assert len(rates) == 2
+    assert rates[1] > rates[0]
+    assert result["total_duration"] < 30.0
 
 
 def test_top5_audio_requires_exactly_six_slides(monkeypatch, tmp_path):
@@ -393,8 +489,8 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
         def prepare_conditionals(self, reference_path, exaggeration=0.5):
             self.conditioning_calls.append(reference_path)
 
-        def generate(self, text, temperature=0.8):
-            self.generate_calls.append((text, temperature))
+        def generate(self, text, **kwargs):
+            self.generate_calls.append((text, kwargs))
             return torch.ones((1, self.sr), dtype=torch.float32)
 
     model = FakeChatterbox()
@@ -415,7 +511,12 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
 
     assert all(not scene["from_cache"] for scene in first["scenes"])
     assert model.generate_calls[0][0] == audio._join_narration_texts([scene["voiceover"] for scene in script["script"]])
-    assert model.generate_calls[0][1] == 0.80
+    assert model.generate_calls[0][1] == {
+        "temperature": 0.90,
+        "top_p": 0.95,
+        "top_k": 1000,
+        "repetition_penalty": 1.15,
+    }
     assert all(scene["continuous_master_path"] == first["full_path"] for scene in first["scenes"])
     assert all(scene["from_cache"] for scene in second["scenes"])
     assert len(model.generate_calls) == 1
@@ -428,6 +529,47 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
 
     assert all(not scene["from_cache"] for scene in third["scenes"])
     assert len(model.generate_calls) == 2
+
+
+def test_chatterbox_seed_varies_by_story_but_remains_cached_for_exact_takes(monkeypatch, tmp_path):
+    import sys
+    import types
+    import torch
+    import audio
+
+    class FakeChatterbox:
+        sr = 16000
+        conds = "builtin"
+
+    seeds = []
+    fake_torchaudio = types.SimpleNamespace(
+        save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
+    )
+
+    def fake_take(model, text, model_version, seed):
+        seeds.append(seed)
+        return torch.ones((1, model.sr), dtype=torch.float32)
+
+    monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda model_version="turbo": FakeChatterbox())
+    monkeypatch.setattr(audio, "_generate_chatterbox_take", fake_take)
+    monkeypatch.setattr(audio, "AUDIO_REFERENCE", tmp_path / "missing-reference.wav")
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_CACHE", {})
+    monkeypatch.setattr(audio, "_CHATTERBOX_DEFAULT_CONDITIONALS", None)
+
+    script = approved_script()
+    output_dir = tmp_path / "story-seeded"
+    audio.generate_chatterbox_audio(script, output_dir=output_dir)
+    audio.generate_chatterbox_audio(script, output_dir=output_dir)
+
+    changed = approved_script()
+    changed["script"][0]["voiceover"] = "Australia won."
+    audio.generate_chatterbox_audio(changed, output_dir=output_dir)
+
+    assert len(seeds) == 2
+    assert seeds[0] != seeds[1]
+    assert all(0 <= seed <= 0x7FFFFFFF for seed in seeds)
 
 
 def test_chatterbox_full_generates_one_continuous_take_with_stable_controls(monkeypatch, tmp_path):
@@ -500,7 +642,7 @@ def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_pat
         def prepare_conditionals(self, reference_path, exaggeration=0.5):
             self.conditioning_calls += 1
 
-        def generate(self, text, temperature=0.8):
+        def generate(self, text, **kwargs):
             self.generate_calls += 1
             return torch.ones((1, self.sr), dtype=torch.float32)
 
@@ -552,7 +694,7 @@ def test_chatterbox_delivery_uses_flat_temperature_and_no_heuristic_acting():
         "The final result changed everything.",
     ]
     assert all(
-        audio._chatterbox_delivery(text, number, len(texts))[1] == 0.80
+        audio._chatterbox_delivery(text, number, len(texts))[1] == 0.90
         for number, text in enumerate(texts, 1)
     )
     assert audio._chatterbox_audio_texts(texts) == texts
@@ -591,7 +733,7 @@ def test_chatterbox_voice_variant_outputs_do_not_overwrite_each_other(monkeypatc
         def prepare_conditionals(self, reference_path, exaggeration=0.5):
             self.conds = Path(reference_path).name
 
-        def generate(self, text, temperature=0.8):
+        def generate(self, text, **kwargs):
             self.generated += 1
             return torch.ones((1, self.sr), dtype=torch.float32)
 
@@ -643,3 +785,43 @@ def test_dashboard_exposes_full_and_turbo_for_every_chatterbox_audio_route():
     assert "def _audio_selection_mismatch(" in app_source
     assert "disabled=model_mismatch" in app_source
     assert "Chatterbox Turbo (Voice Cloning)" not in app_source
+
+
+def test_chatterbox_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch, tmp_path):
+    import sys
+    import types
+    from pathlib import Path
+    import torch
+    import audio
+
+    class FakeChatterbox:
+        sr = 16000
+        conds = None
+
+        def generate(self, text, **kwargs):
+            return torch.ones((1, self.sr * 30), dtype=torch.float32)
+
+    model = FakeChatterbox()
+    fake_torchaudio = types.SimpleNamespace(
+        save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
+    )
+    fake_librosa = types.SimpleNamespace(
+        effects=types.SimpleNamespace(
+            time_stretch=lambda values, rate: values[: int(len(values) / rate)]
+        )
+    )
+    monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda model_version="turbo": model)
+    monkeypatch.setattr(audio, "AUDIO_REFERENCE", tmp_path / "missing-reference.wav")
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_CACHE", {})
+    monkeypatch.setattr(audio, "_CHATTERBOX_DEFAULT_CONDITIONALS", None)
+
+    result = audio.generate_chatterbox_audio(
+        approved_script("english"),
+        output_dir=tmp_path / "exact-limit",
+    )
+
+    assert result["duration_corrected"] is True
+    assert result["total_duration"] < 30.0
