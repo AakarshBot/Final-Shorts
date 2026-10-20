@@ -4347,8 +4347,9 @@ def _show_upload_originality_audit(
     elif seed_report.get("message") and seed_report.get("seeded_count") == 0:
         st.caption(str(seed_report.get("message")))
     st.caption(
-        "This is an advisory QC signal, not a YouTube verdict. Existing channel imports compare titles/descriptions only; "
-        "factory-recorded uploads can also compare narration and exact image hashes. Similar crops/generated images are not detected."
+        "This is advisory QC, not a YouTube verdict. Existing channel imports compare titles/descriptions only; "
+        "factory-recorded uploads also compare narration, source/angle metadata, exact image hashes and perceptual hashes "
+        "that tolerate some resizing/re-encoding. The visual check is not semantic and major crops or similar AI-generated images may evade it."
     )
     return record
 
