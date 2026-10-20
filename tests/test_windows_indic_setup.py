@@ -16,6 +16,7 @@ def test_windows_indic_setup_retries_official_mirrors_without_bypassing_checksum
     assert "if (-not $VerifiedPackage)" in source
     assert "Nothing was installed." in source
 
+
 def test_raqm_wheel_workflow_verifies_the_same_isolated_wheel_used_at_runtime():
     workflow_path = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "build-windows-raqm-pillow.yml"
     workflow = workflow_path.read_text(encoding="utf-8")
