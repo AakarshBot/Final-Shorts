@@ -7462,7 +7462,7 @@ def render_live_dashboard():
                 approved_script,
                 selected_engine,
                 reference,
-                st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold(),
+                model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold(),
             )
             st.session_state.live_audio_status = "running"
             st.session_state.live_stage = "04 · Visuals + Render"
