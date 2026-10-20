@@ -197,7 +197,7 @@ def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
         for variable in ("PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE"):
             probe_env.pop(variable, None)
         if os.name == "nt":
-            system_root = Path(probe_env.get("SystemRoot", r"C:\\Windows"))
+            system_root = Path(probe_env.get("SystemRoot", "C:/Windows"))
             runtime_paths = (
                 staging / "PIL",
                 staging / "pillow.libs",
