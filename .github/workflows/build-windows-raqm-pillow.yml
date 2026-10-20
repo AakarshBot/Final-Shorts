@@ -1,0 +1,135 @@
+name: build-windows-raqm-pillow
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/build-windows-raqm-pillow.yml"
+      - "renderer.py"
+      - "Run_Final_Shorts.bat"
+      - "tests/test_renderer.py"
+      - "fonts/NotoSansDevanagari-Bold.ttf"
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-windows-raqm-pillow.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-raqm-wheel:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: python-pillow/Pillow
+          ref: 11.3.0
+          path: pillow-source
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: actions/cache@v4
+        with:
+          path: pillow-source/winbuild/depends
+          key: pillow-winbuild-11.3.0-amd64-raqm-v1
+      - name: Prepare upstream Pillow dependency build
+        working-directory: pillow-source
+        shell: pwsh
+        run: python winbuild/build_prepare.py -v --architecture AMD64 --depends winbuild/depends --no-imagequant --no-avif
+      - name: Build Pillow with vendored RAQM and FriBiDi
+        working-directory: pillow-source
+        shell: cmd
+        run: |
+          call winbuild\build\build_dep_all.cmd
+          if errorlevel 1 exit /b 1
+          call winbuild\build\build_env.cmd
+          if errorlevel 1 exit /b 1
+          python -m pip install --upgrade pip wheel setuptools
+          if errorlevel 1 exit /b 1
+          if not exist "%GITHUB_WORKSPACE%\raqm-wheels" mkdir "%GITHUB_WORKSPACE%\raqm-wheels"
+          python -m pip wheel --no-deps --no-build-isolation -C raqm=vendor -C fribidi=vendor --wheel-dir "%GITHUB_WORKSPACE%\raqm-wheels" .
+          if errorlevel 1 exit /b 1
+      - name: Verify wheel has RAQM and shapes bundled Devanagari text
+        shell: pwsh
+        run: |
+          $wheel = Get-ChildItem "$env:GITHUB_WORKSPACE\raqm-wheels" -Filter "pillow-11.3.0-cp311-cp311-win_amd64.whl" -File | Select-Object -First 1
+          if (-not $wheel) { throw "The expected CPython 3.11 x64 Pillow wheel was not produced." }
+          $testTarget = Join-Path $env:GITHUB_WORKSPACE "raqm-test"
+          python -m pip install --no-deps --target $testTarget $wheel.FullName
+          if ($LASTEXITCODE -ne 0) { throw "Could not install the just-built wheel into the isolated verification folder." }
+          $verify = @'
+          import os
+          import sys
+          from pathlib import Path
+
+          root = Path(os.environ["GITHUB_WORKSPACE"])
+          test_target = root / "raqm-test"
+          sys.path.insert(0, str(test_target))
+          dll_dirs = (
+              root / "pillow-source" / "winbuild" / "build" / "bin",
+              test_target / "PIL",
+              test_target / "pillow.libs",
+              test_target / "PIL" / ".libs",
+          )
+          handles = [os.add_dll_directory(str(path)) for path in dll_dirs if path.is_dir()]
+          from PIL import ImageFont, features
+
+          if features.check_feature("raqm") is not True:
+              raise SystemExit("The built Pillow wheel does not have RAQM enabled.")
+          font = ImageFont.truetype(
+              str(root / "fonts" / "NotoSansDevanagari-Bold.ttf"),
+              48,
+              layout_engine=ImageFont.Layout.RAQM,
+          )
+          if font.getmask("क्षेत्र की उपलब्धि").getbbox() is None:
+              raise SystemExit("The bundled Noto Devanagari font did not shape correctly.")
+          print("Verified: RAQM is enabled and real Devanagari shaping succeeded.")
+          '@
+          $verifyPath = Join-Path $env:GITHUB_WORKSPACE "verify-raqm-wheel.py"
+          Set-Content -Path $verifyPath -Value $verify -Encoding utf8
+          $env:PYTHONPATH = $testTarget
+          python $verifyPath
+          if ($LASTEXITCODE -ne 0) { throw "The custom Pillow wheel failed RAQM/Devanagari verification." }
+          $sha256 = (Get-FileHash -Path $wheel.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$sha256  $($wheel.Name)" | Set-Content -Path "$($wheel.FullName).sha256" -Encoding ascii
+      - uses: actions/upload-artifact@v4
+        with:
+          name: raqm-pillow-windows-py311
+          path: |
+            raqm-wheels/pillow-11.3.0-cp311-cp311-win_amd64.whl
+            raqm-wheels/pillow-11.3.0-cp311-cp311-win_amd64.whl.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish-raqm-wheel:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build-raqm-wheel
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: raqm-pillow-windows-py311
+          path: raqm-release
+      - name: Publish verified runtime wheel
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          tag="raqm-pillow-windows-v1"
+          if ! gh release view "$tag" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$tag" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "Final-Shorts RAQM-enabled Pillow for Windows" \
+              --notes "Custom Pillow 11.3.0 CPython 3.11 x64 wheel built from the upstream Pillow 11.3.0 source using the documented vendored RAQM and FriBiDi options. The wheel and its SHA-256 sidecar are produced and checked by the Windows build workflow." \
+              --prerelease \
+              --target "$GITHUB_SHA"
+          fi
+          gh release upload "$tag" \
+            raqm-release/pillow-11.3.0-cp311-cp311-win_amd64.whl \
+            raqm-release/pillow-11.3.0-cp311-cp311-win_amd64.whl.sha256 \
+            --repo "$GITHUB_REPOSITORY" \
+            --clobber
