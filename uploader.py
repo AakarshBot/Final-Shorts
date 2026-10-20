@@ -29,6 +29,7 @@ SPORTS_CATEGORY_ID = "17"
 UPLOAD_HISTORY_PATH = Path(__file__).resolve().parent / "output" / "factory_upload_history.json"
 ORIGINALITY_AUDIT_WINDOW = 50
 ORIGINALITY_HISTORY_LIMIT = 200
+CHANNEL_HISTORY_SEED_LIMIT = 50
 
 
 def _clean(value: Any) -> str:
@@ -80,6 +81,8 @@ def build_upload_originality_record(
     title: str,
     *,
     source_url: str = "",
+    description: str = "",
+    hashtags: str | list[str] = "",
     visuals: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     """Build a local comparison record from the approved story and slide visuals."""
@@ -103,12 +106,19 @@ def build_upload_originality_record(
         if isinstance(raw, (bytes, bytearray)) and raw:
             image_hashes.append(hashlib.sha256(bytes(raw)).hexdigest())
 
+    hashtag_text = " ".join(hashtags) if isinstance(hashtags, list) else str(hashtags or "")
+    metadata_text = " ".join(part for part in (
+        _clean(title),
+        _clean(description or script.get("seo_description")),
+        _clean(hashtag_text),
+    ) if part)
     return {
         "title": _clean(title),
         "source_title": _clean(script.get("source_title") or script.get("headline")),
         "source_url": _normalise_history_url(source_url or script.get("source_url") or ""),
         "story_angle": _clean(script.get("story_angle") or script.get("editorial_angle")),
         "narration": " ".join(narration),
+        "metadata_text": metadata_text,
         "visual_hashes": list(dict.fromkeys(image_hashes)),
         "format": _clean(script.get("schema") or script.get("desk_profile") or ""),
     }
@@ -133,6 +143,7 @@ def assess_upload_distinctiveness(
 
     tokens = _originality_tokens(record.get("narration"))
     title_tokens = _originality_tokens(record.get("title"))
+    metadata_tokens = _originality_tokens(record.get("metadata_text") or record.get("title"))
     source_url = _normalise_history_url(record.get("source_url"))
     visual_hashes = set(record.get("visual_hashes") or [])
     trigrams = _originality_trigrams(tokens)
@@ -141,6 +152,7 @@ def assess_upload_distinctiveness(
     for previous in history[-ORIGINALITY_AUDIT_WINDOW:]:
         old_tokens = _originality_tokens(previous.get("narration"))
         old_title = _originality_tokens(previous.get("title"))
+        old_metadata_tokens = _originality_tokens(previous.get("metadata_text") or previous.get("title"))
         old_source = _normalise_history_url(previous.get("source_url"))
         old_visuals = set(previous.get("visual_hashes") or [])
         old_trigrams = _originality_trigrams(old_tokens)
@@ -151,6 +163,10 @@ def assess_upload_distinctiveness(
         title_similarity = (
             SequenceMatcher(None, title_tokens, old_title, autojunk=False).ratio()
             if title_tokens and old_title else 0.0
+        )
+        metadata_similarity = (
+            SequenceMatcher(None, metadata_tokens, old_metadata_tokens, autojunk=False).ratio()
+            if metadata_tokens and old_metadata_tokens and not old_tokens else 0.0
         )
         union = trigrams | old_trigrams
         phrase_overlap = len(trigrams & old_trigrams) / len(union) if union else 0.0
@@ -166,12 +182,15 @@ def assess_upload_distinctiveness(
             "narration_similarity": round(narration_similarity, 3),
             "phrase_overlap": round(phrase_overlap, 3),
             "title_similarity": round(title_similarity, 3),
+            "metadata_similarity": round(metadata_similarity, 3),
+            "metadata_only_history": not bool(old_tokens),
             "visual_overlap": round(image_overlap, 3),
             "same_source": same_source,
         }
         rank = max(
             narration_similarity,
             phrase_overlap * 0.92,
+            metadata_similarity * 0.86,
             0.70 if same_source and narration_similarity >= 0.50 else 0.0,
             0.66 if image_overlap >= 0.75 else 0.0,
         )
@@ -191,6 +210,9 @@ def assess_upload_distinctiveness(
     phrase_overlap = closest["phrase_overlap"]
     image_overlap = closest["visual_overlap"]
     same_source = closest["same_source"]
+    metadata_similarity = closest["metadata_similarity"]
+    title_similarity = closest["title_similarity"]
+    metadata_only = closest["metadata_only_history"]
     if similarity >= 0.82 or phrase_overlap >= 0.72 or (same_source and similarity >= 0.55):
         level = "warning"
         message = (
@@ -198,13 +220,23 @@ def assess_upload_distinctiveness(
             f"{similarity:.0%}, phrase overlap {phrase_overlap:.0%}. Recheck the editorial angle, "
             "evidence, commentary and viewer value before publishing."
         )
-    elif similarity >= 0.62 or phrase_overlap >= 0.55 or same_source or image_overlap >= 0.50:
+    elif (
+        similarity >= 0.62 or phrase_overlap >= 0.55 or same_source or image_overlap >= 0.50
+        or (metadata_only and title_similarity >= 0.86 and metadata_similarity >= 0.78)
+    ):
         level = "review"
-        message = (
-            f"Review this upload against “{closest['title']}”: narration similarity "
-            f"{similarity:.0%}, phrase overlap {phrase_overlap:.0%}, repeated-image overlap "
-            f"{image_overlap:.0%}. Similar formats can be fine; the substance still needs to differ."
-        )
+        if metadata_only:
+            message = (
+                f"Metadata resembles “{closest['title']}” (title similarity {title_similarity:.0%}, "
+                f"metadata similarity {metadata_similarity:.0%}). The older video's narration is not in the local history, "
+                "so this is a metadata-only review signal, not a duplicate-content finding."
+            )
+        else:
+            message = (
+                f"Review this upload against “{closest['title']}”: narration similarity "
+                f"{similarity:.0%}, phrase overlap {phrase_overlap:.0%}, repeated-image overlap "
+                f"{image_overlap:.0%}. Similar formats can be fine; the substance still needs to differ."
+            )
     else:
         level = "ok"
         message = (
@@ -263,6 +295,135 @@ def record_upload_success(
             except OSError:
                 pass
         return False
+
+
+
+def seed_existing_channel_upload_history(
+    history_path: str | Path = UPLOAD_HISTORY_PATH,
+    *,
+    youtube: Resource | None = None,
+) -> dict[str, Any]:
+    """Best-effort import of the channel's latest upload titles/descriptions; never blocks upload."""
+    path = Path(history_path)
+    history = _read_upload_history(path)
+    if any(item.get("format") == "existing-channel-metadata" for item in history):
+        return {
+            "seeded_count": sum(item.get("format") == "existing-channel-metadata" for item in history),
+            "message": "Existing channel upload metadata is already included in the local audit.",
+        }
+
+    if youtube is None:
+        if not TOKEN_PATH.is_file():
+            return {
+                "seeded_count": 0,
+                "message": "Existing channel history was not imported because token.json is unavailable.",
+            }
+        try:
+            youtube = youtube_client(require_comments=False)
+        except Exception as exc:
+            return {
+                "seeded_count": 0,
+                "message": f"Existing channel history could not be loaded ({type(exc).__name__}). Local history will still work.",
+            }
+
+    try:
+        channel_result = youtube.channels().list(
+            part="contentDetails",
+            mine=True,
+            maxResults=1,
+        ).execute(num_retries=1)
+        channels = channel_result.get("items") or []
+        if not channels:
+            return {"seeded_count": 0, "message": "The authorized YouTube account did not return a channel."}
+        uploads_playlist = (
+            channels[0].get("contentDetails", {})
+            .get("relatedPlaylists", {})
+            .get("uploads")
+        )
+        if not uploads_playlist:
+            return {"seeded_count": 0, "message": "YouTube did not return the channel's uploads playlist."}
+        playlist_result = youtube.playlistItems().list(
+            part="snippet,contentDetails",
+            playlistId=uploads_playlist,
+            maxResults=CHANNEL_HISTORY_SEED_LIMIT,
+        ).execute(num_retries=1)
+        items = playlist_result.get("items") or []
+    except Exception as exc:
+        return {
+            "seeded_count": 0,
+            "message": (
+                f"Existing channel history could not be imported ({type(exc).__name__}). "
+                "Upload QC and the local comparison remain available."
+            ),
+        }
+
+    known_ids = {_clean(item.get("video_id")) for item in history}
+    imported = []
+    # YouTube lists newest first; insert oldest-to-newest so later factory uploads
+    # always remain the tail that the 50-video audit examines.
+    for item in reversed(items):
+        snippet = item.get("snippet") or {}
+        content = item.get("contentDetails") or {}
+        video_id = _clean(content.get("videoId") or (snippet.get("resourceId") or {}).get("videoId"))
+        title = _clean(snippet.get("title"))
+        description = _clean(snippet.get("description"))
+        if not video_id or video_id in known_ids or not title:
+            continue
+        record = {
+            "title": title,
+            "source_title": title,
+            "source_url": "",
+            "story_angle": "",
+            "narration": "",
+            "metadata_text": " ".join(part for part in (title, description) if part),
+            "visual_hashes": [],
+            "format": "existing-channel-metadata",
+            "video_id": video_id,
+            "url": f"https://www.youtube.com/watch?v={video_id}",
+            "published_at": _clean(snippet.get("publishedAt") or content.get("videoPublishedAt")),
+            "uploaded_at": _clean(snippet.get("publishedAt") or content.get("videoPublishedAt")),
+            "privacy_status": "channel-upload",
+        }
+        imported.append(record)
+        known_ids.add(video_id)
+
+    if imported:
+        combined = (history + imported)[-ORIGINALITY_HISTORY_LIMIT:]
+        temp_path = None
+        try:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with tempfile.NamedTemporaryFile(
+                mode="w",
+                encoding="utf-8",
+                dir=path.parent,
+                prefix=f".{path.name}.",
+                suffix=".tmp",
+                delete=False,
+            ) as handle:
+                temp_path = Path(handle.name)
+                json.dump(combined, handle, ensure_ascii=False, indent=2)
+                handle.write("\\n")
+            os.replace(temp_path, path)
+        except OSError as exc:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink(missing_ok=True)
+                except OSError:
+                    pass
+            return {
+                "seeded_count": 0,
+                "message": f"Channel metadata was retrieved but could not be saved locally ({type(exc).__name__}).",
+            }
+
+    return {
+        "seeded_count": len(imported),
+        "message": (
+            f"Imported {len(imported)} existing channel uploads for title/description comparison. "
+            "Their narration and visuals were not fetched, so any match against them is only a metadata signal."
+            if imported else
+            "No unseen uploads were found in the channel's latest upload page."
+        ),
+    }
 
 
 def compose_description(description: str, hashtags: str | list[str]) -> str:
