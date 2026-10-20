@@ -1878,6 +1878,7 @@ def test_isolated_raqm_pillow_installer_uses_checksum_verified_factory_wheel(mon
     assert "PYTHONHOME" not in captured["kwargs"]["env"]
     assert "NotoSansDevanagari-Bold.ttf" in captured["command"][-1]
     assert "NotoSansTelugu-Bold.ttf" in captured["command"][-1]
+    assert "font.layout_engine == ImageFont.Layout.RAQM" in captured["command"][-1]
 
 
 def test_raqm_pillow_installer_rejects_bad_checksum(monkeypatch, tmp_path):
