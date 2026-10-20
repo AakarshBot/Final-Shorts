@@ -89,6 +89,8 @@ jobs:
           '@
           $verifyPath = Join-Path $env:GITHUB_WORKSPACE "verify-raqm-wheel.py"
           Set-Content -Path $verifyPath -Value $verify -Encoding utf8
+          $dependencyBin = Join-Path $env:GITHUB_WORKSPACE "pillow-source\\winbuild\\build\\bin"
+          $env:PATH = "$dependencyBin;$testTarget\\PIL;$testTarget\\pillow.libs;$testTarget\\PIL\\.libs;$env:PATH"
           $env:PYTHONPATH = $testTarget
           python $verifyPath
           if ($LASTEXITCODE -ne 0) { throw "The custom Pillow wheel failed RAQM/Devanagari verification." }
