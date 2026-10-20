@@ -131,7 +131,7 @@ def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
         raise RuntimeError(f"Could not start the isolated Pillow installer: {exc}") from exc
 
     if process.returncode != 0:
-        details = "\\n".join(
+        details = "\n".join(
             part.strip() for part in (process.stdout, process.stderr) if part and part.strip()
         )
         if len(details) > 2500:
@@ -169,7 +169,7 @@ def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
     except (OSError, subprocess.TimeoutExpired) as exc:
         raise RuntimeError(f"Could not verify RAQM in the isolated Pillow wheel: {exc}") from exc
     if probe.returncode != 0:
-        details = "\\n".join(
+        details = "\n".join(
             part.strip() for part in (probe.stdout, probe.stderr) if part and part.strip()
         )
         raise RuntimeError(
