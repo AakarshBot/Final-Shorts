@@ -4316,6 +4316,7 @@ def _script_for_topic(
     angle=None,
     research_source=None,
     search_query=None,
+    validation_feedback=None,
 ) -> dict:
     from script_writer import ScriptWriter
 
@@ -4327,6 +4328,7 @@ def _script_for_topic(
         angle=angle,
         research_source=research_source,
         search_query=search_query,
+        validation_feedback=validation_feedback,
     )
 
 
@@ -4687,6 +4689,7 @@ def _live_start_story(index: int):
 def _live_generate_script(
     angle=None,
     research_source=None,
+    validation_feedback=None,
 ):
     selected_index = st.session_state.get("live_selected_topic")
     topics = st.session_state.get("live_topics") or []
@@ -4706,6 +4709,7 @@ def _live_generate_script(
             if st.session_state.get("live_production_line") == "youtube_trends"
             else None
         ),
+        validation_feedback=validation_feedback,
     )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
@@ -5865,12 +5869,14 @@ def _render_live_script():
             button_prefix=f"live-{story_id}",
         )
         if selected_angle:
+            previous_failure = str(st.session_state.get("live_script_error") or "").strip()
             st.session_state.live_script_error = ""
             try:
                 with st.spinner("Writing the Short from the selected angle…"):
                     _live_generate_script(
                         angle=selected_angle,
                         research_source=st.session_state.live_universal_angle_source,
+                        validation_feedback=previous_failure,
                     )
             except Exception as exc:
                 st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
