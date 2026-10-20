@@ -813,7 +813,7 @@ def generate_chatterbox_audio(
 
     raw_duration = full_wave.shape[-1] / model.sr
     corrected = False
-    if raw_duration > 30.0:
+    if raw_duration >= 30.0:
         try:
             import librosa
             rate = min(1.05, raw_duration / 29.7)
@@ -828,7 +828,7 @@ def generate_chatterbox_audio(
         corrected = True
 
     total_duration = full_wave.shape[-1] / model.sr
-    if total_duration > 30.0:
+    if total_duration >= 30.0:
         raise RuntimeError(
             "The generated narration is too long to fit the 30-second Short, "
             "even after one slight pitch-preserving speed adjustment."
@@ -1108,7 +1108,7 @@ def generate_top5_audio(
 
     total_duration = sum(float(scene["duration"]) for scene in results)
     max_duration = max(float(scene["duration"]) for scene in results)
-    if total_duration > TOP5_MAX_TOTAL_DURATION_SECONDS:
+    if total_duration >= TOP5_MAX_TOTAL_DURATION_SECONDS:
         multiplier = total_duration / TOP5_TOTAL_CORRECTION_TARGET_SECONDS
         adjusted = (
             (1.0 + rate_percent / 100.0) * multiplier - 1.0
