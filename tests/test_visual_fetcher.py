@@ -230,8 +230,11 @@ def test_manual_crawl_name_only_keeps_current_search(monkeypatch):
 
     result = visual_fetcher.manual_crawl_visuals("Virat Kohli")
 
-    assert calls == [(["Virat Kohli"], False)]
+    cutoff = visual_fetcher._manual_cutoff_date().isoformat()
+    assert calls == [([f"Virat Kohli after:{cutoff}"], True)]
     assert result["historical"] is False
+    assert result["lookback_years"] == 5
+    assert result["date_cutoff"] == cutoff
     assert result["search_queries"] == ["Virat Kohli"]
 
 
@@ -256,11 +259,17 @@ def test_manual_crawl_context_enables_historical_search(monkeypatch):
 
     result = visual_fetcher.manual_crawl_visuals("Virat Kohli century")
 
+    cutoff = visual_fetcher._manual_cutoff_date().isoformat()
     assert calls == [(
-        ["Virat Kohli century", "Virat Kohli hundred", "Virat Kohli century cricket"],
+        [
+            f"Virat Kohli century after:{cutoff}",
+            f"Virat Kohli hundred after:{cutoff}",
+            f"Virat Kohli century cricket after:{cutoff}",
+        ],
         True,
     )]
     assert result["historical"] is True
+    assert result["lookback_years"] == 5
     assert len(result["search_queries"]) == 3
 
 
@@ -296,6 +305,92 @@ def test_historical_search_keeps_old_relevant_pages(monkeypatch):
 
     assert current_pages == []
     assert [page["url"] for page in historical_pages] == ["https://example.com/old"]
+
+
+
+def test_manual_crawl_excludes_known_pages_older_than_five_years(monkeypatch):
+    from datetime import timedelta
+
+    cutoff = visual_fetcher._manual_cutoff_date()
+    old_date = (cutoff - timedelta(days=1)).isoformat()
+    in_range_date = (cutoff + timedelta(days=1)).isoformat()
+    calls = []
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_manual_query_plan",
+        lambda query: {"historical": False, "queries": [query]},
+    )
+
+    def fake_related(queries, original_url, story_title="", entity="", historical=False):
+        calls.append((queries, historical))
+        return [
+            {
+                "url": "https://example.com/old",
+                "title": "Virat Kohli old century",
+                "published_at": old_date,
+                "query": "Virat Kohli century",
+            },
+            {
+                "url": "https://example.com/in-window",
+                "title": "Virat Kohli recent century",
+                "published_at": in_range_date,
+                "query": "Virat Kohli century",
+            },
+        ]
+
+    crawled = []
+    monkeypatch.setattr(visual_fetcher, "_collect_related_pages", fake_related)
+
+    def fake_crawl(requests):
+        crawled.extend(requests)
+        return [{"assets": []} for _ in requests]
+
+    monkeypatch.setattr(visual_fetcher, "_crawl_pages", fake_crawl)
+    result = visual_fetcher.manual_crawl_visuals("Virat Kohli century")
+
+    assert calls[0][0] == [f"Virat Kohli century after:{cutoff.isoformat()}"]
+    assert calls[0][1] is True
+    assert [request["url"] for request in crawled] == ["https://example.com/in-window"]
+    assert result["date_cutoff"] == cutoff.isoformat()
+    assert result["pages_scraped"] == 1
+
+
+def test_news_search_applies_date_filter_to_providers_but_scores_base_query(monkeypatch):
+    import sys
+
+    calls = []
+
+    class FakeDDGS:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        def text(self, **kwargs):
+            calls.append(("text", kwargs["query"]))
+            return []
+
+    monkeypatch.setitem(
+        sys.modules,
+        "ddgs",
+        type("FakeModule", (), {"DDGS": FakeDDGS}),
+    )
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_ddgs_news",
+        lambda query, timelimit=None: calls.append(("ddgs", query, timelimit)) or [{
+            "title": "Virat Kohli century",
+            "url": "https://example.com/century",
+        }],
+    )
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_google_news_rss",
+        lambda query: calls.append(("google", query)) or [],
+    )
+
+    result = visual_fetcher._news_search("Virat Kohli century after:2021-10-21", historical=True)
+
+    assert all("after:2021-10-21" in item[1] for item in calls)
+    assert result[0]["query"] == "Virat Kohli century"
 
 
 def test_manual_crawl_returns_scraped_assets(monkeypatch):
