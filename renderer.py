@@ -206,6 +206,27 @@ def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
                 + (details or f"RAQM probe exited with code {probe.returncode}.")
             )
 
+        sitecustomize = """import os
+from pathlib import Path
+
+_TARGET = Path(__file__).resolve().parent
+_FACTORY_ROOT = _TARGET.parents[1]
+_DLL_HANDLES = []
+if os.name == "nt" and hasattr(os, "add_dll_directory"):
+    for _dll_dir in (
+        _FACTORY_ROOT / "dlls",
+        _TARGET,
+        _TARGET / "PIL",
+        _TARGET / "pillow.libs",
+        _TARGET / "PIL" / ".libs",
+    ):
+        if _dll_dir.is_dir():
+            try:
+                _DLL_HANDLES.append(os.add_dll_directory(str(_dll_dir)))
+            except (OSError, ValueError):
+                pass
+"""
+        (staging / "sitecustomize.py").write_text(sitecustomize, encoding="utf-8")
         (staging / "python_executable.txt").write_text(str(sys.executable), encoding="utf-8")
         if target.exists():
             shutil.rmtree(target)
