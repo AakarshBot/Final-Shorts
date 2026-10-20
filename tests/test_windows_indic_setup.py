@@ -15,3 +15,19 @@ def test_windows_indic_setup_retries_official_mirrors_without_bypassing_checksum
     assert "$ActualSha256 -eq $ExpectedSha256" in source
     assert "if (-not $VerifiedPackage)" in source
     assert "Nothing was installed." in source
+
+
+def test_raqm_wheel_workflow_verifies_the_same_isolated_wheel_used_at_runtime():
+    workflow_path = Path(__file__).resolve().parents[1] / ".github" / "workflows" / "build-windows-raqm-pillow.yml"
+    workflow = workflow_path.read_text(encoding="utf-8")
+    verification = workflow.split("Verify extracted wheel in an isolated runtime", 1)[1].split(
+        "actions/upload-artifact@v4", 1
+    )[0]
+
+    assert "archive.extractall(test_target)" in verification
+    assert '[sys.executable, "-I", "-S", "-c", probe_code]' in verification
+    assert "PYTHONPATH" in verification and "PYTHONHOME" in verification
+    assert "NotoSansDevanagari-Bold.ttf" in verification
+    assert "NotoSansTelugu-Bold.ttf" in verification
+    assert "pillow-source" not in verification
+    assert "pip install --no-deps --target" not in verification
