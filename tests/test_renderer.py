@@ -1694,3 +1694,31 @@ def test_windows_raqm_bootstrap_surfaces_the_setup_failure_details(monkeypatch):
 
     with pytest.raises(RuntimeError, match="all trusted MSYS2 sources failed checksum verification"):
         renderer._require_raqm("hindi")
+
+
+def test_final_renderer_refuses_overlength_top5_handoff_before_preparing_visuals(tmp_path):
+    import renderer
+
+    script = {
+        "schema": "final-shorts.top5-script.v1",
+        "approved_for_audio": True,
+        "slides": [{"slide_number": number} for number in range(1, 7)],
+    }
+    audio = {
+        "approved_for_visuals": True,
+        "total_duration": 30.1,
+        "scenes": [
+            {"scene": number, "duration": 5.0, "path": "unused"}
+            for number in range(1, 7)
+        ],
+    }
+
+    with pytest.raises(ValueError, match="strictly under 30 seconds"):
+        renderer.render_production_video(
+            script,
+            audio,
+            None,
+            [{} for _ in range(6)],
+            tmp_path / "overlength-top5.mp4",
+        )
+
