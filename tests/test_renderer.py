@@ -1814,46 +1814,73 @@ def test_windows_raqm_bootstrap_surfaces_the_setup_failure_details(monkeypatch):
 
 
 def test_isolated_raqm_pillow_bootstrap_precedes_normal_pil_import(monkeypatch, tmp_path):
-    target = tmp_path / ".deps" / "raqm_pillow"
+    target = tmp_path / ".deps" / "raqm_pillow_11_3_0_cp311"
     package = target / "PIL"
     package.mkdir(parents=True)
     (package / "__init__.py").write_text("", encoding="utf-8")
     (package / "_imagingft.cp311-win_amd64.pyd").write_bytes(b"test extension")
+    (target / "python_executable.txt").write_text(str(renderer.sys.executable), encoding="utf-8")
 
     monkeypatch.setattr(renderer.sys, "path", list(renderer.sys.path))
     assert renderer._activate_bundled_raqm_pillow(tmp_path)
     assert renderer.sys.path[0] == str(target.resolve())
 
 
-def test_isolated_raqm_pillow_installer_uses_wheel_and_verifies_raqm(monkeypatch, tmp_path):
-    calls = []
+def test_isolated_raqm_pillow_installer_uses_checksum_verified_factory_wheel(monkeypatch, tmp_path):
+    import hashlib
+    import zipfile
+
+    wheel_name = "pillow-11.3.0-cp311-cp311-win_amd64.whl"
+    wheel_buffer = BytesIO()
+    with zipfile.ZipFile(wheel_buffer, "w") as wheel:
+        wheel.writestr("PIL/__init__.py", "")
+        wheel.writestr("PIL/features.py", "# mocked package")
+        wheel.writestr("PIL/_imagingft.cp311-win_amd64.pyd", b"test extension")
+    wheel_bytes = wheel_buffer.getvalue()
+    wheel_sha256 = hashlib.sha256(wheel_bytes).hexdigest()
+    requested = []
+
+    def fake_urlopen(url, timeout=0):
+        requested.append((url, timeout))
+        if url.endswith(".whl.sha256"):
+            return BytesIO(f"{wheel_sha256}  {wheel_name}\n".encode("ascii"))
+        assert url.endswith(wheel_name)
+        return BytesIO(wheel_bytes)
 
     class ProcessResult:
         returncode = 0
         stdout = ""
         stderr = ""
 
-    def fake_run(command, **kwargs):
-        calls.append((command, kwargs))
-        if "-m" in command and "pip" in command:
-            target = Path(command[command.index("--target") + 1])
-            package = target / "PIL"
-            package.mkdir(parents=True, exist_ok=True)
-            (package / "__init__.py").write_text("", encoding="utf-8")
-            (package / "_imagingft.cp311-win_amd64.pyd").write_bytes(b"test extension")
-        return ProcessResult()
+    monkeypatch.setattr(renderer, "urlopen", fake_urlopen)
+    monkeypatch.setattr(renderer.subprocess, "run", lambda *_args, **_kwargs: ProcessResult())
+    monkeypatch.setattr(renderer.sys, "version_info", (3, 11, 9, "final", 0))
+    monkeypatch.setattr(renderer.sysconfig, "get_platform", lambda: "win-amd64")
 
-    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
     target = renderer._install_raqm_enabled_pillow(tmp_path)
 
-    assert target == tmp_path / ".deps" / "raqm_pillow"
-    install_command = calls[0][0]
-    assert "--only-binary=:all:" in install_command
-    assert "--no-deps" in install_command
-    assert install_command[install_command.index("--target") + 1] == str(target)
-    assert "Pillow>=10,<12" in install_command
-    assert (target / "python_executable.txt").read_text(encoding="utf-8") == renderer.sys.executable
-    assert len(calls) == 2
+    assert target == tmp_path / ".deps" / "raqm_pillow_11_3_0_cp311"
+    assert len(requested) == 2
+    assert requested[0][0].endswith(f"/{wheel_name}")
+    assert requested[1][0].endswith(f"/{wheel_name}.sha256")
+    assert (target / "PIL" / "_imagingft.cp311-win_amd64.pyd").is_file()
+    assert (target / "python_executable.txt").read_text(encoding="utf-8") == str(renderer.sys.executable)
+
+
+def test_raqm_pillow_installer_rejects_bad_checksum(monkeypatch, tmp_path):
+    def fake_urlopen(url, timeout=0):
+        if url.endswith(".whl.sha256"):
+            return BytesIO((("0" * 64) + "  wheel\n").encode("ascii"))
+        return BytesIO(b"not-a-wheel")
+
+    monkeypatch.setattr(renderer, "urlopen", fake_urlopen)
+    monkeypatch.setattr(renderer.sys, "version_info", (3, 11, 9, "final", 0))
+    monkeypatch.setattr(renderer.sysconfig, "get_platform", lambda: "win-amd64")
+
+    with pytest.raises(RuntimeError, match="failed SHA-256 verification"):
+        renderer._install_raqm_enabled_pillow(tmp_path)
+
+    assert not (tmp_path / ".deps" / "raqm_pillow_11_3_0_cp311" / "python_executable.txt").exists()
 
 
 def test_windows_raqm_prepare_isolated_pillow_when_active_build_has_no_raqm(monkeypatch, tmp_path):
