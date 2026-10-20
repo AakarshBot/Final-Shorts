@@ -701,3 +701,43 @@ def test_dashboard_exposes_full_and_turbo_for_every_chatterbox_audio_route():
     assert "def _audio_selection_mismatch(" in app_source
     assert "disabled=model_mismatch" in app_source
     assert "Chatterbox Turbo (Voice Cloning)" not in app_source
+
+
+def test_chatterbox_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch, tmp_path):
+    import sys
+    import types
+    from pathlib import Path
+    import torch
+    import audio
+
+    class FakeChatterbox:
+        sr = 16000
+        conds = None
+
+        def generate(self, text, temperature=0.8):
+            return torch.ones((1, self.sr * 30), dtype=torch.float32)
+
+    model = FakeChatterbox()
+    fake_torchaudio = types.SimpleNamespace(
+        save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
+    )
+    fake_librosa = types.SimpleNamespace(
+        effects=types.SimpleNamespace(
+            time_stretch=lambda values, rate: values[: int(len(values) / rate)]
+        )
+    )
+    monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
+    monkeypatch.setitem(sys.modules, "librosa", fake_librosa)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda model_version="turbo": model)
+    monkeypatch.setattr(audio, "AUDIO_REFERENCE", tmp_path / "missing-reference.wav")
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_CACHE", {})
+    monkeypatch.setattr(audio, "_CHATTERBOX_DEFAULT_CONDITIONALS", None)
+
+    result = audio.generate_chatterbox_audio(
+        approved_script("english"),
+        output_dir=tmp_path / "exact-limit",
+    )
+
+    assert result["duration_corrected"] is True
+    assert result["total_duration"] < 30.0
