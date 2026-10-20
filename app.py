@@ -6072,18 +6072,22 @@ def _render_live_script():
         )
 
     if st.session_state.live_approved_script:
-        st.success("Script approved. Audio and subtitle handoffs are ready.")
+        if (
+            isinstance(st.session_state.get("live_approved_audio"), dict)
+            and isinstance(st.session_state.get("live_subtitle_data"), dict)
+        ):
+            st.success("Script, Audio and Subtitles are approved.")
+        else:
+            st.info("Script approved. Audio + Subtitles run independently; continue from the Audio stage while narration is generated.")
         if st.session_state.live_handoff_error:
             st.error(st.session_state.live_handoff_error)
             if st.button(
-                "Retry Audio / Subtitles",
+                "Open Audio + Subs to retry",
                 key="live-retry-handoffs",
             ):
-                try:
-                    with st.spinner("Retrying audio and subtitle handoffs…"):
-                        _live_generate_audio_and_subtitles()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    st.session_state.live_handoff_error = str(exc)
+                st.session_state.live_audio_status = "failed"
+                st.session_state.live_audio_error = st.session_state.live_handoff_error
+                st.session_state.live_stage = "03 · Audio + Subs"
                 st.rerun()
 
 
