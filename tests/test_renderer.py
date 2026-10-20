@@ -1624,6 +1624,33 @@ def test_windows_fribidi_bootstrap_surfaces_checksum_failure_without_accepting_d
     assert not (tmp_path / "dlls" / "libfribidi-0.dll").exists()
 
 
+def test_raqm_runtime_probe_catches_true_feature_flag_with_broken_font_load(monkeypatch):
+    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: True)
+
+    def broken_font(*_args, **_kwargs):
+        raise OSError("libfribidi DLL load failed")
+
+    monkeypatch.setattr(renderer.ImageFont, "truetype", broken_font)
+
+    available, reason = renderer._raqm_runtime_probe("hindi")
+
+    assert not available
+    assert "real RAQM font-load/shaping test failed" in reason
+    assert "libfribidi DLL load failed" in reason
+
+
+def test_windows_fribidi_installer_has_checksum_verified_zstd_fallback():
+    script_path = Path(renderer.__file__).resolve().with_name("setup_windows_indic_rendering.ps1")
+    source = script_path.read_text(encoding="utf-8")
+
+    assert "zstd-v1.5.7-win64.zip" in source
+    assert "Get-FileHash -Path $ZstdZipPath -Algorithm SHA512" in source
+    assert "$ExpectedSha256 = " in source
+    assert "$ZstdZipSha512 = " in source
+    assert "if (-not $Extracted)" in source
+    assert "No Python packages were installed" in source
+
+
 def test_indic_raqm_error_explains_actual_shaping_and_automatic_bootstrap(monkeypatch):
     monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
     monkeypatch.setattr(renderer.os, "name", "posix")
