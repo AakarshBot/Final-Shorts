@@ -1292,3 +1292,27 @@ def test_live_pipeline_allows_direct_stage_selection_after_topic_choice():
     assert not at.exception, at.exception
     assert at.session_state["live_stage"] == "03 · Audio + Subs"
     assert any("Approve the Scriptwriter before generating Audio" in warning.value for warning in at.warning)
+
+
+
+def test_test_and_live_stage_pickers_do_not_mix_default_with_session_state():
+    source = (Path(__file__).resolve().parents[1] / "app.py").read_text(encoding="utf-8")
+
+    test_picker = source.index('selected = st.pills(\n                "Pipeline",')
+    test_picker_end = source.index(
+        "if selected != st.session_state.test_stage:",
+        test_picker,
+    )
+    test_picker_call = source[test_picker:test_picker_end]
+    assert 'key="test-stage-switcher"' in test_picker_call
+    assert "default=" not in test_picker_call
+
+    live_picker = source.index('selected = st.pills(\n                    "Live pipeline",')
+    live_picker_end = source.index(
+        'if selected != st.session_state.get("live_stage"):',
+        live_picker,
+    )
+    live_picker_call = source[live_picker:live_picker_end]
+    assert 'key="live-stage-switcher"' in live_picker_call
+    assert "default=" not in live_picker_call
+
