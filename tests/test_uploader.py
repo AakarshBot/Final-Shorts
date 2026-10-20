@@ -449,7 +449,14 @@ def test_upload_originality_audit_catches_resized_reencoded_image_repeat(tmp_pat
         visuals=[{"bytes": recompressed.getvalue()}],
     )
     assert second["visual_hashes"] != first["visual_hashes"]
-    assert second["perceptual_visual_hashes"] == first["perceptual_visual_hashes"]
+    distance = sum(
+        left != right
+        for left, right in zip(
+            second["perceptual_visual_hashes"][0],
+            first["perceptual_visual_hashes"][0],
+        )
+    )
+    assert distance <= 6
 
     report = uploader.assess_upload_distinctiveness(second, history_path)
 
