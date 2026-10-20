@@ -839,15 +839,24 @@ def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatc
         calls.append((model, prompt))
         if len(calls) == 1:
             raise script_writer.GroqAPIError(429, "Rate limit reached", "15")
-        return valid_result()
+        if len(calls) == 2:
+            return valid_result()
+        corrected = valid_result("Shubman Gill faces an injury scare before India's ODI.")
+        return corrected
 
     monkeypatch.setattr(script_writer, "_request", fake_request)
     result = script_writer.write_script(Story(), language="hindi")
 
-    assert [call[0] for call in calls] == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
+    assert [call[0] for call in calls] == [
+        "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
+        "openai/gpt-oss-120b",
+    ]
     assert "HIDDEN REWRITE" not in calls[1][1]
     assert "RECOVERY" not in calls[1][1]
-    assert result["provider_used"] == "openai/gpt-oss-20b"
+    assert "MANDATORY INDIC TIMING REWRITE" in calls[2][1]
+    assert result["provider_used"] == "openai/gpt-oss-120b"
+    assert result["script"][0]["voiceover"] == "Shubman Gill faces an injury scare before India's ODI."
 
 
 def test_writer_stops_on_groq_400_without_spending_another_request(monkeypatch):
