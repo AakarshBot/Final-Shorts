@@ -7455,7 +7455,6 @@ def render_live_dashboard():
             st.session_state.live_subtitle_data = None
             approved_script = deepcopy(st.session_state.live_approved_script)
             selected_engine = "chatterbox" if is_live_chatterbox else "edge"
-            model_version = str(st.session_state.get("live_audio_chatterbox_model", "Turbo")).casefold()
             selected_topic = st.session_state.live_topics[st.session_state.live_selected_topic]
             st.session_state.live_audio_job_story_key = _live_story_key(selected_topic)
             st.session_state.live_audio_future = _live_background_executor().submit(
@@ -7463,7 +7462,7 @@ def render_live_dashboard():
                 approved_script,
                 selected_engine,
                 reference,
-                model_version,
+                st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold(),
             )
             st.session_state.live_audio_status = "running"
             st.session_state.live_stage = "04 · Visuals + Render"
