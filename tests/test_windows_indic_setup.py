@@ -29,6 +29,7 @@ def test_raqm_wheel_workflow_verifies_the_same_isolated_wheel_used_at_runtime():
     assert "PYTHONPATH" in verification and "PYTHONHOME" in verification
     assert "NotoSansDevanagari-Bold.ttf" in verification
     assert "NotoSansTelugu-Bold.ttf" in verification
+    assert "font.layout_engine == ImageFont.Layout.RAQM" in verification
     assert "pillow-source" not in verification
     assert "pip install --no-deps --target" not in verification
     assert "delvewheel repair --include fribidi.dll --no-mangle fribidi.dll --add-path" in workflow
