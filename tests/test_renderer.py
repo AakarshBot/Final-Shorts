@@ -1745,7 +1745,7 @@ def test_indic_raqm_error_explains_actual_shaping_and_automatic_bootstrap(monkey
     monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
     monkeypatch.setattr(renderer.os, "name", "posix")
     monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: (False, "Pillow reports no RAQM"))
-    with pytest.raises(RuntimeError, match="automatically runs the checksum-verified, no-pip FriBiDi installer"):
+    with pytest.raises(RuntimeError, match="compiled RAQM support"):
         renderer._require_raqm("hindi")
 
 
