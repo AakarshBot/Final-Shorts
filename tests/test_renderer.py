@@ -1651,6 +1651,19 @@ def test_windows_fribidi_installer_has_checksum_verified_zstd_fallback():
     assert "No Python packages were installed" in source
 
 
+def test_windows_indic_installer_has_a_checksum_pinned_zstd_fallback():
+    script_path = Path(renderer.__file__).resolve().parent / "setup_windows_indic_rendering.ps1"
+    script = script_path.read_text(encoding="utf-8")
+
+    # Older Windows tar.exe builds cannot always unpack .tar.zst. The fallback
+    # must remain pinned and verified; do not silently accept a downloaded tool.
+    assert '$ExpectedSha256 = "3581ee03cf83a9bb0e98bf688c4f532a29553500e317532d90746de295b0f8a8"' in script
+    assert '$ZstdZipSha512 = "a96dc5417943c03fa231bf2d6a586b7ae7254fa52fdc15d302f296b5ff88e1ff0f07120a720149eb82ea0f0c65444393ebf05d2ee1bd1db341b803ff65a2e675"' in script
+    assert "Get-FileHash -Path $ZstdZipPath -Algorithm SHA512" in script
+    assert "Get-FileHash -Path $PackagePath -Algorithm SHA256" in script
+    assert "& $ZstdExe.FullName -d -q -f -o $TarPath $PackagePath" in script
+
+
 def test_indic_raqm_error_explains_actual_shaping_and_automatic_bootstrap(monkeypatch):
     monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
     monkeypatch.setattr(renderer.os, "name", "posix")
