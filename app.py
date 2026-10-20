@@ -3170,7 +3170,7 @@ def _render_card_studio(
                     key = asset["asset_key"]
                     cropped = crop_store.get(key)
                     preview_bytes = cropped if cropped else asset.get("bytes")
-                    preview = _fit_visual_preview(preview_bytes, width=180, height=320)
+                    preview = _fit_visual_preview(preview_bytes, width=180 if live else 240, height=320 if live else 360)
                     if live:
                         with st.container(key=f"{state_id}-live-source-card-{start + offset}"):
                             image_col, details_col = st.columns([0.68, 1.32], gap="small", vertical_alignment="top")
