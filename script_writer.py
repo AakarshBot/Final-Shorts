@@ -389,14 +389,19 @@ CRICKET_ANGLE_PROMPT = """You are the senior editorial planning desk for a viral
 
 Read the entire research packet and propose exactly three genuinely different, high-retention story angles for the same story.
 
-VIRAL ANGLE ARCHETYPES
-Propose exactly three distinct creative angles corresponding to these proven YouTube formats:
-1. THE HIGH-STAKES DEBATE / PROVOCATION:
-   Frame the event as a polarizing question or tactical debate (e.g., "Is a 33-ball duck better than a golden duck?", "Masterclass or total collapse?", "Did the captain make the right call?").
-2. THE ANOMALY / FREAK STAT / HISTORICAL RECORD:
-   Focus on the extreme numbers, where this ranks in history, or a statistical contrast that shocks the viewer.
-3. THE HIDDEN DRAMA / NARRATIVE INVERSION:
-   Reveal the untold story, tactical sacrifice, or behind-the-scenes tension that proves the scorecard doesn't tell the whole truth.
+EDITORIAL ANGLE SELECTION — STORY FIRST, NOT A FIXED TEMPLATE
+Propose exactly three evidence-supported angles for THIS story. The familiar formats below are options, not mandatory slots:
+- A tactical decision or turning point that changed the contest.
+- A verified statistical anomaly, record, or revealing comparison.
+- A selection, strategy, discipline, fitness, or accountability question with evidence.
+- A consequential reaction or quote, with the speaker and context central.
+- A historical contrast or precedent that changes how the event is understood.
+- A career, team, tournament, or future-selection consequence.
+- A technical explanation of how or why a confirmed development happened.
+- A contradiction, overlooked detail, or under-reported context supported by sources.
+- A human or team impact that is more informative than the scoreline.
+
+Do not force a debate, record, or behind-the-scenes narrative when the source does not support it. Do not invent tension. Do not present the same three angle categories in the same order for every story. Let the evidence determine the angle types and ordering, and make each option lead to a materially different Short rather than three versions of the same headline.
 
 RULES
 - Each angle must be grounded in the research packet.
@@ -562,14 +567,17 @@ UNIVERSAL_ANGLE_PROMPT = """You are the senior editorial planning desk for a vir
 
 Read the entire research packet and propose exactly three genuinely different, high-retention story angles for the same story.
 
-VIRAL ANGLE ARCHETYPES
-Propose exactly three distinct creative angles corresponding to these proven YouTube formats:
-1. THE HIGH-STAKES DEBATE / PROVOCATION:
-   Frame the event as a polarizing question or tactical debate (e.g. "Did they make the right call?", "Masterclass or total collapse?", "Tactical genius or pure luck?").
-2. THE ANOMALY / FREAK STAT / HISTORICAL RECORD:
-   Focus on the extreme numbers, where this ranks in history, or a statistical contrast that shocks the viewer.
-3. THE HIDDEN DRAMA / NARRATIVE INVERSION:
-   Reveal the untold story, tactical sacrifice, or behind-the-scenes tension that proves the headline doesn't tell the whole truth.
+EDITORIAL ANGLE SELECTION — STORY FIRST, NOT A FIXED TEMPLATE
+Propose exactly three evidence-supported angles for THIS story. Select from different approaches such as:
+- a tactical or technical explanation;
+- a turning point or decision and its verified consequence;
+- a surprising confirmed statistic or historical comparison;
+- a supported quote/reaction and what it changes;
+- an injury, transfer, selection, discipline, or career consequence;
+- an overlooked detail, contradiction, or timeline;
+- a rules, strategy, or performance breakdown;
+- a meaningful human/team impact grounded in the research.
+These are options, not mandatory slots. Do not force controversy, hidden drama, a record, or an underdog narrative if the evidence does not support it. Do not place the same three angle types in the same order for every story. Each angle must produce a materially different Short, with a specific evidence basis, not three paraphrases of the headline.
 
 RULES
 - Each angle must be grounded in the research packet.
