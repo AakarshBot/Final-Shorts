@@ -645,14 +645,30 @@ def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
         )
     else:
         # Turbo has no CFG/exaggeration controls; slightly warmer sampling helps
-        # reduce the overly flat delivery without inserting fake acting cues.
-        wav = model.generate(
-            text,
-            temperature=0.90,
-            top_p=0.95,
-            top_k=1000,
-            repetition_penalty=1.15,
-        )
+        # reduce flat delivery without inserting fake acting cues. Filter settings
+        # by the installed model signature so older compatible package versions
+        # still receive the temperature setting instead of failing on new kwargs.
+        turbo_controls = {
+            "temperature": 0.90,
+            "top_p": 0.95,
+            "top_k": 1000,
+            "repetition_penalty": 1.15,
+        }
+        try:
+            import inspect
+            parameters = inspect.signature(model.generate).parameters
+            accepts_kwargs = any(
+                item.kind == inspect.Parameter.VAR_KEYWORD
+                for item in parameters.values()
+            )
+            if not accepts_kwargs:
+                turbo_controls = {
+                    key: value for key, value in turbo_controls.items()
+                    if key in parameters
+                }
+        except (TypeError, ValueError):
+            turbo_controls = {"temperature": 0.90}
+        wav = model.generate(text, **turbo_controls)
 
     wav = wav.detach().cpu()
     if wav.ndim == 1:
