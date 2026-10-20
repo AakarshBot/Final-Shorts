@@ -439,42 +439,47 @@ def get_chatterbox_model(model_version: str = "turbo"):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if selected == "full":
             from chatterbox.tts import ChatterboxTTS
-            try:
-                loaded_model = ChatterboxTTS.from_pretrained(device=device)
-            except Exception as download_error:
-                detail = str(download_error).casefold()
-                retryable_transfer = any(
-                    marker in detail
-                    for marker in (
-                        "xet",
-                        "unable to parse string as hex hash",
-                        "timed out",
-                        "timeout",
-                        "connection reset",
-                        "connection aborted",
-                        "remote end closed",
-                        "incomplete read",
-                    )
-                )
-                if not retryable_transfer:
-                    raise
+            import huggingface_hub.constants as hf_constants
 
-                # The original Full loader uses individual hf_hub_download calls and
-                # has no Xet fallback. Retry a failed large-file transfer using the
-                # standard HTTPS path, mirroring upstream Turbo's recovery strategy.
-                import huggingface_hub.constants as hf_constants
-                previous_xet_setting = hf_constants.HF_HUB_DISABLE_XET
-                hf_constants.HF_HUB_DISABLE_XET = True
+            previous_xet_setting = hf_constants.HF_HUB_DISABLE_XET
+            # Full's upstream loader downloads five artifacts individually but lacks
+            # Turbo's Xet recovery. Prefer the normal HTTPS/LFS cache path on the
+            # first attempt; it still reuses completed Hugging Face cache files.
+            hf_constants.HF_HUB_DISABLE_XET = True
+            try:
                 try:
                     loaded_model = ChatterboxTTS.from_pretrained(device=device)
-                except Exception as retry_error:
-                    raise RuntimeError(
-                        "The Full model download/load failed on the first transfer and "
-                        "the standard HTTPS retry also failed. "
-                        f"First error: {download_error}. Retry error: {retry_error}"
-                    ) from retry_error
-                finally:
+                except Exception as download_error:
+                    detail = str(download_error).casefold()
+                    retryable_transfer = any(
+                        marker in detail
+                        for marker in (
+                            "xet",
+                            "unable to parse string as hex hash",
+                            "timed out",
+                            "timeout",
+                            "connection reset",
+                            "connection aborted",
+                            "remote end closed",
+                            "incomplete read",
+                        )
+                    )
+                    if not retryable_transfer:
+                        raise
+
+                    # A failed standard HTTPS/LFS transfer can be retried through
+                    # Xet, which may recover when the issue is transport-specific.
                     hf_constants.HF_HUB_DISABLE_XET = previous_xet_setting
+                    try:
+                        loaded_model = ChatterboxTTS.from_pretrained(device=device)
+                    except Exception as retry_error:
+                        raise RuntimeError(
+                            "The Full model download/load failed through both the "
+                            "standard HTTPS/LFS path and the Xet retry. "
+                            f"First error: {download_error}. Retry error: {retry_error}"
+                        ) from retry_error
+            finally:
+                hf_constants.HF_HUB_DISABLE_XET = previous_xet_setting
         else:
             from chatterbox.tts_turbo import ChatterboxTurboTTS
             loaded_model = ChatterboxTurboTTS.from_pretrained(device=device)
