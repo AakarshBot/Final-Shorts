@@ -2770,11 +2770,18 @@ def _render_card_studio(
         f"{active_slide or 'standalone'}-card-studio"
     )
     card_type_key = f"{state_id}-type"
-    saved_card_type = st.session_state.get(card_type_key, card_types[0])
+    live_card_type_key = f"{state_id}-selected-type"
+    saved_card_type = (
+        st.session_state.get(live_card_type_key, st.session_state.get(card_type_key, card_types[0]))
+        if live and not top5
+        else st.session_state.get(card_type_key, card_types[0])
+    )
     if saved_card_type not in card_types:
         saved_card_type = card_types[0]
 
     if live and not top5:
+        # Store the selection outside the old pills widget key so Streamlit won't clean it up on rerun.
+        st.session_state.setdefault(live_card_type_key, saved_card_type)
         card_type_visuals = {
             "Text Subject Cutout": (":material/crop_free:", "Place typography around a subject cutout"),
             "Stat Highlight": (":material/monitoring:", "Turn a verified number into the main visual"),
@@ -2796,9 +2803,9 @@ def _render_card_studio(
                         icon=icon,
                         help=description,
                     ):
-                        st.session_state[card_type_key] = option
+                        st.session_state[live_card_type_key] = option
                         st.rerun()
-        card_type = st.session_state.get(card_type_key, saved_card_type)
+        card_type = st.session_state.get(live_card_type_key, saved_card_type)
     else:
         card_type = st.pills(
             "Card type",
