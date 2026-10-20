@@ -411,7 +411,7 @@ def _normalise_chatterbox_model_version(value: str | None = None) -> str:
 
 
 def get_chatterbox_model(model_version: str = "turbo"):
-    """Load and reuse the chosen Chatterbox model, keeping only one model resident."""
+    """Load and reuse the chosen model; Hugging Face caches completed weights on disk."""
     global _CHATTERBOX_MODEL, _CHATTERBOX_MODEL_VERSION
     global _CHATTERBOX_CONDITIONALS_MODEL_ID, _CHATTERBOX_DEFAULT_CONDITIONALS
     global _CHATTERBOX_CONDITIONALS_CACHE
@@ -439,7 +439,42 @@ def get_chatterbox_model(model_version: str = "turbo"):
         device = "cuda" if torch.cuda.is_available() else "cpu"
         if selected == "full":
             from chatterbox.tts import ChatterboxTTS
-            loaded_model = ChatterboxTTS.from_pretrained(device=device)
+            try:
+                loaded_model = ChatterboxTTS.from_pretrained(device=device)
+            except Exception as download_error:
+                detail = str(download_error).casefold()
+                retryable_transfer = any(
+                    marker in detail
+                    for marker in (
+                        "xet",
+                        "unable to parse string as hex hash",
+                        "timed out",
+                        "timeout",
+                        "connection reset",
+                        "connection aborted",
+                        "remote end closed",
+                        "incomplete read",
+                    )
+                )
+                if not retryable_transfer:
+                    raise
+
+                # The original Full loader uses individual hf_hub_download calls and
+                # has no Xet fallback. Retry a failed large-file transfer using the
+                # standard HTTPS path, mirroring upstream Turbo's recovery strategy.
+                import huggingface_hub.constants as hf_constants
+                previous_xet_setting = hf_constants.HF_HUB_DISABLE_XET
+                hf_constants.HF_HUB_DISABLE_XET = True
+                try:
+                    loaded_model = ChatterboxTTS.from_pretrained(device=device)
+                except Exception as retry_error:
+                    raise RuntimeError(
+                        "The Full model download/load failed on the first transfer and "
+                        "the standard HTTPS retry also failed. "
+                        f"First error: {download_error}. Retry error: {retry_error}"
+                    ) from retry_error
+                finally:
+                    hf_constants.HF_HUB_DISABLE_XET = previous_xet_setting
         else:
             from chatterbox.tts_turbo import ChatterboxTurboTTS
             loaded_model = ChatterboxTurboTTS.from_pretrained(device=device)
@@ -538,8 +573,8 @@ def _join_narration_texts(texts: list[str]) -> str:
 
 
 def _chatterbox_delivery(text: str, scene_number: int, scene_count: int) -> tuple[str, float]:
-    """Use one stable sampling temperature; do not vary delivery by slide keywords."""
-    return text, 0.80
+    """Use one moderately expressive sampling temperature, never per-slide keyword rules."""
+    return text, 0.90
 
 
 def _scene_duration_weights(texts: list[str]) -> list[float]:
@@ -609,7 +644,15 @@ def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
             repetition_penalty=1.2,
         )
     else:
-        wav = model.generate(text, temperature=0.80)
+        # Turbo has no CFG/exaggeration controls; slightly warmer sampling helps
+        # reduce the overly flat delivery without inserting fake acting cues.
+        wav = model.generate(
+            text,
+            temperature=0.90,
+            top_p=0.95,
+            top_k=1000,
+            repetition_penalty=1.15,
+        )
 
     wav = wav.detach().cpu()
     if wav.ndim == 1:
@@ -729,16 +772,16 @@ def generate_chatterbox_audio(
             "sha256": _file_sha256(actual_ref),
         }
 
-    # Full model supports the same controlled settings on every run. Turbo does
-    # not support CFG/exaggeration, so it receives only its actual temperature control.
+    # Full supports CFG/exaggeration. Turbo uses its supported sampling controls;
+    # its modestly warmer temperature is intended to avoid flat, robotic cadence.
     settings = (
         {"temperature": 0.75, "cfg_weight": 0.35, "exaggeration": 0.35,
          "min_p": 0.05, "top_p": 1.0, "repetition_penalty": 1.2}
         if selected_model == "full"
-        else {"temperature": 0.80}
+        else {"temperature": 0.90, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.15}
     )
     signature_payload = {
-        "cache_version": "chatterbox-continuous-take-v4-flat-delivery",
+        "cache_version": "chatterbox-continuous-take-v5-expressive-turbo",
         "model_version": selected_model,
         "text": full_text,
         "scene_texts": texts,
@@ -807,8 +850,11 @@ def generate_chatterbox_audio(
 
     audio_text = _chatterbox_audio_texts(texts)
     full_text = _join_narration_texts(audio_text)
+    # Seed by the exact take signature: same input remains reproducible, while
+    # different stories no longer all start with the same random sequence.
+    take_seed = int(signature[:8], 16) & 0x7FFFFFFF
     full_wave = _generate_chatterbox_take(
-        model, full_text, selected_model, seed=run_number * 100 + 1
+        model, full_text, selected_model, seed=take_seed
     )
 
     raw_duration = full_wave.shape[-1] / model.sr
