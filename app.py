@@ -2769,12 +2769,64 @@ def _render_card_studio(
         f"{'top5-' if top5 else ''}"
         f"{active_slide or 'standalone'}-card-studio"
     )
-    card_type = st.pills(
-        "Card type",
-        list(card_types),
-        default=st.session_state.get(f"{state_id}-type", card_types[0]),
-        key=f"{state_id}-type",
-    ) or card_types[0]
+    card_type_key = f"{state_id}-type"
+    live_card_type_key = f"{state_id}-selected-type"
+    saved_card_type = (
+        st.session_state.get(live_card_type_key, st.session_state.get(card_type_key, card_types[0]))
+        if live and not top5
+        else st.session_state.get(card_type_key, card_types[0])
+    )
+    if saved_card_type not in card_types:
+        saved_card_type = card_types[0]
+
+    if live and not top5:
+        # Store the selection outside the old pills widget key so Streamlit won't clean it up on rerun.
+        st.session_state.setdefault(live_card_type_key, saved_card_type)
+        card_type_visuals = {
+            "Text Subject Cutout": (":material/crop_free:", "Place typography around a subject cutout"),
+            "Stat Highlight": (":material/monitoring:", "Turn a verified number into the main visual"),
+            "Quote / Reaction": (":material/format_quote:", "Lead with a real quote and attribution"),
+            "Head-to-Head": (":material/compare_arrows:", "Compare two sides or performances"),
+            "Key Fact / Milestone": (":material/flag:", "Make a record or milestone the hero"),
+        }
+        st.markdown('<div class="eyebrow" style="margin:4px 0 7px;">CARD FORMAT</div>', unsafe_allow_html=True)
+        with st.container(key=f"{state_id}-live-type-grid"):
+            cutout_icon, cutout_help = card_type_visuals["Text Subject Cutout"]
+            if st.button(
+                "Text Subject Cutout",
+                type="primary" if saved_card_type == "Text Subject Cutout" else "secondary",
+                width="stretch",
+                key=f"{state_id}-type-choice-0",
+                icon=cutout_icon,
+                help=cutout_help,
+            ):
+                st.session_state[live_card_type_key] = "Text Subject Cutout"
+                st.rerun()
+            st.markdown('<div class="eyebrow" style="margin:8px 0 5px;">EDITORIAL CARD TYPES</div>', unsafe_allow_html=True)
+            editorial_types = [option for option in card_types if option != "Text Subject Cutout"]
+            type_cols = st.columns(2, gap="small")
+            for option in editorial_types:
+                index = card_types.index(option)
+                icon, description = card_type_visuals.get(option, (":material/dashboard_customize:", "Choose a card format"))
+                with type_cols[(index - 1) % 2]:
+                    if st.button(
+                        option,
+                        type="primary" if option == saved_card_type else "secondary",
+                        width="stretch",
+                        key=f"{state_id}-type-choice-{index}",
+                        icon=icon,
+                        help=description,
+                    ):
+                        st.session_state[live_card_type_key] = option
+                        st.rerun()
+        card_type = st.session_state.get(live_card_type_key, saved_card_type)
+    else:
+        card_type = st.pills(
+            "Card type",
+            list(card_types),
+            default=saved_card_type,
+            key=card_type_key,
+        ) or card_types[0]
 
     if card_type == "Text Subject Cutout":
         if top5 and active_slide is None:
@@ -3129,16 +3181,64 @@ def _render_card_studio(
                 key=split_key,
             )
 
-    container_ctx = st.container(height=520) if len(assets) > 1 else st.container()
+    container_ctx = st.container(height=(390 if live else 520)) if len(assets) > 1 else st.container()
+    assets_per_row = 2 if live else 4
     with container_ctx:
-        for start in range(0, len(assets), 4):
-            cols = st.columns(min(4, len(assets) - start), gap="small")
-            for col, asset in zip(cols, assets[start:start + 4]):
+        for start in range(0, len(assets), assets_per_row):
+            cols = st.columns(min(assets_per_row, len(assets) - start), gap="small")
+            for offset, (col, asset) in enumerate(zip(cols, assets[start:start + assets_per_row])):
                 with col:
                     key = asset["asset_key"]
                     cropped = crop_store.get(key)
                     preview_bytes = cropped if cropped else asset.get("bytes")
-                    preview = _fit_visual_preview(preview_bytes, width=240, height=360)
+                    preview = _fit_visual_preview(preview_bytes, width=180 if live else 240, height=320 if live else 360)
+                    if live:
+                        with st.container(key=f"{state_id}-live-source-card-{start + offset}"):
+                            image_col, details_col = st.columns([0.68, 1.32], gap="small", vertical_alignment="top")
+                            with image_col:
+                                if preview is not None:
+                                    st.image(preview, width=104)
+                                if cropped:
+                                    st.caption("Crop applied")
+                            with details_col:
+                                st.caption(str(asset.get("source") or "Image source"))
+                                st.markdown(f'**{str(asset.get("label") or "Selected visual")}**')
+                                if st.button("Crop image", width="stretch", key=f"{state_id}-crop-{key}"):
+                                    raw = asset.get("bytes")
+                                    if isinstance(raw, (bytes, bytearray)):
+                                        _crop_visual_dialog(
+                                            key, bytes(raw), str(asset["label"]),
+                                            crop_store=crop_store_name, card_selector=True,
+                                        )
+                                    else:
+                                        st.warning("This visual is not crop-ready.")
+                                if image_mode == "Two images" and card_type == "Head-to-Head":
+                                    if st.button(
+                                        "Use as Image 1",
+                                        width="stretch",
+                                        type="primary" if selected_primary == key else "secondary",
+                                        key=f"{state_id}-use-1-{key}",
+                                    ):
+                                        st.session_state[primary_key] = key
+                                        selected_primary = key
+                                    if st.button(
+                                        "Use as Image 2",
+                                        width="stretch",
+                                        type="primary" if selected_secondary == key else "secondary",
+                                        key=f"{state_id}-use-2-{key}",
+                                    ):
+                                        st.session_state[secondary_key] = key
+                                else:
+                                    if st.button(
+                                        "Selected" if selected_primary == key else "Select image",
+                                        width="stretch",
+                                        type="primary" if selected_primary == key else "secondary",
+                                        key=f"{state_id}-use-{key}",
+                                    ):
+                                        st.session_state[primary_key] = key
+                                        selected_primary = key
+                        continue
+
                     if preview is not None:
                         st.image(preview, width="stretch")
                     st.markdown(
@@ -4429,11 +4529,47 @@ def _render_visual_option_grid(
     *,
     session_key: str,
     button_prefix: str,
+    studio_ui: bool = False,
 ) -> str:
     current = st.session_state.get(session_key)
     if current not in options:
         current = options[0]
         st.session_state[session_key] = current
+
+    if studio_ui:
+        source_cards = (
+            (":material/travel_explore:", "Find story-relevant visuals"),
+            (":material/search:", "Search publisher pages"),
+            (":material/photo_library:", "Find real photography"),
+            (":material/auto_awesome:", "Create visuals from a prompt"),
+            (":material/dashboard_customize:", "Design an editorial card"),
+        )
+        st.markdown(
+            '<div class="section-head live-source-head"><div>'
+            '<div class="eyebrow">VISUAL SOURCE</div>'
+            '<div class="section-title">Choose a creative starting point</div>'
+            '<div class="live-source-copy">Switch sources without losing your attached slides.</div>'
+            '</div><div class="section-count">5 ways to build</div></div>',
+            unsafe_allow_html=True,
+        )
+        with st.container(key=f"{button_prefix}-source-tile-grid"):
+            cols = st.columns(len(options), gap="small")
+            for index, (col, option) in enumerate(zip(cols, options)):
+                icon, description = source_cards[index] if index < len(source_cards) else (":material/image:", "Select a visual source")
+                with col:
+                    with st.container(key=f"{button_prefix}-source-card-{index}"):
+                        if st.button(
+                            option,
+                            type="primary" if option == current else "secondary",
+                            width="stretch",
+                            key=f"{button_prefix}-{options.index(option)}",
+                            icon=icon,
+                            help=description,
+                        ):
+                            current = option
+                            st.session_state[session_key] = option
+                        st.caption(description)
+        return current
 
     st.markdown(
         '<div style="display:flex;justify-content:space-between;margin:0.2rem 0 0.5rem 0;font-size:0.75rem;letter-spacing:0.05em;color:var(--text-muted, #888);">'
@@ -4455,7 +4591,6 @@ def _render_visual_option_grid(
                     current = option
                     st.session_state[session_key] = option
     return current
-
 
 def _live_start_story(index: int):
     _live_reset_downstream()
@@ -4839,6 +4974,58 @@ def _render_visual_board(slide_count: int, live: bool = False):
     scenes = script.get("script") if isinstance(script, dict) else []
     scenes = scenes if isinstance(scenes, list) else []
 
+    if live:
+        st.markdown(
+            '<div class="section-head live-storyboard-head"><div>'
+            '<div class="eyebrow">STORYBOARD</div>'
+            '<div class="section-title">Every scene, at a glance</div></div>'
+            f'<div class="section-count">{slide_count} slides · 9:16</div></div>',
+            unsafe_allow_html=True,
+        )
+        for row_start in range(0, slide_count, 4):
+            row_count = min(4, slide_count - row_start)
+            row_cols = st.columns(row_count, gap="small")
+            for offset, col in enumerate(row_cols):
+                slide = row_start + offset + 1
+                assignment = assignments.get(slide)
+                scene = scenes[slide - 1] if slide <= len(scenes) and isinstance(scenes[slide - 1], dict) else {}
+                voiceover = str(scene.get("voiceover") or "").strip()
+                with col:
+                    with st.container(key=f"live-storyboard-card-{slide}"):
+                        attached = bool(assignment and (assignment.get("preview_bytes") or assignment.get("bytes")))
+                        status_label = "ATTACHED" if attached else "NEEDS VISUAL"
+                        status_class = "live-slide-status is-attached" if attached else "live-slide-status is-empty"
+                        st.markdown(
+                            f'<div class="live-slide-card-top"><span>SCENE {slide:02d}</span>'
+                            f'<span class="{status_class}">{status_label}</span></div>',
+                            unsafe_allow_html=True,
+                        )
+                        preview_source = (
+                            assignment.get("preview_bytes")
+                            if assignment and assignment.get("preview_bytes")
+                            else assignment.get("bytes") if assignment else None
+                        )
+                        preview = _fit_visual_preview(preview_source, 180, 320) if preview_source is not None else None
+                        image_col, copy_col = st.columns([0.72, 1.28], gap="small", vertical_alignment="top")
+                        with image_col:
+                            if preview is not None:
+                                st.image(preview, width=104)
+                                st.caption(str(assignment.get("source") or "Attached visual"))
+                            else:
+                                st.markdown(
+                                    '<div class="live-slide-empty">9:16<br><span>Image slot</span></div>',
+                                    unsafe_allow_html=True,
+                                )
+                        with copy_col:
+                            if voiceover:
+                                excerpt = voiceover[:92] + ("…" if len(voiceover) > 92 else "")
+                                st.caption(excerpt)
+                                with st.expander("Full slide script", expanded=False):
+                                    st.write(voiceover)
+                            else:
+                                st.caption("Approved script text will appear here.")
+        return
+
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">VISUAL BOARD</div>'
         '<div class="section-title">Attach one visual to every slide</div></div>'
@@ -4922,7 +5109,7 @@ def _render_two_pane_visual_workspace(
         '</div>',
         unsafe_allow_html=True,
     )
-    view_cols = st.columns([1.6, 0.45, 0.45, 0.45], gap="small")
+    view_cols = st.columns([1.25, 0.6, 0.6, 0.6] if live else [1.6, 0.45, 0.45, 0.45], gap="small")
     with view_cols[0]:
         st.markdown(
             '<div style="font-size:0.78rem;color:var(--text-muted);padding-top:6px;">'
@@ -4932,7 +5119,8 @@ def _render_two_pane_visual_workspace(
         )
     with view_cols[1]:
         if st.button(
-            "⊞ Split View",
+            "Split" if live else "⊞ Split View",
+            icon=":material/view_column:" if live else None,
             type="primary" if st.session_state[pane_key] == "⊞ Side-by-Side (Split)" else "secondary",
             width="stretch",
             key=f"{prefix}view-split-btn",
@@ -4941,7 +5129,8 @@ def _render_two_pane_visual_workspace(
             st.rerun()
     with view_cols[2]:
         if st.button(
-            "◀ Focus Studio",
+            "Studio" if live else "◀ Focus Studio",
+            icon=":material/dashboard_customize:" if live else None,
             type="primary" if st.session_state[pane_key] in {"◀ Card Studio Focus", "▶ Card Studio Focus"} else "secondary",
             width="stretch",
             key=f"{prefix}view-studio-btn",
@@ -4950,7 +5139,8 @@ def _render_two_pane_visual_workspace(
             st.rerun()
     with view_cols[3]:
         if st.button(
-            "▶ Focus Fetcher",
+            "Fetcher" if live else "▶ Focus Fetcher",
+            icon=":material/search:" if live else None,
             type="primary" if st.session_state[pane_key] in {"▶ Visual Fetcher Focus", "◀ Visual Fetcher Focus"} else "secondary",
             width="stretch",
             key=f"{prefix}view-fetcher-btn",
@@ -4966,7 +5156,7 @@ def _render_two_pane_visual_workspace(
         show_studio = True
 
     if show_fetcher and show_studio:
-        col_studio, col_fetcher = st.columns([1, 1], gap="large")
+        col_studio, col_fetcher = st.columns([1.12, 1] if live else [1, 1], gap="medium" if live else "large")
     elif show_studio:
         col_studio = st.container()
         col_fetcher = None
@@ -5186,6 +5376,50 @@ def _render_two_pane_visual_workspace(
 
 
 def _render_live_visuals(slide_count: int):
+    st.markdown(
+        """<style>
+        [class*="st-key-live-"][class*="source-tile-grid"] [data-testid="stButton"] > button {
+            min-height: 68px !important; height: auto !important; padding: 10px 9px !important;
+            white-space: normal !important; overflow: visible !important; text-align: left !important;
+            line-height: 1.25 !important; border-radius: 13px !important;
+        }
+        [class*="st-key-live-"][class*="source-tile-grid"] [data-testid="stButton"] > button p {
+            white-space: normal !important; overflow: visible !important; text-overflow: clip !important;
+            display: block !important; line-height: 1.25 !important; margin: 0 !important;
+        }
+        [class*="st-key-live-"][class*="source-card-"] {
+            height: 100%; padding: 7px 7px 4px; border: 1px solid var(--line);
+            border-radius: 15px; background: linear-gradient(180deg, #ffffff 0%, #f8faff 100%);
+        }
+        [class*="st-key-live-"][class*="source-card-"] [data-testid="stCaptionContainer"] p {
+            font-size: 0.68rem !important; line-height: 1.3 !important; min-height: 2.5em; margin: 4px 2px 0 !important;
+        }
+        [class*="st-key-live-storyboard-card-"] {
+            height: 100%; padding: 10px; border: 1px solid var(--line); border-radius: 15px;
+            background: var(--surface); box-shadow: var(--shadow-xs);
+        }
+        .live-slide-card-top { display:flex; align-items:center; justify-content:space-between; gap:7px; margin-bottom:8px; font-size:.65rem; font-weight:800; letter-spacing:.07em; color:var(--muted); }
+        .live-slide-status { display:inline-flex; align-items:center; padding:3px 6px; border-radius:999px; font-size:.56rem; letter-spacing:.035em; white-space:nowrap; }
+        .live-slide-status.is-attached { color:#047857; background:#d1fae5; }
+        .live-slide-status.is-empty { color:#a16207; background:#fef3c7; }
+        .live-slide-script { color:var(--ink-secondary); font-size:.73rem; line-height:1.4; overflow-wrap:anywhere; }
+        .live-slide-empty { width:100%; min-height:156px; border:1px dashed var(--line-strong); border-radius:8px; display:flex; align-items:center; justify-content:center; text-align:center; color:var(--subtle); font-size:.7rem; line-height:1.5; background:var(--surface-soft); }
+        .live-slide-empty span { font-size:.6rem; }
+        [class*="st-key-live-"][class*="live-type-grid"] [data-testid="stButton"] > button {
+            width:100%; min-height:54px !important; height:auto !important; justify-content:flex-start !important;
+            text-align:left !important; white-space:normal !important; overflow:visible !important;
+            border-radius:12px !important; padding:9px 10px !important; line-height:1.2 !important;
+        }
+        [class*="st-key-live-"][class*="live-type-grid"] [data-testid="stButton"] > button p {
+            white-space:normal !important; overflow:visible !important; text-overflow:clip !important; line-height:1.2 !important;
+        }
+        [class*="st-key-live-"][class*="live-source-card-"] {
+            padding:7px; border:1px solid var(--line); border-radius:12px; background:#fff;
+        }
+        .live-source-title { font-size:.76rem; line-height:1.35; font-weight:700; color:var(--ink); overflow-wrap:anywhere; margin-bottom:4px; }
+        </style>""",
+        unsafe_allow_html=True,
+    )
     if st.session_state.live_visuals_approved:
         st.success("Visuals approved and final render completed.")
         st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
@@ -5204,6 +5438,7 @@ def _render_live_visuals(slide_count: int):
         visual_options,
         session_key="live_visual_option",
         button_prefix="live-visual-source",
+        studio_ui=True,
     )
 
     _render_visual_board(slide_count, live=True)
