@@ -45,7 +45,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "The team is assessing him before the next ODI, and his place remains uncertain until the review is complete.",
+                "voiceover": "The team is assessing him before the next ODI, and his place remains uncertain until the review is complete and doctors provide a clear recommendation.",
                 "narrative_role": "context",
                 "primary_entity": "India cricket team",
                 "visual_intent": "India team training",
@@ -53,7 +53,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "His availability depends on the medical assessment and India's final selection decision.",
+                "voiceover": "His availability depends on the medical report and India's selection call.",
                 "narrative_role": "consequence",
                 "primary_entity": "Shubman Gill",
                 "visual_intent": "Gill fitness assessment",
@@ -349,7 +349,7 @@ def test_universal_validator_allows_long_dashboard_headline_and_duration_based_l
         "Shubman Gill injury update explains what India's next ODI selection decision depends on"
     )
     result["script"][3]["voiceover"] += (
-        " The selection decision will follow the medical review and the team's final assessment before match day."
+        " The selection decision follows the medical review and final assessment before match day."
     )
 
     valid, reason = script_writer.validate_universal_script(result, language=language)
@@ -362,7 +362,7 @@ def test_universal_validator_keeps_english_13_word_limit():
         "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
     )
     result["script"][3]["voiceover"] += (
-        " The selection decision will follow the medical review and the team's final assessment before match day."
+        " The selection decision follows the medical review and final assessment before match day."
     )
 
     valid, reason = script_writer.validate_universal_script(result, language="english")
