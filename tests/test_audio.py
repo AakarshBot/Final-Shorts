@@ -159,6 +159,35 @@ def test_audio_uses_measured_lead_duration_for_hindi_telugu(
         assert result["scenes"][0]["duration"] == first_duration
 
 
+def test_audio_auto_corrects_hindi_lead_before_applying_the_hard_limit(monkeypatch, tmp_path):
+    import audio
+
+    rates = []
+
+    async def fake_generate(scenes, requested_language, rate_percent, output_dir):
+        rates.append(rate_percent)
+        first_duration = 5.55 if len(rates) == 1 else 4.65
+        return [
+            {
+                "scene": index,
+                "path": str(tmp_path / f"voiceover_{index}.mp3"),
+                "duration": first_duration if index == 1 else 1.0,
+                "timings": [{"word": "sample", "start": 0.0, "end": 0.5}],
+                "from_cache": False,
+            }
+            for index, _scene in enumerate(scenes, 1)
+        ]
+
+    monkeypatch.setattr(audio, "_generate_at_rate", fake_generate)
+    result = generate_audio(approved_script("hindi"), tmp_path, engine="edge")
+
+    assert result["duration_corrected"] is True
+    assert len(rates) == 2
+    assert rates[1] > rates[0]
+    assert result["scenes"][0]["duration"] <= audio.FIRST_SCENE_MAX_DURATION_SECONDS
+    assert result["total_duration"] < audio.MAX_DURATION_SECONDS
+
+
 def test_audio_approval_cannot_bypass_hindi_lead_duration_limit(tmp_path):
     import audio
 
