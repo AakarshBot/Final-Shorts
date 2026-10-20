@@ -1852,6 +1852,7 @@ def test_isolated_raqm_pillow_installer_uses_wheel_and_verifies_raqm(monkeypatch
     assert "--no-deps" in install_command
     assert install_command[install_command.index("--target") + 1] == str(target)
     assert "Pillow>=10,<12" in install_command
+    assert (target / "python_executable.txt").read_text(encoding="utf-8") == renderer.sys.executable
     assert len(calls) == 2
 
 
