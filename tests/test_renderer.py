@@ -1378,6 +1378,58 @@ def test_production_renderer_uses_card_studio_static_preview_and_overlays(monkey
     assert calls == ["logo", "source"]
 
 
+def test_final_renderer_refuses_audio_at_30_seconds(tmp_path):
+    import renderer
+
+    audio_path = tmp_path / "lead.mp3"
+    audio_path.write_bytes(b"x" * 700)
+    visual_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual_buffer, format="PNG")
+
+    with pytest.raises(ValueError, match="strictly under 30 seconds"):
+        renderer.render_production_video(
+            {
+                "approved_for_audio": True,
+                "language_used": "english",
+                "script": [{"voiceover": "The Short must stay within its limit."}],
+            },
+            {
+                "approved_for_visuals": True,
+                "language": "english",
+                "scenes": [{"scene": 1, "path": str(audio_path), "duration": 30.0}],
+            },
+            TEST_SUBTITLE_DATA,
+            [{"bytes": visual_buffer.getvalue()}],
+            tmp_path / "too-long.mp4",
+        )
+
+
+def test_final_renderer_refuses_hindi_lead_over_5_2_seconds(tmp_path):
+    import renderer
+
+    audio_path = tmp_path / "lead.mp3"
+    audio_path.write_bytes(b"x" * 700)
+    visual_buffer = BytesIO()
+    Image.new("RGB", (1080, 1920), "white").save(visual_buffer, format="PNG")
+
+    with pytest.raises(ValueError, match="Hindi Slide 1 audio is 5.21s"):
+        renderer.render_production_video(
+            {
+                "approved_for_audio": True,
+                "language_used": "hindi",
+                "script": [{"voiceover": "भारत की टीम तैयार है।"}],
+            },
+            {
+                "approved_for_visuals": True,
+                "language": "hindi",
+                "scenes": [{"scene": 1, "path": str(audio_path), "duration": 5.21}],
+            },
+            TEST_SUBTITLE_DATA,
+            [{"bytes": visual_buffer.getvalue()}],
+            tmp_path / "long-indic-lead.mp4",
+        )
+
+
 def test_final_renderer_quality_contract():
     import inspect
     import renderer
