@@ -240,7 +240,7 @@ def test_indic_generation_preflight_catches_long_lead_without_changing_public_va
     assert valid, reason
     assert not generation_valid
     assert "Slide 1" in generation_reason
-    assert "9 or fewer" in generation_reason
+    assert "7 or fewer" in generation_reason
 
 
 def test_indic_generation_preflight_targets_total_length_without_padding():
@@ -250,7 +250,7 @@ def test_indic_generation_preflight_targets_total_length_without_padding():
     issue = script_writer._indic_generation_delivery_issue(result, "telugu")
 
     assert "narration has" in issue
-    assert "62 or fewer" in issue
+    assert "55 or fewer" in issue
     assert "without dropping essential facts or adding filler" in issue
 
 
@@ -260,7 +260,7 @@ def test_writer_hidden_rewrite_fixes_indic_timing_preflight(monkeypatch):
     too_long = valid_result(
         "Shubman Gill faces a fresh injury scare before India's next ODI against England"
     )
-    concise = valid_result("Shubman Gill faces an injury scare before India's ODI.")
+    concise = valid_result("Shubman Gill faces an injury scare.")
 
     def fake_request(model, prompt, story, schema=None, **kwargs):
         calls.append((model, prompt))
@@ -271,7 +271,7 @@ def test_writer_hidden_rewrite_fixes_indic_timing_preflight(monkeypatch):
 
     assert len(calls) == 2
     assert "Indic generation timing preflight" in calls[1][1]
-    assert "never more than 9" in calls[1][1]
+    assert "never more than 7" in calls[1][1]
     assert result["script"][0]["voiceover"] == concise["script"][0]["voiceover"]
 
 
