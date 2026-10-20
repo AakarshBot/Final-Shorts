@@ -66,6 +66,49 @@ def _originality_trigrams(tokens: list[str]) -> set[tuple[str, ...]]:
     }
 
 
+def _perceptual_image_hash(raw: bytes | bytearray) -> str:
+    """Return a dependency-free dHash that tolerates common resize/re-encode changes."""
+    try:
+        from io import BytesIO
+        from PIL import Image
+
+        with Image.open(BytesIO(bytes(raw))) as source:
+            image = source.convert("L").resize((9, 8), Image.Resampling.LANCZOS)
+        pixels = list(image.getdata())
+    except Exception:
+        return ""
+    bits = []
+    for y in range(8):
+        row = y * 9
+        for x in range(8):
+            bits.append("1" if pixels[row + x] > pixels[row + x + 1] else "0")
+    return "".join(bits)
+
+
+def _perceptual_visual_overlap(first: list[str], second: list[str]) -> float:
+    """Greedily match close 64-bit dHashes once, ignoring unreadable/legacy images."""
+    left = [value for value in first if isinstance(value, str) and len(value) == 64]
+    right = [value for value in second if isinstance(value, str) and len(value) == 64]
+    if not left or not right:
+        return 0.0
+    pairs = []
+    for i, a in enumerate(left):
+        for j, b in enumerate(right):
+            distance = sum(bit_a != bit_b for bit_a, bit_b in zip(a, b))
+            pairs.append((distance, i, j))
+    used_left, used_right = set(), set()
+    matches = 0
+    for distance, i, j in sorted(pairs):
+        if distance > 6:
+            break
+        if i in used_left or j in used_right:
+            continue
+        used_left.add(i)
+        used_right.add(j)
+        matches += 1
+    return matches / min(len(left), len(right))
+
+
 def _read_upload_history(history_path: str | Path = UPLOAD_HISTORY_PATH) -> list[dict[str, Any]]:
     try:
         payload = json.loads(Path(history_path).read_text(encoding="utf-8"))
@@ -99,12 +142,17 @@ def build_upload_originality_record(
             narration.append(text)
 
     image_hashes = []
+    perceptual_hashes = []
     for visual in visuals or []:
         if not isinstance(visual, dict):
             continue
         raw = visual.get("preview_bytes") or visual.get("bytes")
         if isinstance(raw, (bytes, bytearray)) and raw:
-            image_hashes.append(hashlib.sha256(bytes(raw)).hexdigest())
+            raw_bytes = bytes(raw)
+            image_hashes.append(hashlib.sha256(raw_bytes).hexdigest())
+            perceptual = _perceptual_image_hash(raw_bytes)
+            if perceptual:
+                perceptual_hashes.append(perceptual)
 
     hashtag_text = " ".join(hashtags) if isinstance(hashtags, list) else str(hashtags or "")
     metadata_text = " ".join(part for part in (
@@ -120,6 +168,7 @@ def build_upload_originality_record(
         "narration": " ".join(narration),
         "metadata_text": metadata_text,
         "visual_hashes": list(dict.fromkeys(image_hashes)),
+        "perceptual_visual_hashes": list(dict.fromkeys(perceptual_hashes)),
         "format": _clean(script.get("schema") or script.get("desk_profile") or ""),
     }
 
@@ -155,6 +204,7 @@ def assess_upload_distinctiveness(
         old_metadata_tokens = _originality_tokens(previous.get("metadata_text") or previous.get("title"))
         old_source = _normalise_history_url(previous.get("source_url"))
         old_visuals = set(previous.get("visual_hashes") or [])
+        old_perceptual_visuals = list(previous.get("perceptual_visual_hashes") or [])
         old_trigrams = _originality_trigrams(old_tokens)
         narration_similarity = (
             SequenceMatcher(None, tokens, old_tokens, autojunk=False).ratio()
@@ -174,6 +224,10 @@ def assess_upload_distinctiveness(
             len(visual_hashes & old_visuals) / min(len(visual_hashes), len(old_visuals))
             if visual_hashes and old_visuals else 0.0
         )
+        perceptual_image_overlap = _perceptual_visual_overlap(
+            list(record.get("perceptual_visual_hashes") or []),
+            old_perceptual_visuals,
+        )
         same_source = bool(source_url and old_source and source_url == old_source)
         candidate = {
             "title": _clean(previous.get("title")) or "Untitled upload",
@@ -185,6 +239,7 @@ def assess_upload_distinctiveness(
             "metadata_similarity": round(metadata_similarity, 3),
             "metadata_only_history": not bool(old_tokens),
             "visual_overlap": round(image_overlap, 3),
+            "perceptual_visual_overlap": round(perceptual_image_overlap, 3),
             "same_source": same_source,
         }
         rank = max(
@@ -193,6 +248,7 @@ def assess_upload_distinctiveness(
             metadata_similarity * 0.86,
             0.70 if same_source and narration_similarity >= 0.50 else 0.0,
             0.66 if image_overlap >= 0.75 else 0.0,
+            0.68 if perceptual_image_overlap >= 0.75 else 0.0,
         )
         if closest is None or rank > closest["_rank"]:
             candidate["_rank"] = rank
@@ -209,6 +265,7 @@ def assess_upload_distinctiveness(
     similarity = closest["narration_similarity"]
     phrase_overlap = closest["phrase_overlap"]
     image_overlap = closest["visual_overlap"]
+    perceptual_image_overlap = closest["perceptual_visual_overlap"]
     same_source = closest["same_source"]
     metadata_similarity = closest["metadata_similarity"]
     title_similarity = closest["title_similarity"]
@@ -221,7 +278,8 @@ def assess_upload_distinctiveness(
             "evidence, commentary and viewer value before publishing."
         )
     elif (
-        similarity >= 0.62 or phrase_overlap >= 0.55 or same_source or image_overlap >= 0.50
+        similarity >= 0.62 or phrase_overlap >= 0.55 or same_source
+        or image_overlap >= 0.50 or perceptual_image_overlap >= 0.75
         or (metadata_only and title_similarity >= 0.86 and metadata_similarity >= 0.78)
     ):
         level = "review"
@@ -234,8 +292,10 @@ def assess_upload_distinctiveness(
         else:
             message = (
                 f"Review this upload against “{closest['title']}”: narration similarity "
-                f"{similarity:.0%}, phrase overlap {phrase_overlap:.0%}, repeated-image overlap "
-                f"{image_overlap:.0%}. Similar formats can be fine; the substance still needs to differ."
+                f"{similarity:.0%}, phrase overlap {phrase_overlap:.0%}, exact-image overlap "
+                f"{image_overlap:.0%}, perceptual-image overlap {perceptual_image_overlap:.0%}. "
+                "The visual check tolerates some resize/re-encode changes but is not semantic image understanding. "
+                "Similar formats can be fine; the substance still needs to differ."
             )
     else:
         level = "ok"
@@ -377,6 +437,7 @@ def seed_existing_channel_upload_history(
             "narration": "",
             "metadata_text": " ".join(part for part in (title, description) if part),
             "visual_hashes": [],
+            "perceptual_visual_hashes": [],
             "format": "existing-channel-metadata",
             "video_id": video_id,
             "url": f"https://www.youtube.com/watch?v={video_id}",
@@ -388,7 +449,9 @@ def seed_existing_channel_upload_history(
         known_ids.add(video_id)
 
     if imported:
-        combined = (history + imported)[-ORIGINALITY_HISTORY_LIMIT:]
+        # Channel-seeded metadata is older than existing factory records; prepend
+        # it so the last-50 audit continues to prioritise the newest factory uploads.
+        combined = (imported + history)[-ORIGINALITY_HISTORY_LIMIT:]
         temp_path = None
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
