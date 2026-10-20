@@ -55,7 +55,7 @@ def _normalise_history_url(value: Any) -> str:
 
 
 def _originality_tokens(value: Any) -> list[str]:
-    return re.findall(r"\\w+", str(value or "").casefold(), flags=re.UNICODE)
+    return re.findall(r"\w+", str(value or "").casefold(), flags=re.UNICODE)
 
 
 def _originality_trigrams(tokens: list[str]) -> set[tuple[str, ...]]:
@@ -253,7 +253,7 @@ def record_upload_success(
         ) as handle:
             temp_path = Path(handle.name)
             json.dump(history, handle, ensure_ascii=False, indent=2)
-            handle.write("\\n")
+            handle.write("\n")
         os.replace(temp_path, path)
         return True
     except OSError:
