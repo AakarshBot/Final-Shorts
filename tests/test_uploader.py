@@ -91,6 +91,128 @@ def test_upload_originality_audit_does_not_flag_materially_different_story(tmp_p
     assert "advisory" in report["message"]
 
 
+def test_upload_originality_audit_reviews_metadata_only_channel_import(tmp_path):
+    history_path = tmp_path / "history.json"
+    existing = {
+        "title": "Gill injury update and India selection decision",
+        "source_title": "Gill injury update and India selection decision",
+        "source_url": "",
+        "story_angle": "",
+        "narration": "",
+        "metadata_text": "Gill injury update and India selection decision. The fitness report could decide India's next ODI selection.",
+        "visual_hashes": [],
+        "format": "existing-channel-metadata",
+        "video_id": "old001",
+        "url": "https://www.youtube.com/watch?v=old001",
+    }
+    assert uploader.record_upload_success(
+        existing,
+        {"video_id": "old001", "url": "https://www.youtube.com/watch?v=old001", "privacy_status": "public"},
+        history_path,
+    )
+
+    current = uploader.build_upload_originality_record(
+        {
+            "source_title": "Gill injury report shapes India's ODI selection",
+            "seo_description": "The fitness report could decide India's next ODI selection.",
+            "script": [{"voiceover": "A completely new tactical explanation with fresh context."}],
+        },
+        "Gill injury update and India selection decision",
+        description="The fitness report could decide India's next ODI selection.",
+    )
+    report = uploader.assess_upload_distinctiveness(current, history_path)
+
+    assert report["level"] == "review"
+    assert report["closest"]["metadata_only_history"] is True
+    assert "metadata-only review signal" in report["message"]
+
+
+def test_seed_existing_channel_upload_history_imports_latest_fifty_oldest_to_newest(tmp_path):
+    history_path = tmp_path / "history.json"
+
+    class Request:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self, num_retries=0):
+            return self.payload
+
+    class Channels:
+        def list(self, **kwargs):
+            assert kwargs["mine"] is True
+            assert kwargs["maxResults"] == 1
+            return Request({
+                "items": [{
+                    "contentDetails": {
+                        "relatedPlaylists": {"uploads": "uploads123"}
+                    }
+                }]
+            })
+
+    class PlaylistItems:
+        def list(self, **kwargs):
+            assert kwargs["playlistId"] == "uploads123"
+            assert kwargs["maxResults"] == 50
+            return Request({
+                "items": [
+                    {
+                        "snippet": {
+                            "title": "Newest upload",
+                            "description": "A detailed and unique description.",
+                            "publishedAt": "2026-10-19T10:00:00Z",
+                            "resourceId": {"videoId": "new001"},
+                        },
+                        "contentDetails": {"videoId": "new001"},
+                    },
+                    {
+                        "snippet": {
+                            "title": "Oldest upload",
+                            "description": "Another detailed description.",
+                            "publishedAt": "2026-08-01T10:00:00Z",
+                            "resourceId": {"videoId": "old001"},
+                        },
+                        "contentDetails": {"videoId": "old001"},
+                    },
+                ]
+            })
+
+    class FakeYoutube:
+        def channels(self):
+            return Channels()
+
+        def playlistItems(self):
+            return PlaylistItems()
+
+    result = uploader.seed_existing_channel_upload_history(history_path, youtube=FakeYoutube())
+
+    assert result["seeded_count"] == 2
+    entries = uploader._read_upload_history(history_path)
+    assert [entry["video_id"] for entry in entries] == ["old001", "new001"]
+    assert all(entry["format"] == "existing-channel-metadata" for entry in entries)
+    assert all(not entry["narration"] for entry in entries)
+    assert "metadata only" in result["message"]
+
+
+def test_seed_existing_channel_upload_history_is_idempotent(tmp_path):
+    history_path = tmp_path / "history.json"
+
+    class FakeYoutube:
+        def channels(self):
+            raise AssertionError("The channel should not be queried again after seed.")
+
+    history = [{
+        "video_id": "already-seeded",
+        "format": "existing-channel-metadata",
+        "title": "Existing upload",
+    }]
+    history_path.write_text(__import__("json").dumps(history), encoding="utf-8")
+
+    result = uploader.seed_existing_channel_upload_history(history_path, youtube=FakeYoutube())
+
+    assert result["seeded_count"] == 1
+    assert "already included" in result["message"]
+
+
 def test_upload_rejects_unlisted(tmp_path):
     video = tmp_path / "video.mp4"
     video.write_bytes(b"video")
