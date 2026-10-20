@@ -1,6 +1,17 @@
 import uploader
 
 
+def test_youtube_oauth_requests_readonly_scope_for_upload_history():
+    from pathlib import Path
+
+    source = Path(__file__).resolve().parents[1] / "authorize_youtube.py"
+    oauth_code = source.read_text(encoding="utf-8")
+
+    assert '"https://www.googleapis.com/auth/youtube.upload"' in oauth_code
+    assert '"https://www.googleapis.com/auth/youtube.force-ssl"' in oauth_code
+    assert '"https://www.googleapis.com/auth/youtube.readonly"' in oauth_code
+
+
 def test_compose_description_adds_hashtags():
     result = uploader.compose_description(
         "A quick cricket update.",
