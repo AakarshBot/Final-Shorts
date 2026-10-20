@@ -172,28 +172,53 @@ def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
         ):
             raise RuntimeError("The verified Pillow wheel did not contain the expected Windows binaries.")
 
-        font_name, sample = ("NotoSansDevanagari-Bold.ttf", "क्षेत्र की उपलब्धि")
-        probe_code = (
-            "import os, sys; "
-            f"root = {str(root.resolve())!r}; target = {str(staging.resolve())!r}; "
-            "dll_dirs = [os.path.join(root, 'dlls'), os.path.join(target, 'PIL'), "
-            "os.path.join(target, 'pillow.libs'), os.path.join(target, 'PIL', '.libs')]; "
-            "handles = [os.add_dll_directory(p) for p in dll_dirs if os.name == 'nt' and os.path.isdir(p)]; "
-            "sys.path.insert(0, target); "
-            "from PIL import features, ImageFont; "
-            "assert features.check_feature('raqm') is True, 'Pillow was not compiled with RAQM'; "
-            f"font = ImageFont.truetype(os.path.join(root, 'fonts', {font_name!r}), 48, layout_engine=ImageFont.Layout.RAQM); "
-            f"assert font.getmask({sample!r}).getbbox() is not None, 'Indic glyph shaping returned an empty mask'"
+        samples = (
+            ("NotoSansDevanagari-Bold.ttf", "क्षेत्र की उपलब्धि"),
+            ("NotoSansTelugu-Bold.ttf", "ప్రత్యేకమైన క్రీడాకారుడు"),
         )
+        probe_code = "\n".join((
+            "import os, sys",
+            f"root = {str(root.resolve())!r}",
+            f"target = {str(staging.resolve())!r}",
+            "dll_dirs = [os.path.join(target, 'PIL'), os.path.join(target, 'pillow.libs'), os.path.join(target, 'PIL', '.libs')]",
+            "handles = [os.add_dll_directory(p) for p in dll_dirs if os.name == 'nt' and os.path.isdir(p)]",
+            "sys.path.insert(0, target)",
+            "import PIL",
+            "from PIL import features, ImageFont",
+            "import PIL._imagingft as imagingft",
+            "raqm = features.check_feature('raqm')",
+            "assert raqm is True, f'Pillow was not compiled with RAQM (PIL={PIL.__file__}; _imagingft={imagingft.__file__}; RAQM={raqm})'",
+            f"samples = {samples!r}",
+            "for font_name, sample in samples:",
+            "    font = ImageFont.truetype(os.path.join(root, 'fonts', font_name), 48, layout_engine=ImageFont.Layout.RAQM)",
+            "    assert font.getmask(sample).getbbox() is not None, f'Indic glyph shaping returned an empty mask for {font_name}'",
+        ))
+        probe_env = os.environ.copy()
+        for variable in ("PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE"):
+            probe_env.pop(variable, None)
+        if os.name == "nt":
+            system_root = Path(probe_env.get("SystemRoot", r"C:\\Windows"))
+            runtime_paths = (
+                staging / "PIL",
+                staging / "pillow.libs",
+                staging / "PIL" / ".libs",
+                Path(sys.executable).resolve().parent,
+                system_root / "System32",
+                system_root,
+            )
+            probe_env["PATH"] = os.pathsep.join(
+                str(path) for path in runtime_paths if path.is_dir()
+            )
         try:
             probe = subprocess.run(
-                [sys.executable, "-c", probe_code],
+                [sys.executable, "-I", "-S", "-c", probe_code],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
                 errors="replace",
                 timeout=45,
                 check=False,
+                env=probe_env,
             )
         except (OSError, subprocess.TimeoutExpired) as exc:
             raise RuntimeError(f"Could not run the real RAQM/Pillow verification: {exc}") from exc
