@@ -4311,14 +4311,27 @@ def _show_upload_originality_audit(
     title: str,
     *,
     source_url: str = "",
+    description: str = "",
+    hashtags: str | list[str] = "",
     visuals: list[dict] | None = None,
 ) -> dict:
-    from uploader import assess_upload_distinctiveness, build_upload_originality_record
+    from uploader import (
+        assess_upload_distinctiveness,
+        build_upload_originality_record,
+        seed_existing_channel_upload_history,
+    )
+
+    seed_key = "_factory_upload_history_seed_report"
+    if seed_key not in st.session_state:
+        st.session_state[seed_key] = seed_existing_channel_upload_history()
+    seed_report = st.session_state.get(seed_key) or {}
 
     record = build_upload_originality_record(
         script,
         title,
         source_url=source_url,
+        description=description,
+        hashtags=hashtags,
         visuals=visuals or [],
     )
     report = assess_upload_distinctiveness(record)
@@ -4329,9 +4342,13 @@ def _show_upload_originality_audit(
         st.info(report["message"])
     else:
         st.caption(report["message"])
+    if seed_report.get("seeded_count"):
+        st.caption(str(seed_report.get("message") or "Existing channel metadata was added to the comparison."))
+    elif seed_report.get("message") and seed_report.get("seeded_count") == 0:
+        st.caption(str(seed_report.get("message")))
     st.caption(
-        "This is a local similarity warning, not a YouTube verdict. It checks only uploads recorded by this factory, "
-        "and exact image hashes do not detect visually similar crops or generated images."
+        "This is an advisory QC signal, not a YouTube verdict. Existing channel imports compare titles/descriptions only; "
+        "factory-recorded uploads can also compare narration and exact image hashes. Similar crops/generated images are not detected."
     )
     return record
 
