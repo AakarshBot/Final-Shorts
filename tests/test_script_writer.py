@@ -858,7 +858,7 @@ def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatc
     assert "RECOVERY" not in calls[1][1]
     assert "MANDATORY INDIC TIMING REWRITE" in calls[2][1]
     assert result["provider_used"] == "openai/gpt-oss-120b"
-    assert result["script"][0]["voiceover"] == "Shubman Gill faces an injury scare before India's ODI."
+    assert result["script"][0]["voiceover"] == "Shubman Gill faces an injury scare."
 
 
 def test_writer_stops_on_groq_400_without_spending_another_request(monkeypatch):
