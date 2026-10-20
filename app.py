@@ -2791,10 +2791,24 @@ def _render_card_studio(
         }
         st.markdown('<div class="eyebrow" style="margin:4px 0 7px;">CARD FORMAT</div>', unsafe_allow_html=True)
         with st.container(key=f"{state_id}-live-type-grid"):
+            cutout_icon, cutout_help = card_type_visuals["Text Subject Cutout"]
+            if st.button(
+                "Text Subject Cutout",
+                type="primary" if saved_card_type == "Text Subject Cutout" else "secondary",
+                width="stretch",
+                key=f"{state_id}-type-choice-0",
+                icon=cutout_icon,
+                help=cutout_help,
+            ):
+                st.session_state[live_card_type_key] = "Text Subject Cutout"
+                st.rerun()
+            st.markdown('<div class="eyebrow" style="margin:8px 0 5px;">EDITORIAL CARD TYPES</div>', unsafe_allow_html=True)
+            editorial_types = [option for option in card_types if option != "Text Subject Cutout"]
             type_cols = st.columns(2, gap="small")
-            for index, option in enumerate(card_types):
+            for option in editorial_types:
+                index = card_types.index(option)
                 icon, description = card_type_visuals.get(option, (":material/dashboard_customize:", "Choose a card format"))
-                with type_cols[index % 2]:
+                with type_cols[(index - 1) % 2]:
                     if st.button(
                         option,
                         type="primary" if option == saved_card_type else "secondary",
