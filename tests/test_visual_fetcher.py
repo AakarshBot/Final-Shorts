@@ -356,7 +356,23 @@ def test_manual_crawl_excludes_known_pages_older_than_five_years(monkeypatch):
 
 
 def test_news_search_applies_date_filter_to_providers_but_scores_base_query(monkeypatch):
+    import sys
+
     calls = []
+
+    class FakeDDGS:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        def text(self, **kwargs):
+            calls.append(("text", kwargs["query"]))
+            return []
+
+    monkeypatch.setitem(
+        sys.modules,
+        "ddgs",
+        type("FakeModule", (), {"DDGS": FakeDDGS}),
+    )
     monkeypatch.setattr(
         visual_fetcher,
         "_ddgs_news",
