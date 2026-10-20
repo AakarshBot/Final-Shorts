@@ -375,13 +375,14 @@ def test_universal_indic_retry_receives_error_and_rejected_script_until_fixed(mo
 def test_scriptwriter_accepts_previous_failed_generation_feedback(monkeypatch):
     calls = []
     monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
-    monkeypatch.setattr(
-        script_writer,
-        "_request",
-        lambda model, prompt, story, schema=None, **kwargs: (
-            calls.append((model, prompt)) or valid_result()
-        ),
-    )
+    corrected = valid_result("Shubman Gill faces an injury scare.")
+    corrected["script"][3]["voiceover"] = "Availability depends on the medical report and selection."
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt))
+        return json.loads(json.dumps(corrected))
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
 
     result = script_writer.ScriptWriter.write(
         Story(),
