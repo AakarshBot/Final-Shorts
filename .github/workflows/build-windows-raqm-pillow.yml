@@ -71,7 +71,7 @@ jobs:
           with zipfile.ZipFile(wheel) as archive:
               archive.extractall(test_target)
 
-          probe_code = "\\n".join((
+          probe_code = "\n".join((
               "import os, sys",
               f"root = {str(root)!r}",
               f"target = {str(test_target)!r}",
@@ -113,7 +113,7 @@ jobs:
           )
           if probe.returncode != 0:
               raise SystemExit(
-                  "The extracted RAQM-enabled Pillow wheel failed isolated runtime verification.\\n"
+                  "The extracted RAQM-enabled Pillow wheel failed isolated runtime verification.\n"
                   + (probe.stdout or "")
                   + (probe.stderr or "")
               )
