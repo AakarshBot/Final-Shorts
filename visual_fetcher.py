@@ -21,8 +21,9 @@ from PIL import Image, UnidentifiedImageError
 
 TARGET = 15
 SUCCESS = 10
-MAX_RELATED_PAGES = 10
-PROFILE_PAGES = 4
+MAX_RELATED_PAGES = 6
+PROFILE_PAGES = 2
+MANUAL_LOOKBACK_YEARS = 5
 PROFILE_IMAGES = 5
 IMAGES_PER_PAGE = 6
 MIN_SIDE = 500
@@ -462,12 +463,16 @@ def _google_news_rss(query):
 
 
 def _news_search(query, historical=False):
+    requested_query = _clean(query, 500)
+    date_match = re.search(r"\s+after:(\d{4}-\d{2}-\d{2})\s*$", requested_query, re.IGNORECASE)
+    scoring_query = requested_query[:date_match.start()].strip() if date_match else requested_query
+
     def text_search():
         try:
             from ddgs import DDGS
             search = DDGS(timeout=SEARCH_TIMEOUT)
             results = search.text(
-                query=query,
+                query=requested_query,
                 region=SEARCH_REGION,
                 safesearch="moderate",
                 max_results=SEARCH_RESULTS,
@@ -480,10 +485,10 @@ def _news_search(query, historical=False):
     with ThreadPoolExecutor(max_workers=3 if historical else 2) as executor:
         news_future = executor.submit(
             _ddgs_news,
-            query,
+            requested_query,
             None if historical else "d",
         )
-        google_future = executor.submit(_google_news_rss, query)
+        google_future = executor.submit(_google_news_rss, requested_query)
         text_future = executor.submit(text_search) if historical else None
         ddgs = news_future.result()
         google = google_future.result()
@@ -498,17 +503,17 @@ def _news_search(query, historical=False):
         if not identity or identity in seen:
             continue
         seen.add(identity)
-        combined.append({**item, "url": url, "title": title, "query": query})
+        combined.append({**item, "url": url, "title": title, "query": scoring_query})
 
     if not historical and len(combined) < min(SEARCH_RESULTS, 8):
-        for item in _ddgs_news(query, timelimit="w"):
+        for item in _ddgs_news(requested_query, timelimit="w"):
             url = _clean(item.get("url") or item.get("href"), 3000)
             title = _clean(item.get("title"), 600)
             identity = url.casefold() or title.casefold()
             if not identity or identity in seen:
                 continue
             seen.add(identity)
-            combined.append({**item, "url": url, "title": title, "query": query})
+            combined.append({**item, "url": url, "title": title, "query": scoring_query})
             if len(combined) >= SEARCH_RESULTS:
                 break
 
@@ -532,6 +537,13 @@ def _article_url_is_usable(url):
 def _collect_related_pages(queries, original_url, story_title="", entity="", historical=False):
     if not queries:
         return []
+
+    date_filters = [
+        match.group(1)
+        for query in queries
+        if (match := re.search(r"\s+after:(\d{4}-\d{2}-\d{2})\s*$", str(query), re.IGNORECASE))
+    ]
+    manual_cutoff = _parse_date(date_filters[0]) if date_filters else None
 
     with ThreadPoolExecutor(max_workers=min(3, len(queries))) as executor:
         groups = list(executor.map(lambda query: _news_search(query, historical), queries))
@@ -557,6 +569,8 @@ def _collect_related_pages(queries, original_url, story_title="", entity="", his
                 or item.get("date")
             )
             age = _age_hours(published, now)
+            if manual_cutoff is not None and published is not None and published.date() < manual_cutoff.date():
+                continue
             if not historical and age is not None and (age < -0.5 or age > MAX_AGE_HOURS):
                 continue
 
@@ -1894,34 +1908,51 @@ def ranked_visual_search(story):
     }
 
 
+def _manual_cutoff_date(today=None):
+    """Return the inclusive calendar date five years before today."""
+    current = today or datetime.now(timezone.utc).date()
+    try:
+        return current.replace(year=current.year - MANUAL_LOOKBACK_YEARS)
+    except ValueError:
+        return current.replace(year=current.year - MANUAL_LOOKBACK_YEARS, day=28)
+
+
 def manual_crawl_visuals(query):
-    """Scrape publisher pages for a manual query with optional historical targeting."""
+    """Scrape query-matched publisher pages from the last five years, never older."""
     query = _clean(query, 260)
     if not query:
         raise ValueError("Manual scraper requires a search query.")
 
     plan = _manual_query_plan(query)
-    queries = plan["queries"]
-    historical = plan["historical"]
+    queries = list(plan["queries"])
+    cutoff = _manual_cutoff_date()
+    # Search engines understand the after: operator. _news_search removes this clause
+    # before relevance ranking, and older known publication dates are also rejected locally.
+    bounded_queries = [f"{value} after:{cutoff.isoformat()}" for value in queries]
     related_pages = _collect_related_pages(
-        queries,
+        bounded_queries,
         "",
         "",
         "",
-        historical=historical,
+        historical=True,
     )
-    page_requests = [
-        {
+    page_requests = []
+    for page in related_pages:
+        published = _parse_date(page.get("published_at"))
+        if published is not None and published.date() < cutoff:
+            continue
+        query_value = _clean(page.get("query"), 260)
+        if not query_value:
+            query_value = queries[0] if queries else query
+        page_requests.append({
             "url": page["url"],
             "title": page.get("title", ""),
             "publisher": page.get("source", ""),
             "published_at": page.get("published_at", ""),
-            "query": page.get("query", ""),
+            "query": query_value,
             "entity": "",
             "story_title": "",
-        }
-        for page in related_pages
-    ]
+        })
 
     results = _crawl_pages(page_requests)
     assets = []
@@ -1960,8 +1991,8 @@ def manual_crawl_visuals(query):
     )
     print(
         f"   [Visual Fetcher] manual_query={query!r} "
-        f"queries={len(queries)} historical={historical} "
-        f"pages={len(related_pages)} final_pool={len(selected)}/{TARGET} "
+        f"queries={len(queries)} window={cutoff.isoformat()}..today "
+        f"pages={len(page_requests)} final_pool={len(selected)}/{TARGET} "
         f"state={failure_state}",
         flush=True,
     )
@@ -1971,7 +2002,9 @@ def manual_crawl_visuals(query):
         "success_threshold": SUCCESS,
         "manual_query": query,
         "search_queries": queries,
-        "historical": historical,
+        "historical": bool(plan["historical"]),
+        "lookback_years": MANUAL_LOOKBACK_YEARS,
+        "date_cutoff": cutoff.isoformat(),
         "pages_scraped": len(page_requests),
         "related_pages": len(related_pages),
         "failure_state": failure_state,
