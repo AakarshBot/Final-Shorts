@@ -4316,6 +4316,7 @@ def _script_for_topic(
     angle=None,
     research_source=None,
     search_query=None,
+    validation_feedback=None,
 ) -> dict:
     from script_writer import ScriptWriter
 
@@ -4327,6 +4328,7 @@ def _script_for_topic(
         angle=angle,
         research_source=research_source,
         search_query=search_query,
+        validation_feedback=validation_feedback,
     )
 
 
@@ -4687,6 +4689,7 @@ def _live_start_story(index: int):
 def _live_generate_script(
     angle=None,
     research_source=None,
+    validation_feedback=None,
 ):
     selected_index = st.session_state.get("live_selected_topic")
     topics = st.session_state.get("live_topics") or []
@@ -4706,6 +4709,7 @@ def _live_generate_script(
             if st.session_state.get("live_production_line") == "youtube_trends"
             else None
         ),
+        validation_feedback=validation_feedback,
     )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
@@ -5865,12 +5869,14 @@ def _render_live_script():
             button_prefix=f"live-{story_id}",
         )
         if selected_angle:
+            previous_failure = str(st.session_state.get("live_script_error") or "").strip()
             st.session_state.live_script_error = ""
             try:
                 with st.spinner("Writing the Short from the selected angle…"):
                     _live_generate_script(
                         angle=selected_angle,
                         research_source=st.session_state.live_universal_angle_source,
+                        validation_feedback=previous_failure,
                     )
             except Exception as exc:
                 st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
@@ -7443,6 +7449,82 @@ def render_live_dashboard():
         audio_error = st.session_state.get("live_audio_error") or st.session_state.get("live_handoff_error")
         if audio_error:
             st.error(audio_error)
+            timing_error_text = str(audio_error).casefold()
+            if any(
+                marker in timing_error_text
+                for marker in (
+                    "30-second",
+                    "30 seconds",
+                    "5.2 seconds",
+                    "first-slide audio",
+                    "narration is too long",
+                    "too long to fit",
+                    "reduce narration in scriptwriter",
+                )
+            ):
+                st.caption("This error came from measured audio, not just estimated word count. Send it back to Scriptwriter so the next draft can target the actual failed limit.")
+                if st.button(
+                    "Rewrite Script for measured audio limits",
+                    width="stretch",
+                    key="live-regenerate-script-from-audio-error",
+                ):
+                    previous_script = st.session_state.get("live_approved_script") or script
+                    angle = previous_script.get("story_angle") if isinstance(previous_script, dict) else None
+                    previous_scenes = (
+                        previous_script.get("script") or []
+                        if isinstance(previous_script, dict)
+                        else []
+                    )
+                    previous_narration = [
+                        str(scene.get("voiceover") or "").strip()
+                        for scene in previous_scenes
+                        if isinstance(scene, dict) and str(scene.get("voiceover") or "").strip()
+                    ]
+                    feedback = str(audio_error)
+                    if previous_narration:
+                        feedback += (
+                            "\nRejected narration that produced this audio (JSON, same slide order): "
+                            + json.dumps(previous_narration, ensure_ascii=False)
+                        )
+                    research_source = st.session_state.get("live_universal_angle_source")
+
+                    st.session_state.live_script_data = None
+                    st.session_state.live_approved_script = None
+                    st.session_state.live_audio_data = None
+                    st.session_state.live_approved_audio = None
+                    st.session_state.live_subtitle_data = None
+                    st.session_state.live_handoff_error = ""
+                    st.session_state.live_audio_error = ""
+                    st.session_state.live_audio_status = "idle"
+                    st.session_state.live_audio_future = None
+                    st.session_state.live_visual_result = None
+                    st.session_state.live_visual_future = None
+                    st.session_state.live_visual_status = "idle"
+                    st.session_state.live_visual_error = ""
+                    st.session_state.live_manual_visual_result = None
+                    st.session_state.live_manual_visual_future = None
+                    st.session_state.live_manual_visual_status = "idle"
+                    st.session_state.live_real_image_result = None
+                    st.session_state.live_real_image_future = None
+                    st.session_state.live_real_image_status = "idle"
+                    st.session_state.live_visual_assignments = {}
+                    st.session_state.live_visuals_approved = False
+                    st.session_state.live_rendered_video_path = None
+                    st.session_state.live_render_error = ""
+                    st.session_state.live_upload_qc_approved = False
+                    st.session_state.live_stage = "02 · Script"
+                    st.session_state.live_script_error = ""
+
+                    try:
+                        with st.spinner("Rewriting the script against the measured audio failure…"):
+                            _live_generate_script(
+                                angle=angle,
+                                research_source=research_source,
+                                validation_feedback=feedback,
+                            )
+                    except Exception as exc:
+                        st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+                    st.rerun()
         button_label = "Retry Audio + Subtitles in Background" if audio_status == "failed" else "Start Audio + Subtitles in Background"
         if st.button(
             button_label,
