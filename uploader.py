@@ -402,7 +402,7 @@ def seed_existing_channel_upload_history(
             ) as handle:
                 temp_path = Path(handle.name)
                 json.dump(combined, handle, ensure_ascii=False, indent=2)
-                handle.write("\\n")
+                handle.write("\n")
             os.replace(temp_path, path)
         except OSError as exc:
             if temp_path is not None:
