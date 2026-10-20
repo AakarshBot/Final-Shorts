@@ -1813,6 +1813,83 @@ def test_windows_raqm_bootstrap_surfaces_the_setup_failure_details(monkeypatch):
         renderer._require_raqm("hindi")
 
 
+def test_isolated_raqm_pillow_bootstrap_precedes_normal_pil_import(monkeypatch, tmp_path):
+    target = tmp_path / ".deps" / "raqm_pillow"
+    package = target / "PIL"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text("", encoding="utf-8")
+    (package / "_imagingft.cp311-win_amd64.pyd").write_bytes(b"test extension")
+
+    monkeypatch.setattr(renderer.sys, "path", list(renderer.sys.path))
+    assert renderer._activate_bundled_raqm_pillow(tmp_path)
+    assert renderer.sys.path[0] == str(target.resolve())
+
+
+def test_isolated_raqm_pillow_installer_uses_wheel_and_verifies_raqm(monkeypatch, tmp_path):
+    calls = []
+
+    class ProcessResult:
+        returncode = 0
+        stdout = ""
+        stderr = ""
+
+    def fake_run(command, **kwargs):
+        calls.append((command, kwargs))
+        if "-m" in command and "pip" in command:
+            target = Path(command[command.index("--target") + 1])
+            package = target / "PIL"
+            package.mkdir(parents=True, exist_ok=True)
+            (package / "__init__.py").write_text("", encoding="utf-8")
+            (package / "_imagingft.cp311-win_amd64.pyd").write_bytes(b"test extension")
+        return ProcessResult()
+
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
+    target = renderer._install_raqm_enabled_pillow(tmp_path)
+
+    assert target == tmp_path / ".deps" / "raqm_pillow"
+    install_command = calls[0][0]
+    assert "--only-binary=:all:" in install_command
+    assert "--no-deps" in install_command
+    assert install_command[install_command.index("--target") + 1] == str(target)
+    assert "Pillow>=10,<12" in install_command
+    assert len(calls) == 2
+
+
+def test_windows_raqm_prepare_isolated_pillow_when_active_build_has_no_raqm(monkeypatch, tmp_path):
+    monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ERROR", "")
+    monkeypatch.setattr(renderer, "_WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_RAQM_PILLOW_INSTALL_ERROR", "")
+    monkeypatch.setattr(renderer, "_WINDOWS_RAQM_PILLOW_READY_FOR_RESTART", False)
+    monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
+    monkeypatch.setattr(renderer, "_activate_windows_fribidi", lambda: "")
+    monkeypatch.setattr(renderer, "_install_windows_fribidi_via_powershell", lambda: None)
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: (False, "This Pillow build does not report RAQM support."))
+    installed = []
+    monkeypatch.setattr(
+        renderer,
+        "_install_raqm_enabled_pillow",
+        lambda: installed.append("isolated-wheel") or (tmp_path / ".deps" / "raqm_pillow"),
+    )
+
+    with pytest.raises(RuntimeError, match="Fully close Final-Shorts / Streamlit and restart"):
+        renderer._require_raqm("hindi")
+
+    assert installed == ["isolated-wheel"]
+    assert renderer._WINDOWS_RAQM_PILLOW_READY_FOR_RESTART is True
+
+
+def test_windows_fribidi_installer_skips_overwrite_when_existing_dll_is_loaded():
+    script_path = Path(renderer.__file__).resolve().with_name("setup_windows_indic_rendering.ps1")
+    script = script_path.read_text(encoding="utf-8")
+
+    assert '$SourceDllHash = (Get-FileHash -Path $SourceDll -Algorithm SHA256).Hash.ToLowerInvariant()' in script
+    assert '$TargetDllHash -eq $SourceDllHash' in script
+    assert "leaving it in place" in script
+    assert "Close every Final-Shorts / Streamlit process" in script
+
+
 def test_final_renderer_refuses_overlength_top5_handoff_before_preparing_visuals(tmp_path):
     import renderer
 
