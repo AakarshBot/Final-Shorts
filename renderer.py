@@ -2283,21 +2283,31 @@ def render_production_video(
 
         motion_seed = ""
         if static_frame is None and not isinstance(top5_card, dict) and not manual_subject_cutout and not card_studio:
-            motion_seed = "|".join(
-                [
-                    str(approved_script.get("story_angle") or ""),
-                    *(
-                        str(visual.get(key) or "")
-                        for key in (
-                            "primary_entity",
-                            "visual_intent",
-                            "specific_search_prompt",
-                            "sport_or_topic_category",
-                            "source",
-                        )
-                    ),
-                ]
-            ).strip("|")
+            scene_metadata = script_scenes[index - 1] if index - 1 < len(script_scenes) else {}
+            seed_parts = [
+                str(approved_script.get("story_angle") or ""),
+                *(
+                    str(visual.get(key) or "")
+                    for key in (
+                        "primary_entity",
+                        "visual_intent",
+                        "specific_search_prompt",
+                        "sport_or_topic_category",
+                        "source",
+                    )
+                ),
+            ]
+            # Standard Shorts use the spoken beat and story identity in addition
+            # to image metadata. This makes each camera path follow the actual
+            # editorial cut, rather than choosing motion from the image search
+            # prompt alone. Top-5 keeps its established motion-seed behavior.
+            if not is_top5 and isinstance(scene_metadata, dict):
+                seed_parts.extend((
+                    str(approved_script.get("source_title") or approved_script.get("headline") or ""),
+                    str(scene_metadata.get("voiceover") or scene_metadata.get("headline") or ""),
+                    f"scene:{index}",
+                ))
+            motion_seed = "|".join(seed_parts).strip("|")
             if not motion_seed:
                 # Image bytes are stable for this scene; hashing them per frame is
                 # pure repeated work, so derive the fallback seed only once here.
