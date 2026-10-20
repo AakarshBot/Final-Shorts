@@ -1157,6 +1157,7 @@ def test_test_scriptwriter_same_angle_retry_receives_previous_failure(monkeypatc
     story_key = hashlib.sha1(f"{topic.title}|{topic.url}".encode("utf-8")).hexdigest()[:12]
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
+    at.session_state["factory_format"] = "shorts"
     at.session_state["test_production_line"] = "deep_dive"
     at.session_state["test_stage"] = "02 · Scriptwriter"
     at.session_state["topic_desk_profile"] = "cricket_india_asia"
@@ -1223,6 +1224,7 @@ def test_test_audio_timing_rewrite_sends_error_and_rejected_narration(monkeypatc
     original["script"][0]["voiceover"] = "शुभमन गिल की फिटनेस पर लंबी चिंता है, और चयन अभी तय नहीं है।"
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
+    at.session_state["factory_format"] = "shorts"
     at.session_state["test_production_line"] = "deep_dive"
     at.session_state["test_stage"] = "03 · Audio"
     at.session_state["topic_desk_profile"] = "cricket_india_asia"
@@ -1267,6 +1269,7 @@ def test_live_pipeline_allows_direct_stage_selection_after_topic_choice():
     )
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "live"
+    at.session_state["factory_format"] = "shorts"
     at.session_state["live_production_line"] = "deep_dive"
     at.session_state["live_desk"] = "cricket"
     at.session_state["live_cricket_profile"] = "cricket_india_asia"
