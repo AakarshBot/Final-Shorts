@@ -385,6 +385,7 @@ output/
 
 - Renderer preview regression fixed: opening preview now uses `PREVIEW_SUBTITLE_DATA` instead of an undefined `subtitle_data`.
 - The root-level Scriptwriter headline is crisp dashboard-only metadata with no word-count limit; it is disconnected from standard Shorts rendering.
+- **Scriptwriter Slide 1 recovery (PR #126, merged 2026-10-20):** The English opening remains capped at 13 counted words. If the normal hidden rewrite still misses the limit, the writer performs up to two bounded, count-aware targeted repairs, then copies back only `script[0].voiceover` so other slides and metadata are preserved. GitHub Actions run [#39469507613](https://github.com/AakarshBot/Final-Shorts/actions/runs/39469507613) passed Python compilation and the full suite (**456 passed, 1 skipped, 1 non-blocking Pillow deprecation warning**). The first real Windows Live-script generation smoke test remains unverified; verify the generated script reaches Manual QC before any upload.
 - Scriptwriter now generates hashtags and the public-upload comment in the same generation call.
 - YouTube Upload QC was added with editable publish metadata and Public/Private upload lanes.
 - Renderer text layout was corrected to use stroke-aware, screen-safe measurements so headline and subtitle characters do not clip at the canvas edges.
