@@ -10341,7 +10341,19 @@ def render_audio():
                             "\nRejected narration that produced this audio (JSON, same slide order): "
                             + json.dumps(rejected_narration, ensure_ascii=False)
                         )
-                    angle = failed_script.get("story_angle")
+                    angle = str(st.session_state.get("test_universal_angle_custom") or "").strip()
+                    if not angle:
+                        available_angles = st.session_state.get("test_universal_angles") or []
+                        angle_index = st.session_state.get("test_universal_angle_selected", 0)
+                        if isinstance(angle_index, int) and 0 <= angle_index < len(available_angles):
+                            selected_angle_data = available_angles[angle_index]
+                            if isinstance(selected_angle_data, dict):
+                                angle = (
+                                    f'{str(selected_angle_data.get("title") or "").strip()}: '
+                                    f'{str(selected_angle_data.get("description") or "").strip()}'
+                                ).strip(": ")
+                    if not angle:
+                        angle = str(failed_script.get("story_angle") or "").strip()
                     research_source = st.session_state.get("test_universal_angle_source")
                     desk_profile = st.session_state.get("topic_desk_profile") or (
                         "youtube_trends"
