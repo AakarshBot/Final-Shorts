@@ -41,7 +41,7 @@ def test_chatterbox_turbo_stack_imports_without_loading_weights():
     assert callable(ChatterboxTurboTTS.from_pretrained)
 
 
-def test_chatterbox_full_retries_xet_transfer_and_keeps_loaded_model(monkeypatch):
+def test_chatterbox_full_tries_https_first_then_xet_and_keeps_loaded_model(monkeypatch):
     import sys
     import types
     import audio
@@ -72,8 +72,8 @@ def test_chatterbox_full_retries_xet_transfer_and_keeps_loaded_model(monkeypatch
 
     assert loaded is model
     assert len(calls) == 2
-    assert calls[0][1] is False
-    assert calls[1][1] is True
+    assert calls[0][1] is True
+    assert calls[1][1] is False
     assert hf_constants.HF_HUB_DISABLE_XET is False
     assert audio.get_chatterbox_model("full") is model
     assert len(calls) == 2
