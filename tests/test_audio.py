@@ -451,8 +451,8 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
         def prepare_conditionals(self, reference_path, exaggeration=0.5):
             self.conditioning_calls.append(reference_path)
 
-        def generate(self, text, temperature=0.8):
-            self.generate_calls.append((text, temperature))
+        def generate(self, text, **kwargs):
+            self.generate_calls.append((text, kwargs))
             return torch.ones((1, self.sr), dtype=torch.float32)
 
     model = FakeChatterbox()
@@ -473,7 +473,12 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
 
     assert all(not scene["from_cache"] for scene in first["scenes"])
     assert model.generate_calls[0][0] == audio._join_narration_texts([scene["voiceover"] for scene in script["script"]])
-    assert model.generate_calls[0][1] == 0.80
+    assert model.generate_calls[0][1] == {
+        "temperature": 0.90,
+        "top_p": 0.95,
+        "top_k": 1000,
+        "repetition_penalty": 1.15,
+    }
     assert all(scene["continuous_master_path"] == first["full_path"] for scene in first["scenes"])
     assert all(scene["from_cache"] for scene in second["scenes"])
     assert len(model.generate_calls) == 1
@@ -558,7 +563,7 @@ def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_pat
         def prepare_conditionals(self, reference_path, exaggeration=0.5):
             self.conditioning_calls += 1
 
-        def generate(self, text, temperature=0.8):
+        def generate(self, text, **kwargs):
             self.generate_calls += 1
             return torch.ones((1, self.sr), dtype=torch.float32)
 
@@ -610,7 +615,7 @@ def test_chatterbox_delivery_uses_flat_temperature_and_no_heuristic_acting():
         "The final result changed everything.",
     ]
     assert all(
-        audio._chatterbox_delivery(text, number, len(texts))[1] == 0.80
+        audio._chatterbox_delivery(text, number, len(texts))[1] == 0.90
         for number, text in enumerate(texts, 1)
     )
     assert audio._chatterbox_audio_texts(texts) == texts
@@ -649,7 +654,7 @@ def test_chatterbox_voice_variant_outputs_do_not_overwrite_each_other(monkeypatc
         def prepare_conditionals(self, reference_path, exaggeration=0.5):
             self.conds = Path(reference_path).name
 
-        def generate(self, text, temperature=0.8):
+        def generate(self, text, **kwargs):
             self.generated += 1
             return torch.ones((1, self.sr), dtype=torch.float32)
 
@@ -714,7 +719,7 @@ def test_chatterbox_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch
         sr = 16000
         conds = None
 
-        def generate(self, text, temperature=0.8):
+        def generate(self, text, **kwargs):
             return torch.ones((1, self.sr * 30), dtype=torch.float32)
 
     model = FakeChatterbox()
