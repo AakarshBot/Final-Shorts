@@ -2562,6 +2562,7 @@ def write_universal_script(
     research_source: str | None = None,
     search_query: str | None = None,
     profile: str = "niche_sports",
+    validation_feedback: str | None = None,
 ) -> dict:
     source = research_source or _research_story(story)
     if not source:
@@ -2600,6 +2601,10 @@ def write_universal_script(
             "Choose the strongest evidence-backed editorial angle yourself and keep the entire Short centered on it."
         )
 
+    instruction = _append_previous_validation_feedback(
+        instruction, validation_feedback, language_key
+    )
+
     errors = []
     recovery_reason = ""
     last_result = None
@@ -2608,12 +2613,11 @@ def write_universal_script(
         model_instruction = instruction
         if recovery_reason:
             model_instruction += (
-                "\nRECOVERY:\n"
-                "The previous draft was rejected by local validation. "
-                "Rewrite the complete package now. Fix the exact failure below "
-                "while preserving every other hard rule and all supported facts. "
+                "\nRECOVERY (THE PREVIOUS DRAFT FAILED LOCAL VALIDATION):\n"
+                "Rewrite the complete package to fix the exact failure below while preserving all supported facts. "
+                "Do not merely repeat the requirements; use the rejected package and validator counts that follow. "
                 "Return only the complete JSON package.\n"
-                f"Validation failure: {recovery_reason}"
+                + _script_recovery_context(last_result, recovery_reason, language_key)
             )
         try:
             result = _prepare_generated_script(_request(model, model_instruction, source), language_key)
@@ -2654,41 +2658,52 @@ def write_universal_script(
         errors.append(f"{model}: {reason}")
 
     if _is_indic_timing_issue(recovery_reason, language_key) and last_result is not None:
-        timing_instruction = (
-            instruction
-            + "\n\nMANDATORY INDIC TIMING REWRITE\n"
-            "Rewrite the full package, not just metadata. Use a short direct Slide 1 with no more than seven compact "
-            "whitespace-separated tokens (ideally five to seven), keep the exact subject, move background/context to later slides, "
-            "and target 50–55 total tokens where the evidence supports that length. Never pad or omit essential facts. "
-            "Actual generated audio must measure Slide 1 at <=5.2 seconds and the full Short strictly under 30 seconds. "
-            "Return only complete JSON.\n"
-            + recovery_reason
-        )
-        model = MODELS[0] if last_model != MODELS[0] else MODELS[1]
-        try:
-            corrected = _prepare_generated_script(_request(model, timing_instruction, source), language_key)
-            if angle_text:
-                corrected["story_angle"] = angle_text
-            corrected_valid, corrected_reason = _validate_generated_universal_draft(corrected, language_key)
-            if corrected_valid:
-                return _finish_result(
-                    corrected,
-                    story,
-                    source,
-                    model,
-                    language_key,
-                    angle_text=angle_text,
-                    search_query=search_query,
-                    delivery_profile=(
-                        "UNIVERSAL SPORTS"
-                        if norm_profile in {"niche_sports", "universal"}
-                        else DESK_PROFILES.get(norm_profile, "UNIVERSAL SPORTS")
-                    ),
-                    desk_profile=norm_profile,
-                )
-            errors.append(f"{model}: targeted timing rewrite: {corrected_reason}")
-        except Exception as exc:
-            errors.append(f"{model}: targeted timing rewrite: {type(exc).__name__}: {exc}")
+        recovery_errors = []
+        previous_model = last_model
+        for attempt in range(1, 3):
+            model = MODELS[0] if previous_model != MODELS[0] else MODELS[1]
+            timing_instruction = (
+                instruction
+                + "\n\nMANDATORY INDIC TIMING RECOVERY "
+                + f"(ATTEMPT {attempt}/2)\n"
+                + "The previous script was rejected. Repair the complete package using the exact local failure and rejected JSON below. "
+                + "Use a short direct Slide 1 with no more than seven compact whitespace-separated tokens (ideally five to seven), "
+                + "keep the exact subject, move background/context to later slides, and target 50–55 total tokens where the evidence supports it. "
+                + "Never pad or omit essential facts. Actual audio must measure Slide 1 at <=5.2 seconds and the full Short strictly under 30 seconds. "
+                + "Return only complete JSON.\n"
+                + _script_recovery_context(last_result, recovery_reason, language_key)
+            )
+            previous_model = model
+            try:
+                corrected = _prepare_generated_script(_request(model, timing_instruction, source), language_key)
+                if angle_text:
+                    corrected["story_angle"] = angle_text
+                corrected_valid, corrected_reason = _validate_generated_universal_draft(corrected, language_key)
+                if corrected_valid:
+                    return _finish_result(
+                        corrected,
+                        story,
+                        source,
+                        model,
+                        language_key,
+                        angle_text=angle_text,
+                        search_query=search_query,
+                        delivery_profile=(
+                            "UNIVERSAL SPORTS"
+                            if norm_profile in {"niche_sports", "universal"}
+                            else DESK_PROFILES.get(norm_profile, "UNIVERSAL SPORTS")
+                        ),
+                        desk_profile=norm_profile,
+                    )
+                recovery_errors.append(f"{model}: attempt {attempt}: {corrected_reason}")
+                last_result = corrected
+                recovery_reason = corrected_reason
+                last_model = model
+            except Exception as exc:
+                recovery_errors.append(f"{model}: attempt {attempt}: {type(exc).__name__}: {exc}")
+                last_model = model
+
+        errors.extend(recovery_errors)
 
     raise RuntimeError(
         "Universal sports script generation failed: " + " | ".join(errors)
@@ -2913,6 +2928,7 @@ class ScriptWriter:
                 angle=angle,
                 research_source=research_source,
                 profile=norm,
+                validation_feedback=kwargs.get("validation_feedback"),
             )
         else:
             return write_universal_script(
@@ -2922,6 +2938,7 @@ class ScriptWriter:
                 research_source=research_source,
                 search_query=search_query,
                 profile=norm,
+                validation_feedback=kwargs.get("validation_feedback"),
             )
 
     @classmethod
