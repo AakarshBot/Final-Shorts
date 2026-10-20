@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from io import BytesIO
+import ctypes
 import hashlib
 import os
 from pathlib import Path
@@ -18,6 +19,9 @@ from itertools import combinations
 
 
 _DLL_DIRECTORY_HANDLES = []
+_FRIBIDI_DLL_HANDLES = []
+_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED = False
+_WINDOWS_FRIBIDI_INSTALL_ERROR = ""
 
 
 def _windows_dll_search_directories(root: Path | None = None) -> tuple[Path, ...]:
@@ -232,40 +236,134 @@ def _indic_language_for_text(text: str) -> str | None:
     return None
 
 
-def _require_raqm(language: str) -> None:
-    # Re-check paths at call time too, in case the DLL was installed/configured
-    # after this module was first imported during the Streamlit session.
-    _register_windows_dll_paths()
+def _raqm_runtime_probe(language: str) -> tuple[bool, str]:
+    """Test real Indic font loading/shaping; a feature flag alone misses DLL-load failures."""
+    language_key = _normalise_indic_language(language)
+    if language_key not in {"hindi", "telugu"}:
+        return True, ""
+
     try:
-        available = features.check_feature("raqm")
-    except (AttributeError, ValueError):
-        available = False
+        if not features.check_feature("raqm"):
+            return False, "This Pillow build does not report RAQM support."
+    except (AttributeError, ValueError, OSError) as exc:
+        return False, f"Pillow could not check RAQM support: {type(exc).__name__}: {exc}"
 
-    bootstrap_error = None
-    if not available and os.name == "nt":
+    filename, sample = (
+        ("NotoSansDevanagari-Bold.ttf", "क्षेत्र की उपलब्धि")
+        if language_key == "hindi"
+        else ("NotoSansTelugu-Bold.ttf", "ప్రత్యేకమైన క్రీడాకారుడు")
+    )
+    font_path = Path(__file__).resolve().parent / "fonts" / filename
+    if not font_path.is_file():
+        return False, f"The bundled Indic font is missing: {filename}."
+
+    try:
+        font = ImageFont.truetype(
+            str(font_path),
+            48,
+            layout_engine=ImageFont.Layout.RAQM,
+        )
+        bounds = font.getmask(sample).getbbox()
+        if bounds is None:
+            return False, f"RAQM returned an empty glyph mask for {language_key.title()} text."
+    except Exception as exc:
+        return False, (
+            f"The real RAQM font-load/shaping test failed: "
+            f"{type(exc).__name__}: {exc}"
+        )
+    return True, ""
+
+
+def _activate_windows_fribidi(root: Path | None = None) -> str:
+    """Load a bundled FriBiDi DLL explicitly and keep its Windows handle alive."""
+    if os.name != "nt":
+        return ""
+    root = Path(root or Path(__file__).resolve().parent)
+    _register_windows_dll_paths()
+    configured = os.environ.get("FRIBIDI_DLL_PATH") or ""
+    candidates = []
+    if configured.strip():
+        configured_path = Path(configured.strip().strip('"'))
+        if configured_path.suffix.casefold() == ".dll":
+            candidates.append(configured_path)
+    candidates.extend((
+        root / "dlls" / "libfribidi-0.dll",
+        root / "dlls" / "fribidi-0.dll",
+        root / "dlls" / "fribidi.dll",
+    ))
+    loader = getattr(ctypes, "WinDLL", None)
+    if loader is None:
+        return "This Python runtime does not expose the Windows DLL loader."
+    seen = set()
+    for path in candidates:
         try:
-            _install_windows_fribidi_via_powershell()
-            _register_windows_dll_paths()
-            # Pillow's Windows wheels load FriBiDi at runtime; check again after
-            # the DLL has been installed and its folder registered.
-            available = bool(features.check_feature("raqm"))
-        except Exception as exc:
-            bootstrap_error = str(exc)
+            resolved = path.resolve()
+        except OSError:
+            resolved = path
+        key = str(resolved).casefold()
+        if key in seen or not resolved.is_file():
+            continue
+        seen.add(key)
+        try:
+            handle = loader(str(resolved))
+            _FRIBIDI_DLL_HANDLES.append(handle)
+            return ""
+        except OSError as exc:
+            return f"Could not load {resolved.name}: {exc}"
+    return "No FriBiDi DLL was found in the factory's configured DLL folders."
 
-    if not available:
-        detail = (
-            f" Automatic FriBiDi setup could not complete: {bootstrap_error}"
-            if bootstrap_error
-            else " FriBiDi was installed or found, but this Pillow build still does not expose RAQM."
-        )
-        raise RuntimeError(
-            f"{language.title()} text needs Pillow's RAQM text-shaping engine. "
-            "Rendering has been stopped rather than producing incorrectly joined letters. "
-            "On Windows the factory automatically runs the existing checksum-verified, "
-            "no-pip PowerShell installer when FriBiDi is missing, then re-checks Pillow in this process. "
-            "You can also set FRIBIDI_DLL_PATH to a compatible DLL or FRIBIDI_DLL_DIR to its "
-            f"folder, then restart the factory.{detail}"
-        )
+
+def _require_raqm(language: str) -> None:
+    """Require working RAQM shaping, installing the verified Windows DLL when needed."""
+    global _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED, _WINDOWS_FRIBIDI_INSTALL_ERROR
+    language_key = _normalise_indic_language(language)
+    _register_windows_dll_paths()
+    if os.name == "nt":
+        _activate_windows_fribidi()
+
+    available, probe_error = _raqm_runtime_probe(language_key)
+    if available:
+        return
+
+    setup_error = ""
+    if os.name == "nt":
+        if not _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED:
+            _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED = True
+            try:
+                _install_windows_fribidi_via_powershell()
+                _register_windows_dll_paths()
+                load_error = _activate_windows_fribidi()
+                if load_error:
+                    setup_error = load_error
+            except Exception as exc:
+                _WINDOWS_FRIBIDI_INSTALL_ERROR = str(exc)
+                setup_error = _WINDOWS_FRIBIDI_INSTALL_ERROR
+        else:
+            setup_error = _WINDOWS_FRIBIDI_INSTALL_ERROR
+
+        # The second check loads the bundled Noto font and forces actual glyph shaping.
+        available, retry_error = _raqm_runtime_probe(language_key)
+        if available:
+            return
+        if retry_error:
+            probe_error = retry_error
+
+    extra = ""
+    if setup_error:
+        extra += f" Automatic FriBiDi setup detail: {setup_error}"
+    if probe_error:
+        extra += f" RAQM runtime check: {probe_error}"
+
+    raise RuntimeError(
+        f"{language_key.title()} text needs a working Pillow RAQM text-shaping engine. "
+        "Rendering has been stopped rather than producing incorrectly joined letters. "
+        "The factory now tests the actual bundled Noto font and Indic glyph shaping, not only Pillow's feature flag. "
+        "On Windows it automatically runs the checksum-verified, no-pip FriBiDi installer once per factory session, "
+        "loads the DLL from the factory's dlls folder, and verifies shaping again. "
+        "No manual pip installation or file copying is required; close and restart the factory only if the "
+        "runtime was installed after the process started."
+        + extra
+    )
 
 
 @lru_cache(maxsize=512)
