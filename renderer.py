@@ -206,24 +206,37 @@ def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
                 + (details or f"RAQM probe exited with code {probe.returncode}.")
             )
 
-        sitecustomize = """import os
+        sitecustomize = """import ctypes
+import os
 from pathlib import Path
 
 _TARGET = Path(__file__).resolve().parent
 _FACTORY_ROOT = _TARGET.parents[1]
+_DLL_PATHS = (
+    _FACTORY_ROOT / "dlls",
+    _TARGET,
+    _TARGET / "PIL",
+    _TARGET / "pillow.libs",
+    _TARGET / "PIL" / ".libs",
+)
 _DLL_HANDLES = []
+_VALID_DLL_PATHS = [str(_path) for _path in _DLL_PATHS if _path.is_dir()]
+if _VALID_DLL_PATHS:
+    os.environ["PATH"] = os.pathsep.join(_VALID_DLL_PATHS + [os.environ.get("PATH", "")])
 if os.name == "nt" and hasattr(os, "add_dll_directory"):
-    for _dll_dir in (
-        _FACTORY_ROOT / "dlls",
-        _TARGET,
-        _TARGET / "PIL",
-        _TARGET / "pillow.libs",
-        _TARGET / "PIL" / ".libs",
-    ):
+    for _dll_dir in _DLL_PATHS:
         if _dll_dir.is_dir():
             try:
                 _DLL_HANDLES.append(os.add_dll_directory(str(_dll_dir)))
             except (OSError, ValueError):
+                pass
+    for _dll_name in ("libfribidi-0.dll", "fribidi-0.dll", "fribidi.dll"):
+        _dll_path = _FACTORY_ROOT / "dlls" / _dll_name
+        if _dll_path.is_file():
+            try:
+                _DLL_HANDLES.append(ctypes.WinDLL(str(_dll_path)))
+                break
+            except OSError:
                 pass
 """
         (staging / "sitecustomize.py").write_text(sitecustomize, encoding="utf-8")
