@@ -1083,3 +1083,202 @@ def test_live_audio_runs_in_background_while_visual_qc_opens(monkeypatch):
     assert at.session_state["live_audio_status"] == "complete"
     assert at.session_state["live_approved_audio"]["approved"] is True
     assert at.session_state["live_subtitle_data"] == {"subtitles": True}
+
+
+
+def _indic_script_package(story_angle="selection uncertainty"):
+    return {
+        "headline": "Gill fitness decision",
+        "story_angle": story_angle,
+        "language_used": "hindi",
+        "subject_name": "शुभमन गिल",
+        "titles": ["Gill fitness update", "India selection decision", "Latest cricket news"],
+        "seo_description": "The latest confirmed update on Shubman Gill's fitness.",
+        "hashtags": ["#Cricket"],
+        "comment": "Should India wait for the assessment?",
+        "script": [
+            {
+                "voiceover": "शुभमन गिल की फिटनेस पर चिंता है।",
+                "primary_entity": "शुभमन गिल",
+                "visual_intent": "शुभमन गिल cricket",
+                "specific_search_prompt": "शुभमन गिल India cricket",
+                "sport_or_topic_category": "Cricket",
+            },
+            {
+                "voiceover": "डॉक्टर उनकी स्थिति की समीक्षा कर रहे हैं।",
+                "primary_entity": "शुभमन गिल",
+                "visual_intent": "medical assessment",
+                "specific_search_prompt": "Shubman Gill medical assessment cricket",
+                "sport_or_topic_category": "Cricket",
+            },
+            {
+                "voiceover": "अगले मैच के लिए चयन अभी तय नहीं है।",
+                "primary_entity": "India cricket team",
+                "visual_intent": "India cricket team",
+                "specific_search_prompt": "India cricket team squad",
+                "sport_or_topic_category": "Cricket",
+            },
+        ],
+    }
+
+
+def test_test_scriptwriter_same_angle_retry_receives_previous_failure(monkeypatch):
+    import script_writer
+
+    observed = []
+    attempts = {"count": 0}
+    topic = Topic(
+        title="Shubman Gill injury update",
+        description="Gill is being assessed ahead of the next ODI.",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/gill-retry",
+    )
+    angle = {
+        "title": "Selection uncertainty",
+        "description": "Will India wait for the final fitness assessment?",
+        "evidence_basis": "The assessment is still pending.",
+    }
+    selected_angle = (
+        f'{angle["title"]}: {angle["description"]}'
+    )
+
+    def fake_write(cls, story, profile="cricket_india_asia", language="english",
+                   angle=None, research_source=None, search_query=None, **kwargs):
+        observed.append(kwargs.get("validation_feedback"))
+        attempts["count"] += 1
+        if attempts["count"] == 1:
+            raise ValueError(
+                "Indic generation timing preflight: Slide 1 has 9 whitespace-separated tokens."
+            )
+        return _indic_script_package(selected_angle)
+
+    monkeypatch.setattr(script_writer.ScriptWriter, "write", classmethod(fake_write))
+    story_key = hashlib.sha1(f"{topic.title}|{topic.url}".encode("utf-8")).hexdigest()[:12]
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "02 · Scriptwriter"
+    at.session_state["topic_desk_profile"] = "cricket_india_asia"
+    at.session_state["topics"] = [topic]
+    at.session_state["selected_topic"] = 0
+    at.session_state["script_language"] = "Hindi"
+    at.session_state["script_data"] = None
+    at.session_state["approved_script"] = None
+    at.session_state["test_universal_angles"] = [angle]
+    at.session_state["test_universal_angle_source"] = "Fitness assessment remains pending."
+    at.session_state["test_universal_angle_selected"] = 0
+    at.session_state["test_universal_angle_custom"] = ""
+    at.session_state["test_universal_angle_story_key"] = story_key
+    at.run()
+
+    assert not at.exception, at.exception
+    generate = next(button for button in at.button if button.label == "⚡ Generate Viral Short from Selected Lens")
+    generate.click().run()
+    assert not at.exception, at.exception
+    assert "Slide 1 has 9" in at.session_state["test_scriptwriter_retry"]["feedback"]
+
+    generate = next(button for button in at.button if button.label == "⚡ Generate Viral Short from Selected Lens")
+    generate.click().run()
+    assert not at.exception, at.exception
+    assert len(observed) == 2
+    assert observed[0] is None
+    assert "Slide 1 has 9 whitespace-separated tokens" in observed[1]
+    assert at.session_state["script_data"]["language_used"] == "hindi"
+    assert "test_scriptwriter_retry" not in at.session_state
+
+
+def test_test_audio_timing_rewrite_sends_error_and_rejected_narration(monkeypatch):
+    import audio
+    import script_writer
+
+    observed = {}
+
+    def fail_audio(*_args, **_kwargs):
+        raise ValueError(
+            "Hindi/Telugu first-slide audio is 6.37s; it must be no more than 5.2 seconds. "
+            "Shorten Slide 1 in Scriptwriter and regenerate Audio."
+        )
+
+    def fake_write(cls, story, profile="cricket_india_asia", language="english",
+                   angle=None, research_source=None, search_query=None, **kwargs):
+        observed.update({
+            "profile": profile,
+            "language": language,
+            "angle": angle,
+            "feedback": kwargs.get("validation_feedback"),
+        })
+        return _indic_script_package(angle or "selection uncertainty")
+
+    monkeypatch.setattr(audio, "generate_audio", fail_audio)
+    monkeypatch.setattr(script_writer.ScriptWriter, "write", classmethod(fake_write))
+    topic = Topic(
+        title="Shubman Gill injury update",
+        description="Gill is being assessed ahead of the next ODI.",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/gill-audio-retry",
+    )
+    original = _indic_script_package("selection uncertainty")
+    original["script"][0]["voiceover"] = "शुभमन गिल की फिटनेस पर लंबी चिंता है, और चयन अभी तय नहीं है।"
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "test"
+    at.session_state["test_production_line"] = "deep_dive"
+    at.session_state["test_stage"] = "03 · Audio"
+    at.session_state["topic_desk_profile"] = "cricket_india_asia"
+    at.session_state["topics"] = [topic]
+    at.session_state["selected_topic"] = 0
+    at.session_state["script_data"] = original
+    at.session_state["approved_script"] = original
+    at.session_state["audio_data"] = None
+    at.session_state["approved_audio"] = None
+    at.session_state["audio_engine_choice_v2"] = "Edge-TTS Neural"
+    at.session_state["audio_language"] = "Hindi"
+    at.session_state["test_universal_angle_source"] = "Fitness assessment remains pending."
+    at.run()
+
+    assert not at.exception, at.exception
+    next(button for button in at.button if button.label == "Generate audio").click().run()
+    assert not at.exception, at.exception
+    assert "6.37s" in at.session_state["test_audio_error"]
+    rewrite = next(button for button in at.button if button.label == "Rewrite Script for measured audio limits")
+    rewrite.click().run()
+
+    assert not at.exception, at.exception
+    assert observed["profile"] == "cricket_india_asia"
+    assert observed["language"] == "hindi"
+    assert observed["angle"] == "selection uncertainty"
+    assert "6.37s" in observed["feedback"]
+    assert "5.2 seconds" in observed["feedback"]
+    assert "Rejected narration that produced this audio" in observed["feedback"]
+    assert "शुभमन गिल की फिटनेस पर लंबी चिंता है" in observed["feedback"]
+    assert at.session_state["test_stage"] == "02 · Scriptwriter"
+    assert at.session_state["approved_script"] is None
+    assert at.session_state["script_data"]["headline"] == "Gill fitness decision"
+
+
+def test_live_pipeline_allows_direct_stage_selection_after_topic_choice():
+    topic = Topic(
+        title="Test cricket story",
+        description="Test story description.",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/live-stage-navigation",
+    )
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "deep_dive"
+    at.session_state["live_desk"] = "cricket"
+    at.session_state["live_cricket_profile"] = "cricket_india_asia"
+    at.session_state["live_topics_profile"] = "cricket_india_asia"
+    at.session_state["live_topics"] = [topic]
+    at.session_state["live_selected_topic"] = 0
+    at.session_state["live_stage"] = "02 · Script"
+    at.session_state["live_script_data"] = None
+    at.session_state["live_approved_script"] = None
+    at.session_state["live-stage-switcher"] = "03 · Audio + Subs"
+    at.run()
+
+    assert not at.exception, at.exception
+    assert at.session_state["live_stage"] == "03 · Audio + Subs"
+    assert any("Approve the Scriptwriter before generating Audio" in warning.value for warning in at.warning)
