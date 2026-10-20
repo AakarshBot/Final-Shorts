@@ -37,7 +37,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "Gill was struck during training and returned after treatment.",
+                "voiceover": "Gill was struck during training and returned after treatment, while doctors review his recovery before selection.",
                 "narrative_role": "development",
                 "primary_entity": "Shubman Gill",
                 "visual_intent": "Gill at India training",
@@ -45,7 +45,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "The team is assessing him before the next ODI.",
+                "voiceover": "The team is assessing him before the next ODI, and his place remains uncertain until the review is complete.",
                 "narrative_role": "context",
                 "primary_entity": "India cricket team",
                 "visual_intent": "India team training",
@@ -53,7 +53,7 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
                 "sport_or_topic_category": "Cricket",
             },
             {
-                "voiceover": "His availability will depend on the next medical assessment.",
+                "voiceover": "His availability depends on the medical assessment and India's final selection decision.",
                 "narrative_role": "consequence",
                 "primary_entity": "Shubman Gill",
                 "visual_intent": "Gill fitness assessment",
@@ -444,6 +444,40 @@ def test_manual_edits_are_not_rejected_by_editorial_validation(apply_edits):
     assert approved["headline"] == "A much longer human-written headline is acceptable"
     assert approved["script"][0]["voiceover"] == edited_voiceovers[0]
     assert "Shubman Gill" not in " ".join(scene["voiceover"] for scene in approved["script"])
+
+
+def test_cricket_validator_keeps_normal_script_inside_word_budget():
+    result = valid_result()
+    narration = " ".join(scene["voiceover"] for scene in result["script"])
+    total = script_writer._spoken_word_count(narration, "english")
+    assert script_writer.MIN_WORDS <= total <= script_writer.MAX_CRICKET_WORDS
+
+    valid, reason = script_writer.validate_cricket_script(result, language="english")
+    assert valid, reason
+
+
+@pytest.mark.parametrize(
+    ("mutation", "expected_fragment"),
+    [
+        ("short", "target at least 50 useful words"),
+        ("long", "at or below 70"),
+    ],
+)
+def test_cricket_validator_rejects_narration_outside_duration_budget(mutation, expected_fragment):
+    result = valid_result()
+    if mutation == "short":
+        result["script"][1]["voiceover"] = "Gill was struck."
+        result["script"][2]["voiceover"] = "India is assessing him."
+        result["script"][3]["voiceover"] = "Selection remains pending."
+    else:
+        result["script"][3]["voiceover"] += (
+            " This additional background explains the selection context and the practical consequence "
+            "before the next match, without changing the confirmed facts or adding any new result."
+        )
+
+    valid, reason = script_writer.validate_cricket_script(result, language="english")
+    assert not valid
+    assert expected_fragment in reason
 
 
 def test_valid_script_passes():
