@@ -493,7 +493,7 @@ def seed_existing_channel_upload_history(
         "seeded_count": len(imported),
         "message": (
             f"Imported {len(imported)} existing channel uploads for title/description comparison. "
-            "Metadata only: their narration and visuals were not fetched, so any match is not evidence of repeated narration."
+            "The imported entries are metadata only: their narration and visuals were not fetched, so any match is not evidence of repeated narration."
             if imported else
             "No unseen uploads were found in the channel's latest upload page."
         ),
