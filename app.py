@@ -6464,7 +6464,7 @@ def render_live_top5():
                 disabled=not is_live_top5_chatterbox,
             )
             if is_live_top5_chatterbox:
-                st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Completed model files stay in the Hugging Face disk cache between factory runs.")
+                st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
             live_top5_reference = None
             live_top5_reference_ready = True
             if is_live_top5_chatterbox:
@@ -7275,7 +7275,7 @@ def render_live_dashboard():
             disabled=not is_live_chatterbox,
         )
         if is_live_chatterbox:
-            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take. Completed model files stay in the Hugging Face disk cache between factory runs.")
+            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
         if is_live_chatterbox and live_language not in {"english", "en"}:
             st.warning("Chatterbox Full and Turbo are English-only. Select Edge-TTS Neural for Hindi or Telugu narration.")
         live_reference_ready = True
@@ -7308,7 +7308,7 @@ def render_live_dashboard():
                 st.session_state.live_subtitle_data = None
                 try:
                     with st.spinner(
-                        "Loading Chatterbox weights from the Hugging Face disk cache if available, then generating Audio and Subtitles…"
+                        "Preparing Chatterbox if needed, then generating Audio and Subtitles…"
                         if is_live_chatterbox else "Generating Audio and Subtitles…"
                     ):
                         _live_generate_audio_and_subtitles()
@@ -7865,7 +7865,7 @@ def render_longform_audio(live: bool = False):
         index=0,
         key=f"{prefix}audio_chatterbox_model",
     )
-    st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Completed model files stay in the Hugging Face disk cache between factory runs. Long-form narration is grouped into paragraph-sized chunks to respect model limits, with brief gaps between chunks and the existing act pauses.")
+    st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading. Long-form narration is grouped into paragraph-sized chunks to respect model limits, with brief gaps between chunks and the existing act pauses.")
 
     st.markdown(
         f'<div style="background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin: 10px 0 14px 0;">'
@@ -7884,7 +7884,7 @@ def render_longform_audio(live: bool = False):
         with col_btn:
             if st.button("Synthesize Full Narration", type="primary", width="stretch", key=f"{k_prefix}gen-audio", disabled=not ref_ready):
                 with st.spinner(
-                    f"Loading Chatterbox {longform_chatterbox_model_choice} weights from the Hugging Face disk cache if available, then synthesizing the documentary…"
+                    f"Preparing Chatterbox {longform_chatterbox_model_choice} if needed, then synthesizing the documentary…"
                 ):
                     try:
                         from longform_audio import LongformAudioEngine
@@ -9873,7 +9873,7 @@ def render_audio():
             disabled=not is_cb,
         )
         if is_cb:
-            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take. Completed model files stay in the Hugging Face disk cache between factory runs.")
+            st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings; both generate one continuous narration take. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
         selected_reference_label = None
         selected_reference = None
         selected_reference_ready = True
@@ -9937,7 +9937,7 @@ def render_audio():
             selected["voice"]="chatterbox" if is_cb else selected_voice
             selected["voice_engine"]="chatterbox" if is_cb else "edge"
             with st.spinner(
-                "Loading Chatterbox weights from the Hugging Face disk cache if available, then generating voiceover…"
+                "Preparing Chatterbox if needed, then generating voiceover…"
                 if is_cb else "Generating voiceover…"
             ):
                 try:
@@ -10749,7 +10749,7 @@ elif st.session_state.app_mode == "test":
                     disabled=not is_t5_chatterbox,
                 )
                 if is_t5_chatterbox:
-                    st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Completed model files stay in the Hugging Face disk cache between factory runs.")
+                    st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
                 t5_voice = "chatterbox" if is_t5_chatterbox else resolve_voice(t5_language.casefold(), t5_gender.casefold())
                 t5_reference = None
                 t5_reference_ready = True
