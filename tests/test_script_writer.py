@@ -527,6 +527,36 @@ def test_writer_hides_invalid_first_draft_and_rewrites_once(monkeypatch):
 
 
 
+
+
+def test_writer_recovers_slide_one_word_count_after_full_rewrite_misses(monkeypatch):
+    bad = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
+    )
+    good = valid_result("Shubman Gill's fitness remains uncertain before India's next ODI.")
+    drafts = [bad, bad, bad, good]
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+
+    def fake_request(model, prompt, story, schema=None):
+        calls.append((model, prompt, story))
+        return json.loads(json.dumps(drafts.pop(0)))
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.write_script(Story(), language="english")
+
+    assert len(calls) == 4
+    assert calls[0][0] == "openai/gpt-oss-120b"
+    assert calls[1][0] == "openai/gpt-oss-20b"
+    assert calls[2][0] == "openai/gpt-oss-120b"
+    assert calls[3][0] == "openai/gpt-oss-20b"
+    assert "TARGETED SLIDE 1 WORD-COUNT RECOVERY (ATTEMPT 1/2)" in calls[2][1]
+    assert "TARGETED SLIDE 1 WORD-COUNT RECOVERY (ATTEMPT 2/2)" in calls[3][1]
+    assert "14 words" in calls[2][1]
+    assert "CURRENT SCRIPT PACKAGE TO REPAIR" in calls[3][2]
+    assert script_writer._words(result["script"][0]["voiceover"]) <= 13
+
+
 def test_writer_never_returns_second_invalid_draft(monkeypatch):
     monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
     bad = valid_result(
