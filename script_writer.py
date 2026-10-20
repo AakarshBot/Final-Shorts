@@ -2138,7 +2138,7 @@ def write_script(
         if valid:
             return finish(rewritten, MODELS[0])
     if not valid:
-        raise RuntimeError("Script generation failed after timing-aware rewrite: " + reason)
+        raise RuntimeError("Script generation failed after hidden rewrite and any applicable timing correction: " + reason)
 
     return finish(rewritten, MODELS[1])
 
