@@ -339,8 +339,7 @@ def _require_raqm(language: str) -> None:
                 _install_windows_fribidi_via_powershell()
                 _register_windows_dll_paths()
                 load_error = _activate_windows_fribidi()
-                if load_error:
-                    setup_error = load_error
+                setup_error = load_error
             except Exception as exc:
                 _WINDOWS_FRIBIDI_INSTALL_ERROR = str(exc)
                 setup_error = _WINDOWS_FRIBIDI_INSTALL_ERROR
