@@ -51,49 +51,79 @@ jobs:
           if not exist "%GITHUB_WORKSPACE%\raqm-wheels" mkdir "%GITHUB_WORKSPACE%\raqm-wheels"
           python -m pip wheel -v --no-deps --no-build-isolation -C raqm=enable -C raqm=vendor -C fribidi=vendor --wheel-dir "%GITHUB_WORKSPACE%\raqm-wheels" .
           if errorlevel 1 exit /b 1
-      - name: Verify wheel has RAQM and shapes bundled Devanagari text
+      - name: Verify extracted wheel in an isolated runtime with Hindi and Telugu fonts
         shell: pwsh
         run: |
-          $wheel = Get-ChildItem "$env:GITHUB_WORKSPACE\raqm-wheels" -Filter "pillow-11.3.0-cp311-cp311-win_amd64.whl" -File | Select-Object -First 1
-          if (-not $wheel) { throw "The expected CPython 3.11 x64 Pillow wheel was not produced." }
-          $testTarget = Join-Path $env:GITHUB_WORKSPACE "raqm-test"
-          python -m pip install --no-deps --target $testTarget $wheel.FullName
-          if ($LASTEXITCODE -ne 0) { throw "Could not install the just-built wheel into the isolated verification folder." }
           $verify = @'
           import os
           import sys
+          import zipfile
+          import subprocess
+          import shutil
           from pathlib import Path
 
           root = Path(os.environ["GITHUB_WORKSPACE"])
+          wheel = root / "raqm-wheels" / "pillow-11.3.0-cp311-cp311-win_amd64.whl"
           test_target = root / "raqm-test"
-          sys.path.insert(0, str(test_target))
-          dll_dirs = (
-              root / "pillow-source" / "winbuild" / "build" / "bin",
+          if test_target.exists():
+              shutil.rmtree(test_target)
+          test_target.mkdir()
+          with zipfile.ZipFile(wheel) as archive:
+              archive.extractall(test_target)
+
+          probe_code = "\n".join((
+              "import os, sys",
+              f"root = {str(root)!r}",
+              f"target = {str(test_target)!r}",
+              "dll_dirs = [os.path.join(target, 'PIL'), os.path.join(target, 'pillow.libs'), os.path.join(target, 'PIL', '.libs')]",
+              "handles = [os.add_dll_directory(p) for p in dll_dirs if os.name == 'nt' and os.path.isdir(p)]",
+              "sys.path.insert(0, target)",
+              "import PIL",
+              "from PIL import ImageFont, features",
+              "import PIL._imagingft as imagingft",
+              "raqm = features.check_feature('raqm')",
+              "assert raqm is True, f'Pillow was not compiled with RAQM (PIL={PIL.__file__}; _imagingft={imagingft.__file__}; RAQM={raqm})'",
+              "samples = [('NotoSansDevanagari-Bold.ttf', 'क्षेत्र की उपलब्धि'), ('NotoSansTelugu-Bold.ttf', 'ప్రత్యేకమైన క్రీడాకారుడు')]",
+              "for font_name, sample in samples:",
+              "    font = ImageFont.truetype(os.path.join(root, 'fonts', font_name), 48, layout_engine=ImageFont.Layout.RAQM)",
+              "    assert font.getmask(sample).getbbox() is not None, f'Indic glyph shaping returned an empty mask for {font_name}'",
+          ))
+          probe_env = os.environ.copy()
+          for variable in ("PYTHONPATH", "PYTHONHOME", "PYTHONUSERBASE"):
+              probe_env.pop(variable, None)
+          system_root = Path(probe_env.get("SystemRoot", "C:/Windows"))
+          runtime_paths = (
               test_target / "PIL",
               test_target / "pillow.libs",
               test_target / "PIL" / ".libs",
+              Path(sys.executable).resolve().parent,
+              system_root / "System32",
+              system_root,
           )
-          handles = [os.add_dll_directory(str(path)) for path in dll_dirs if path.is_dir()]
-          from PIL import ImageFont, features
-
-          if features.check_feature("raqm") is not True:
-              raise SystemExit("The built Pillow wheel does not have RAQM enabled.")
-          font = ImageFont.truetype(
-              str(root / "fonts" / "NotoSansDevanagari-Bold.ttf"),
-              48,
-              layout_engine=ImageFont.Layout.RAQM,
+          probe_env["PATH"] = os.pathsep.join(str(path) for path in runtime_paths if path.is_dir())
+          probe = subprocess.run(
+              [sys.executable, "-I", "-S", "-c", probe_code],
+              capture_output=True,
+              text=True,
+              encoding="utf-8",
+              errors="replace",
+              timeout=45,
+              check=False,
+              env=probe_env,
           )
-          if font.getmask("क्षेत्र की उपलब्धि").getbbox() is None:
-              raise SystemExit("The bundled Noto Devanagari font did not shape correctly.")
-          print("Verified: RAQM is enabled and real Devanagari shaping succeeded.")
+          if probe.returncode != 0:
+              raise SystemExit(
+                  "The extracted RAQM-enabled Pillow wheel failed isolated runtime verification.\n"
+                  + (probe.stdout or "")
+                  + (probe.stderr or "")
+              )
+          print("Verified: isolated wheel has RAQM and both Devanagari and Telugu font shaping succeeds.")
           '@
           $verifyPath = Join-Path $env:GITHUB_WORKSPACE "verify-raqm-wheel.py"
           Set-Content -Path $verifyPath -Value $verify -Encoding utf8
-          $dependencyBin = Join-Path $env:GITHUB_WORKSPACE "pillow-source\\winbuild\\build\\bin"
-          $env:PATH = "$dependencyBin;$testTarget\\PIL;$testTarget\\pillow.libs;$testTarget\\PIL\\.libs;$env:PATH"
-          $env:PYTHONPATH = $testTarget
           python $verifyPath
-          if ($LASTEXITCODE -ne 0) { throw "The custom Pillow wheel failed RAQM/Devanagari verification." }
+          if ($LASTEXITCODE -ne 0) { throw "The isolated custom Pillow wheel failed RAQM/Indic verification." }
+          $wheel = Get-Item "$env:GITHUB_WORKSPACE\\raqm-wheels\\pillow-11.3.0-cp311-cp311-win_amd64.whl"
           $sha256 = (Get-FileHash -Path $wheel.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
           "$sha256  $($wheel.Name)" | Set-Content -Path "$($wheel.FullName).sha256" -Encoding ascii
       - uses: actions/upload-artifact@v4
