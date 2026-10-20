@@ -10330,7 +10330,18 @@ def render_audio():
                     angle = failed_script.get("story_angle")
                     research_source = st.session_state.get("test_universal_angle_source")
                     desk_profile = st.session_state.get("topic_desk_profile") or (
-                        "youtube_trends" if universal_story else "cricket_india_asia"
+                        "youtube_trends"
+                        if st.session_state.get("test_production_line") == "youtube_trends"
+                        else "cricket_india_asia"
+                    )
+                    retry_universal = (
+                        st.session_state.get("test_production_line") in {"youtube_trends", "otd"}
+                        or desk_profile in {"niche_sports", "otd"}
+                    )
+                    retry_search_query = (
+                        st.session_state.get("youtube_trend_search_query")
+                        if st.session_state.get("test_production_line") == "youtube_trends"
+                        else None
                     )
                     story_key = _live_story_key(retry_topic) if retry_topic is not None else ""
                     st.session_state.approved_script = None
@@ -10352,10 +10363,10 @@ def render_audio():
                                 retry_topic,
                                 desk_profile,
                                 failed_language,
-                                universal=universal_story,
+                                universal=retry_universal,
                                 angle=angle,
                                 research_source=research_source,
-                                search_query=search_query,
+                                search_query=retry_search_query,
                                 validation_feedback=feedback,
                             )
                     except Exception as exc:
