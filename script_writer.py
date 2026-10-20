@@ -804,7 +804,7 @@ def _words(value) -> int:
 
 def _language_key(language: str | None) -> str:
     """Canonicalise common language names and locale tags before applying language rules."""
-    raw = re.sub(r"[\\s_]+", "-", str(language or "english").strip().casefold()) or "english"
+    raw = re.sub(r"[\s_]+", "-", str(language or "english").strip().casefold()) or "english"
     if raw in {"hindi", "hi"} or raw.startswith("hi-"):
         return "hindi"
     if raw in {"telugu", "te"} or raw.startswith("te-"):
@@ -894,7 +894,52 @@ def _is_indic_timing_issue(reason: str, language: str | None) -> bool:
             "Narration must stay under 30 seconds",
             "Cricket narration has",
             "Narration is too short to reach the 18-second minimum",
+            "Slide 1 must contain fewer than 14 words.",
         )
+    )
+
+
+def _script_recovery_context(result: dict | None, reason: str, language: str | None) -> str:
+    """Give recovery calls the exact local failure, same counters, and rejected JSON."""
+    language_key = _language_key(language)
+    scenes = result.get("script") if isinstance(result, dict) else None
+    spoken_scenes = [
+        _clean(scene.get("voiceover"))
+        for scene in scenes or []
+        if isinstance(scene, dict)
+    ] if isinstance(scenes, list) else []
+    lead_tokens = _spoken_word_count(spoken_scenes[0], language_key) if spoken_scenes else 0
+    total_tokens = _spoken_word_count(" ".join(spoken_scenes), language_key) if spoken_scenes else 0
+    rejected_json = json.dumps(result, ensure_ascii=False, separators=(",", ":")) if isinstance(result, dict) else "{}"
+
+    context = (
+        "\n\nEXACT LOCAL VALIDATION FAILURE — FIX THIS, DO NOT GUESS:\n"
+        f"Requested narration language: {language_key}.\n"
+        f"Validator message: {str(reason or 'Unknown validation failure')}\n"
+        f"Same-counter count for Slide 1: {lead_tokens}; same-counter total narration count: {total_tokens}.\n"
+        "The package below is the actual rejected model output. Repair this package against the exact failure above; "
+        "do not start from a blank script or merely restate the requirement.\n"
+    )
+    if _is_indic_language(language_key):
+        context += (
+            "For Hindi/Telugu, the drafting margins are at most 7 whitespace-separated tokens in Slide 1 "
+            "and at most 55 tokens in the complete narration. Preserve the named subject and the essential confirmed "
+            "facts, move background into later slides, and do not pad. Actual audio must still measure Slide 1 at "
+            "5.2 seconds or less and the complete Short strictly under 30 seconds.\n"
+        )
+    return context + "CURRENT REJECTED SCRIPT PACKAGE (JSON):\n" + rejected_json + "\n"
+
+
+def _append_previous_validation_feedback(instruction: str, feedback: str | None, language: str | None) -> str:
+    detail = _clean(feedback)[:3000]
+    if not detail:
+        return instruction
+    return instruction + (
+        "\n\nPREVIOUS GENERATION FAILURE TO CORRECT:\n"
+        + detail
+        + "\nThis is feedback from the immediately previous failed generation attempt. Fix it in the new "
+        "script before returning JSON; do not repeat the same validation failure.\n"
+        + _indic_timing_guidance(language)
     )
 
 
@@ -1076,7 +1121,7 @@ def evaluate_flow(script: dict) -> dict:
         }
 
     voiceovers = [str(s.get("voiceover") or "").strip() for s in scenes if isinstance(s, dict)]
-    language_key = str(script.get("language_used") or "english").strip().casefold()
+    language_key = _language_key(script.get("language_used"))
     slide_one_words = _spoken_word_count(voiceovers[0], language_key) if voiceovers else 0
     total_words = _spoken_word_count(" ".join(voiceovers), language_key)
     est_seconds = round(total_words / 2.5, 1)
@@ -2031,7 +2076,7 @@ def write_script(
         raise ValueError("The selected story contains no usable evidence.")
 
     norm_profile = _normalize_profile(profile)
-    language_key = str(language or "english").strip().lower()
+    language_key = _language_key(language)
     angle_text = _angle_text(angle)
     if angle_text:
         source = _supplement_research_for_angle(story, angle_text, source)
@@ -2291,7 +2336,7 @@ def validate_universal_script(
     if not subject:
         return False, "The Scriptwriter must identify the main subject."
 
-    language_key = str(language or result.get("language_used") or "english").strip().casefold()
+    language_key = _language_key(language or result.get("language_used"))
     first_words = _spoken_word_count(
         scenes[0].get("voiceover")
         if isinstance(scenes[0], dict)
@@ -2408,7 +2453,7 @@ def suggest_universal_story_angles(
         raise ValueError("The selected story contains no usable evidence.")
 
     norm_profile = _normalize_profile(profile)
-    language_key = str(language or "english").strip().lower()
+    language_key = _language_key(language)
     instruction = (
         UNIVERSAL_ANGLE_PROMPT
         + "\nLANGUAGE:\n"
@@ -2480,7 +2525,7 @@ def write_universal_script(
         raise ValueError("The selected story contains no usable evidence.")
 
     norm_profile = _normalize_profile(profile)
-    language_key = str(language or "english").strip().lower()
+    language_key = _language_key(language)
     angle_text = _angle_text(angle)
     if angle_text:
         source = _supplement_research_for_angle(story, angle_text, source)
