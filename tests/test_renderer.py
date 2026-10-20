@@ -1572,20 +1572,27 @@ def test_windows_fribidi_bootstrap_surfaces_checksum_failure_without_accepting_d
     assert not (tmp_path / "dlls" / "libfribidi-0.dll").exists()
 
 
-def test_indic_raqm_error_explains_verified_automatic_bootstrap(monkeypatch):
+def test_indic_raqm_error_explains_actual_shaping_and_automatic_bootstrap(monkeypatch):
     monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
     monkeypatch.setattr(renderer.os, "name", "posix")
-    with pytest.raises(RuntimeError, match="automatically runs the existing checksum-verified, no-pip PowerShell installer"):
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: (False, "Pillow reports no RAQM"))
+    with pytest.raises(RuntimeError, match="automatically runs the checksum-verified, no-pip FriBiDi installer"):
         renderer._require_raqm("hindi")
 
 
-def test_windows_raqm_bootstrap_rechecks_pillow_after_install(monkeypatch):
-    checks = iter([False, True])
+def test_windows_raqm_bootstrap_rechecks_real_font_after_install(monkeypatch):
     calls = []
+    probes = iter([
+        (False, "FriBiDi could not be loaded by Pillow"),
+        (True, ""),
+    ])
 
     monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ERROR", "")
     monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
-    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: next(checks))
+    monkeypatch.setattr(renderer, "_activate_windows_fribidi", lambda: "")
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: next(probes))
     monkeypatch.setattr(
         renderer,
         "_install_windows_fribidi_via_powershell",
@@ -1597,15 +1604,41 @@ def test_windows_raqm_bootstrap_rechecks_pillow_after_install(monkeypatch):
     assert calls == ["installed"]
 
 
+def test_windows_raqm_bootstraps_when_feature_flag_is_true_but_real_font_fails(monkeypatch):
+    calls = []
+    probes = iter([
+        (False, "RAQM font-load/shaping test failed: cannot load FriBiDi"),
+        (True, ""),
+    ])
+    monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ERROR", "")
+    monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
+    monkeypatch.setattr(renderer, "_activate_windows_fribidi", lambda: "")
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: next(probes))
+    monkeypatch.setattr(
+        renderer,
+        "_install_windows_fribidi_via_powershell",
+        lambda: calls.append("installed"),
+    )
+
+    renderer._require_raqm("telugu")
+
+    assert calls == ["installed"]
+
+
 def test_windows_raqm_bootstrap_surfaces_the_setup_failure_details(monkeypatch):
     monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ERROR", "")
     monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
-    monkeypatch.setattr(renderer.features, "check_feature", lambda _feature: False)
+    monkeypatch.setattr(renderer, "_activate_windows_fribidi", lambda: "")
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: (False, "Pillow reports no RAQM"))
     monkeypatch.setattr(
         renderer,
         "_install_windows_fribidi_via_powershell",
         lambda: (_ for _ in ()).throw(RuntimeError("all trusted MSYS2 sources failed checksum verification")),
     )
 
-    with pytest.raises(RuntimeError, match="Automatic FriBiDi setup could not complete: all trusted MSYS2 sources failed checksum verification"):
+    with pytest.raises(RuntimeError, match="all trusted MSYS2 sources failed checksum verification"):
         renderer._require_raqm("hindi")
