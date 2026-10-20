@@ -4141,6 +4141,9 @@ def _render_app_sidebar():
             )
             labels = [stage["key"] for stage in STAGES]
             current = st.session_state.test_stage
+            previously_rendered = st.session_state.get("_test_stage_switcher_rendered_stage")
+            if previously_rendered is not None and current != previously_rendered:
+                st.session_state["test-stage-switcher"] = current
             selected = st.pills(
                 "Pipeline",
                 labels,
@@ -4152,6 +4155,7 @@ def _render_app_sidebar():
             if selected != st.session_state.test_stage:
                 st.session_state.test_stage = selected
                 st.session_state.test_pipeline_notice = None
+            st.session_state["_test_stage_switcher_rendered_stage"] = st.session_state.test_stage
         elif (
             st.session_state.app_mode == "live"
             and st.session_state.live_production_line not in {None, "top_5", "otd"}
@@ -4169,6 +4173,9 @@ def _render_app_sidebar():
                 current = st.session_state.get("live_stage") or live_labels[0]
                 if current not in live_labels:
                     current = live_labels[0]
+                previously_rendered = st.session_state.get("_live_stage_switcher_rendered_stage")
+                if previously_rendered is not None and current != previously_rendered:
+                    st.session_state["live-stage-switcher"] = current
                 st.markdown(
                     '<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 6px 0;">'
                     '<span class="eyebrow" style="color:var(--accent);font-size:0.65rem;">LIVE · PRODUCTION PIPELINE</span>'
@@ -4187,7 +4194,9 @@ def _render_app_sidebar():
                 if selected != st.session_state.get("live_stage"):
                     st.session_state.live_stage = selected
                     st.session_state.live_pipeline_notice = None
+                    st.session_state["_live_stage_switcher_rendered_stage"] = selected
                     st.rerun()
+                st.session_state["_live_stage_switcher_rendered_stage"] = st.session_state.live_stage
 
 
 def _longform_live_reset_downstream():
