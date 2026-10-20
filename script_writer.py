@@ -801,6 +801,90 @@ def _spoken_word_count(value, language: str | None = None) -> int:
     return _words(value)
 
 
+INDIC_GENERATION_MAX_LEAD_TOKENS = 9
+INDIC_GENERATION_MAX_TOTAL_TOKENS = 62
+
+
+def _is_indic_language(language: str | None) -> bool:
+    return str(language or "").strip().casefold() in {"hindi", "telugu", "hi", "te"}
+
+
+def _indic_generation_delivery_issue(result: dict, language: str | None) -> str:
+    """Preflight Indic narration conservatively; measured audio remains the hard gate."""
+    if not _is_indic_language(language):
+        return ""
+    scenes = result.get("script")
+    if not isinstance(scenes, list) or not scenes:
+        return ""
+    voiceovers = [
+        _clean(scene.get("voiceover"))
+        for scene in scenes
+        if isinstance(scene, dict)
+    ]
+    if not voiceovers:
+        return ""
+
+    issues = []
+    lead_tokens = len(voiceovers[0].split())
+    total_tokens = sum(len(text.split()) for text in voiceovers)
+    if lead_tokens > INDIC_GENERATION_MAX_LEAD_TOKENS:
+        issues.append(
+            f"Slide 1 has {lead_tokens} whitespace-separated tokens; rewrite it to "
+            f"{INDIC_GENERATION_MAX_LEAD_TOKENS} or fewer short tokens, keeping the named subject "
+            "and strongest confirmed development while moving background to later slides"
+        )
+    if total_tokens > INDIC_GENERATION_MAX_TOTAL_TOKENS:
+        issues.append(
+            f"the narration has {total_tokens} whitespace-separated tokens; tighten it to "
+            f"{INDIC_GENERATION_MAX_TOTAL_TOKENS} or fewer without dropping essential facts or adding filler"
+        )
+    if not issues:
+        return ""
+    return "Indic generation timing preflight: " + "; ".join(issues) + (
+        ". These are conservative drafting targets only. Do not claim that token counts prove compliance: "
+        "actual generated audio must measure Slide 1 at no more than 5.2 seconds and the full Short under 30 seconds."
+    )
+
+
+def _indic_timing_guidance(language: str | None) -> str:
+    if not _is_indic_language(language):
+        return ""
+    return (
+        "\\n\\nMEASURED-AUDIO TIMING GUIDANCE (HARD REQUIREMENTS):\\n"
+        "- Hindi/Telugu Slide 1 must be one short direct lead with the subject and strongest confirmed development. "
+        "Target 6–8 compact whitespace-separated tokens (never more than 9), about 4.0–4.7 seconds of natural speech. "
+        "Avoid subordinate clauses, scene-setting and background in Slide 1; move those facts to later slides.\\n"
+        "- Keep the complete narration factual and tight, preferably 50–62 whitespace-separated tokens where the story permits. "
+        "Do not pad to reach a minimum and never sacrifice an essential fact merely to hit a token target.\\n"
+        "- The numbers above are only drafting margins, not the compliance test. The Audio stage measures the actual selected voice: "
+        "Slide 1 must be at most 5.2 seconds and total audio must be strictly under 30 seconds. "
+        "Write with enough headroom that ordinary voice speed does not sit on either limit.\\n"
+    )
+
+
+def _is_indic_timing_issue(reason: str, language: str | None) -> bool:
+    return _is_indic_language(language) and (
+        str(reason or "").startswith("Indic generation timing preflight:")
+        or "Narration must stay under 30 seconds" in str(reason or "")
+    )
+
+
+def _validate_generated_cricket_draft(result: dict, language: str) -> tuple[bool, str]:
+    valid, reason = validate_cricket_script(result, language=language)
+    if valid:
+        reason = _indic_generation_delivery_issue(result, language)
+        valid = not reason
+    return valid, reason
+
+
+def _validate_generated_universal_draft(result: dict, language: str) -> tuple[bool, str]:
+    valid, reason = validate_universal_script(result, language=language)
+    if valid:
+        reason = _indic_generation_delivery_issue(result, language)
+        valid = not reason
+    return valid, reason
+
+
 def _normalise(value) -> str:
     return re.sub(r"[^\w ]+", " ", str(value or "").casefold(), flags=re.UNICODE).strip()
 
@@ -1914,6 +1998,7 @@ def write_script(
         + DESK_PROMPTS.get(norm_profile, DESK_PROMPTS["cricket_india_asia"])
         + "\nLANGUAGE:\n"
         + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
+        + _indic_timing_guidance(language_key)
     )
     if angle_text:
         instruction += (
@@ -1943,10 +2028,25 @@ def write_script(
                 f"Primary request: {first_error} | Fresh backup request: {second_error}. "
                 "No hidden rewrite was attempted because the primary request did not produce a draft."
             ) from second_error
-        backup_valid, backup_reason = validate_cricket_script(backup, language=language_key)
+        backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
+        if not backup_valid and _is_indic_timing_issue(backup_reason, language_key):
+            timing_instruction = (
+                instruction
+                + "\\n\\nMANDATORY INDIC TIMING REWRITE\\n"
+                "Rewrite the complete script from the supplied evidence. Fix Slide 1 and, if needed, total length. "
+                "Use a single short lead of no more than nine compact whitespace-separated tokens, name the subject, "
+                "move background to later slides, and preserve the story's essential facts without padding. "
+                "Actual audio must remain <=5.2 seconds for Slide 1 and strictly under 30 seconds overall. "
+                "Return the full JSON package only.\\n"
+                + backup_reason
+            )
+            backup = _prepare_generated_script(_request(MODELS[0], timing_instruction, source), language_key)
+            backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
+            if backup_valid:
+                return finish(backup, MODELS[0])
         if not backup_valid:
             raise RuntimeError(
-                "The backup model returned an invalid script after the primary request failed: "
+                "The backup model returned an invalid script after generation preflight: "
                 + backup_reason
             )
         return finish(backup, MODELS[1])
@@ -1964,7 +2064,7 @@ def write_script(
     except Exception as first_error:
         return fresh_backup(first_error)
     else:
-        valid, reason = validate_cricket_script(result, language=language_key)
+        valid, reason = _validate_generated_cricket_draft(result, language_key)
         if valid:
             return finish(result, MODELS[0])
         first_reason = reason
@@ -1989,9 +2089,24 @@ def write_script(
             + f"{first_reason} | {type(second_error).__name__}: {second_error}"
         ) from second_error
 
-    valid, reason = validate_cricket_script(rewritten, language=language_key)
+    valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+    if not valid and _is_indic_timing_issue(reason, language_key):
+        timing_instruction = (
+            instruction
+            + "\\n\\nMANDATORY INDIC TIMING REWRITE\\n"
+            "The prior rewrite still missed the measured-audio drafting margins. Rewrite the complete 3–5-slide package. "
+            "Keep Slide 1 to nine or fewer compact whitespace-separated tokens, ideally six to eight, and move context to later slides. "
+            "Target 50–62 total tokens where supported by the story. Do not remove essential facts, add filler, or alter factual claims. "
+            "The actual Audio stage still enforces <=5.2 seconds for Slide 1 and strictly under 30 seconds overall. "
+            "Return full JSON only.\\n"
+            + reason
+        )
+        rewritten = _prepare_generated_script(_request(MODELS[0], timing_instruction, source), language_key)
+        valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+        if valid:
+            return finish(rewritten, MODELS[0])
     if not valid:
-        raise RuntimeError("Script generation failed after one hidden rewrite: " + reason)
+        raise RuntimeError("Script generation failed after timing-aware rewrite: " + reason)
 
     return finish(rewritten, MODELS[1])
 
@@ -2245,6 +2360,7 @@ def write_universal_script(
         + DESK_PROMPTS.get(norm_profile, DESK_PROMPTS["niche_sports"])
         + "\nLANGUAGE:\n"
         + LANGUAGE_INSTRUCTIONS.get(language_key, LANGUAGE_INSTRUCTIONS["english"])
+        + _indic_timing_guidance(language_key)
     )
     if str(search_query or "").strip():
         instruction += (
@@ -2266,6 +2382,8 @@ def write_universal_script(
 
     errors = []
     recovery_reason = ""
+    last_result = None
+    last_model = None
     for model in MODELS:
         model_instruction = instruction
         if recovery_reason:
@@ -2293,7 +2411,7 @@ def write_universal_script(
 
         if angle_text:
             result["story_angle"] = angle_text
-        valid, reason = validate_universal_script(result, language=language_key)
+        valid, reason = _validate_generated_universal_draft(result, language_key)
         if valid:
             return _finish_result(
                 result,
@@ -2311,7 +2429,46 @@ def write_universal_script(
                 desk_profile=norm_profile,
             )
         recovery_reason = reason
+        last_result = result
+        last_model = model
         errors.append(f"{model}: {reason}")
+
+    if _is_indic_timing_issue(recovery_reason, language_key) and last_result is not None:
+        timing_instruction = (
+            instruction
+            + "\\n\\nMANDATORY INDIC TIMING REWRITE\\n"
+            "Rewrite the full package, not just metadata. Use a short direct Slide 1 with no more than nine compact "
+            "whitespace-separated tokens (ideally six to eight), keep the exact subject, move background/context to later slides, "
+            "and target 50–62 total tokens where the evidence supports that length. Never pad or omit essential facts. "
+            "Actual generated audio must measure Slide 1 at <=5.2 seconds and the full Short strictly under 30 seconds. "
+            "Return only complete JSON.\\n"
+            + recovery_reason
+        )
+        model = MODELS[0] if last_model != MODELS[0] else MODELS[1]
+        try:
+            corrected = _prepare_generated_script(_request(model, timing_instruction, source), language_key)
+            if angle_text:
+                corrected["story_angle"] = angle_text
+            corrected_valid, corrected_reason = _validate_generated_universal_draft(corrected, language_key)
+            if corrected_valid:
+                return _finish_result(
+                    corrected,
+                    story,
+                    source,
+                    model,
+                    language_key,
+                    angle_text=angle_text,
+                    search_query=search_query,
+                    delivery_profile=(
+                        "UNIVERSAL SPORTS"
+                        if norm_profile in {"niche_sports", "universal"}
+                        else DESK_PROFILES.get(norm_profile, "UNIVERSAL SPORTS")
+                    ),
+                    desk_profile=norm_profile,
+                )
+            errors.append(f"{model}: targeted timing rewrite: {corrected_reason}")
+        except Exception as exc:
+            errors.append(f"{model}: targeted timing rewrite: {type(exc).__name__}: {exc}")
 
     raise RuntimeError(
         "Universal sports script generation failed: " + " | ".join(errors)
