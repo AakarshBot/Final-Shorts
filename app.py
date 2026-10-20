@@ -3,10 +3,27 @@ import base64
 import hashlib
 import json
 import os
+import sys
 from io import BytesIO
 from dataclasses import replace
-from PIL import Image, ImageOps
 from pathlib import Path
+
+# If the Indic recovery prepared an isolated Pillow wheel, load it before importing PIL.
+_RAQM_PILLOW_TARGET = Path(__file__).resolve().parent / ".deps" / "raqm_pillow"
+_RAQM_PILLOW_PACKAGE = _RAQM_PILLOW_TARGET / "PIL"
+if (
+    (_RAQM_PILLOW_PACKAGE / "__init__.py").is_file()
+    and any(
+        path.is_file() and path.name.startswith("_imagingft.")
+        for path in _RAQM_PILLOW_PACKAGE.iterdir()
+    )
+):
+    _raqm_pillow_target_string = str(_RAQM_PILLOW_TARGET.resolve())
+    if _raqm_pillow_target_string in sys.path:
+        sys.path.remove(_raqm_pillow_target_string)
+    sys.path.insert(0, _raqm_pillow_target_string)
+
+from PIL import Image, ImageOps
 
 from dotenv import load_dotenv
 import streamlit as st
