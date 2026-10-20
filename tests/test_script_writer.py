@@ -273,7 +273,127 @@ def test_writer_hidden_rewrite_fixes_indic_timing_preflight(monkeypatch):
     assert len(calls) == 2
     assert "Indic generation timing preflight" in calls[1][1]
     assert "never more than 7" in calls[1][1]
+    assert "EXACT LOCAL VALIDATION FAILURE" in calls[1][1]
+    assert "CURRENT REJECTED SCRIPT PACKAGE (JSON)" in calls[1][1]
+    assert "Shubman Gill faces a fresh injury scare before India's next ODI against England" in calls[1][1]
     assert result["script"][0]["voiceover"] == concise["script"][0]["voiceover"]
+
+
+
+@pytest.mark.parametrize(
+    ("locale", "canonical"),
+    [
+        ("hindi", "hindi"),
+        ("hi", "hindi"),
+        ("hi-IN", "hindi"),
+        ("hi_in", "hindi"),
+        ("telugu", "telugu"),
+        ("te", "telugu"),
+        ("te-IN", "telugu"),
+        ("te_in", "telugu"),
+        ("en-IN", "english"),
+    ],
+)
+def test_language_key_normalizes_names_and_locale_tags(locale, canonical):
+    assert script_writer._language_key(locale) == canonical
+
+
+@pytest.mark.parametrize("locale", ["hi-IN", "te-IN"])
+def test_indic_locale_tags_do_not_trigger_english_14_word_error(locale):
+    result = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's next ODI against England"
+    )
+    valid, public_reason = script_writer.validate_cricket_script(result, language=locale)
+    generation_valid, generation_reason = script_writer._validate_generated_cricket_draft(
+        result, locale
+    )
+
+    assert valid, public_reason
+    assert not generation_valid
+    assert "Indic generation timing preflight" in generation_reason
+    assert "Slide 1 must contain fewer than 14 words" not in generation_reason
+
+
+@pytest.mark.parametrize("language", ["hindi", "telugu"])
+def test_cricket_indic_retry_receives_error_and_rejected_script_until_fixed(monkeypatch, language):
+    bad = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's next ODI against England"
+    )
+    concise = valid_result("Shubman Gill faces an injury scare.")
+    concise["script"][3]["voiceover"] = "Availability depends on the medical report and selection."
+    drafts = [bad, bad, bad, concise]
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt, story))
+        return json.loads(json.dumps(drafts.pop(0)))
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.write_script(Story(), language=language)
+
+    assert len(calls) == 4
+    assert calls[0][0] == "openai/gpt-oss-120b"
+    assert calls[1][0] == "openai/gpt-oss-20b"
+    assert "CURRENT REJECTED SCRIPT PACKAGE (JSON)" in calls[1][1]
+    assert "MANDATORY INDIC TIMING RECOVERY (ATTEMPT 1/2)" in calls[2][1]
+    assert "Validator message:" in calls[2][1]
+    assert "CURRENT REJECTED SCRIPT PACKAGE (JSON)" in calls[2][1]
+    assert "MANDATORY INDIC TIMING RECOVERY (ATTEMPT 2/2)" in calls[3][1]
+    assert script_writer._language_key(result["language_used"]) == language
+
+
+@pytest.mark.parametrize("language", ["hi-IN", "te-IN"])
+def test_universal_indic_retry_receives_error_and_rejected_script_until_fixed(monkeypatch, language):
+    bad = valid_result(
+        "Shubman Gill faces a fresh injury scare before India's next ODI against England"
+    )
+    concise = valid_result("Shubman Gill faces an injury scare.")
+    concise["script"][3]["voiceover"] = "Availability depends on the medical report and selection."
+    drafts = [bad, bad, bad, concise]
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt, story))
+        return json.loads(json.dumps(drafts.pop(0)))
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.write_universal_script(
+        Story(), language=language, profile="niche_sports"
+    )
+
+    assert len(calls) == 4
+    assert "EXACT LOCAL VALIDATION FAILURE" in calls[1][1]
+    assert "CURRENT REJECTED SCRIPT PACKAGE (JSON)" in calls[1][1]
+    assert "MANDATORY INDIC TIMING RECOVERY (ATTEMPT 1/2)" in calls[2][1]
+    assert "CURRENT REJECTED SCRIPT PACKAGE (JSON)" in calls[2][1]
+    assert "MANDATORY INDIC TIMING RECOVERY (ATTEMPT 2/2)" in calls[3][1]
+    assert script_writer._language_key(result["language_used"]) == script_writer._language_key(language)
+
+
+def test_scriptwriter_accepts_previous_failed_generation_feedback(monkeypatch):
+    calls = []
+    monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+    monkeypatch.setattr(
+        script_writer,
+        "_request",
+        lambda model, prompt, story, schema=None, **kwargs: (
+            calls.append((model, prompt)) or valid_result()
+        ),
+    )
+
+    result = script_writer.ScriptWriter.write(
+        Story(),
+        profile="cricket_india_asia",
+        language="hindi",
+        validation_feedback="Previous failure: Slide 1 had 11 tokens; reduce to seven or fewer and target under 30 seconds.",
+    )
+
+    assert result["language_used"] == "hindi"
+    assert len(calls) == 1
+    assert "PREVIOUS GENERATION FAILURE TO CORRECT" in calls[0][1]
+    assert "Slide 1 had 11 tokens" in calls[0][1]
 
 
 def test_generation_prompts_cover_validator_requirements():
