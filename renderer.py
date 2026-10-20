@@ -176,6 +176,8 @@ def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
             "The isolated Pillow wheel was installed, but it did not pass the RAQM capability check. "
             + (details or f"RAQM probe exited with code {probe.returncode}.")
         )
+    marker = target / "python_executable.txt"
+    marker.write_text(str(sys.executable), encoding="utf-8")
     return target
 
 
