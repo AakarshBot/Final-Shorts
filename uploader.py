@@ -192,6 +192,7 @@ def assess_upload_distinctiveness(
 
     tokens = _originality_tokens(record.get("narration"))
     title_tokens = _originality_tokens(record.get("title"))
+    angle_tokens = _originality_tokens(record.get("story_angle"))
     metadata_tokens = _originality_tokens(record.get("metadata_text") or record.get("title"))
     source_url = _normalise_history_url(record.get("source_url"))
     visual_hashes = set(record.get("visual_hashes") or [])
@@ -201,6 +202,7 @@ def assess_upload_distinctiveness(
     for previous in history[-ORIGINALITY_AUDIT_WINDOW:]:
         old_tokens = _originality_tokens(previous.get("narration"))
         old_title = _originality_tokens(previous.get("title"))
+        old_angle_tokens = _originality_tokens(previous.get("story_angle"))
         old_metadata_tokens = _originality_tokens(previous.get("metadata_text") or previous.get("title"))
         old_source = _normalise_history_url(previous.get("source_url"))
         old_visuals = set(previous.get("visual_hashes") or [])
@@ -213,6 +215,10 @@ def assess_upload_distinctiveness(
         title_similarity = (
             SequenceMatcher(None, title_tokens, old_title, autojunk=False).ratio()
             if title_tokens and old_title else 0.0
+        )
+        angle_similarity = (
+            SequenceMatcher(None, angle_tokens, old_angle_tokens, autojunk=False).ratio()
+            if angle_tokens and old_angle_tokens else 0.0
         )
         metadata_similarity = (
             SequenceMatcher(None, metadata_tokens, old_metadata_tokens, autojunk=False).ratio()
@@ -236,6 +242,7 @@ def assess_upload_distinctiveness(
             "narration_similarity": round(narration_similarity, 3),
             "phrase_overlap": round(phrase_overlap, 3),
             "title_similarity": round(title_similarity, 3),
+            "story_angle_similarity": round(angle_similarity, 3),
             "metadata_similarity": round(metadata_similarity, 3),
             "metadata_only_history": not bool(old_tokens),
             "visual_overlap": round(image_overlap, 3),
@@ -246,6 +253,8 @@ def assess_upload_distinctiveness(
             narration_similarity,
             phrase_overlap * 0.92,
             metadata_similarity * 0.86,
+            title_similarity * 0.78,
+            angle_similarity * 0.72,
             0.70 if same_source and narration_similarity >= 0.50 else 0.0,
             0.66 if image_overlap >= 0.75 else 0.0,
             0.68 if perceptual_image_overlap >= 0.75 else 0.0,
@@ -280,7 +289,8 @@ def assess_upload_distinctiveness(
     elif (
         similarity >= 0.62 or phrase_overlap >= 0.55 or same_source
         or image_overlap >= 0.50 or perceptual_image_overlap >= 0.75
-        or (metadata_only and title_similarity >= 0.86 and metadata_similarity >= 0.78)
+        or title_similarity >= 0.86 or angle_similarity >= 0.90
+        or (metadata_only and metadata_similarity >= 0.78)
     ):
         level = "review"
         if metadata_only:
@@ -291,9 +301,10 @@ def assess_upload_distinctiveness(
             )
         else:
             message = (
-                f"Review this upload against “{closest['title']}”: narration similarity "
-                f"{similarity:.0%}, phrase overlap {phrase_overlap:.0%}, exact-image overlap "
-                f"{image_overlap:.0%}, perceptual-image overlap {perceptual_image_overlap:.0%}. "
+                f"Review this upload against “{closest['title']}”: title similarity {title_similarity:.0%}, "
+                f"editorial-angle similarity {angle_similarity:.0%}, narration similarity {similarity:.0%}, "
+                f"phrase overlap {phrase_overlap:.0%}, exact-image overlap {image_overlap:.0%}, "
+                f"perceptual-image overlap {perceptual_image_overlap:.0%}. "
                 "The visual check tolerates some resize/re-encode changes but is not semantic image understanding. "
                 "Similar formats can be fine; the substance still needs to differ."
             )
