@@ -1874,7 +1874,7 @@ def test_windows_raqm_prepare_isolated_pillow_when_active_build_has_no_raqm(monk
         lambda: installed.append("isolated-wheel") or (tmp_path / ".deps" / "raqm_pillow"),
     )
 
-    with pytest.raises(RuntimeError, match="Fully close Final-Shorts / Streamlit and restart"):
+    with pytest.raises(RuntimeError, match="Run_Final_Shorts.bat"):
         renderer._require_raqm("hindi")
 
     assert installed == ["isolated-wheel"]
