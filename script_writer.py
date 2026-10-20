@@ -48,6 +48,7 @@ MAX_HASHTAGS = 5
 # Shared non-Top-5 spoken-script constants
 MIN_WORDS = 50
 MAX_WORDS = 74
+MAX_CRICKET_WORDS = 70
 MIN_SCENES = 3
 MAX_SCENES = 5
 
@@ -1895,12 +1896,26 @@ def validate_cricket_script(
     if not _clean(result.get("comment")):
         return False, "The Scriptwriter must produce the upload comment."
 
+    narration_text = []
     for number, scene in enumerate(scenes, 1):
         if not isinstance(scene, dict) or not _clean(scene.get("voiceover")):
             return False, f"Slide {number} is empty or malformed."
         for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category"):
             if not _clean(scene.get(key)):
                 return False, f"Slide {number} is missing {key}."
+        narration_text.append(_clean(scene.get("voiceover")))
+
+    total_words = _spoken_word_count(" ".join(narration_text), language_key)
+    if total_words < MIN_WORDS:
+        return False, (
+            f"Cricket narration has {total_words} spoken words; target at least {MIN_WORDS} "
+            "useful words to preserve the existing 18-second minimum without padding."
+        )
+    if total_words > MAX_CRICKET_WORDS:
+        return False, (
+            f"Cricket narration has {total_words} spoken words; it must stay at or below "
+            f"{MAX_CRICKET_WORDS} so Audio has headroom to remain strictly under 30 seconds."
+        )
 
     return True, ""
 
