@@ -2584,8 +2584,9 @@ def _render_manual_subject_cutout(
         state["layout_signature"] = layout_signature
 
     st.caption(
-        "English only · Negative Space does not detect subjects · Behind Subject uses BiRefNet. "
-        "Polygon is the full text field from one end to the other: text spans left to right and aligns top to bottom inside the polygon boundaries. "
+        "English, Hindi and Telugu are supported. Hindi/Telugu use the bundled Noto font with a verified Pillow RAQM shaping check. "
+        "Negative Space does not detect subjects; Behind Subject uses BiRefNet. "
+        "The polygon is the full text field from one end to the other: text spans left to right and aligns top to bottom inside its boundaries. "
         "Render Now replaces the rendered frame."
     )
 
