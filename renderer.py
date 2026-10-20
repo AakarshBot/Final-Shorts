@@ -432,6 +432,8 @@ def _activate_windows_fribidi(root: Path | None = None) -> str:
 def _require_raqm(language: str) -> None:
     """Require working RAQM shaping, installing the verified Windows DLL when needed."""
     global _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED, _WINDOWS_FRIBIDI_INSTALL_ERROR
+    global _WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED
+    global _WINDOWS_RAQM_PILLOW_INSTALL_ERROR, _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART
     language_key = _normalise_indic_language(language)
     _register_windows_dll_paths()
     activation_error = _activate_windows_fribidi() if os.name == "nt" else ""
@@ -478,7 +480,7 @@ def _require_raqm(language: str) -> None:
         if _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART:
             raise RuntimeError(
                 "The factory has prepared an isolated, RAQM-enabled Pillow wheel in "
-                ".deps/raqm_pillow. Fully close Final-Shorts / Streamlit and restart it so "
+                ".deps/raqm_pillow. Fully close every Final-Shorts / Streamlit process, then start it with Run_Final_Shorts.bat so "
                 "the new Pillow loads before any image libraries; then retry the Hindi/Telugu text."
             )
         if not _WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED:
@@ -495,8 +497,8 @@ def _require_raqm(language: str) -> None:
             raise RuntimeError(
                 "Your currently active Pillow build was compiled without RAQM, so installing FriBiDi "
                 "alone cannot enable Indic text. The factory has now prepared an isolated, RAQM-enabled "
-                "Pillow wheel under .deps/raqm_pillow. Fully close Final-Shorts / Streamlit and restart "
-                "it, then retry your Hindi/Telugu Text Subject Cutout. No manual pip install or DLL copying "
+                "Pillow wheel under .deps/raqm_pillow. Fully close every Final-Shorts / Streamlit process, then use Run_Final_Shorts.bat, "
+                "then retry your Hindi/Telugu Text Subject Cutout. No manual pip install or DLL copying "
                 "is required."
             )
         if _WINDOWS_RAQM_PILLOW_INSTALL_ERROR:
