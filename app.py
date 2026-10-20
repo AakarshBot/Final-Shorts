@@ -4261,11 +4261,6 @@ def _live_reset_downstream():
         "live_real_image_job_query": "",
         "live_real_image_job_story_key": None,
         "live_ai_image_result": None,
-        "live_ai_image_future": None,
-        "live_ai_image_status": "idle",
-        "live_ai_image_error": "",
-        "live_ai_image_job_query": "",
-        "live_ai_image_job_story_key": None,
         "live_manual_subject_cutout": {},
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
@@ -4781,7 +4776,6 @@ def _poll_live_background_jobs():
         ("live_visual_future", "live_visual_status", "live_visual_error", "live_visual_job_story_key", "live_visual_result"),
         ("live_manual_visual_future", "live_manual_visual_status", "live_manual_visual_error", "live_manual_visual_job_story_key", "live_manual_visual_result"),
         ("live_real_image_future", "live_real_image_status", "live_real_image_error", "live_real_image_job_story_key", "live_real_image_result"),
-        ("live_ai_image_future", "live_ai_image_status", "live_ai_image_error", "live_ai_image_job_story_key", "live_ai_image_result"),
     )
     for future_key, status_key, error_key, story_key_key, destination in jobs:
         future = st.session_state.get(future_key)
@@ -5580,6 +5574,8 @@ def _render_live_visuals(slide_count: int):
     audio_status = st.session_state.get("live_audio_status", "idle")
     if audio_status == "running":
         st.info("Audio + Subtitles are still being generated in the background. Visual QC is independent; final rendering will unlock when the handoff is ready.")
+        if st.button("Refresh background status", key="live-refresh-background-status"):
+            st.rerun()
     elif audio_status == "failed":
         st.error("Background Audio + Subtitles failed: " + str(st.session_state.get("live_audio_error") or st.session_state.get("live_handoff_error") or "Unknown error"))
         if st.button("Return to Audio + Subs to retry", key="live-visuals-return-audio-retry"):
