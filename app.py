@@ -6110,6 +6110,8 @@ def _render_live_upload():
         script,
         (qc.get("title") or title),
         source_url=originality_source_url,
+        description=qc.get("description", ""),
+        hashtags=qc.get("hashtags", ""),
         visuals=originality_visuals,
     )
 
@@ -9553,6 +9555,8 @@ def render_top5_upload_qc():
     originality_record = _show_upload_originality_audit(
         script,
         title,
+        description=qc.get("description", ""),
+        hashtags=qc.get("hashtags", ""),
         visuals=list(st.session_state.get("test_top5_visual_handoff") or []),
     )
     st.subheader("Upload")
@@ -9746,6 +9750,8 @@ def render_upload_qc():
         script,
         qc.get("title", ""),
         source_url=originality_source_url,
+        description=qc.get("description", ""),
+        hashtags=qc.get("hashtags", ""),
         visuals=list(st.session_state.get("approved_visuals") or []),
     )
     st.subheader("Upload")
