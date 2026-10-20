@@ -41,6 +41,44 @@ def test_chatterbox_turbo_stack_imports_without_loading_weights():
     assert callable(ChatterboxTurboTTS.from_pretrained)
 
 
+def test_chatterbox_full_retries_xet_transfer_and_keeps_loaded_model(monkeypatch):
+    import sys
+    import types
+    import audio
+    import huggingface_hub.constants as hf_constants
+
+    calls = []
+    model = object()
+
+    class FakeFullChatterbox:
+        @classmethod
+        def from_pretrained(cls, device):
+            calls.append((device, hf_constants.HF_HUB_DISABLE_XET))
+            if len(calls) == 1:
+                raise RuntimeError("hf_xet transfer timed out while downloading a checkpoint")
+            return model
+
+    package = types.ModuleType("chatterbox")
+    package.__path__ = []
+    full_module = types.ModuleType("chatterbox.tts")
+    full_module.ChatterboxTTS = FakeFullChatterbox
+    monkeypatch.setitem(sys.modules, "chatterbox", package)
+    monkeypatch.setitem(sys.modules, "chatterbox.tts", full_module)
+    monkeypatch.setattr(audio, "_CHATTERBOX_MODEL", None)
+    monkeypatch.setattr(audio, "_CHATTERBOX_MODEL_VERSION", None)
+    monkeypatch.setattr(hf_constants, "HF_HUB_DISABLE_XET", False)
+
+    loaded = audio.get_chatterbox_model("full")
+
+    assert loaded is model
+    assert len(calls) == 2
+    assert calls[0][1] is False
+    assert calls[1][1] is True
+    assert hf_constants.HF_HUB_DISABLE_XET is False
+    assert audio.get_chatterbox_model("full") is model
+    assert len(calls) == 2
+
+
 def test_chatterbox_reference_conditioning_failure_is_reported(monkeypatch, tmp_path):
     import audio
 
@@ -491,6 +529,47 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
 
     assert all(not scene["from_cache"] for scene in third["scenes"])
     assert len(model.generate_calls) == 2
+
+
+def test_chatterbox_seed_varies_by_story_but_remains_cached_for_exact_takes(monkeypatch, tmp_path):
+    import sys
+    import types
+    import torch
+    import audio
+
+    class FakeChatterbox:
+        sr = 16000
+        conds = "builtin"
+
+    seeds = []
+    fake_torchaudio = types.SimpleNamespace(
+        save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
+    )
+
+    def fake_take(model, text, model_version, seed):
+        seeds.append(seed)
+        return torch.ones((1, model.sr), dtype=torch.float32)
+
+    monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda model_version="turbo": FakeChatterbox())
+    monkeypatch.setattr(audio, "_generate_chatterbox_take", fake_take)
+    monkeypatch.setattr(audio, "AUDIO_REFERENCE", tmp_path / "missing-reference.wav")
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
+    monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_CACHE", {})
+    monkeypatch.setattr(audio, "_CHATTERBOX_DEFAULT_CONDITIONALS", None)
+
+    script = approved_script()
+    output_dir = tmp_path / "story-seeded"
+    audio.generate_chatterbox_audio(script, output_dir=output_dir)
+    audio.generate_chatterbox_audio(script, output_dir=output_dir)
+
+    changed = approved_script()
+    changed["script"][0]["voiceover"] = "Australia won."
+    audio.generate_chatterbox_audio(changed, output_dir=output_dir)
+
+    assert len(seeds) == 2
+    assert seeds[0] != seeds[1]
+    assert all(0 <= seed <= 0x7FFFFFFF for seed in seeds)
 
 
 def test_chatterbox_full_generates_one_continuous_take_with_stable_controls(monkeypatch, tmp_path):
