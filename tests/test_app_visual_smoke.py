@@ -949,6 +949,7 @@ def test_live_audio_runs_in_background_while_visual_qc_opens(monkeypatch):
     at.session_state["live_audio_engine_choice_v2"] = "Edge-TTS Neural"
     at.session_state["live_audio_status"] = "idle"
     at.session_state["live_audio_future"] = None
+    at.session_state["live_visual_option"] = "Option 3 · Real Image Search"
     at.session_state["live_approved_audio"] = None
     at.session_state["live_subtitle_data"] = None
     at.session_state["live_visual_result"] = None
@@ -965,7 +966,6 @@ def test_live_audio_runs_in_background_while_visual_qc_opens(monkeypatch):
         assert at.session_state["live_audio_status"] == "running"
         assert any(button.label == "Search real images" for button in at.button)
         assert at.session_state["live_visual_status"] in {"running", "complete"}
-        audio_future = at.session_state["live_audio_future"]
     finally:
         release.set()
         future = at.session_state.get("live_audio_future")
