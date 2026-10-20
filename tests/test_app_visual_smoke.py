@@ -1,6 +1,7 @@
 from io import BytesIO
 import hashlib
 from pathlib import Path
+from threading import Event
 from datetime import datetime, timezone
 
 from topic_fetcher import Topic
@@ -821,3 +822,158 @@ def test_live_scriptwriter_headline_is_dashboard_only_and_unlimited():
     headline = next(field for field in at.text_input if field.label == "Dashboard-only opening headline")
     assert len(headline.value) > 100
     assert not any(toggle.label == "Use opening headline" for toggle in at.toggle)
+
+
+
+def test_live_automatic_scraper_runs_once_without_blocking_visual_qc(monkeypatch):
+    import visual_fetcher
+
+    started = Event()
+    release = Event()
+    calls = []
+
+    def slow_scrape(story):
+        calls.append(story)
+        started.set()
+        release.wait(timeout=5)
+        return {"assets": [], "success_threshold": 10, "pages_scraped": 1}
+
+    monkeypatch.setattr(visual_fetcher, "crawl_visuals", slow_scrape)
+    topic = Topic(
+        title="Test cricket story",
+        description="Test story description",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/test-story",
+    )
+    script = {
+        "headline": "Test story headline",
+        "script": [
+            {
+                "voiceover": f"Test narration slide {number}.",
+                "primary_entity": "Test player",
+                "visual_intent": "player in cricket action",
+                "specific_search_prompt": "Test player cricket",
+            }
+            for number in range(1, 5)
+        ],
+    }
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "deep_dive"
+    at.session_state["live_desk"] = "cricket"
+    at.session_state["live_cricket_profile"] = "cricket_india_asia"
+    at.session_state["live_topics_profile"] = "cricket_india_asia"
+    at.session_state["live_topics"] = [topic]
+    at.session_state["live_selected_topic"] = 0
+    at.session_state["live_stage"] = "04 · Visuals + Render"
+    at.session_state["live_script_data"] = script
+    at.session_state["live_approved_script"] = script
+    at.session_state["live_approved_audio"] = {}
+    at.session_state["live_subtitle_data"] = {}
+    at.session_state["live_visual_result"] = None
+    at.session_state["live_visual_status"] = "idle"
+    at.session_state["live_visual_option"] = "Option 3 · Real Image Search"
+
+    try:
+        at.run()
+        assert not at.exception, at.exception
+        assert started.wait(timeout=3), "The automatic scraper was not dispatched."
+        assert at.session_state["live_visual_status"] == "running"
+        assert any(button.label == "Search real images" for button in at.button)
+
+        # An ordinary Streamlit rerun while scraping is in flight must not submit a duplicate.
+        at.run()
+        assert not at.exception, at.exception
+        assert len(calls) == 1
+        assert at.session_state["live_visual_status"] == "running"
+    finally:
+        release.set()
+        future = at.session_state.get("live_visual_future")
+        if future is not None:
+            future.result(timeout=5)
+
+
+def test_live_audio_runs_in_background_while_visual_qc_opens(monkeypatch):
+    import audio
+    import subtitles
+    import visual_fetcher
+
+    started = Event()
+    release = Event()
+
+    def slow_audio(*_args, **_kwargs):
+        started.set()
+        release.wait(timeout=5)
+        return {"audio_path": "fake-audio.wav", "duration": 5.0}
+
+    monkeypatch.setattr(audio, "generate_audio", slow_audio)
+    monkeypatch.setattr(audio, "approve_audio", lambda value: {"approved": True, **value})
+    monkeypatch.setattr(subtitles, "generate_subtitles", lambda _script, _audio: {"subtitles": True})
+    monkeypatch.setattr(
+        visual_fetcher,
+        "crawl_visuals",
+        lambda _story: {"assets": [], "success_threshold": 10, "pages_scraped": 1},
+    )
+    topic = Topic(
+        title="Test cricket story",
+        description="Test story description",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/test-story",
+    )
+    script = {
+        "headline": "Test story headline",
+        "language_used": "english",
+        "script": [
+            {
+                "voiceover": f"Test narration slide {number}.",
+                "primary_entity": "Test player",
+                "visual_intent": "player in cricket action",
+                "specific_search_prompt": "Test player cricket",
+            }
+            for number in range(1, 5)
+        ],
+    }
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "deep_dive"
+    at.session_state["live_desk"] = "cricket"
+    at.session_state["live_cricket_profile"] = "cricket_india_asia"
+    at.session_state["live_topics_profile"] = "cricket_india_asia"
+    at.session_state["live_topics"] = [topic]
+    at.session_state["live_selected_topic"] = 0
+    at.session_state["live_stage"] = "03 · Audio + Subs"
+    at.session_state["live_script_data"] = script
+    at.session_state["live_approved_script"] = script
+    at.session_state["live_audio_engine_choice_v2"] = "Edge-TTS Neural"
+    at.session_state["live_audio_status"] = "idle"
+    at.session_state["live_audio_future"] = None
+    at.session_state["live_approved_audio"] = None
+    at.session_state["live_subtitle_data"] = None
+    at.session_state["live_visual_result"] = None
+    at.session_state["live_visual_status"] = "idle"
+
+    try:
+        at.run()
+        assert not at.exception, at.exception
+        start_button = next(button for button in at.button if button.label == "Start Audio + Subtitles in Background")
+        start_button.click().run()
+        assert not at.exception, at.exception
+        assert started.wait(timeout=3), "The audio worker was not dispatched."
+        assert at.session_state["live_stage"] == "04 · Visuals + Render"
+        assert at.session_state["live_audio_status"] == "running"
+        assert any(button.label == "Search real images" for button in at.button)
+        assert at.session_state["live_visual_status"] in {"running", "complete"}
+        audio_future = at.session_state["live_audio_future"]
+    finally:
+        release.set()
+        future = at.session_state.get("live_audio_future")
+        if future is not None:
+            future.result(timeout=5)
+
+    at.run()
+    assert not at.exception, at.exception
+    assert at.session_state["live_audio_status"] == "complete"
+    assert at.session_state["live_approved_audio"]["approved"] is True
+    assert at.session_state["live_subtitle_data"] == {"subtitles": True}
