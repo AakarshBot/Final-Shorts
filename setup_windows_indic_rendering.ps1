@@ -65,19 +65,72 @@ try {
         )
     }
 
-    # Use Windows' built-in tar/libarchive instead of pip. This deliberately
-    # avoids modifying or relying on the user's Python installation.
-    $Tar = Get-Command tar.exe -ErrorAction SilentlyContinue
-    if (-not $Tar) { throw "Windows tar.exe was not found. Install a current Windows build with tar/libarchive support, then rerun this setup file." }
-
-    Write-Host "Extracting the verified FriBiDi package with Windows tar..."
-    & $Tar.Source -xf $PackagePath -C $ExtractRoot "ucrt64/bin/libfribidi-0.dll" "ucrt64/share/licenses/fribidi/COPYING"
-    if ($LASTEXITCODE -ne 0) {
-        throw "Windows tar could not read the .tar.zst package. Update Windows or install 7-Zip with Zstandard support, then rerun this setup file. No Python packages were installed."
-    }
-
+    # Prefer the Windows-provided tar tool. Older Windows tar/libarchive builds
+    # cannot read .tar.zst, so fall back to a checksum-pinned official Zstandard
+    # CLI downloaded to TEMP; never require pip, MSYS2, or a user-installed tool.
     $SourceDll = Join-Path $ExtractRoot "ucrt64/bin/libfribidi-0.dll"
     $SourceLicense = Join-Path $ExtractRoot "ucrt64/share/licenses/fribidi/COPYING"
+    $Extracted = $false
+    $Tar = Get-Command tar.exe -ErrorAction SilentlyContinue
+
+    if ($Tar) {
+        Write-Host "Extracting the verified FriBiDi package with Windows tar..."
+        & $Tar.Source -xf $PackagePath -C $ExtractRoot "ucrt64/bin/libfribidi-0.dll" "ucrt64/share/licenses/fribidi/COPYING"
+        if ($LASTEXITCODE -eq 0 -and (Test-Path -LiteralPath $SourceDll -PathType Leaf) -and (Test-Path -LiteralPath $SourceLicense -PathType Leaf)) {
+            $Extracted = $true
+        } else {
+            Write-Warning "This Windows tar build cannot fully extract .tar.zst; trying the verified Zstandard fallback."
+            Remove-Item -LiteralPath $SourceDll, $SourceLicense -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    if (-not $Extracted) {
+        $ZstdZipName = "zstd-v1.5.7-win64.zip"
+        $ZstdZipUrl = "https://github.com/facebook/zstd/releases/download/v1.5.7/$ZstdZipName"
+        $ZstdZipSha512 = "a96dc5417943c03fa231bf2d6a586b7ae7254fa52fdc15d302f296b5ff88e1ff0f07120a720149eb82ea0f0c65444393ebf05d2ee1bd1db341b803ff65a2e675"
+        $ZstdZipPath = Join-Path $TemporaryRoot $ZstdZipName
+        $ZstdOuterRoot = Join-Path $TemporaryRoot "zstd-outer"
+        $ZstdInnerRoot = Join-Path $TemporaryRoot "zstd-inner"
+        $TarPath = Join-Path $TemporaryRoot "fribidi-package.tar"
+        New-Item -ItemType Directory -Force -Path $ZstdOuterRoot, $ZstdInnerRoot | Out-Null
+
+        Write-Host "Downloading the official Zstandard fallback and verifying its SHA-512..."
+        Invoke-WebRequest -Uri $ZstdZipUrl -OutFile $ZstdZipPath
+        $ActualZstdSha512 = (Get-FileHash -Path $ZstdZipPath -Algorithm SHA512).Hash.ToLowerInvariant()
+        if ($ActualZstdSha512 -ne $ZstdZipSha512) {
+            throw "The Zstandard fallback checksum did not match the pinned official release. Nothing unverified was executed."
+        }
+
+        # The official 1.5.7 Windows release is a ZIP containing a second ZIP.
+        Expand-Archive -LiteralPath $ZstdZipPath -DestinationPath $ZstdOuterRoot -Force
+        $NestedZip = Get-ChildItem -LiteralPath $ZstdOuterRoot -Filter "*.zip" -File -Recurse | Select-Object -First 1
+        if (-not $NestedZip) { throw "The verified Zstandard release did not contain its expected nested ZIP." }
+        Expand-Archive -LiteralPath $NestedZip.FullName -DestinationPath $ZstdInnerRoot -Force
+        $ZstdExe = Get-ChildItem -LiteralPath $ZstdInnerRoot -Filter "zstd.exe" -File -Recurse | Select-Object -First 1
+        if (-not $ZstdExe) { throw "The verified Zstandard release did not contain zstd.exe." }
+
+        Write-Host "Decompressing the verified FriBiDi archive..."
+        & $ZstdExe.FullName -d -q -f -o $TarPath $PackagePath
+        if ($LASTEXITCODE -ne 0 -or -not (Test-Path -LiteralPath $TarPath -PathType Leaf)) {
+            throw "The verified Zstandard executable could not decompress the FriBiDi package."
+        }
+
+        if ($Tar) {
+            & $Tar.Source -xf $TarPath -C $ExtractRoot "ucrt64/bin/libfribidi-0.dll" "ucrt64/share/licenses/fribidi/COPYING"
+            if ($LASTEXITCODE -ne 0) {
+                throw "Windows tar could not extract the decompressed FriBiDi tar archive."
+            }
+        } else {
+            throw "Windows tar.exe is unavailable after verified Zstandard decompression. No Python packages were installed."
+        }
+
+        if (-not (Test-Path -LiteralPath $SourceDll -PathType Leaf) -or -not (Test-Path -LiteralPath $SourceLicense -PathType Leaf)) {
+            throw "The decompressed official package did not yield the expected FriBiDi DLL and licence."
+        }
+        $Extracted = $true
+    }
+
+    if (-not $Extracted) { throw "The verified FriBiDi package could not be extracted." }
     if (-not (Test-Path -LiteralPath $SourceDll -PathType Leaf)) { throw "The verified archive did not contain the expected FriBiDi DLL." }
     if (-not (Test-Path -LiteralPath $SourceLicense -PathType Leaf)) { throw "The verified archive did not contain the FriBiDi license." }
 
