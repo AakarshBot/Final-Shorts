@@ -872,9 +872,18 @@ def _indic_timing_guidance(language: str | None) -> str:
 
 
 def _is_indic_timing_issue(reason: str, language: str | None) -> bool:
-    return _is_indic_language(language) and (
-        str(reason or "").startswith("Indic generation timing preflight:")
-        or "Narration must stay under 30 seconds" in str(reason or "")
+    """Recognise measured-timing and native-script word-budget failures for recovery."""
+    if not _is_indic_language(language):
+        return False
+    detail = str(reason or "")
+    return any(
+        marker in detail
+        for marker in (
+            "Indic generation timing preflight:",
+            "Narration must stay under 30 seconds",
+            "Cricket narration has",
+            "Narration is too short to reach the 18-second minimum",
+        )
     )
 
 
