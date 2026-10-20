@@ -295,6 +295,8 @@ def _activate_windows_fribidi(root: Path | None = None) -> str:
     if loader is None:
         return "This Python runtime does not expose the Windows DLL loader."
     seen = set()
+    load_errors = []
+    found_dll = False
     for path in candidates:
         try:
             resolved = path.resolve()
@@ -304,12 +306,17 @@ def _activate_windows_fribidi(root: Path | None = None) -> str:
         if key in seen or not resolved.is_file():
             continue
         seen.add(key)
+        found_dll = True
         try:
             handle = loader(str(resolved))
             _FRIBIDI_DLL_HANDLES.append(handle)
             return ""
         except OSError as exc:
-            return f"Could not load {resolved.name}: {exc}"
+            load_errors.append(f"{resolved}: {exc}")
+    if load_errors:
+        return "Could not load any candidate FriBiDi DLL: " + " | ".join(load_errors)
+    if found_dll:
+        return "Candidate FriBiDi DLLs were found but none could be loaded."
     return "No FriBiDi DLL was found in the factory's configured DLL folders."
 
 
@@ -318,14 +325,13 @@ def _require_raqm(language: str) -> None:
     global _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED, _WINDOWS_FRIBIDI_INSTALL_ERROR
     language_key = _normalise_indic_language(language)
     _register_windows_dll_paths()
-    if os.name == "nt":
-        _activate_windows_fribidi()
+    activation_error = _activate_windows_fribidi() if os.name == "nt" else ""
 
     available, probe_error = _raqm_runtime_probe(language_key)
     if available:
         return
 
-    setup_error = ""
+    setup_error = activation_error
     if os.name == "nt":
         if not _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED:
             _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED = True
@@ -339,14 +345,22 @@ def _require_raqm(language: str) -> None:
                 _WINDOWS_FRIBIDI_INSTALL_ERROR = str(exc)
                 setup_error = _WINDOWS_FRIBIDI_INSTALL_ERROR
         else:
-            setup_error = _WINDOWS_FRIBIDI_INSTALL_ERROR
+            setup_error = _WINDOWS_FRIBIDI_INSTALL_ERROR or activation_error
 
-        # The second check loads the bundled Noto font and forces actual glyph shaping.
+        # Re-open the bundled Noto font and force actual glyph shaping after setup.
         available, retry_error = _raqm_runtime_probe(language_key)
         if available:
             return
         if retry_error:
             probe_error = retry_error
+        if not setup_error:
+            setup_error = (
+                "The DLL setup completed, but Pillow still failed the real font-load/shaping probe."
+            )
+        if probe_error:
+            _WINDOWS_FRIBIDI_INSTALL_ERROR = (
+                f"{setup_error} Final RAQM probe: {probe_error}"
+            )
 
     extra = ""
     if setup_error:
@@ -2157,6 +2171,31 @@ def render_production_video(
         or not script_scenes
     ):
         raise ValueError("Script, audio and visual scene counts must match.")
+
+    if not is_top5:
+        language = _normalise_indic_language(
+            approved_script.get("language_used") or approved_audio.get("language")
+        )
+        durations = []
+        for number, scene in enumerate(audio_scenes, 1):
+            try:
+                duration = float(scene.get("duration") or 0.0)
+            except (AttributeError, TypeError, ValueError):
+                duration = 0.0
+            if duration <= 0.0:
+                raise ValueError(f"Audio scene {number} has no valid measured duration.")
+            durations.append(duration)
+        total_duration = sum(durations)
+        if total_duration >= 30.0:
+            raise ValueError(
+                f"Renderer refuses a {total_duration:.2f}-second Short: the factory limit is strictly under 30 seconds. "
+                "Regenerate Audio with the timing correction or shorten the narration."
+            )
+        if language in {"hindi", "telugu"} and durations[0] > 5.2:
+            raise ValueError(
+                f"{language.title()} Slide 1 audio is {durations[0]:.2f}s; it must be no more than 5.2 seconds. "
+                "Regenerate Audio so its measured timing is corrected before rendering."
+            )
 
     prepared_visuals = []
     for index, visual in enumerate(visuals, 1):
