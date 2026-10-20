@@ -2251,14 +2251,19 @@ def render_production_video(
         motion_seed = ""
         if static_frame is None and not isinstance(top5_card, dict) and not manual_subject_cutout and not card_studio:
             motion_seed = "|".join(
-                str(visual.get(key) or "")
-                for key in (
-                    "primary_entity",
-                    "visual_intent",
-                    "specific_search_prompt",
-                    "sport_or_topic_category",
-                    "source",
-                )
+                [
+                    str(approved_script.get("story_angle") or ""),
+                    *(
+                        str(visual.get(key) or "")
+                        for key in (
+                            "primary_entity",
+                            "visual_intent",
+                            "specific_search_prompt",
+                            "sport_or_topic_category",
+                            "source",
+                        )
+                    ),
+                ]
             ).strip("|")
             if not motion_seed:
                 # Image bytes are stable for this scene; hashing them per frame is
