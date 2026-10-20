@@ -526,14 +526,13 @@ def test_writer_hides_invalid_first_draft_and_rewrites_once(monkeypatch):
     assert script_writer._words(result["script"][0]["voiceover"]) < 14
 
 
-
-
-
 def test_writer_recovers_slide_one_word_count_after_full_rewrite_misses(monkeypatch):
     bad = valid_result(
         "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
     )
     good = valid_result("Shubman Gill's fitness remains uncertain before India's next ODI.")
+    good["headline"] = "This model-side metadata change must be ignored"
+    good["script"][1]["voiceover"] = "This unrelated slide change must be ignored."
     drafts = [bad, bad, bad, good]
     calls = []
     monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
@@ -554,6 +553,10 @@ def test_writer_recovers_slide_one_word_count_after_full_rewrite_misses(monkeypa
     assert "TARGETED SLIDE 1 WORD-COUNT RECOVERY (ATTEMPT 2/2)" in calls[3][1]
     assert "14 words" in calls[2][1]
     assert "CURRENT SCRIPT PACKAGE TO REPAIR" in calls[3][2]
+    assert result["headline"] == "Gill Injury Update"
+    assert result["script"][1]["voiceover"] == (
+        "Gill was struck during training and returned after treatment, while doctors review his recovery before selection."
+    )
     assert script_writer._words(result["script"][0]["voiceover"]) <= 13
 
 
