@@ -979,6 +979,7 @@ def _normalise_name(value) -> str:
             characters.append(" ")
     return " ".join("".join(characters).split())
 
+
 def _spoken_entity_spelling(candidate, voiceover) -> str:
     """Return a primary-entity spelling actually spoken, even if it has descriptors."""
     candidate_text = _clean(candidate)
@@ -994,7 +995,7 @@ def _spoken_entity_spelling(candidate, voiceover) -> str:
     pieces = candidate_text.split()
     for width in range(len(pieces) - 1, 1, -1):
         for start in range(len(pieces) - width + 1):
-            phrase = " ".join(pieces[start : start + width]).strip(" \\t\\r\\n.,:;()[]{}")
+            phrase = " ".join(pieces[start : start + width]).strip(" \t\r\n.,:;()[]{}")
             normalised_phrase = _normalise_name(phrase)
             if normalised_phrase and normalised_phrase in narration:
                 return phrase
