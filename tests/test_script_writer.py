@@ -240,7 +240,7 @@ def test_indic_generation_preflight_catches_long_lead_without_changing_public_va
     assert valid, reason
     assert not generation_valid
     assert "Slide 1" in generation_reason
-    assert "nine or fewer" in generation_reason
+    assert "9 or fewer" in generation_reason
 
 
 def test_indic_generation_preflight_targets_total_length_without_padding():
