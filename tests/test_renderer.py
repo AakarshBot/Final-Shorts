@@ -1864,6 +1864,7 @@ def test_isolated_raqm_pillow_installer_uses_checksum_verified_factory_wheel(mon
     assert requested[0][0].endswith(f"/{wheel_name}")
     assert requested[1][0].endswith(f"/{wheel_name}.sha256")
     assert (target / "PIL" / "_imagingft.cp311-win_amd64.pyd").is_file()
+    assert "os.add_dll_directory" in (target / "sitecustomize.py").read_text(encoding="utf-8")
     assert (target / "python_executable.txt").read_text(encoding="utf-8") == str(renderer.sys.executable)
 
 
