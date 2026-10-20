@@ -7468,9 +7468,24 @@ def render_live_dashboard():
                     width="stretch",
                     key="live-regenerate-script-from-audio-error",
                 ):
-                    feedback = str(audio_error)
                     previous_script = st.session_state.get("live_approved_script") or script
                     angle = previous_script.get("story_angle") if isinstance(previous_script, dict) else None
+                    previous_scenes = (
+                        previous_script.get("script") or []
+                        if isinstance(previous_script, dict)
+                        else []
+                    )
+                    previous_narration = [
+                        str(scene.get("voiceover") or "").strip()
+                        for scene in previous_scenes
+                        if isinstance(scene, dict) and str(scene.get("voiceover") or "").strip()
+                    ]
+                    feedback = str(audio_error)
+                    if previous_narration:
+                        feedback += (
+                            "\nRejected narration that produced this audio (JSON, same slide order): "
+                            + json.dumps(previous_narration, ensure_ascii=False)
+                        )
                     research_source = st.session_state.get("live_universal_angle_source")
 
                     st.session_state.live_script_data = None
