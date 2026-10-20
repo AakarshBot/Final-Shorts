@@ -2070,6 +2070,7 @@ def write_script(
     angle=None,
     research_source: str | None = None,
     profile: str = "cricket_india_asia",
+    validation_feedback: str | None = None,
 ) -> dict:
     source = research_source or _research_story(story) or _source_text(story)
     if not source:
@@ -2095,6 +2096,10 @@ def write_script(
             + "\nBuild the whole narration around this lens. Explore the debate, comparison, or insight posed by this angle using the context and cricket knowledge. Do not replace it with the obvious event/result summary."
         )
 
+    instruction = _append_previous_validation_feedback(
+        instruction, validation_feedback, language_key
+    )
+
     def finish(result: dict, model: str) -> dict:
         return _finish_result(
             result,
@@ -2117,24 +2122,38 @@ def write_script(
                 "No hidden rewrite was attempted because the primary request did not produce a draft."
             ) from second_error
         backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
-        if not backup_valid and _is_indic_timing_issue(backup_reason, language_key):
-            timing_instruction = (
-                instruction
-                + "\n\nMANDATORY INDIC TIMING REWRITE\n"
-                "Rewrite the complete script from the supplied evidence. Fix Slide 1 and, if needed, total length. "
-                "Use a single short lead of no more than seven compact whitespace-separated tokens, name the subject, "
-                "move background to later slides, and preserve the story's essential facts without padding. "
-                "Actual audio must remain <=5.2 seconds for Slide 1 and strictly under 30 seconds overall. "
-                "Return the full JSON package only.\n"
-                + backup_reason
-            )
-            backup = _prepare_generated_script(_request(MODELS[0], timing_instruction, source), language_key)
-            backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
-            if backup_valid:
-                return finish(backup, MODELS[0])
+        if not backup_valid and _is_indic_language(language_key) and _is_indic_timing_issue(backup_reason, language_key):
+            repair_errors = []
+            previous_model = MODELS[1]
+            for attempt in range(1, 3):
+                repair_model = MODELS[0] if previous_model != MODELS[0] else MODELS[1]
+                timing_instruction = (
+                    instruction
+                    + "\n\nMANDATORY INDIC TIMING RECOVERY "
+                    + f"(ATTEMPT {attempt}/2)\n"
+                    + "The backup draft was rejected by local validation. Rewrite the package to fix the exact failure, "
+                    "keep the subject name verbatim in the spoken narration, move background to later slides, preserve essential facts, "
+                    "and return the complete JSON package only.\n"
+                    + _script_recovery_context(backup, backup_reason, language_key)
+                )
+                previous_model = repair_model
+                try:
+                    repaired = _prepare_generated_script(
+                        _request(repair_model, timing_instruction, source),
+                        language_key,
+                    )
+                except Exception as repair_error:
+                    repair_errors.append(f"{repair_model}: {type(repair_error).__name__}: {repair_error}")
+                    continue
+                backup = repaired
+                backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
+                if backup_valid:
+                    return finish(backup, repair_model)
+            if repair_errors:
+                backup_reason += " | Recovery request errors: " + " | ".join(repair_errors)
         if not backup_valid:
             raise RuntimeError(
-                "The backup model returned an invalid script after generation preflight: "
+                "The backup model returned an invalid script after error-aware Indic recovery: "
                 + backup_reason
             )
         return finish(backup, MODELS[1])
@@ -2159,7 +2178,7 @@ def write_script(
 
     rewrite_instruction = (
         instruction
-        + "\n\nHIDDEN REWRITE\n"
+        + "\n\nHIDDEN REWRITE (ATTEMPT 1 OF 3)\n"
         "The first draft is NOT being shown to the human reviewer. Rewrite the complete 3–5-slide script now, using the story's natural structure. "
         "Keep every important factual detail from the research packet, but fix the exact failure below. "
         "Treat subject-name mismatches precisely: subject_name must use the same script and spelling "
@@ -2167,6 +2186,7 @@ def write_script(
         "For Hindi/Telugu, use the native script consistently; do not fix this only in titles or metadata. "
         "Do not explain the rewrite. Return only the complete JSON package.\n"
         f"Failure to fix: {first_reason}\n"
+        + _script_recovery_context(result, first_reason, language_key)
     )
 
     try:
@@ -2266,20 +2286,45 @@ def write_script(
             )
 
     if not valid and _is_indic_timing_issue(reason, language_key):
-        timing_instruction = (
-            instruction
-            + "\n\nMANDATORY INDIC TIMING REWRITE\n"
-            "The prior rewrite still missed the measured-audio drafting margins. Rewrite the complete 3–5-slide package. "
-            "Keep Slide 1 to seven or fewer compact whitespace-separated tokens, ideally five to seven, and move context to later slides. "
-            "Target 50–55 total tokens where supported by the story. Do not remove essential facts, add filler, or alter factual claims. "
-            "The actual Audio stage still enforces <=5.2 seconds for Slide 1 and strictly under 30 seconds overall. "
-            "Return full JSON only.\n"
-            + reason
+        recovery_errors = []
+        previous_model = MODELS[1]
+        for attempt in range(1, 3):
+            repair_model = MODELS[0] if previous_model != MODELS[0] else MODELS[1]
+            timing_instruction = (
+                instruction
+                + "\n\nMANDATORY INDIC TIMING RECOVERY "
+                + f"(ATTEMPT {attempt}/2)\n"
+                + "The prior draft failed local validation. Rewrite the complete 3–5-slide package and fix the exact error below. "
+                + "Keep Slide 1 to seven or fewer compact whitespace-separated tokens, ideally five to seven, and move context to later slides. "
+                + "Target 50–55 total tokens where the story permits. Keep the exact subject name, preserve essential facts, and do not add filler. "
+                + "The actual Audio stage still requires Slide 1 <=5.2 seconds and total narration strictly under 30 seconds. "
+                + "Return full JSON only.\n"
+                + _script_recovery_context(rewritten, reason, language_key)
+            )
+            previous_model = repair_model
+            try:
+                repaired = _prepare_generated_script(
+                    _request(repair_model, timing_instruction, source),
+                    language_key,
+                )
+            except Exception as repair_error:
+                recovery_errors.append(
+                    f"{repair_model}: {type(repair_error).__name__}: {repair_error}"
+                )
+                continue
+            rewritten = repaired
+            valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+            if valid:
+                return finish(rewritten, repair_model)
+
+        detail = (
+            "Script generation failed after hidden rewrite and two error-aware Indic recovery attempts. "
+            + str(reason)
         )
-        rewritten = _prepare_generated_script(_request(MODELS[0], timing_instruction, source), language_key)
-        valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
-        if valid:
-            return finish(rewritten, MODELS[0])
+        if recovery_errors:
+            detail += " Recovery request errors: " + " | ".join(recovery_errors)
+        raise RuntimeError(detail)
+
     if not valid:
         raise RuntimeError("Script generation failed after hidden rewrite and any applicable timing correction: " + reason)
 
