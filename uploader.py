@@ -3,8 +3,15 @@
 from __future__ import annotations
 
 from pathlib import Path
+from difflib import SequenceMatcher
+from datetime import datetime, timezone
+import hashlib
+import json
+import os
 import re
+import tempfile
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from google.auth.exceptions import RefreshError
 from google.auth.transport.requests import Request
@@ -19,10 +26,243 @@ YOUTUBE_SCOPE = "https://www.googleapis.com/auth/youtube"
 YOUTUBE_UPLOAD_SCOPE = "https://www.googleapis.com/auth/youtube.upload"
 YOUTUBE_COMMENT_SCOPE = "https://www.googleapis.com/auth/youtube.force-ssl"
 SPORTS_CATEGORY_ID = "17"
+UPLOAD_HISTORY_PATH = Path(__file__).resolve().parent / "output" / "factory_upload_history.json"
+ORIGINALITY_AUDIT_WINDOW = 50
+ORIGINALITY_HISTORY_LIMIT = 200
 
 
 def _clean(value: Any) -> str:
     return re.sub(r"\s+", " ", str(value or "")).strip()
+
+
+def _normalise_history_url(value: Any) -> str:
+    url = _clean(value)
+    if not url:
+        return ""
+    try:
+        parsed = urlsplit(url)
+        if not parsed.scheme or not parsed.netloc:
+            return url.rstrip("/").casefold()
+        return urlunsplit((
+            parsed.scheme.casefold(),
+            parsed.netloc.casefold().removeprefix("www."),
+            parsed.path.rstrip("/"),
+            "",
+            "",
+        ))
+    except ValueError:
+        return url.rstrip("/").casefold()
+
+
+def _originality_tokens(value: Any) -> list[str]:
+    return re.findall(r"\\w+", str(value or "").casefold(), flags=re.UNICODE)
+
+
+def _originality_trigrams(tokens: list[str]) -> set[tuple[str, ...]]:
+    return {
+        tuple(tokens[index:index + 3])
+        for index in range(max(0, len(tokens) - 2))
+    }
+
+
+def _read_upload_history(history_path: str | Path = UPLOAD_HISTORY_PATH) -> list[dict[str, Any]]:
+    try:
+        payload = json.loads(Path(history_path).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return []
+    if not isinstance(payload, list):
+        return []
+    return [item for item in payload if isinstance(item, dict)]
+
+
+def build_upload_originality_record(
+    script: dict,
+    title: str,
+    *,
+    source_url: str = "",
+    visuals: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    """Build a local comparison record from the approved story and slide visuals."""
+    script = script if isinstance(script, dict) else {}
+    scenes = script.get("script")
+    if not isinstance(scenes, list):
+        scenes = script.get("slides")
+    narration = []
+    for scene in scenes if isinstance(scenes, list) else []:
+        if not isinstance(scene, dict):
+            continue
+        text = _clean(scene.get("voiceover") or scene.get("headline") or scene.get("title"))
+        if text:
+            narration.append(text)
+
+    image_hashes = []
+    for visual in visuals or []:
+        if not isinstance(visual, dict):
+            continue
+        raw = visual.get("preview_bytes") or visual.get("bytes")
+        if isinstance(raw, (bytes, bytearray)) and raw:
+            image_hashes.append(hashlib.sha256(bytes(raw)).hexdigest())
+
+    return {
+        "title": _clean(title),
+        "source_title": _clean(script.get("source_title") or script.get("headline")),
+        "source_url": _normalise_history_url(source_url or script.get("source_url") or ""),
+        "story_angle": _clean(script.get("story_angle") or script.get("editorial_angle")),
+        "narration": " ".join(narration),
+        "visual_hashes": list(dict.fromkeys(image_hashes)),
+        "format": _clean(script.get("schema") or script.get("desk_profile") or ""),
+    }
+
+
+def assess_upload_distinctiveness(
+    record: dict[str, Any],
+    history_path: str | Path = UPLOAD_HISTORY_PATH,
+) -> dict[str, Any]:
+    """Advisory repeat-content check against the factory's latest successful uploads."""
+    history = _read_upload_history(history_path)
+    if not history:
+        return {
+            "level": "baseline",
+            "history_count": 0,
+            "message": (
+                "No prior uploads are recorded locally yet. This comparison starts with uploads "
+                "made after the audit is introduced; it cannot assess older videos that are not in this history."
+            ),
+            "closest": None,
+        }
+
+    tokens = _originality_tokens(record.get("narration"))
+    title_tokens = _originality_tokens(record.get("title"))
+    source_url = _normalise_history_url(record.get("source_url"))
+    visual_hashes = set(record.get("visual_hashes") or [])
+    trigrams = _originality_trigrams(tokens)
+    closest = None
+
+    for previous in history[-ORIGINALITY_AUDIT_WINDOW:]:
+        old_tokens = _originality_tokens(previous.get("narration"))
+        old_title = _originality_tokens(previous.get("title"))
+        old_source = _normalise_history_url(previous.get("source_url"))
+        old_visuals = set(previous.get("visual_hashes") or [])
+        old_trigrams = _originality_trigrams(old_tokens)
+        narration_similarity = (
+            SequenceMatcher(None, tokens, old_tokens, autojunk=False).ratio()
+            if tokens and old_tokens else 0.0
+        )
+        title_similarity = (
+            SequenceMatcher(None, title_tokens, old_title, autojunk=False).ratio()
+            if title_tokens and old_title else 0.0
+        )
+        union = trigrams | old_trigrams
+        phrase_overlap = len(trigrams & old_trigrams) / len(union) if union else 0.0
+        image_overlap = (
+            len(visual_hashes & old_visuals) / min(len(visual_hashes), len(old_visuals))
+            if visual_hashes and old_visuals else 0.0
+        )
+        same_source = bool(source_url and old_source and source_url == old_source)
+        candidate = {
+            "title": _clean(previous.get("title")) or "Untitled upload",
+            "video_id": _clean(previous.get("video_id")),
+            "url": _clean(previous.get("url")),
+            "narration_similarity": round(narration_similarity, 3),
+            "phrase_overlap": round(phrase_overlap, 3),
+            "title_similarity": round(title_similarity, 3),
+            "visual_overlap": round(image_overlap, 3),
+            "same_source": same_source,
+        }
+        rank = max(
+            narration_similarity,
+            phrase_overlap * 0.92,
+            0.70 if same_source and narration_similarity >= 0.50 else 0.0,
+            0.66 if image_overlap >= 0.75 else 0.0,
+        )
+        if closest is None or rank > closest["_rank"]:
+            candidate["_rank"] = rank
+            closest = candidate
+
+    if closest is None:
+        return {
+            "level": "ok",
+            "history_count": len(history),
+            "message": "No comparable narration was available in the local upload history.",
+            "closest": None,
+        }
+
+    similarity = closest["narration_similarity"]
+    phrase_overlap = closest["phrase_overlap"]
+    image_overlap = closest["visual_overlap"]
+    same_source = closest["same_source"]
+    if similarity >= 0.82 or phrase_overlap >= 0.72 or (same_source and similarity >= 0.55):
+        level = "warning"
+        message = (
+            f"High repeat-content signal versus “{closest['title']}”: narration similarity "
+            f"{similarity:.0%}, phrase overlap {phrase_overlap:.0%}. Recheck the editorial angle, "
+            "evidence, commentary and viewer value before publishing."
+        )
+    elif similarity >= 0.62 or phrase_overlap >= 0.55 or same_source or image_overlap >= 0.50:
+        level = "review"
+        message = (
+            f"Review this upload against “{closest['title']}”: narration similarity "
+            f"{similarity:.0%}, phrase overlap {phrase_overlap:.0%}, repeated-image overlap "
+            f"{image_overlap:.0%}. Similar formats can be fine; the substance still needs to differ."
+        )
+    else:
+        level = "ok"
+        message = (
+            f"No strong repeat-content signal against the last "
+            f"{min(len(history), ORIGINALITY_AUDIT_WINDOW)} factory-uploaded videos. "
+            "This local check is advisory, not a prediction of YouTube's decision."
+        )
+
+    closest.pop("_rank", None)
+    return {
+        "level": level,
+        "history_count": len(history),
+        "message": message,
+        "closest": closest,
+    }
+
+
+def record_upload_success(
+    record: dict[str, Any],
+    upload_result: dict[str, Any],
+    history_path: str | Path = UPLOAD_HISTORY_PATH,
+) -> bool:
+    """Persist a successful factory upload; history I/O never undoes a successful upload."""
+    if not isinstance(upload_result, dict) or not _clean(upload_result.get("video_id")):
+        return False
+    path = Path(history_path)
+    history = _read_upload_history(path)
+    entry = dict(record or {})
+    entry.update({
+        "video_id": _clean(upload_result.get("video_id")),
+        "url": _clean(upload_result.get("url")),
+        "privacy_status": _clean(upload_result.get("privacy_status") or upload_result.get("requested_privacy")),
+        "uploaded_at": datetime.now(timezone.utc).isoformat(),
+    })
+    history = (history + [entry])[-ORIGINALITY_HISTORY_LIMIT:]
+    temp_path = None
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            temp_path = Path(handle.name)
+            json.dump(history, handle, ensure_ascii=False, indent=2)
+            handle.write("\\n")
+        os.replace(temp_path, path)
+        return True
+    except OSError:
+        if temp_path is not None:
+            try:
+                temp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return False
 
 
 def compose_description(description: str, hashtags: str | list[str]) -> str:
