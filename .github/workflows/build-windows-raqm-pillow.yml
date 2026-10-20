@@ -49,7 +49,7 @@ jobs:
           python -m pip install --upgrade pip wheel setuptools
           if errorlevel 1 exit /b 1
           if not exist "%GITHUB_WORKSPACE%\raqm-wheels" mkdir "%GITHUB_WORKSPACE%\raqm-wheels"
-          python -m pip wheel --no-deps --no-build-isolation -C raqm=vendor -C fribidi=vendor --wheel-dir "%GITHUB_WORKSPACE%\raqm-wheels" .
+          python -m pip wheel -v --no-deps --no-build-isolation -C raqm=enable -C raqm=vendor -C fribidi=vendor --wheel-dir "%GITHUB_WORKSPACE%\raqm-wheels" .
           if errorlevel 1 exit /b 1
       - name: Verify wheel has RAQM and shapes bundled Devanagari text
         shell: pwsh
