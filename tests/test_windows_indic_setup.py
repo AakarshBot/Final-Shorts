@@ -31,3 +31,6 @@ def test_raqm_wheel_workflow_verifies_the_same_isolated_wheel_used_at_runtime():
     assert "NotoSansTelugu-Bold.ttf" in verification
     assert "pillow-source" not in verification
     assert "pip install --no-deps --target" not in verification
+    assert "delvewheel repair --add-path" in workflow
+    assert "raqm-wheel-raw" in workflow
+    assert "winbuild\\\\build\\\\bin" in workflow or "winbuild\\build\\bin" in workflow
