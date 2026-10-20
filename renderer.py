@@ -1672,14 +1672,14 @@ def build_top5_card_preview(
     return buffer.getvalue()
 
 
-@lru_cache(maxsize=512)
+@lru_cache(maxsize=1024)
 def _motion_profile(seed: str) -> tuple[int, float, float, int, int]:
-    """Calculate each deterministic Ken Burns profile once per visual seed."""
+    """Choose a stable, varied editorial camera path from story/visual evidence."""
     digest = hashlib.sha1(str(seed or "visual").encode("utf-8")).digest()
     return (
-        digest[0] % 5,
-        1.04 + (digest[1] % 5) * 0.006,
-        1.085 + (digest[2] % 5) * 0.006,
+        digest[0] % 10,
+        1.025 + (digest[1] % 9) * 0.005,
+        1.075 + (digest[2] % 11) * 0.005,
         -1 if digest[3] & 1 else 1,
         -1 if digest[4] & 1 else 1,
     )
@@ -1691,17 +1691,24 @@ def _animate_visual(
     duration: float,
     seed: str,
 ) -> Image.Image:
+    """Apply a deterministic story-specific Ken Burns path without changing the master frame."""
     if duration <= 0.0:
         return image.copy()
 
     mode, start_scale, end_scale, x_direction, y_direction = _motion_profile(seed)
     progress = min(1.0, max(0.0, float(t) / duration))
     eased = 0.5 - 0.5 * math.cos(math.pi * progress)
+    sweep = (eased - 0.5) * 2.0
 
-    if mode == 1:
+    # Ten restrained paths: directional push/pull, horizontal/vertical sweeps,
+    # and diagonals. They remain deterministic for repeatable render previews.
+    reverse_zoom_modes = {1, 5, 8}
+    if mode in reverse_zoom_modes:
         scale = end_scale - (end_scale - start_scale) * eased
     elif mode == 4:
         scale = start_scale + (end_scale - start_scale) * eased * 0.65
+    elif mode == 7:
+        scale = start_scale + (end_scale - start_scale) * (eased * 0.8)
     else:
         scale = start_scale + (end_scale - start_scale) * eased
 
@@ -1712,9 +1719,19 @@ def _animate_visual(
     elif mode == 2:
         x_progress, y_progress = eased * x_direction, eased * y_direction
     elif mode == 3:
-        x_progress, y_progress = (eased - 0.5) * 2.0 * x_direction, 0.0
+        x_progress, y_progress = sweep * x_direction, 0.0
+    elif mode == 4:
+        x_progress, y_progress = 0.45 * eased * x_direction, sweep * y_direction
+    elif mode == 5:
+        x_progress, y_progress = -eased * x_direction, 0.0
+    elif mode == 6:
+        x_progress, y_progress = eased * x_direction, -eased * y_direction
+    elif mode == 7:
+        x_progress, y_progress = 0.0, sweep * y_direction
+    elif mode == 8:
+        x_progress, y_progress = 0.65 * eased * x_direction, 0.35 * eased * y_direction
     else:
-        x_progress, y_progress = eased * 0.5 * x_direction, (eased - 0.5) * y_direction
+        x_progress, y_progress = sweep * x_direction, 0.35 * eased * y_direction
 
     scaled_width = max(WIDTH, int(round(WIDTH * scale)))
     scaled_height = max(HEIGHT, int(round(HEIGHT * scale)))
@@ -2266,21 +2283,31 @@ def render_production_video(
 
         motion_seed = ""
         if static_frame is None and not isinstance(top5_card, dict) and not manual_subject_cutout and not card_studio:
-            motion_seed = "|".join(
-                [
-                    str(approved_script.get("story_angle") or ""),
-                    *(
-                        str(visual.get(key) or "")
-                        for key in (
-                            "primary_entity",
-                            "visual_intent",
-                            "specific_search_prompt",
-                            "sport_or_topic_category",
-                            "source",
-                        )
-                    ),
-                ]
-            ).strip("|")
+            scene_metadata = script_scenes[index - 1] if index - 1 < len(script_scenes) else {}
+            seed_parts = [
+                str(approved_script.get("story_angle") or ""),
+                *(
+                    str(visual.get(key) or "")
+                    for key in (
+                        "primary_entity",
+                        "visual_intent",
+                        "specific_search_prompt",
+                        "sport_or_topic_category",
+                        "source",
+                    )
+                ),
+            ]
+            # Standard Shorts use the spoken beat and story identity in addition
+            # to image metadata. This makes each camera path follow the actual
+            # editorial cut, rather than choosing motion from the image search
+            # prompt alone. Top-5 keeps its established motion-seed behavior.
+            if not is_top5 and isinstance(scene_metadata, dict):
+                seed_parts.extend((
+                    str(approved_script.get("source_title") or approved_script.get("headline") or ""),
+                    str(scene_metadata.get("voiceover") or scene_metadata.get("headline") or ""),
+                    f"scene:{index}",
+                ))
+            motion_seed = "|".join(seed_parts).strip("|")
             if not motion_seed:
                 # Image bytes are stable for this scene; hashing them per frame is
                 # pure repeated work, so derive the fallback seed only once here.

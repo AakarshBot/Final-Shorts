@@ -1449,6 +1449,83 @@ def test_final_renderer_quality_contract():
         assert setting in source
 
 
+def test_short_motion_profiles_offer_ten_stable_story_paths():
+    profiles = [
+        renderer._motion_profile(f"story-scene-{index}")
+        for index in range(250)
+    ]
+
+    assert {profile[0] for profile in profiles} == set(range(10))
+    assert renderer._motion_profile("same story beat") == renderer._motion_profile("same story beat")
+    for _mode, start_scale, end_scale, x_direction, y_direction in profiles:
+        assert 1.025 <= start_scale <= 1.065
+        assert 1.075 <= end_scale <= 1.125
+        assert end_scale > start_scale
+        assert x_direction in {-1, 1}
+        assert y_direction in {-1, 1}
+
+
+def test_standard_short_motion_seed_uses_spoken_scene_and_angle(monkeypatch, tmp_path):
+    captured = {}
+    audio_path = tmp_path / "lead.mp3"
+    audio_path.write_bytes(b"x" * 700)
+    output = tmp_path / "story-aware.mp4"
+    image = Image.new("RGB", (1080, 1920), "white")
+    ImageDraw.Draw(image).rectangle((110, 220, 880, 1450), fill="navy")
+    visual_buffer = BytesIO()
+    image.save(visual_buffer, format="PNG")
+
+    def fake_animate(source, t, duration, seed):
+        captured["seed"] = seed
+        return source.copy()
+
+    def fake_preview(frames, path):
+        next(iter(frames))
+        path.write_bytes(b"silent")
+        return path
+
+    def fake_mux(silent_path, scenes, output_path):
+        output_path.write_bytes(b"final")
+        return output_path
+
+    monkeypatch.setattr(renderer, "_animate_visual", fake_animate)
+    monkeypatch.setattr(renderer, "write_preview_video", fake_preview)
+    monkeypatch.setattr(renderer, "_mux_audio", fake_mux)
+
+    result = renderer.render_production_video(
+        {
+            "approved_for_audio": True,
+            "language_used": "english",
+            "source_title": "India's tactical collapse",
+            "story_angle": "the field change that shifted the chase",
+            "script": [{"voiceover": "The captain moved a fielder after the second boundary."}],
+        },
+        {
+            "approved_for_visuals": True,
+            "language": "english",
+            "total_duration": 1.0,
+            "scenes": [{"scene": 1, "path": str(audio_path), "duration": 1.0}],
+        },
+        TEST_SUBTITLE_DATA,
+        [{
+            "bytes": visual_buffer.getvalue(),
+            "primary_entity": "India captain",
+            "visual_intent": "field placement change",
+            "specific_search_prompt": "India captain adjusts field in cricket match",
+            "sport_or_topic_category": "Cricket",
+            "source": "Sports Desk",
+        }],
+        output,
+    )
+
+    assert result == output
+    assert output.read_bytes() == b"final"
+    assert "India's tactical collapse" in captured["seed"]
+    assert "the field change that shifted the chase" in captured["seed"]
+    assert "The captain moved a fielder after the second boundary." in captured["seed"]
+    assert "scene:1" in captured["seed"]
+
+
 @pytest.mark.parametrize(
     ("language", "sample", "font_name"),
     [
