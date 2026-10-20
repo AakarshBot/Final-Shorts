@@ -894,6 +894,110 @@ def test_live_automatic_scraper_runs_once_without_blocking_visual_qc(monkeypatch
             future.result(timeout=5)
 
 
+def test_live_measured_audio_failure_is_sent_back_to_scriptwriter(monkeypatch):
+    import script_writer
+
+    observed = {}
+    corrected = {
+        "headline": "Gill injury update",
+        "language_used": "hindi",
+        "story_angle": "selection uncertainty",
+        "titles": ["Gill update", "Selection question", "What happens next"],
+        "seo_description": "The latest confirmed cricket update.",
+        "hashtags": ["#Cricket"],
+        "comment": "Should India wait for the assessment?",
+        "script": [
+            {
+                "voiceover": "शुभमन गिल की फिटनेस पर चिंता है।",
+                "primary_entity": "शुभमन गिल",
+                "visual_intent": "शुभमन गिल cricket",
+                "specific_search_prompt": "शुभमन गिल India cricket",
+                "sport_or_topic_category": "Cricket",
+            },
+            {
+                "voiceover": "डॉक्टर उनकी स्थिति की समीक्षा कर रहे हैं।",
+                "primary_entity": "शुभमन गिल",
+                "visual_intent": "medical assessment",
+                "specific_search_prompt": "Shubman Gill medical assessment cricket",
+                "sport_or_topic_category": "Cricket",
+            },
+            {
+                "voiceover": "अगले मैच के लिए चयन अभी तय नहीं है।",
+                "primary_entity": "India cricket team",
+                "visual_intent": "India cricket team",
+                "specific_search_prompt": "India cricket team squad",
+                "sport_or_topic_category": "Cricket",
+            },
+        ],
+    }
+
+    def fake_write(cls, story, profile="cricket_india_asia", language="english", angle=None,
+                   research_source=None, search_query=None, **kwargs):
+        observed.update({
+            "language": language,
+            "angle": angle,
+            "feedback": kwargs.get("validation_feedback"),
+            "profile": profile,
+        })
+        return corrected
+
+    monkeypatch.setattr(script_writer.ScriptWriter, "write", classmethod(fake_write))
+    topic = Topic(
+        title="Shubman Gill injury update",
+        description="Gill is being assessed ahead of the next ODI.",
+        source="Test Source",
+        published_at=datetime.now(timezone.utc),
+        url="https://example.com/gill-injury",
+    )
+    original = {
+        **corrected,
+        "language_used": "hindi",
+        "script": [
+            {**scene, "voiceover": "शुभमन गिल की फिटनेस पर लंबी चिंता है, और चयन अभी तय नहीं है।"}
+            for scene in corrected["script"]
+        ],
+    }
+    at = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    at.session_state["app_mode"] = "live"
+    at.session_state["live_production_line"] = "deep_dive"
+    at.session_state["live_desk"] = "cricket"
+    at.session_state["live_cricket_profile"] = "cricket_india_asia"
+    at.session_state["live_topics_profile"] = "cricket_india_asia"
+    at.session_state["live_topics"] = [topic]
+    at.session_state["live_selected_topic"] = 0
+    at.session_state["live_stage"] = "03 · Audio + Subs"
+    at.session_state["live_script_language"] = "hindi"
+    at.session_state["live_script_data"] = original
+    at.session_state["live_approved_script"] = original
+    at.session_state["live_audio_engine_choice_v2"] = "Edge-TTS Neural"
+    at.session_state["live_audio_status"] = "failed"
+    at.session_state["live_audio_error"] = (
+        "Hindi/Telugu first-slide audio is 5.83s; it must be no more than 5.2 seconds. "
+        "Shorten Slide 1 in Scriptwriter and regenerate Audio."
+    )
+    at.session_state["live_handoff_error"] = at.session_state["live_audio_error"]
+    at.session_state["live_approved_audio"] = None
+    at.session_state["live_subtitle_data"] = None
+    at.session_state["live_universal_angle_source"] = "Confirmed source evidence for the injury update."
+    at.run()
+
+    assert not at.exception, at.exception
+    rewrite = next(
+        button for button in at.button
+        if button.label == "Rewrite Script for measured audio limits"
+    )
+    rewrite.click().run()
+    assert not at.exception, at.exception
+    assert observed["language"] == "hindi"
+    assert observed["angle"] == "selection uncertainty"
+    assert "5.83s" in observed["feedback"]
+    assert "5.2 seconds" in observed["feedback"]
+    assert observed["profile"] == "cricket_india_asia"
+    assert at.session_state["live_stage"] == "02 · Script"
+    assert at.session_state["live_approved_script"] is None
+    assert at.session_state["live_script_data"]["headline"] == "Gill injury update"
+
+
 def test_live_audio_runs_in_background_while_visual_qc_opens(monkeypatch):
     import audio
     import subtitles
