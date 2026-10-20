@@ -2168,7 +2168,21 @@ def write_script(
                 )
                 continue
 
-            rewritten = repaired
+            repaired_scenes = repaired.get("script") if isinstance(repaired, dict) else None
+            if (
+                not isinstance(repaired_scenes, list)
+                or not repaired_scenes
+                or not isinstance(repaired_scenes[0], dict)
+                or not _clean(repaired_scenes[0].get("voiceover"))
+            ):
+                repair_errors.append(
+                    f"{repair_model}: response did not contain a usable Slide 1 voiceover"
+                )
+                continue
+
+            # Apply only the repaired opening. Preserve every other field from the
+            # last validly structured draft instead of trusting model-side changes.
+            rewritten["script"][0]["voiceover"] = _clean(repaired_scenes[0]["voiceover"])
             valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
             if valid:
                 return finish(rewritten, repair_model)
