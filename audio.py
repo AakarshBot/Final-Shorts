@@ -34,7 +34,10 @@ MAX_CONCURRENCY = 2
 MAX_ATTEMPTS = 2
 MAX_DURATION_SECONDS = 30.0
 FIRST_SCENE_MAX_DURATION_SECONDS = 5.2
+INDIC_LEAD_CORRECTION_TARGET_SECONDS = 4.8
 CORRECTION_TARGET_SECONDS = 29.6
+MAX_CORRECTION_RATE_PERCENT = 45.0
+MAX_DELIVERY_CORRECTIONS = 3
 TOP5_SCENE_COUNT = 6
 TOP5_MAX_TOTAL_DURATION_SECONDS = 30.0
 TOP5_TOTAL_CORRECTION_TARGET_SECONDS = 29.6
@@ -978,22 +981,52 @@ def generate_audio(
     results = _call_rate(scenes, language, rate_percent, output_path, selected_voice)
     total = round(sum(float(item["duration"]) for item in results), 3)
     corrected = False
+    is_indic = language in {"hindi", "telugu"}
 
-    if total > MAX_DURATION_SECONDS:
-        multiplier = total / CORRECTION_TARGET_SECONDS
+    # Re-measure after every synthesis. A Hindi/Telugu lead can break 5.2s even
+    # when the full track is under 30s, so correct both constraints together.
+    for _attempt in range(MAX_DELIVERY_CORRECTIONS):
+        try:
+            first_duration = float(results[0].get("duration") or 0.0)
+        except (IndexError, TypeError, ValueError, AttributeError):
+            first_duration = 0.0
+        needs_total_correction = total > CORRECTION_TARGET_SECONDS
+        needs_lead_correction = (
+            is_indic and first_duration > INDIC_LEAD_CORRECTION_TARGET_SECONDS
+        )
+        if not needs_total_correction and not needs_lead_correction:
+            break
+
+        factors = [1.0]
+        if needs_total_correction:
+            factors.append(total / CORRECTION_TARGET_SECONDS)
+        if needs_lead_correction:
+            factors.append(first_duration / INDIC_LEAD_CORRECTION_TARGET_SECONDS)
+        multiplier = max(factors)
         adjusted = (
             (1.0 + rate_percent / 100.0) * multiplier - 1.0
         ) * 100.0
-        adjusted = min(100.0, max(rate_percent + 1.0, adjusted))
-        results = _call_rate(scenes, language, adjusted, output_path, selected_voice)
-        total = round(sum(float(item["duration"]) for item in results), 3)
+        adjusted = min(
+            MAX_CORRECTION_RATE_PERCENT,
+            max(rate_percent + 1.0, adjusted),
+        )
+        if adjusted <= rate_percent:
+            break
+
+        results = _call_rate(
+            scenes, language, round(adjusted, 2), output_path, selected_voice
+        )
         rate_percent = round(adjusted, 2)
+        total = round(sum(float(item["duration"]) for item in results), 3)
         corrected = True
-        if total > MAX_DURATION_SECONDS:
-            raise RuntimeError(
-                "Audio remains over 30 seconds after one measured speed correction "
-                f"({total:.2f}s)."
-            )
+
+    if total >= MAX_DURATION_SECONDS:
+        raise RuntimeError(
+            "Audio remains at or above the 30-second limit after "
+            f"{MAX_DELIVERY_CORRECTIONS} measured delivery corrections ({total:.2f}s). "
+            "The factory has kept the hard limit and stopped this take rather than exporting an overlength Short. "
+            "Reduce narration in Scriptwriter, then regenerate Audio."
+        )
 
     _validate_indic_first_scene_duration(results, language)
     return {
@@ -1140,8 +1173,8 @@ def approve_audio(audio: dict[str, Any]) -> dict[str, Any]:
         audio.get("scenes") or [],
         audio.get("language") or audio.get("language_used"),
     )
-    if total <= 0 or total > MAX_DURATION_SECONDS:
-        raise ValueError("Audio duration is outside the factory limit.")
+    if total <= 0 or total >= MAX_DURATION_SECONDS:
+        raise ValueError("Audio duration must be positive and strictly under 30 seconds.")
     for scene in audio["scenes"]:
         path = Path(scene.get("path", ""))
         if not path.exists() or path.stat().st_size <= 500:
