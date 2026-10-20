@@ -1237,6 +1237,13 @@ def test_test_audio_timing_rewrite_sends_error_and_rejected_narration(monkeypatc
     at.session_state["audio_engine_choice_v2"] = "Edge-TTS Neural"
     at.session_state["audio_language"] = "Hindi"
     at.session_state["test_universal_angle_source"] = "Fitness assessment remains pending."
+    at.session_state["test_universal_angles"] = [{
+        "title": "Selection uncertainty",
+        "description": "Will India wait for the fitness assessment?",
+        "evidence_basis": "The final fitness assessment is still pending.",
+    }]
+    at.session_state["test_universal_angle_selected"] = 0
+    at.session_state["test_universal_angle_custom"] = ""
     at.run()
 
     assert not at.exception, at.exception
@@ -1249,7 +1256,7 @@ def test_test_audio_timing_rewrite_sends_error_and_rejected_narration(monkeypatc
     assert not at.exception, at.exception
     assert observed["profile"] == "cricket_india_asia"
     assert observed["language"] == "hindi"
-    assert observed["angle"] == "selection uncertainty"
+    assert observed["angle"] == "Selection uncertainty: Will India wait for the fitness assessment?"
     assert "6.37s" in observed["feedback"]
     assert "5.2 seconds" in observed["feedback"]
     assert "Rejected narration that produced this audio" in observed["feedback"]
