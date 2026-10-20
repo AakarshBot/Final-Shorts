@@ -10,7 +10,7 @@ import os
 import re
 from html.parser import HTMLParser
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import quote_plus, urljoin, urlparse
 from xml.etree import ElementTree as ET
@@ -1910,7 +1910,9 @@ def ranked_visual_search(story):
 
 def _manual_cutoff_date(today=None):
     """Return the inclusive calendar date five years before today."""
-    current = today or datetime.now(timezone.utc).date()
+    current = today or datetime.now(timezone.utc).astimezone(
+        timezone(timedelta(hours=5, minutes=30))
+    ).date()
     try:
         return current.replace(year=current.year - MANUAL_LOOKBACK_YEARS)
     except ValueError:
