@@ -191,6 +191,7 @@ def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
             f"samples = {samples!r}",
             "for font_name, sample in samples:",
             "    font = ImageFont.truetype(os.path.join(root, 'fonts', font_name), 48, layout_engine=ImageFont.Layout.RAQM)",
+            "    assert font.layout_engine == ImageFont.Layout.RAQM, f'RAQM fell back to basic layout for {font_name}'",
             "    assert font.getmask(sample).getbbox() is not None, f'Indic glyph shaping returned an empty mask for {font_name}'",
         ))
         probe_env = os.environ.copy()
