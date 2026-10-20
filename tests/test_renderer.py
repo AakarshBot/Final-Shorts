@@ -1899,7 +1899,7 @@ def test_windows_raqm_prepare_isolated_pillow_when_active_build_has_no_raqm(monk
     monkeypatch.setattr(
         renderer,
         "_install_raqm_enabled_pillow",
-        lambda: installed.append("isolated-wheel") or (tmp_path / ".deps" / "raqm_pillow"),
+        lambda: installed.append("isolated-wheel") or (tmp_path / ".deps" / "raqm_pillow_11_3_0_cp311"),
     )
 
     with pytest.raises(RuntimeError, match="Run_Final_Shorts.bat"):
