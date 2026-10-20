@@ -22,6 +22,30 @@ _DLL_DIRECTORY_HANDLES = []
 _FRIBIDI_DLL_HANDLES = []
 _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED = False
 _WINDOWS_FRIBIDI_INSTALL_ERROR = ""
+_WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED = False
+_WINDOWS_RAQM_PILLOW_INSTALL_ERROR = ""
+_WINDOWS_RAQM_PILLOW_READY_FOR_RESTART = False
+
+
+def _bundled_raqm_pillow_directory(root: Path | None = None) -> Path:
+    """Return the isolated, factory-owned Pillow location used for Indic rendering."""
+    root = Path(root or Path(__file__).resolve().parent)
+    return root / ".deps" / "raqm_pillow"
+
+
+def _activate_bundled_raqm_pillow(root: Path | None = None) -> bool:
+    """Prefer a prepared RAQM-enabled Pillow wheel before this process imports PIL."""
+    target = _bundled_raqm_pillow_directory(root)
+    package = target / "PIL"
+    if not (package / "__init__.py").is_file():
+        return False
+    if not any(path.is_file() and path.name.startswith("_imagingft.") for path in package.iterdir()):
+        return False
+    target_string = str(target.resolve())
+    if target_string in sys.path:
+        sys.path.remove(target_string)
+    sys.path.insert(0, target_string)
+    return True
 
 
 def _windows_dll_search_directories(root: Path | None = None) -> tuple[Path, ...]:
@@ -71,6 +95,90 @@ def _register_windows_dll_paths() -> None:
         except (OSError, ValueError):
             continue
         _DLL_DIRECTORY_HANDLES.append(handle)
+
+
+def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
+    """Install an official RAQM-capable Pillow wheel into an isolated factory folder."""
+    root = Path(root or Path(__file__).resolve().parent)
+    target = _bundled_raqm_pillow_directory(root)
+    try:
+        shutil.rmtree(target, ignore_errors=True)
+        process = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "pip",
+                "install",
+                "--disable-pip-version-check",
+                "--no-input",
+                "--only-binary=:all:",
+                "--no-deps",
+                "--upgrade",
+                "--target",
+                str(target),
+                "Pillow>=10,<12",
+            ],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=240,
+            check=False,
+        )
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError("Preparing the isolated Pillow wheel exceeded 240 seconds.") from exc
+    except OSError as exc:
+        raise RuntimeError(f"Could not start the isolated Pillow installer: {exc}") from exc
+
+    if process.returncode != 0:
+        details = "\n".join(
+            part.strip() for part in (process.stdout, process.stderr) if part and part.strip()
+        )
+        if len(details) > 2500:
+            details = details[-2500:]
+        raise RuntimeError(
+            "Could not prepare a binary Pillow wheel with RAQM support. "
+            + (details or f"pip exited with code {process.returncode}.")
+        )
+
+    package = target / "PIL"
+    if not (package / "__init__.py").is_file() or not any(
+        path.is_file() and path.name.startswith("_imagingft.") for path in package.iterdir()
+    ):
+        raise RuntimeError("The isolated Pillow install did not contain the expected Pillow binaries.")
+
+    probe_code = (
+        "import os, sys; "
+        f"root = {str(root.resolve())!r}; target = {str(target.resolve())!r}; "
+        "dll_dir = os.path.join(root, 'dlls'); "
+        "dll_handle = os.add_dll_directory(dll_dir) if os.name == 'nt' and os.path.isdir(dll_dir) else None; "
+        "sys.path.insert(0, target); "
+        "from PIL import features; "
+        "raise SystemExit(0 if features.check_feature('raqm') else 37)"
+    )
+    try:
+        probe = subprocess.run(
+            [sys.executable, "-c", probe_code],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=30,
+            check=False,
+        )
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        raise RuntimeError(f"Could not verify RAQM in the isolated Pillow wheel: {exc}") from exc
+    if probe.returncode != 0:
+        details = "\n".join(
+            part.strip() for part in (probe.stdout, probe.stderr) if part and part.strip()
+        )
+        raise RuntimeError(
+            "The isolated Pillow wheel was installed, but it did not pass the RAQM capability check. "
+            + (details or f"RAQM probe exited with code {probe.returncode}.")
+        )
+    marker = target / "python_executable.txt"
+    marker.write_text(str(sys.executable), encoding="utf-8")
+    return target
 
 
 def _install_windows_fribidi_via_powershell(root: Path | None = None) -> None:
@@ -142,6 +250,7 @@ def _install_windows_fribidi_via_powershell(root: Path | None = None) -> None:
         )
 
 
+_activate_bundled_raqm_pillow()
 _register_windows_dll_paths()
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
@@ -323,6 +432,8 @@ def _activate_windows_fribidi(root: Path | None = None) -> str:
 def _require_raqm(language: str) -> None:
     """Require working RAQM shaping, installing the verified Windows DLL when needed."""
     global _WINDOWS_FRIBIDI_INSTALL_ATTEMPTED, _WINDOWS_FRIBIDI_INSTALL_ERROR
+    global _WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED
+    global _WINDOWS_RAQM_PILLOW_INSTALL_ERROR, _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART
     language_key = _normalise_indic_language(language)
     _register_windows_dll_paths()
     activation_error = _activate_windows_fribidi() if os.name == "nt" else ""
@@ -360,6 +471,41 @@ def _require_raqm(language: str) -> None:
             _WINDOWS_FRIBIDI_INSTALL_ERROR = (
                 f"{setup_error} Final RAQM probe: {probe_error}"
             )
+
+    if (
+        os.name == "nt"
+        and not available
+        and "does not report RAQM support" in probe_error
+    ):
+        if _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART:
+            raise RuntimeError(
+                "The factory has prepared an isolated, RAQM-enabled Pillow wheel in "
+                ".deps/raqm_pillow. Fully close every Final-Shorts / Streamlit process, then start it with Run_Final_Shorts.bat so "
+                "the new Pillow loads before any image libraries; then retry the Hindi/Telugu text."
+            )
+        if not _WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED:
+            _WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED = True
+            try:
+                target = _install_raqm_enabled_pillow()
+                _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART = True
+                _WINDOWS_RAQM_PILLOW_INSTALL_ERROR = (
+                    f"Prepared isolated Pillow at {target}. A full factory restart is required."
+                )
+            except Exception as exc:
+                _WINDOWS_RAQM_PILLOW_INSTALL_ERROR = str(exc)
+        if _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART:
+            raise RuntimeError(
+                "Your currently active Pillow build was compiled without RAQM, so installing FriBiDi "
+                "alone cannot enable Indic text. The factory has now prepared an isolated, RAQM-enabled "
+                "Pillow wheel under .deps/raqm_pillow. Fully close every Final-Shorts / Streamlit process, then use Run_Final_Shorts.bat, "
+                "then retry your Hindi/Telugu Text Subject Cutout. No manual pip install or DLL copying "
+                "is required."
+            )
+        if _WINDOWS_RAQM_PILLOW_INSTALL_ERROR:
+            setup_error = (
+                f"{setup_error} Isolated RAQM-enabled Pillow setup: "
+                f"{_WINDOWS_RAQM_PILLOW_INSTALL_ERROR}"
+            ).strip()
 
     extra = ""
     if setup_error:

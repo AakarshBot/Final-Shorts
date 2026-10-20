@@ -135,8 +135,38 @@ try {
     if (-not (Test-Path -LiteralPath $SourceLicense -PathType Leaf)) { throw "The verified archive did not contain the FriBiDi license." }
 
     New-Item -ItemType Directory -Force -Path $DllDirectory | Out-Null
-    Copy-Item -LiteralPath $SourceDll -Destination (Join-Path $DllDirectory "libfribidi-0.dll") -Force
-    Copy-Item -LiteralPath $SourceLicense -Destination (Join-Path $DllDirectory "FRIBIDI-COPYING.txt") -Force
+    $TargetDll = Join-Path $DllDirectory "libfribidi-0.dll"
+    $SourceDllHash = (Get-FileHash -Path $SourceDll -Algorithm SHA256).Hash.ToLowerInvariant()
+    $CopyDll = $true
+
+    if (Test-Path -LiteralPath $TargetDll -PathType Leaf) {
+        try {
+            $TargetDllHash = (Get-FileHash -Path $TargetDll -Algorithm SHA256).Hash.ToLowerInvariant()
+            if ($TargetDllHash -eq $SourceDllHash) {
+                Write-Host "The existing factory FriBiDi DLL matches the checksum-verified package; leaving it in place."
+                $CopyDll = $false
+            }
+        } catch {
+            Write-Warning "Could not hash the existing FriBiDi DLL while it is in use; attempting a verified replacement."
+        }
+    }
+
+    if ($CopyDll) {
+        try {
+            Copy-Item -LiteralPath $SourceDll -Destination $TargetDll -Force
+        } catch {
+            throw (
+                "Could not replace dlls\\libfribidi-0.dll. It may be loaded by another running Final-Shorts process. " +
+                "Close every Final-Shorts / Streamlit process and restart the factory, then retry. " +
+                "Original error: $($_.Exception.Message)"
+            )
+        }
+    }
+
+    $TargetLicense = Join-Path $DllDirectory "FRIBIDI-COPYING.txt"
+    if (-not (Test-Path -LiteralPath $TargetLicense -PathType Leaf)) {
+        Copy-Item -LiteralPath $SourceLicense -Destination $TargetLicense -Force
+    }
     Write-Host ""
     Write-Host "Finished. Close Final-Shorts / Streamlit, then restart the factory."
     Write-Host "The renderer will find dlls\libfribidi-0.dll automatically."
