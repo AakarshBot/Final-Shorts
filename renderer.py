@@ -16,6 +16,9 @@ import time
 import warnings
 from functools import lru_cache
 from itertools import combinations
+import sysconfig
+import zipfile
+from urllib.request import urlopen
 
 
 _DLL_DIRECTORY_HANDLES = []
@@ -28,18 +31,25 @@ _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART = False
 
 
 def _bundled_raqm_pillow_directory(root: Path | None = None) -> Path:
-    """Return the isolated, factory-owned Pillow location used for Indic rendering."""
+    """Return the versioned, isolated Pillow build compiled with RAQM for CPython 3.11."""
     root = Path(root or Path(__file__).resolve().parent)
-    return root / ".deps" / "raqm_pillow"
+    return root / ".deps" / "raqm_pillow_11_3_0_cp311"
 
 
 def _activate_bundled_raqm_pillow(root: Path | None = None) -> bool:
     """Prefer a prepared RAQM-enabled Pillow wheel before this process imports PIL."""
     target = _bundled_raqm_pillow_directory(root)
     package = target / "PIL"
-    if not (package / "__init__.py").is_file():
+    marker = target / "python_executable.txt"
+    if not marker.is_file() or not (package / "__init__.py").is_file():
         return False
     if not any(path.is_file() and path.name.startswith("_imagingft.") for path in package.iterdir()):
+        return False
+    try:
+        recorded_python = Path(marker.read_text(encoding="utf-8").strip()).resolve()
+        if recorded_python != Path(sys.executable).resolve():
+            return False
+    except (OSError, ValueError):
         return False
     target_string = str(target.resolve())
     if target_string in sys.path:
@@ -57,7 +67,12 @@ def _windows_dll_search_directories(root: Path | None = None) -> tuple[Path, ...
     if configured.strip():
         configured_path = Path(configured.strip().strip('"'))
         paths.append(configured_path.parent if configured_path.suffix.casefold() == ".dll" else configured_path)
+    raqm_pillow = _bundled_raqm_pillow_directory(root)
     paths.extend((
+        raqm_pillow,
+        raqm_pillow / "PIL",
+        raqm_pillow / "pillow.libs",
+        raqm_pillow / "PIL" / ".libs",
         root / "dlls",
         root / ".deps",
         root / "vendor" / "dlls",
@@ -98,87 +113,107 @@ def _register_windows_dll_paths() -> None:
 
 
 def _install_raqm_enabled_pillow(root: Path | None = None) -> Path:
-    """Install an official RAQM-capable Pillow wheel into an isolated factory folder."""
+    """Download and verify the factory's custom Pillow wheel built with vendored RAQM."""
     root = Path(root or Path(__file__).resolve().parent)
+    if sys.version_info[:2] != (3, 11) or sysconfig.get_platform().replace("-", "_") != "win_amd64":
+        raise RuntimeError(
+            "The verified RAQM-enabled Pillow build currently targets 64-bit CPython 3.11 on Windows. "
+            "The active interpreter is not that build target."
+        )
+
+    dependency_root = root / ".deps"
+    dependency_root.mkdir(parents=True, exist_ok=True)
     target = _bundled_raqm_pillow_directory(root)
-    try:
-        shutil.rmtree(target, ignore_errors=True)
-        process = subprocess.run(
-            [
-                sys.executable,
-                "-m",
-                "pip",
-                "install",
-                "--disable-pip-version-check",
-                "--no-input",
-                "--only-binary=:all:",
-                "--no-deps",
-                "--upgrade",
-                "--target",
-                str(target),
-                "Pillow>=10,<12",
-            ],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=240,
-            check=False,
-        )
-    except subprocess.TimeoutExpired as exc:
-        raise RuntimeError("Preparing the isolated Pillow wheel exceeded 240 seconds.") from exc
-    except OSError as exc:
-        raise RuntimeError(f"Could not start the isolated Pillow installer: {exc}") from exc
-
-    if process.returncode != 0:
-        details = "\n".join(
-            part.strip() for part in (process.stdout, process.stderr) if part and part.strip()
-        )
-        if len(details) > 2500:
-            details = details[-2500:]
-        raise RuntimeError(
-            "Could not prepare a binary Pillow wheel with RAQM support. "
-            + (details or f"pip exited with code {process.returncode}.")
-        )
-
-    package = target / "PIL"
-    if not (package / "__init__.py").is_file() or not any(
-        path.is_file() and path.name.startswith("_imagingft.") for path in package.iterdir()
-    ):
-        raise RuntimeError("The isolated Pillow install did not contain the expected Pillow binaries.")
-
-    probe_code = (
-        "import os, sys; "
-        f"root = {str(root.resolve())!r}; target = {str(target.resolve())!r}; "
-        "dll_dir = os.path.join(root, 'dlls'); "
-        "dll_handle = os.add_dll_directory(dll_dir) if os.name == 'nt' and os.path.isdir(dll_dir) else None; "
-        "sys.path.insert(0, target); "
-        "from PIL import features; "
-        "raise SystemExit(0 if features.check_feature('raqm') else 37)"
+    filename = "pillow-11.3.0-cp311-cp311-win_amd64.whl"
+    release_root = (
+        "https://github.com/AakarshBot/Final-Shorts/releases/download/"
+        "raqm-pillow-windows-v1"
     )
+    wheel_url = f"{release_root}/{filename}"
+    checksum_url = f"{wheel_url}.sha256"
+    staging = Path(tempfile.mkdtemp(prefix="raqm-pillow-staging-", dir=str(dependency_root)))
+
     try:
-        probe = subprocess.run(
-            [sys.executable, "-c", probe_code],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=30,
-            check=False,
+        try:
+            with urlopen(wheel_url, timeout=90) as response:
+                wheel_bytes = response.read()
+            with urlopen(checksum_url, timeout=30) as response:
+                checksum_text = response.read().decode("ascii", errors="strict").strip()
+        except Exception as exc:
+            raise RuntimeError(
+                "Could not download the RAQM-enabled Pillow build from the factory's verified release. "
+                "Make sure the local checkout is updated to the latest main and retry."
+            ) from exc
+
+        checksum_fields = checksum_text.split()
+        expected_sha256 = checksum_fields[0].casefold() if checksum_fields else ""
+        actual_sha256 = hashlib.sha256(wheel_bytes).hexdigest()
+        if len(expected_sha256) != 64 or any(char not in "0123456789abcdef" for char in expected_sha256):
+            raise RuntimeError("The RAQM Pillow release did not provide a valid SHA-256 checksum.")
+        if actual_sha256 != expected_sha256:
+            raise RuntimeError(
+                "The downloaded RAQM-enabled Pillow wheel failed SHA-256 verification; it was not installed."
+            )
+
+        try:
+            with zipfile.ZipFile(BytesIO(wheel_bytes)) as archive:
+                staging_resolved = staging.resolve()
+                for member in archive.infolist():
+                    extracted = (staging / member.filename).resolve()
+                    if not extracted.is_relative_to(staging_resolved):
+                        raise RuntimeError("The RAQM Pillow wheel contains an unsafe archive path.")
+                archive.extractall(staging)
+        except (OSError, zipfile.BadZipFile) as exc:
+            raise RuntimeError("The verified Pillow wheel could not be unpacked.") from exc
+
+        package = staging / "PIL"
+        if not (package / "__init__.py").is_file() or not any(
+            path.is_file() and path.name.startswith("_imagingft.") for path in package.iterdir()
+        ):
+            raise RuntimeError("The verified Pillow wheel did not contain the expected Windows binaries.")
+
+        font_name, sample = ("NotoSansDevanagari-Bold.ttf", "क्षेत्र की उपलब्धि")
+        probe_code = (
+            "import os, sys; "
+            f"root = {str(root.resolve())!r}; target = {str(staging.resolve())!r}; "
+            "dll_dirs = [os.path.join(root, 'dlls'), os.path.join(target, 'PIL'), "
+            "os.path.join(target, 'pillow.libs'), os.path.join(target, 'PIL', '.libs')]; "
+            "handles = [os.add_dll_directory(p) for p in dll_dirs if os.name == 'nt' and os.path.isdir(p)]; "
+            "sys.path.insert(0, target); "
+            "from PIL import features, ImageFont; "
+            "assert features.check_feature('raqm') is True, 'Pillow was not compiled with RAQM'; "
+            f"font = ImageFont.truetype(os.path.join(root, 'fonts', {font_name!r}), 48, layout_engine=ImageFont.Layout.RAQM); "
+            f"assert font.getmask({sample!r}).getbbox() is not None, 'Indic glyph shaping returned an empty mask'"
         )
-    except (OSError, subprocess.TimeoutExpired) as exc:
-        raise RuntimeError(f"Could not verify RAQM in the isolated Pillow wheel: {exc}") from exc
-    if probe.returncode != 0:
-        details = "\n".join(
-            part.strip() for part in (probe.stdout, probe.stderr) if part and part.strip()
-        )
-        raise RuntimeError(
-            "The isolated Pillow wheel was installed, but it did not pass the RAQM capability check. "
-            + (details or f"RAQM probe exited with code {probe.returncode}.")
-        )
-    marker = target / "python_executable.txt"
-    marker.write_text(str(sys.executable), encoding="utf-8")
-    return target
+        try:
+            probe = subprocess.run(
+                [sys.executable, "-c", probe_code],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=45,
+                check=False,
+            )
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            raise RuntimeError(f"Could not run the real RAQM/Pillow verification: {exc}") from exc
+        if probe.returncode != 0:
+            details = "\n".join(
+                part.strip() for part in (probe.stdout, probe.stderr) if part and part.strip()
+            )
+            raise RuntimeError(
+                "The downloaded Pillow wheel did not pass the real RAQM and Indic font-shaping test. "
+                + (details or f"RAQM probe exited with code {probe.returncode}.")
+            )
+
+        (staging / "python_executable.txt").write_text(str(sys.executable), encoding="utf-8")
+        if target.exists():
+            shutil.rmtree(target)
+        staging.replace(target)
+        return target
+    finally:
+        if staging.exists():
+            shutil.rmtree(staging, ignore_errors=True)
 
 
 def _install_windows_fribidi_via_powershell(root: Path | None = None) -> None:
@@ -480,7 +515,7 @@ def _require_raqm(language: str) -> None:
         if _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART:
             raise RuntimeError(
                 "The factory has prepared an isolated, RAQM-enabled Pillow wheel in "
-                ".deps/raqm_pillow. Fully close every Final-Shorts / Streamlit process, then start it with Run_Final_Shorts.bat so "
+                ".deps/raqm_pillow_11_3_0_cp311. Fully close every Final-Shorts / Streamlit process, then start it with Run_Final_Shorts.bat so "
                 "the new Pillow loads before any image libraries; then retry the Hindi/Telugu text."
             )
         if not _WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED:
@@ -495,11 +530,11 @@ def _require_raqm(language: str) -> None:
                 _WINDOWS_RAQM_PILLOW_INSTALL_ERROR = str(exc)
         if _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART:
             raise RuntimeError(
-                "Your currently active Pillow build was compiled without RAQM, so installing FriBiDi "
-                "alone cannot enable Indic text. The factory has now prepared an isolated, RAQM-enabled "
-                "Pillow wheel under .deps/raqm_pillow. Fully close every Final-Shorts / Streamlit process, then use Run_Final_Shorts.bat, "
-                "then retry your Hindi/Telugu Text Subject Cutout. No manual pip install or DLL copying "
-                "is required."
+                "Your currently active Pillow build was compiled without RAQM. The factory has downloaded a "
+                "SHA-256-verified custom Windows Pillow wheel compiled with vendored RAQM and validated actual "
+                "Hindi font shaping. Fully close every Final-Shorts / Streamlit process, then use "
+                "Run_Final_Shorts.bat and retry your Hindi/Telugu Text Subject Cutout. No manual pip install "
+                "or DLL copying is required."
             )
         if _WINDOWS_RAQM_PILLOW_INSTALL_ERROR:
             setup_error = (
@@ -516,11 +551,10 @@ def _require_raqm(language: str) -> None:
     raise RuntimeError(
         f"{language_key.title()} text needs a working Pillow RAQM text-shaping engine. "
         "Rendering has been stopped rather than producing incorrectly joined letters. "
-        "The factory now tests the actual bundled Noto font and Indic glyph shaping, not only Pillow's feature flag. "
-        "On Windows it automatically runs the checksum-verified, no-pip FriBiDi installer once per factory session, "
-        "loads the DLL from the factory's dlls folder, and verifies shaping again. "
-        "No manual pip installation or file copying is required; close and restart the factory only if the "
-        "runtime was installed after the process started."
+        "The factory tests both Pillow's compiled RAQM support and actual bundled Noto-font shaping. "
+        "On Windows it installs the checksum-verified FriBiDi runtime and, when standard Pillow lacks RAQM, "
+        "downloads the factory's custom RAQM-enabled wheel and verifies real Indic glyph shaping before accepting it. "
+        "No global pip installation or manual DLL copying is required."
         + extra
     )
 
