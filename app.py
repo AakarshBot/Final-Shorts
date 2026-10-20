@@ -10315,6 +10315,11 @@ def render_audio():
                     failed_language = str(
                         failed_script.get("language_used") or language.casefold()
                     ).strip().casefold()
+                    st.session_state.script_language = {
+                        "english": "English",
+                        "hindi": "Hindi",
+                        "telugu": "Telugu",
+                    }.get(failed_language, "English")
                     failed_scenes = failed_script.get("script") or []
                     rejected_narration = [
                         str(scene.get("voiceover") or "").strip()
