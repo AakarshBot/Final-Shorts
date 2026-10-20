@@ -64,10 +64,22 @@ VOICES = {
 }
 
 
+def _language_key(language: str | None) -> str:
+    """Canonicalise language names and BCP-47-style tags for voice/timing rules."""
+    key = str(language or "english").strip().casefold().replace("_", "-") or "english"
+    if key in {"hindi", "hi"} or key.startswith("hi-"):
+        return "hindi"
+    if key in {"telugu", "te"} or key.startswith("te-"):
+        return "telugu"
+    if key in {"english", "en"} or key.startswith("en-"):
+        return "english"
+    return key
+
+
 def resolve_voice(language: str, gender: str | None = None, voice: str | None = None) -> str:
     if voice:
         return voice
-    lang_key = str(language or "english").strip().casefold()
+    lang_key = _language_key(language)
     if gender and lang_key in VOICE_ROSTER:
         gender_key = str(gender).strip().casefold()
         if gender_key in VOICE_ROSTER[lang_key]:
@@ -963,8 +975,8 @@ def _use_chatterbox_engine(engine: str | None, voice: str | None, handoff: dict[
 
 def _validate_indic_first_scene_duration(scenes: list[dict[str, Any]], language: str | None) -> None:
     """Use measured TTS timing, not whitespace-token counts, for an Indic lead."""
-    language_key = str(language or "").strip().casefold()
-    if language_key not in {"hindi", "telugu", "hi", "te"}:
+    language_key = _language_key(language)
+    if language_key not in {"hindi", "telugu"}:
         return
     if not isinstance(scenes, list) or not scenes or not isinstance(scenes[0], dict):
         raise ValueError("Hindi/Telugu first-slide audio duration could not be measured.")
@@ -1016,9 +1028,9 @@ def generate_audio(
         )
         return result
 
-    language = str(
+    language = _language_key(
         approved_script.get("language_used") or "english"
-    ).strip().casefold()
+    )
     if language not in VOICES:
         raise ValueError(f"Unsupported audio language: {language}")
 

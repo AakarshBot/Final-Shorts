@@ -4141,6 +4141,9 @@ def _render_app_sidebar():
             )
             labels = [stage["key"] for stage in STAGES]
             current = st.session_state.test_stage
+            previously_rendered = st.session_state.get("_test_stage_switcher_rendered_stage")
+            if previously_rendered is not None and current != previously_rendered:
+                st.session_state["test-stage-switcher"] = current
             selected = st.pills(
                 "Pipeline",
                 labels,
@@ -4152,6 +4155,48 @@ def _render_app_sidebar():
             if selected != st.session_state.test_stage:
                 st.session_state.test_stage = selected
                 st.session_state.test_pipeline_notice = None
+            st.session_state["_test_stage_switcher_rendered_stage"] = st.session_state.test_stage
+        elif (
+            st.session_state.app_mode == "live"
+            and st.session_state.live_production_line not in {None, "top_5", "otd"}
+        ):
+            live_topics = st.session_state.get("live_topics") or []
+            live_selected = st.session_state.get("live_selected_topic")
+            if isinstance(live_selected, int) and 0 <= live_selected < len(live_topics):
+                live_labels = [
+                    "01 · Story",
+                    "02 · Script",
+                    "03 · Audio + Subs",
+                    "04 · Visuals + Render",
+                    "05 · Upload",
+                ]
+                current = st.session_state.get("live_stage") or live_labels[0]
+                if current not in live_labels:
+                    current = live_labels[0]
+                previously_rendered = st.session_state.get("_live_stage_switcher_rendered_stage")
+                if previously_rendered is not None and current != previously_rendered:
+                    st.session_state["live-stage-switcher"] = current
+                st.markdown(
+                    '<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 6px 0;">'
+                    '<span class="eyebrow" style="color:var(--accent);font-size:0.65rem;">LIVE · PRODUCTION PIPELINE</span>'
+                    '<span style="font-size:0.68rem;color:var(--subtle);font-weight:650;">Independent Stage Navigation</span>'
+                    '</div>',
+                    unsafe_allow_html=True,
+                )
+                selected = st.pills(
+                    "Live pipeline",
+                    live_labels,
+                    default=current,
+                    format_func=lambda value: f'{value.split(" · ")[0]}  {value.split(" · ")[-1]}',
+                    key="live-stage-switcher",
+                    label_visibility="collapsed",
+                ) or current
+                if selected != st.session_state.get("live_stage"):
+                    st.session_state.live_stage = selected
+                    st.session_state.live_pipeline_notice = None
+                    st.session_state["_live_stage_switcher_rendered_stage"] = selected
+                    st.rerun()
+                st.session_state["_live_stage_switcher_rendered_stage"] = st.session_state.live_stage
 
 
 def _longform_live_reset_downstream():
@@ -4329,6 +4374,15 @@ def _script_for_topic(
         research_source=research_source,
         search_query=search_query,
         validation_feedback=validation_feedback,
+    )
+
+
+def _is_indic_language(language: str | None) -> bool:
+    """Treat language names and locale tags consistently in dashboard checks."""
+    key = str(language or "").strip().casefold().replace("_", "-")
+    return (
+        key in {"hindi", "hi", "telugu", "te"}
+        or key.startswith(("hi-", "te-"))
     )
 
 
@@ -5985,7 +6039,7 @@ def _render_live_script():
             lead_language_live = str(
                 script.get("language_used") or st.session_state.get("live_script_language", "english")
             ).strip().casefold()
-            if index == 1 and lead_language_live in {"hindi", "telugu", "hi", "te"}:
+            if index == 1 and _is_indic_language(lead_language_live):
                 meter_badge = '<span style="font-size:0.72rem; font-weight:700; color:var(--muted); background:var(--surface-soft); padding:3px 8px; border-radius:6px; border:1px solid var(--line);">Hindi/Telugu lead: measured audio ≤5.2s</span>'
             elif index == 1:
                 if word_count <= 13:
@@ -7561,6 +7615,9 @@ def render_live_dashboard():
 
     if st.session_state.live_stage == "04 · Visuals + Render":
         script = st.session_state.live_approved_script or st.session_state.live_script_data
+        if not isinstance(script, dict) or not isinstance(script.get("script"), list) or not script["script"]:
+            st.warning("Generate a Scriptwriter result first. The Live Visuals function is available independently once a story script exists.")
+            return
         if (
             st.session_state.get("live_visual_result") is None
             and st.session_state.get("live_visual_status", "idle") == "idle"
@@ -8871,6 +8928,16 @@ def render_scriptwriter():
     with top_left:
         language=st.pills("Language",["English","Hindi","Telugu"],default="English",key="script_language",label_visibility="collapsed") or "English"
 
+    retry_key = "test_scriptwriter_retry"
+    retry_state = st.session_state.get(retry_key)
+    language_key = language.casefold().replace("_", "-")
+    if isinstance(retry_state, dict) and (
+        retry_state.get("story_key") != story_key
+        or retry_state.get("language") != language_key
+    ):
+        st.session_state.pop(retry_key, None)
+        retry_state = None
+
     if st.session_state.get("test_universal_angle_story_key") != story_key:
         st.session_state.test_universal_angles = None
         st.session_state.test_universal_angle_source = None
@@ -8899,6 +8966,13 @@ def render_scriptwriter():
                 except Exception as exc:
                     st.error(f"Scriptwriter failed: {type(exc).__name__}: {exc}")
     else:
+        retry_state = st.session_state.get(retry_key)
+        if isinstance(retry_state, dict) and retry_state.get("feedback"):
+            st.warning(
+                "The last Scriptwriter attempt failed. The next attempt will receive that exact error and "
+                "the rejected narration again when you regenerate from the same angle."
+            )
+            st.caption(str(retry_state["feedback"])[:1400])
         selected_angle = _render_universal_angle_picker(
             st.session_state.test_universal_angles,
             selected_key="test_universal_angle_selected",
@@ -8911,9 +8985,20 @@ def render_scriptwriter():
                 *(f"script-slide-{story_key}-{index}" for index in range(1, 7)),
             ):
                 st.session_state.pop(key, None)
+            retry_state = st.session_state.get(retry_key)
+            retry_feedback = None
+            if isinstance(retry_state, dict):
+                if (
+                    retry_state.get("story_key") == story_key
+                    and retry_state.get("language") == language_key
+                    and retry_state.get("angle") == selected_angle
+                ):
+                    retry_feedback = str(retry_state.get("feedback") or "").strip() or None
+                else:
+                    st.session_state.pop(retry_key, None)
             try:
                 with st.spinner("Writing the Short from the selected angle…"):
-                    st.session_state.script_data = _script_for_topic(
+                    generated_script = _script_for_topic(
                         topic,
                         st.session_state.get("topic_desk_profile") or "",
                         language.casefold(),
@@ -8921,10 +9006,22 @@ def render_scriptwriter():
                         angle=selected_angle,
                         research_source=st.session_state.test_universal_angle_source,
                         search_query=search_query,
+                        validation_feedback=retry_feedback,
                     )
+                    st.session_state.script_data = generated_script
             except Exception as exc:
-                st.error(f"Scriptwriter failed: {type(exc).__name__}: {exc}")
+                failure = f"{type(exc).__name__}: {exc}"
+                st.session_state[retry_key] = {
+                    "story_key": story_key,
+                    "language": language_key,
+                    "angle": selected_angle,
+                    "feedback": failure,
+                }
+                st.error(f"Scriptwriter failed: {failure}")
             else:
+                st.session_state.pop(retry_key, None)
+                st.session_state.test_audio_error = ""
+                st.session_state.test_audio_failed_script = None
                 st.session_state.approved_script=None
                 st.session_state.audio_data=None
                 st.session_state.approved_audio=None
@@ -9026,7 +9123,7 @@ def render_scriptwriter():
                 role = scene.get("narrative_role") or scene_roles.get(index, f"SCENE {index}")
 
                 lead_language_test = str(script.get("language_used") or language).strip().casefold()
-                if index == 1 and lead_language_test in {"hindi", "telugu", "hi", "te"}:
+                if index == 1 and _is_indic_language(lead_language_test):
                     meter_badge = '<span style="font-size:0.72rem; font-weight:700; color:var(--muted); background:var(--surface-soft); padding:3px 8px; border-radius:6px; border:1px solid var(--line);">Hindi/Telugu lead: measured audio ≤5.2s</span>'
                 elif index == 1:
                     if word_count <= 13:
@@ -10180,9 +10277,150 @@ def render_audio():
                     )
                     st.session_state.approved_audio=None
                 except (RuntimeError,ValueError) as exc:
-                    st.error(str(exc)); st.session_state.audio_data=None; st.session_state.approved_audio=None
+                    st.session_state.test_audio_error = str(exc)
+                    st.session_state.test_audio_failed_script = dict(selected)
+                    st.session_state.audio_data=None
+                    st.session_state.approved_audio=None
+                else:
+                    st.session_state.test_audio_error = ""
+                    st.session_state.test_audio_failed_script = None
             st.session_state.subtitle_data=None
             st.session_state.approved_subtitles=None
+
+        audio_failure = str(st.session_state.get("test_audio_error") or "").strip()
+        if audio_failure:
+            st.error(audio_failure)
+            timing_error_text = audio_failure.casefold()
+            if any(
+                marker in timing_error_text
+                for marker in (
+                    "30-second",
+                    "30 seconds",
+                    "5.2 seconds",
+                    "first-slide audio",
+                    "narration is too long",
+                    "too long to fit",
+                    "reduce narration in scriptwriter",
+                )
+            ):
+                st.caption(
+                    "This failure came from measured audio. Send the duration error and the exact rejected narration "
+                    "back to Scriptwriter; the replacement still needs manual QC."
+                )
+                if st.button(
+                    "Rewrite Script for measured audio limits",
+                    type="primary",
+                    width="stretch",
+                    key="test-regenerate-script-from-audio-error",
+                ):
+                    failed_script = st.session_state.get("test_audio_failed_script") or script
+                    selected_index = st.session_state.get("selected_topic")
+                    topics = st.session_state.get("topics") or []
+                    retry_topic = (
+                        topics[selected_index]
+                        if isinstance(selected_index, int) and 0 <= selected_index < len(topics)
+                        else None
+                    )
+                    failed_language = str(
+                        failed_script.get("language_used") or language.casefold()
+                    ).strip().casefold()
+                    st.session_state.script_language = {
+                        "english": "English",
+                        "hindi": "Hindi",
+                        "telugu": "Telugu",
+                    }.get(failed_language, "English")
+                    failed_scenes = failed_script.get("script") or []
+                    rejected_narration = [
+                        str(scene.get("voiceover") or "").strip()
+                        for scene in failed_scenes
+                        if isinstance(scene, dict) and str(scene.get("voiceover") or "").strip()
+                    ]
+                    feedback = audio_failure
+                    if rejected_narration:
+                        feedback += (
+                            "\nRejected narration that produced this audio (JSON, same slide order): "
+                            + json.dumps(rejected_narration, ensure_ascii=False)
+                        )
+                    angle = str(st.session_state.get("test_universal_angle_custom") or "").strip()
+                    if not angle:
+                        available_angles = st.session_state.get("test_universal_angles") or []
+                        angle_index = st.session_state.get("test_universal_angle_selected", 0)
+                        if isinstance(angle_index, int) and 0 <= angle_index < len(available_angles):
+                            selected_angle_data = available_angles[angle_index]
+                            if isinstance(selected_angle_data, dict):
+                                angle = (
+                                    f'{str(selected_angle_data.get("title") or "").strip()}: '
+                                    f'{str(selected_angle_data.get("description") or "").strip()}'
+                                ).strip(": ")
+                    if not angle:
+                        angle = str(failed_script.get("story_angle") or "").strip()
+                    research_source = st.session_state.get("test_universal_angle_source")
+                    desk_profile = st.session_state.get("topic_desk_profile") or (
+                        "youtube_trends"
+                        if st.session_state.get("test_production_line") == "youtube_trends"
+                        else "cricket_india_asia"
+                    )
+                    retry_universal = (
+                        st.session_state.get("test_production_line") in {"youtube_trends", "otd"}
+                        or desk_profile in {"niche_sports", "otd"}
+                    )
+                    retry_search_query = (
+                        st.session_state.get("youtube_trend_search_query")
+                        if st.session_state.get("test_production_line") == "youtube_trends"
+                        else None
+                    )
+                    story_key = _live_story_key(retry_topic) if retry_topic is not None else ""
+                    st.session_state.approved_script = None
+                    st.session_state.audio_data = None
+                    st.session_state.approved_audio = None
+                    st.session_state.subtitle_data = None
+                    st.session_state.approved_subtitles = None
+                    st.session_state.renderer_previews = None
+                    st.session_state.rendered_video_path = None
+                    st.session_state.upload_qc_approved = False
+                    st.session_state.upload_result = None
+                    st.session_state.upload_qc = None
+                    st.session_state.test_stage = "02 · Scriptwriter"
+                    try:
+                        if retry_topic is None:
+                            raise ValueError("Select the original story again before rewriting the script.")
+                        with st.spinner("Rewriting the script against the measured audio failure…"):
+                            revised_script = _script_for_topic(
+                                retry_topic,
+                                desk_profile,
+                                failed_language,
+                                universal=retry_universal,
+                                angle=angle,
+                                research_source=research_source,
+                                search_query=retry_search_query,
+                                validation_feedback=feedback,
+                            )
+                    except Exception as exc:
+                        retry_feedback = (
+                            f"{type(exc).__name__}: {exc}\n"
+                            "The previous audio attempt also failed this measured limit:\n"
+                            + feedback
+                        )
+                        st.session_state["test_scriptwriter_retry"] = {
+                            "story_key": story_key,
+                            "language": failed_language.replace("_", "-"),
+                            "angle": angle or "",
+                            "feedback": retry_feedback,
+                        }
+                        st.session_state.test_pipeline_notice = {
+                            "confirmed": "Scriptwriter retry needs attention",
+                            "next": "The measured audio failure and rejected narration are saved for the next attempt.",
+                        }
+                    else:
+                        st.session_state.script_data = revised_script
+                        st.session_state.pop("test_scriptwriter_retry", None)
+                        st.session_state.test_audio_error = ""
+                        st.session_state.test_audio_failed_script = None
+                        st.session_state.test_pipeline_notice = {
+                            "confirmed": "Measured audio failure sent to Scriptwriter",
+                            "next": "Review and approve the replacement script before generating Audio again.",
+                        }
+                    st.rerun()
 
         with st.expander("🎙️ Human voiceover / mic upload (per-scene override)", expanded=False):
             st.caption("Upload an MP3/WAV file to override TTS for any scene. Word timings will be synthesized linearly.")
