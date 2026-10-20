@@ -261,6 +261,7 @@ def test_writer_hidden_rewrite_fixes_indic_timing_preflight(monkeypatch):
         "Shubman Gill faces a fresh injury scare before India's next ODI against England"
     )
     concise = valid_result("Shubman Gill faces an injury scare.")
+    concise["script"][3]["voiceover"] = "Availability depends on the medical report and selection."
 
     def fake_request(model, prompt, story, schema=None, **kwargs):
         calls.append((model, prompt))
@@ -842,6 +843,7 @@ def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatc
         if len(calls) == 2:
             return valid_result()
         corrected = valid_result("Shubman Gill faces an injury scare.")
+        corrected["script"][3]["voiceover"] = "Availability depends on the medical report and selection."
         return corrected
 
     monkeypatch.setattr(script_writer, "_request", fake_request)
