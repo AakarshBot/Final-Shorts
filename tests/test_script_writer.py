@@ -260,7 +260,7 @@ def test_writer_hidden_rewrite_fixes_indic_timing_preflight(monkeypatch):
     too_long = valid_result(
         "Shubman Gill faces a fresh injury scare before India's next ODI against England"
     )
-    concise = valid_result("Shubman Gill faces an injury scare before India's next ODI.")
+    concise = valid_result("Shubman Gill faces an injury scare before India's ODI.")
 
     def fake_request(model, prompt, story, schema=None, **kwargs):
         calls.append((model, prompt))
@@ -271,7 +271,7 @@ def test_writer_hidden_rewrite_fixes_indic_timing_preflight(monkeypatch):
 
     assert len(calls) == 2
     assert "Indic generation timing preflight" in calls[1][1]
-    assert "no more than nine compact" in calls[1][1]
+    assert "never more than 9" in calls[1][1]
     assert result["script"][0]["voiceover"] == concise["script"][0]["voiceover"]
 
 
