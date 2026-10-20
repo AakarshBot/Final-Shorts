@@ -413,3 +413,110 @@ def test_public_upload_without_comment_does_not_require_comment_scope(monkeypatc
 
     assert result["video_id"] == "abc123"
     assert captured["require_comments"] is False
+
+
+def test_upload_originality_audit_catches_resized_reencoded_image_repeat(tmp_path):
+    from io import BytesIO
+    from PIL import Image, ImageDraw
+
+    source = Image.new("RGB", (360, 640), "black")
+    draw = ImageDraw.Draw(source)
+    draw.rectangle((28, 82, 330, 515), fill="white")
+    draw.rectangle((75, 140, 285, 465), fill="black")
+    draw.rectangle((110, 180, 250, 420), fill="white")
+    original = BytesIO()
+    source.save(original, format="PNG")
+
+    changed_size = source.resize((180, 320), Image.Resampling.LANCZOS)
+    recompressed = BytesIO()
+    changed_size.save(recompressed, format="JPEG", quality=72)
+
+    first = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "A tactical analysis of one match."}]},
+        "Tactical breakdown of the match",
+        visuals=[{"bytes": original.getvalue()}],
+    )
+    history_path = tmp_path / "history.json"
+    uploader.record_upload_success(
+        first,
+        {"video_id": "visual-old", "url": "https://youtube.com/watch?v=visual-old", "privacy_status": "public"},
+        history_path,
+    )
+
+    second = uploader.build_upload_originality_record(
+        {"script": [{"voiceover": "A young runner breaks a championship record."}]},
+        "A record-breaking sprint",
+        visuals=[{"bytes": recompressed.getvalue()}],
+    )
+    assert second["visual_hashes"] != first["visual_hashes"]
+    assert second["perceptual_visual_hashes"] == first["perceptual_visual_hashes"]
+
+    report = uploader.assess_upload_distinctiveness(second, history_path)
+
+    assert report["level"] == "review"
+    assert report["closest"]["visual_overlap"] == 0.0
+    assert report["closest"]["perceptual_visual_overlap"] == 1.0
+
+
+def test_channel_seed_keeps_existing_factory_uploads_after_older_metadata(tmp_path):
+    history_path = tmp_path / "history.json"
+    uploader.record_upload_success(
+        {"title": "Latest factory story", "narration": "Latest factory narration"},
+        {"video_id": "factory-latest", "url": "https://youtube.com/watch?v=factory-latest", "privacy_status": "public"},
+        history_path,
+    )
+
+    class Request:
+        def __init__(self, payload):
+            self.payload = payload
+
+        def execute(self, num_retries=0):
+            return self.payload
+
+    class Channels:
+        def list(self, **kwargs):
+            return Request({
+                "items": [{
+                    "contentDetails": {
+                        "relatedPlaylists": {"uploads": "uploads-seed"}
+                    }
+                }]
+            })
+
+    class PlaylistItems:
+        def list(self, **kwargs):
+            return Request({
+                "items": [
+                    {
+                        "snippet": {
+                            "title": "Newest old channel video",
+                            "description": "Existing channel description.",
+                            "publishedAt": "2026-10-10T00:00:00Z",
+                            "resourceId": {"videoId": "old-new"},
+                        },
+                        "contentDetails": {"videoId": "old-new"},
+                    },
+                    {
+                        "snippet": {
+                            "title": "Oldest channel video",
+                            "description": "Older channel description.",
+                            "publishedAt": "2026-08-01T00:00:00Z",
+                            "resourceId": {"videoId": "old-old"},
+                        },
+                        "contentDetails": {"videoId": "old-old"},
+                    },
+                ]
+            })
+
+    class FakeYoutube:
+        def channels(self):
+            return Channels()
+
+        def playlistItems(self):
+            return PlaylistItems()
+
+    seeded = uploader.seed_existing_channel_upload_history(history_path, youtube=FakeYoutube())
+
+    assert seeded["seeded_count"] == 2
+    entries = uploader._read_upload_history(history_path)
+    assert [item["video_id"] for item in entries] == ["old-old", "old-new", "factory-latest"]
