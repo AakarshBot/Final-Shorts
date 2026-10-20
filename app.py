@@ -6066,6 +6066,8 @@ def _render_live_upload():
     result = st.session_state.live_upload_result
     if result:
         st.success(f"Upload successful · Video ID: {result.get('video_id')}")
+        if result.get("originality_history_saved") is False:
+            st.warning("The upload succeeded, but the factory could not save its local repeat-content history entry.")
         if result.get("url"):
             st.link_button("Open YouTube video", result["url"], width="stretch")
         if result.get("requested_privacy") == "public":
@@ -6077,6 +6079,22 @@ def _render_live_upload():
                     + str(result["comment_error"])
                 )
         return
+
+    if is_top5:
+        originality_visuals = list(st.session_state.get("live_top5_visual_handoff") or [])
+        originality_source_url = ""
+    else:
+        originality_visuals = list((st.session_state.get("live_visual_assignments") or {}).values())
+        originality_source_url = str(
+            getattr(story, "url", "") or
+            (story.get("url", "") if isinstance(story, dict) else "")
+        )
+    originality_record = _show_upload_originality_audit(
+        script,
+        (qc.get("title") or title),
+        source_url=originality_source_url,
+        visuals=originality_visuals,
+    )
 
     left, right = st.columns(2, gap="medium")
     with left:
@@ -6098,7 +6116,7 @@ def _render_live_upload():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading video as {privacy}…"):
-            from uploader import upload_video
+            from uploader import record_upload_success, upload_video
             st.session_state.live_upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -6106,6 +6124,9 @@ def _render_live_upload():
                 qc.get("hashtags", ""),
                 qc.get("comment", ""),
                 privacy,
+            )
+            st.session_state.live_upload_result["originality_history_saved"] = record_upload_success(
+                originality_record, st.session_state.live_upload_result
             )
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
