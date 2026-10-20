@@ -825,3 +825,31 @@ def test_chatterbox_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch
 
     assert result["duration_corrected"] is True
     assert result["total_duration"] < 30.0
+
+
+
+@pytest.mark.parametrize(
+    ("locale", "gender", "expected_voice"),
+    [
+        ("hi-IN", "female", "hi-IN-SwaraNeural"),
+        ("hi_in", "male", "hi-IN-MadhurNeural"),
+        ("te-IN", "female", "te-IN-ShrutiNeural"),
+        ("te_in", "male", "te-IN-MohanNeural"),
+        ("en-IN", "female", "en-IN-NeerjaNeural"),
+    ],
+)
+def test_audio_voice_selection_canonicalizes_locale_tags(locale, gender, expected_voice):
+    import audio
+
+    assert audio.resolve_voice(locale, gender=gender) == expected_voice
+
+
+@pytest.mark.parametrize("locale", ["hi-IN", "hi_in", "te-IN", "te_in"])
+def test_indic_first_scene_duration_validation_canonicalizes_locale_tags(locale):
+    import audio
+
+    with pytest.raises(ValueError, match="no more than 5.2 seconds"):
+        audio._validate_indic_first_scene_duration(
+            [{"scene": 1, "duration": 5.21}],
+            locale,
+        )
