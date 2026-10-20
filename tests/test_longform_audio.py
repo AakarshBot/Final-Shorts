@@ -101,8 +101,8 @@ def test_longform_groups_same_act_scenes_into_one_generation(monkeypatch, tmp_pa
         def __init__(self):
             self.calls = []
 
-        def generate(self, text, temperature=0.8):
-            self.calls.append((text, temperature))
+        def generate(self, text, **kwargs):
+            self.calls.append((text, kwargs))
             return torch.zeros((1, int(self.sr * 4)))
 
     model = FakeChatterbox()
@@ -118,7 +118,10 @@ def test_longform_groups_same_act_scenes_into_one_generation(monkeypatch, tmp_pa
 
     expected_text = " ".join(scene["voiceover"] for scene in script["scenes"])
     assert len(model.calls) == 1
-    assert model.calls[0] == (expected_text, 0.80)
+    assert model.calls[0] == (
+        expected_text,
+        {"temperature": 0.90, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.15},
+    )
     assert result["continuous_audio"] is True
     assert result["model_version"] == "turbo"
     assert len(result["scenes"]) == 2
@@ -177,8 +180,8 @@ def test_longform_serious_story_keeps_clear_temperature_in_opening_act(monkeypat
         def __init__(self):
             self.temperatures = []
 
-        def generate(self, text, temperature=0.8):
-            self.temperatures.append(temperature)
+        def generate(self, text, **kwargs):
+            self.temperatures.append(kwargs)
             return torch.zeros((int(self.sr * 0.5),))
 
     model = FakeChatterbox()
@@ -194,7 +197,12 @@ def test_longform_serious_story_keeps_clear_temperature_in_opening_act(monkeypat
 
     LongformAudioEngine.generate(script, output_dir=tmp_path)
 
-    assert model.temperatures == [0.80]
+    assert model.temperatures == [{
+        "temperature": 0.90,
+        "top_p": 0.95,
+        "top_k": 1000,
+        "repetition_penalty": 1.15,
+    }]
 
 
 def test_longform_audio_approve(tmp_path):
