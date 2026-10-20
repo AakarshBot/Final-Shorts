@@ -9512,6 +9512,8 @@ def render_top5_upload_qc():
 
     result = st.session_state.get("test_top5_upload_result")
     if result:
+        if result.get("originality_history_saved") is False:
+            st.warning("The upload succeeded, but the factory could not save its local repeat-content history entry.")
         st.success(
             f"Uploaded as {result.get('privacy_status') or result.get('requested_privacy')} · "
             f"{result.get('url')}"
@@ -9531,6 +9533,11 @@ def render_top5_upload_qc():
         st.link_button("Open YouTube video", result["url"], width="stretch")
         return
 
+    originality_record = _show_upload_originality_audit(
+        script,
+        title,
+        visuals=list(st.session_state.get("test_top5_visual_handoff") or []),
+    )
     st.subheader("Upload")
     col1, col2 = st.columns(2, gap="medium")
     with col1:
@@ -9553,7 +9560,7 @@ def render_top5_upload_qc():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading Top-5 video as {privacy}…"):
-            from uploader import upload_video
+            from uploader import record_upload_success, upload_video
             st.session_state.test_top5_upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -9561,6 +9568,9 @@ def render_top5_upload_qc():
                 qc.get("hashtags", ""),
                 qc.get("comment", ""),
                 privacy,
+            )
+            st.session_state.test_top5_upload_result["originality_history_saved"] = record_upload_success(
+                originality_record, st.session_state.test_top5_upload_result
             )
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
@@ -9681,6 +9691,8 @@ def render_upload_qc():
 
     result = st.session_state.get("upload_result")
     if result:
+        if result.get("originality_history_saved") is False:
+            st.warning("The upload succeeded, but the factory could not save its local repeat-content history entry.")
         st.success(
             f"Uploaded as {result.get('privacy_status') or result.get('requested_privacy')} · "
             f"{result.get('url')}"
@@ -9704,6 +9716,21 @@ def render_upload_qc():
         st.caption("Upload choices become available after a rendered video is present.")
         return
 
+    selected_topic = st.session_state.get("selected_topic")
+    topics = st.session_state.get("topics") or []
+    originality_source_url = ""
+    if isinstance(selected_topic, int) and 0 <= selected_topic < len(topics):
+        topic = topics[selected_topic]
+        originality_source_url = str(
+            getattr(topic, "url", "") or
+            (topic.get("url", "") if isinstance(topic, dict) else "")
+        )
+    originality_record = _show_upload_originality_audit(
+        script,
+        qc.get("title", ""),
+        source_url=originality_source_url,
+        visuals=list(st.session_state.get("approved_visuals") or []),
+    )
     st.subheader("Upload")
     col1, col2 = st.columns(2, gap="medium")
     with col1:
@@ -9724,7 +9751,7 @@ def render_upload_qc():
     privacy = "public" if public else "private"
     try:
         with st.spinner(f"Uploading video as {privacy}…"):
-            from uploader import upload_video
+            from uploader import record_upload_success, upload_video
             st.session_state.upload_result = upload_video(
                 video_path,
                 qc.get("title", ""),
@@ -9732,6 +9759,9 @@ def render_upload_qc():
                 qc.get("hashtags", ""),
                 qc.get("comment", ""),
                 privacy,
+            )
+            st.session_state.upload_result["originality_history_saved"] = record_upload_success(
+                originality_record, st.session_state.upload_result
             )
     except (RuntimeError, ValueError, OSError) as exc:
         st.error(str(exc))
