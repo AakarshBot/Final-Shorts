@@ -841,7 +841,7 @@ def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatc
             raise script_writer.GroqAPIError(429, "Rate limit reached", "15")
         if len(calls) == 2:
             return valid_result()
-        corrected = valid_result("Shubman Gill faces an injury scare before India's ODI.")
+        corrected = valid_result("Shubman Gill faces an injury scare.")
         return corrected
 
     monkeypatch.setattr(script_writer, "_request", fake_request)
