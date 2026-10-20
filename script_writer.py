@@ -810,8 +810,8 @@ def _spoken_word_count(value, language: str | None = None) -> int:
     return _words(value)
 
 
-INDIC_GENERATION_MAX_LEAD_TOKENS = 9
-INDIC_GENERATION_MAX_TOTAL_TOKENS = 62
+INDIC_GENERATION_MAX_LEAD_TOKENS = 7
+INDIC_GENERATION_MAX_TOTAL_TOKENS = 55
 
 
 def _is_indic_language(language: str | None) -> bool:
@@ -861,9 +861,9 @@ def _indic_timing_guidance(language: str | None) -> str:
     return (
         "\n\nMEASURED-AUDIO TIMING GUIDANCE (HARD REQUIREMENTS):\n"
         "- Hindi/Telugu Slide 1 must be one short direct lead with the subject and strongest confirmed development. "
-        "Target 6–8 compact whitespace-separated tokens (never more than 9), about 4.0–4.7 seconds of natural speech. "
+        "Target 5–7 compact whitespace-separated tokens (never more than 7), about 4.0–4.7 seconds of natural speech. "
         "Avoid subordinate clauses, scene-setting and background in Slide 1; move those facts to later slides.\n"
-        "- Keep the complete narration factual and tight, preferably 50–62 whitespace-separated tokens where the story permits. "
+        "- Keep the complete narration factual and tight, preferably 50–55 whitespace-separated tokens where the story permits. "
         "Do not pad to reach a minimum and never sacrifice an essential fact merely to hit a token target.\n"
         "- The numbers above are only drafting margins, not the compliance test. The Audio stage measures the actual selected voice: "
         "Slide 1 must be at most 5.2 seconds and total audio must be strictly under 30 seconds. "
@@ -2066,7 +2066,7 @@ def write_script(
                 instruction
                 + "\n\nMANDATORY INDIC TIMING REWRITE\n"
                 "Rewrite the complete script from the supplied evidence. Fix Slide 1 and, if needed, total length. "
-                "Use a single short lead of no more than nine compact whitespace-separated tokens, name the subject, "
+                "Use a single short lead of no more than seven compact whitespace-separated tokens, name the subject, "
                 "move background to later slides, and preserve the story's essential facts without padding. "
                 "Actual audio must remain <=5.2 seconds for Slide 1 and strictly under 30 seconds overall. "
                 "Return the full JSON package only.\n"
@@ -2127,8 +2127,8 @@ def write_script(
             instruction
             + "\n\nMANDATORY INDIC TIMING REWRITE\n"
             "The prior rewrite still missed the measured-audio drafting margins. Rewrite the complete 3–5-slide package. "
-            "Keep Slide 1 to nine or fewer compact whitespace-separated tokens, ideally six to eight, and move context to later slides. "
-            "Target 50–62 total tokens where supported by the story. Do not remove essential facts, add filler, or alter factual claims. "
+            "Keep Slide 1 to seven or fewer compact whitespace-separated tokens, ideally five to seven, and move context to later slides. "
+            "Target 50–55 total tokens where supported by the story. Do not remove essential facts, add filler, or alter factual claims. "
             "The actual Audio stage still enforces <=5.2 seconds for Slide 1 and strictly under 30 seconds overall. "
             "Return full JSON only.\n"
             + reason
@@ -2469,9 +2469,9 @@ def write_universal_script(
         timing_instruction = (
             instruction
             + "\n\nMANDATORY INDIC TIMING REWRITE\n"
-            "Rewrite the full package, not just metadata. Use a short direct Slide 1 with no more than nine compact "
-            "whitespace-separated tokens (ideally six to eight), keep the exact subject, move background/context to later slides, "
-            "and target 50–62 total tokens where the evidence supports that length. Never pad or omit essential facts. "
+            "Rewrite the full package, not just metadata. Use a short direct Slide 1 with no more than seven compact "
+            "whitespace-separated tokens (ideally five to seven), keep the exact subject, move background/context to later slides, "
+            "and target 50–55 total tokens where the evidence supports that length. Never pad or omit essential facts. "
             "Actual generated audio must measure Slide 1 at <=5.2 seconds and the full Short strictly under 30 seconds. "
             "Return only complete JSON.\n"
             + recovery_reason
