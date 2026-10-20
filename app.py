@@ -7449,6 +7449,67 @@ def render_live_dashboard():
         audio_error = st.session_state.get("live_audio_error") or st.session_state.get("live_handoff_error")
         if audio_error:
             st.error(audio_error)
+            timing_error_text = str(audio_error).casefold()
+            if any(
+                marker in timing_error_text
+                for marker in (
+                    "30-second",
+                    "30 seconds",
+                    "5.2 seconds",
+                    "first-slide audio",
+                    "narration is too long",
+                    "too long to fit",
+                    "reduce narration in scriptwriter",
+                )
+            ):
+                st.caption("This error came from measured audio, not just estimated word count. Send it back to Scriptwriter so the next draft can target the actual failed limit.")
+                if st.button(
+                    "Rewrite Script for measured audio limits",
+                    width="stretch",
+                    key="live-regenerate-script-from-audio-error",
+                ):
+                    feedback = str(audio_error)
+                    previous_script = st.session_state.get("live_approved_script") or script
+                    angle = previous_script.get("story_angle") if isinstance(previous_script, dict) else None
+                    research_source = st.session_state.get("live_universal_angle_source")
+
+                    st.session_state.live_script_data = None
+                    st.session_state.live_approved_script = None
+                    st.session_state.live_audio_data = None
+                    st.session_state.live_approved_audio = None
+                    st.session_state.live_subtitle_data = None
+                    st.session_state.live_handoff_error = ""
+                    st.session_state.live_audio_error = ""
+                    st.session_state.live_audio_status = "idle"
+                    st.session_state.live_audio_future = None
+                    st.session_state.live_visual_result = None
+                    st.session_state.live_visual_future = None
+                    st.session_state.live_visual_status = "idle"
+                    st.session_state.live_visual_error = ""
+                    st.session_state.live_manual_visual_result = None
+                    st.session_state.live_manual_visual_future = None
+                    st.session_state.live_manual_visual_status = "idle"
+                    st.session_state.live_real_image_result = None
+                    st.session_state.live_real_image_future = None
+                    st.session_state.live_real_image_status = "idle"
+                    st.session_state.live_visual_assignments = {}
+                    st.session_state.live_visuals_approved = False
+                    st.session_state.live_rendered_video_path = None
+                    st.session_state.live_render_error = ""
+                    st.session_state.live_upload_qc_approved = False
+                    st.session_state.live_stage = "02 · Script"
+                    st.session_state.live_script_error = ""
+
+                    try:
+                        with st.spinner("Rewriting the script against the measured audio failure…"):
+                            _live_generate_script(
+                                angle=angle,
+                                research_source=research_source,
+                                validation_feedback=feedback,
+                            )
+                    except Exception as exc:
+                        st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+                    st.rerun()
         button_label = "Retry Audio + Subtitles in Background" if audio_status == "failed" else "Start Audio + Subtitles in Background"
         if st.button(
             button_label,
