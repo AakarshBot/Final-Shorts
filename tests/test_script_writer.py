@@ -349,7 +349,7 @@ def test_universal_validator_allows_long_dashboard_headline_and_duration_based_l
         "Shubman Gill injury update explains what India's next ODI selection decision depends on"
     )
     result["script"][3]["voiceover"] += (
-        " The selection decision follows the medical review and final assessment before match day."
+        " Final selection follows the medical review and report."
     )
 
     valid, reason = script_writer.validate_universal_script(result, language=language)
@@ -362,7 +362,7 @@ def test_universal_validator_keeps_english_13_word_limit():
         "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
     )
     result["script"][3]["voiceover"] += (
-        " The selection decision follows the medical review and final assessment before match day."
+        " Final selection follows the medical review and report."
     )
 
     valid, reason = script_writer.validate_universal_script(result, language="english")
