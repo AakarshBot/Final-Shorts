@@ -1010,7 +1010,7 @@ def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatc
     ]
     assert "HIDDEN REWRITE" not in calls[1][1]
     assert "RECOVERY" not in calls[1][1]
-    assert "MANDATORY INDIC TIMING REWRITE" in calls[2][1]
+    assert "MANDATORY INDIC TIMING RECOVERY (ATTEMPT 1/2)" in calls[2][1]
     assert result["provider_used"] == "openai/gpt-oss-120b"
     assert result["script"][0]["voiceover"] == "Shubman Gill faces an injury scare."
 
