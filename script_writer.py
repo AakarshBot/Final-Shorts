@@ -802,10 +802,21 @@ def _words(value) -> int:
     return len(re.findall(r"\b[\w]+(?:['’][\w]+)?\b", str(value or ""), flags=re.UNICODE))
 
 
+def _language_key(language: str | None) -> str:
+    """Canonicalise common language names and locale tags before applying language rules."""
+    raw = re.sub(r"[\\s_]+", "-", str(language or "english").strip().casefold()) or "english"
+    if raw in {"hindi", "hi"} or raw.startswith("hi-"):
+        return "hindi"
+    if raw in {"telugu", "te"} or raw.startswith("te-"):
+        return "telugu"
+    if raw in {"english", "en"} or raw.startswith("en-"):
+        return "english"
+    return raw
+
+
 def _spoken_word_count(value, language: str | None = None) -> int:
-    """Use whitespace-separated words for Hindi/Telugu, whose vowel marks split regex tokens."""
-    language_key = str(language or "english").strip().casefold()
-    if language_key in {"hindi", "telugu", "hi", "te"}:
+    """Use whitespace-separated tokens for Hindi/Telugu, whose vowel marks split regex tokens."""
+    if _language_key(language) in {"hindi", "telugu"}:
         return len(_clean(value).split())
     return _words(value)
 
@@ -815,7 +826,7 @@ INDIC_GENERATION_MAX_TOTAL_TOKENS = 55
 
 
 def _is_indic_language(language: str | None) -> bool:
-    return str(language or "").strip().casefold() in {"hindi", "telugu", "hi", "te"}
+    return _language_key(language) in {"hindi", "telugu"}
 
 
 def _indic_generation_delivery_issue(result: dict, language: str | None) -> str:
@@ -1806,7 +1817,7 @@ def suggest_cricket_story_angles(
     if not source:
         raise ValueError("The selected story contains no usable evidence.")
 
-    language_key = str(language or "english").strip().lower()
+    language_key = _language_key(language)
     instruction = (
         CRICKET_ANGLE_PROMPT
         + "\nLANGUAGE:\n"
@@ -1870,7 +1881,7 @@ def validate_cricket_script(
     if not subject:
         return False, "The Scriptwriter must identify the main subject."
 
-    language_key = str(language or result.get("language_used") or "english").strip().casefold()
+    language_key = _language_key(language or result.get("language_used"))
     first_words = _words((scenes[0] or {}).get("voiceover")) if isinstance(scenes[0], dict) else 0
     if language_key not in {"hindi", "telugu", "hi", "te"} and first_words > MAX_SLIDE_ONE_WORDS:
         return False, "Slide 1 must contain fewer than 14 words."
