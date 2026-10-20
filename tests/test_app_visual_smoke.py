@@ -992,6 +992,8 @@ def test_live_measured_audio_failure_is_sent_back_to_scriptwriter(monkeypatch):
     assert observed["angle"] == "selection uncertainty"
     assert "5.83s" in observed["feedback"]
     assert "5.2 seconds" in observed["feedback"]
+    assert "Rejected narration that produced this audio" in observed["feedback"]
+    assert "शुभमन गिल की फिटनेस पर लंबी चिंता है" in observed["feedback"]
     assert observed["profile"] == "cricket_india_asia"
     assert at.session_state["live_stage"] == "02 · Script"
     assert at.session_state["live_approved_script"] is None
