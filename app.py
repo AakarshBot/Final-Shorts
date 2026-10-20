@@ -4306,6 +4306,36 @@ def _upload_metadata(script: dict) -> dict:
     }
 
 
+def _show_upload_originality_audit(
+    script: dict,
+    title: str,
+    *,
+    source_url: str = "",
+    visuals: list[dict] | None = None,
+) -> dict:
+    from uploader import assess_upload_distinctiveness, build_upload_originality_record
+
+    record = build_upload_originality_record(
+        script,
+        title,
+        source_url=source_url,
+        visuals=visuals or [],
+    )
+    report = assess_upload_distinctiveness(record)
+    st.markdown("**Factory repeat-content check · recent upload history**")
+    if report["level"] == "warning":
+        st.warning(report["message"])
+    elif report["level"] == "review":
+        st.info(report["message"])
+    else:
+        st.caption(report["message"])
+    st.caption(
+        "This is a local similarity warning, not a YouTube verdict. It checks only uploads recorded by this factory, "
+        "and exact image hashes do not detect visually similar crops or generated images."
+    )
+    return record
+
+
 def _visual_story_for_topic(topic, script: dict | None = None) -> dict:
     story = _story_payload(topic)
     if isinstance(script, dict):
