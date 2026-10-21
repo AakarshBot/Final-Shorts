@@ -1796,6 +1796,40 @@ def test_windows_raqm_bootstraps_when_feature_flag_is_true_but_real_font_fails(m
     assert calls == ["installed"]
 
 
+def test_windows_raqm_uses_bundled_pillow_when_feature_exists_but_shaping_fails(
+    monkeypatch, tmp_path
+):
+    calls = []
+    shape_error = "The real RAQM font-load/shaping test failed: cannot load FriBiDi"
+    target = tmp_path / ".deps" / "raqm_pillow_11_3_0_cp311"
+
+    monkeypatch.setattr(renderer.os, "name", "nt")
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ERROR", "")
+    monkeypatch.setattr(renderer, "_WINDOWS_RAQM_PILLOW_INSTALL_ATTEMPTED", False)
+    monkeypatch.setattr(renderer, "_WINDOWS_RAQM_PILLOW_INSTALL_ERROR", "")
+    monkeypatch.setattr(renderer, "_WINDOWS_RAQM_PILLOW_READY_FOR_RESTART", False)
+    monkeypatch.setattr(renderer, "_register_windows_dll_paths", lambda: None)
+    monkeypatch.setattr(renderer, "_activate_windows_fribidi", lambda: "")
+    monkeypatch.setattr(renderer, "_raqm_runtime_probe", lambda _language: (False, shape_error))
+    monkeypatch.setattr(
+        renderer,
+        "_install_windows_fribidi_via_powershell",
+        lambda: calls.append("fribidi"),
+    )
+    monkeypatch.setattr(
+        renderer,
+        "_install_raqm_enabled_pillow",
+        lambda: calls.append("pillow-wheel") or target,
+    )
+
+    with pytest.raises(RuntimeError, match="compiled with vendored RAQM"):
+        renderer._require_raqm("hindi")
+
+    assert calls == ["fribidi", "pillow-wheel"]
+    assert renderer._WINDOWS_RAQM_PILLOW_READY_FOR_RESTART is True
+
+
 def test_windows_raqm_bootstrap_surfaces_the_setup_failure_details(monkeypatch):
     monkeypatch.setattr(renderer.os, "name", "nt")
     monkeypatch.setattr(renderer, "_WINDOWS_FRIBIDI_INSTALL_ATTEMPTED", False)

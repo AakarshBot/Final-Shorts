@@ -541,11 +541,17 @@ def _require_raqm(language: str) -> None:
                 f"{setup_error} Final RAQM probe: {probe_error}"
             )
 
-    if (
-        os.name == "nt"
-        and not available
-        and "does not report RAQM support" in probe_error
-    ):
+    probe_error_key = probe_error.casefold()
+    needs_bundled_raqm_pillow = any(
+        reason in probe_error_key
+        for reason in (
+            "does not report raqm support",
+            "could not check raqm support",
+            "font-load/shaping test failed",
+            "empty glyph mask",
+        )
+    )
+    if os.name == "nt" and not available and needs_bundled_raqm_pillow:
         if _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART:
             raise RuntimeError(
                 "The factory has prepared an isolated, RAQM-enabled Pillow wheel in "
@@ -564,7 +570,7 @@ def _require_raqm(language: str) -> None:
                 _WINDOWS_RAQM_PILLOW_INSTALL_ERROR = str(exc)
         if _WINDOWS_RAQM_PILLOW_READY_FOR_RESTART:
             raise RuntimeError(
-                "Your currently active Pillow build was compiled without RAQM. The factory has downloaded a "
+                "Your currently active Pillow build could not complete real RAQM text shaping. The factory has prepared a "
                 "SHA-256-verified custom Windows Pillow wheel compiled with vendored RAQM and validated actual "
                 "Hindi font shaping. Fully close every Final-Shorts / Streamlit process, then use "
                 "Run_Final_Shorts.bat and retry your Hindi/Telugu Text Subject Cutout. No manual pip install "
