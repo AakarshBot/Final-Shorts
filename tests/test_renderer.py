@@ -1886,8 +1886,15 @@ def test_isolated_raqm_pillow_installer_uses_checksum_verified_factory_wheel(mon
         stdout = ""
         stderr = ""
 
+    captured = {}
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["kwargs"] = kwargs
+        return ProcessResult()
+
     monkeypatch.setattr(renderer, "urlopen", fake_urlopen)
-    monkeypatch.setattr(renderer.subprocess, "run", lambda *_args, **_kwargs: ProcessResult())
+    monkeypatch.setattr(renderer.subprocess, "run", fake_run)
     monkeypatch.setattr(renderer.sys, "version_info", (3, 11, 9, "final", 0))
     monkeypatch.setattr(renderer.sysconfig, "get_platform", lambda: "win-amd64")
 
@@ -1900,6 +1907,12 @@ def test_isolated_raqm_pillow_installer_uses_checksum_verified_factory_wheel(mon
     assert (target / "PIL" / "_imagingft.cp311-win_amd64.pyd").is_file()
     assert "os.add_dll_directory" in (target / "sitecustomize.py").read_text(encoding="utf-8")
     assert (target / "python_executable.txt").read_text(encoding="utf-8") == str(renderer.sys.executable)
+    assert captured["command"][:3] == [str(renderer.sys.executable), "-I", "-S"]
+    assert "PYTHONPATH" not in captured["kwargs"]["env"]
+    assert "PYTHONHOME" not in captured["kwargs"]["env"]
+    assert "NotoSansDevanagari-Bold.ttf" in captured["command"][-1]
+    assert "NotoSansTelugu-Bold.ttf" in captured["command"][-1]
+    assert "font.layout_engine == ImageFont.Layout.RAQM" in captured["command"][-1]
 
 
 def test_raqm_pillow_installer_rejects_bad_checksum(monkeypatch, tmp_path):

@@ -1315,4 +1315,6 @@ def test_test_and_live_stage_pickers_do_not_mix_default_with_session_state():
     live_picker_call = source[live_picker:live_picker_end]
     assert 'key="live-stage-switcher"' in live_picker_call
     assert "default=" not in live_picker_call
+    assert '"test-stage-switcher" not in st.session_state' in source
+    assert '"live-stage-switcher" not in st.session_state' in source
 
