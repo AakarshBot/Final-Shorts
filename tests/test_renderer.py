@@ -213,6 +213,165 @@ def test_manual_subject_cutout_polygon_adapts_to_irregular_end_to_end_shape(monk
         assert line_top + (bbox[3] - bbox[1]) <= 998
 
 
+def test_manual_subject_cutout_uses_exact_font_size_without_retry(monkeypatch):
+    sizes = []
+
+    def no_layout(_headline, _polygon, font_size, *_args):
+        sizes.append(font_size)
+        return {"font_size": font_size, "layouts": []}
+
+    monkeypatch.setattr(renderer, "_manual_subject_cutout_layout_data", no_layout)
+    with pytest.raises(ValueError, match="Text size 150px"):
+        renderer._draw_manual_subject_cutout(
+            _test_base(),
+            {
+                "headline": "INDIA WINS",
+                "mode": "behind-subject",
+                "text_polygon": ((80, 700), (1000, 700), (1000, 1000), (80, 1000)),
+                "font_size": 150,
+                "font": "Barlow Condensed",
+                "style": "Crisp Outline",
+                "polygon_flow": True,
+            },
+        )
+    assert sizes == [150]
+
+
+def test_manual_subject_cutout_line_stretches_word_spacing_not_glyphs():
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    font = ImageFont.truetype(str(font_path), 80)
+    image = Image.new("RGBA", (1080, 240), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(image)
+    line = "INDIA WINS"
+    bbox = draw.textbbox((0, 0), line, font=font, stroke_width=4)
+
+    renderer._draw_manual_subject_cutout_line(
+        draw, line, 40, 100, bbox,
+        font=font, fill=(255, 255, 255, 255), stroke_width=4,
+        stroke_fill=(0, 0, 0, 255), target_width=700, stretch_spaces=True,
+    )
+    bounds = image.getchannel("A").getbbox()
+    assert bounds is not None
+    # Pillow's text bbox includes the 2px outline bearing before the glyph ink.
+    assert bounds[0] == 102
+    assert 790 <= bounds[2] <= 802
+
+    one_word_image = Image.new("RGBA", (1080, 240), (0, 0, 0, 0))
+    one_word_draw = ImageDraw.Draw(one_word_image)
+    one_word_bbox = one_word_draw.textbbox((0, 0), "INDIA", font=font, stroke_width=4)
+    renderer._draw_manual_subject_cutout_line(
+        one_word_draw, "INDIA", 40, 100, one_word_bbox,
+        font=font, fill=(255, 255, 255, 255), stroke_width=4,
+        stroke_fill=(0, 0, 0, 255), target_width=700, stretch_spaces=True,
+    )
+    one_word_bounds = one_word_image.getchannel("A").getbbox()
+    assert one_word_bounds is not None
+    assert one_word_bounds[2] - one_word_bounds[0] < 400
+
+
+def test_manual_subject_cutout_layout_previews_do_not_shrink_font_size(monkeypatch):
+    sizes = []
+
+    def no_layout(_headline, _polygon, font_size, *_args):
+        sizes.append(font_size)
+        return {"font_size": font_size, "layouts": []}
+
+    monkeypatch.setattr(renderer, "_manual_subject_cutout_layout_data", no_layout)
+    with pytest.raises(ValueError, match="Text size 140px"):
+        renderer.build_manual_subject_cutout_layout_previews(
+            _test_base(),
+            "INDIA WINS",
+            mode="behind-subject",
+            font_size=140,
+            text_polygon=((80, 700), (1000, 700), (1000, 1000), (80, 1000)),
+        )
+    assert sizes == [140]
+
+
+def test_visual_boundaries_follow_each_scene_audio_duration_even_when_a_card_hides_subtitles(monkeypatch, tmp_path):
+    from io import BytesIO
+
+    monkeypatch.setattr(renderer, "FPS", 2)
+    audio_paths = []
+    for number in range(1, 4):
+        path = tmp_path / f"scene{number}.wav"
+        path.write_bytes(b"audio")
+        audio_paths.append(path)
+
+    def image_bytes(color):
+        buffer = BytesIO()
+        Image.new("RGB", (1080, 1920), color).save(buffer, format="PNG")
+        return buffer.getvalue()
+
+    visuals = [
+        {"bytes": image_bytes((200, 0, 0))},
+        {
+            "bytes": image_bytes((0, 0, 0)),
+            "preview_bytes": image_bytes((245, 245, 245)),
+            "manual_subject_cutout": {"headline": "A static card"},
+        },
+        {"bytes": image_bytes((0, 0, 200))},
+    ]
+    audio_scenes = [
+        {"scene": 1, "path": str(audio_paths[0]), "duration": 0.5},
+        {"scene": 2, "path": str(audio_paths[1]), "duration": 0.5},
+        {"scene": 3, "path": str(audio_paths[2]), "duration": 0.5},
+    ]
+    drawn = []
+    encoded_frames = []
+    monkeypatch.setattr(renderer, "_animate_visual", lambda base, _t, _duration, _seed: base)
+
+    def capture_frame(base_image, t, *_args, **_kwargs):
+        drawn.append((base_image.getpixel((0, 0)), t))
+        return base_image.convert("RGB").copy()
+
+    monkeypatch.setattr(renderer, "render_frame", capture_frame)
+
+    def capture_video(frames, path):
+        encoded_frames.extend(list(frames))
+        path.write_bytes(b"silent")
+        return path
+
+    monkeypatch.setattr(renderer, "write_preview_video", capture_video)
+    monkeypatch.setattr(
+        renderer,
+        "_mux_audio",
+        lambda _silent, _scenes, output: (output.write_bytes(b"final") or output),
+    )
+
+    output = tmp_path / "scene-boundaries.mp4"
+    renderer.render_production_video(
+        {
+            "approved_for_audio": True,
+            "language_used": "english",
+            "script": [
+                {"voiceover": "Opening line."},
+                {"voiceover": "Card narration."},
+                {"voiceover": "Final line."},
+            ],
+        },
+        {
+            "approved_for_visuals": True,
+            "language": "english",
+            "total_duration": 1.5,
+            "scenes": audio_scenes,
+        },
+        TEST_SUBTITLE_DATA,
+        visuals,
+        output,
+    )
+
+    assert len(encoded_frames) == 3
+    assert [frame.getpixel((0, 0)) for frame in encoded_frames] == [
+        (200, 0, 0),
+        (245, 245, 245),
+        (0, 0, 200),
+    ]
+    # Slide 2 hides subtitles but still occupies its measured half-second. Slide 3
+    # resumes subtitles on its own absolute timestamp, 1.0s into the same narration.
+    assert drawn == [((200, 0, 0, 255), 0.0), ((0, 0, 200, 255), 1.0)]
+
+
 def test_production_upload_encode_settings_are_youtube_ready():
     assert renderer.FPS == 30
 

@@ -6749,7 +6749,7 @@ def render_live_top5():
             return
         full_path = audio.get("full_path")
         if full_path and Path(full_path).is_file():
-            st.markdown("### Full narration · continuous take")
+            st.markdown("### Combined narration preview · slide-by-slide clips")
             st.audio(full_path, format="audio/wav")
         for scene in audio.get("scenes") or []:
             with st.container(key=f"live-top5-audio-scene-{scene['scene']}"):
@@ -10554,7 +10554,7 @@ def render_audio():
         if audio:
             full_path = audio.get("full_path")
             if full_path and Path(full_path).is_file():
-                st.markdown("### Full narration · continuous take")
+                st.markdown("### Combined narration preview · slide-by-slide clips")
                 st.audio(full_path, format="audio/wav")
             for scene in audio["scenes"]:
                 with st.container(key=f"audio-scene-{scene['scene']}"):
@@ -11396,7 +11396,7 @@ elif st.session_state.app_mode == "test":
                 if audio:
                     full_path = audio.get("full_path")
                     if full_path and Path(full_path).is_file():
-                        st.markdown("### Full narration · continuous take")
+                        st.markdown("### Combined narration preview · slide-by-slide clips")
                         st.audio(full_path, format="audio/wav")
                     for scene in audio["scenes"]:
                         with st.container(key=f"test-top5-audio-scene-{scene['scene']}"):
