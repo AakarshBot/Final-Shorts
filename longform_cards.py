@@ -198,7 +198,23 @@ def _draw_lines(
     shadow_offset: tuple[int, int] = (3, 4),
 ) -> int:
     draw = ImageDraw.Draw(canvas)
-    _, height = _measure(draw, "Ag", font)
+    has_indic = any(
+        any(
+            0x0900 <= ord(char) <= 0x097F or 0x0C00 <= ord(char) <= 0x0C7F
+            for char in line
+        )
+        for line in lines
+    )
+    if has_indic and hasattr(font, "getmetrics"):
+        ascent, descent = font.getmetrics()
+        metric_h = ascent + descent + stroke_width * 2
+        line_ink_heights = [_measure(draw, line, font)[1] for line in lines] if lines else [0]
+        height = max(metric_h, max(line_ink_heights))
+        font_size = getattr(font, "size", 40)
+        effective_gap = max(gap, int(font_size * 0.18))
+    else:
+        _, height = _measure(draw, "Ag", font)
+        effective_gap = gap
     sx, sy = shadow_offset
     for line in lines:
         if sx > 0 or sy > 0:
@@ -218,7 +234,7 @@ def _draw_lines(
             stroke_width=stroke_width,
             stroke_fill=stroke_fill,
         )
-        y += height + gap
+        y += height + effective_gap
     return y
 
 

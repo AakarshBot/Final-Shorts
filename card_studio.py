@@ -345,6 +345,33 @@ def _fit(
     raise CardStudioError("The card text is too long for this layout. Shorten the copy.")
 
 
+def _lines_metric_height(
+    draw: ImageDraw.ImageDraw,
+    lines: list[str],
+    font: ImageFont.ImageFont,
+    gap: int,
+    stroke_width: int = 0,
+) -> tuple[int, int]:
+    has_indic = any(
+        any(
+            0x0900 <= ord(char) <= 0x097F or 0x0C00 <= ord(char) <= 0x0C7F
+            for char in line
+        )
+        for line in lines
+    )
+    if has_indic and hasattr(font, "getmetrics"):
+        ascent, descent = font.getmetrics()
+        metric_h = ascent + descent + stroke_width * 2
+        line_ink_heights = [_measure(draw, line, font)[1] for line in lines] if lines else [0]
+        line_height = max(metric_h, max(line_ink_heights))
+        font_size = getattr(font, "size", 40)
+        effective_gap = max(gap, int(font_size * 0.18))
+    else:
+        _, line_height = _measure(draw, "Ag", font)
+        effective_gap = gap
+    return line_height, effective_gap
+
+
 def _draw_lines(
     canvas: Image.Image,
     lines: list[str],
@@ -358,17 +385,9 @@ def _draw_lines(
     shadow_offset: tuple[int, int] = (0, 0),
 ) -> int:
     draw = ImageDraw.Draw(canvas)
-    script_line = next(
-        (
-            line for line in lines
-            if any(
-                0x0900 <= ord(char) <= 0x097F or 0x0C00 <= ord(char) <= 0x0C7F
-                for char in line
-            )
-        ),
-        "Ag",
+    line_height, effective_gap = _lines_metric_height(
+        draw, lines, font, gap, stroke_width=stroke_width
     )
-    _, line_height = _measure(draw, script_line, font)
     shadow_x, shadow_y = shadow_offset
     for line in lines:
         if shadow_x or shadow_y:
@@ -381,7 +400,7 @@ def _draw_lines(
                 stroke_fill=stroke_fill,
             )
         draw.text((x, y), line, font=font, fill=fill, stroke_width=stroke_width, stroke_fill=stroke_fill)
-        y += line_height + gap
+        y += line_height + effective_gap
     return y
 
 
@@ -682,8 +701,13 @@ def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None)
             bold=False, font_fn=_font_body,
         )
 
-    attr_height = sum(_measure(draw, line, attr_font)[1] + 4 for line in attr_lines)
-    context_height = sum(_measure(draw, line, context_font)[1] + 4 for line in context_lines) if context_font else 0
+    attr_lh, attr_gap = _lines_metric_height(draw, attr_lines, attr_font, 4)
+    attr_height = attr_lh * len(attr_lines) + attr_gap * max(0, len(attr_lines) - 1)
+    if context_lines and context_font:
+        ctx_lh, ctx_gap = _lines_metric_height(draw, context_lines, context_font, 4)
+        context_height = ctx_lh * len(context_lines) + ctx_gap * max(0, len(context_lines) - 1)
+    else:
+        context_height = 0
     tail_height = 30 + 5 + 24 + attr_height + (8 + context_height if context_lines else 0)
     target_rule_y = SAFE_BOTTOM - tail_height
     rule_y = max(quote_bottom + (24 if bottom_mode else 20), target_rule_y - 18)

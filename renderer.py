@@ -906,16 +906,29 @@ def _top5_headline_font_stack(size: int, language: str) -> tuple[object, ...]:
     return (ImageFont.truetype(str(path), size),) if path.is_file() else (ImageFont.load_default(),)
 
 
-def _top5_two_line_headline(draw: ImageDraw.ImageDraw, words: list[str], fonts: tuple[object, ...]):
+def _top5_two_line_headline(
+    draw: ImageDraw.ImageDraw,
+    words: list[str],
+    fonts: tuple[object, ...],
+    language: str | None = None,
+):
     if len(words) < 2:
         width, height = _top5_editorial_measure(draw, " ".join(words), fonts)
         return [words], width, height
+    lang = _normalise_indic_language(language) if language else _indic_language_for_text(" ".join(words))
+    is_indic = lang in {"hindi", "telugu"}
+    gap = max(TOP5_EDITORIAL_HEADLINE_LINE_GAP, int(getattr(fonts[0], "size", 72) * 0.18)) if is_indic else TOP5_EDITORIAL_HEADLINE_LINE_GAP
     best = None
     for split in range(1, len(words)):
         first, second = words[:split], words[split:]
         w1, h1 = _top5_editorial_measure(draw, " ".join(first), fonts)
         w2, h2 = _top5_editorial_measure(draw, " ".join(second), fonts)
-        candidate = (abs(w1 - w2), [first, second], max(w1, w2), h1 + TOP5_EDITORIAL_HEADLINE_LINE_GAP + h2)
+        if is_indic and hasattr(fonts[0], "getmetrics"):
+            ascent, descent = fonts[0].getmetrics()
+            metric_h = ascent + descent
+            h1 = max(metric_h, h1)
+            h2 = max(metric_h, h2)
+        candidate = (abs(w1 - w2), [first, second], max(w1, w2), h1 + gap + h2)
         if best is None or candidate[0] < best[0]:
             best = candidate
     return best[1], best[2], best[3]
@@ -954,15 +967,20 @@ def _top5_editorial_layout(
             if width <= rw and height <= rh:
                 return rx1 + (rw - width) // 2, ry1 + (rh - height) // 2, width, height, fonts, [words], size
             if max_headline_lines >= 2:
-                two = _top5_two_line_headline(draw, words, fonts)
+                two = _top5_two_line_headline(draw, words, fonts, language=language)
                 if two[1] <= rw and two[2] <= rh:
                     return rx1 + (rw - two[1]) // 2, ry1 + (rh - two[2]) // 2, two[1], two[2], fonts, two[0], size
             if max_headline_lines > 2:
                 lines = _top5_wrap_editorial_words(draw, clean_headline, fonts, rw)
                 if 1 <= len(lines) <= max_headline_lines:
-                    heights = [_top5_editorial_measure(draw, " ".join(line), fonts)[1] for line in lines]
+                    h_gap = max(TOP5_EDITORIAL_HEADLINE_LINE_GAP, int(size * 0.18)) if language in {"hindi", "telugu"} else TOP5_EDITORIAL_HEADLINE_LINE_GAP
+                    if language in {"hindi", "telugu"} and hasattr(fonts[0], "getmetrics"):
+                        ascent, descent = fonts[0].getmetrics()
+                        heights = [max(ascent + descent, _top5_editorial_measure(draw, " ".join(line), fonts)[1]) for line in lines]
+                    else:
+                        heights = [_top5_editorial_measure(draw, " ".join(line), fonts)[1] for line in lines]
                     width = max(_top5_editorial_measure(draw, " ".join(line), fonts)[0] for line in lines)
-                    height = sum(heights) + TOP5_EDITORIAL_HEADLINE_LINE_GAP * (len(lines) - 1)
+                    height = sum(heights) + h_gap * (len(lines) - 1)
                     if width <= rw and height <= rh:
                         return rx1 + (rw - width) // 2, ry1 + (rh - height) // 2, width, height, fonts, lines, size
         return None
@@ -979,9 +997,23 @@ def _top5_editorial_layout(
             for body_size in range(TOP5_EDITORIAL_BODY_MAX_SIZE, TOP5_EDITORIAL_BODY_MIN_SIZE - 1, -2):
                 font = _top5_body_font(body_size, body_language)
                 lines_body = _top5_wrap_editorial_words(draw, clean_body, (font,), safe_width)
-                box = draw.textbbox((0, 0), "Ag", font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
-                line_height = box[3] - box[1]
-                height_body = line_height * len(lines_body) + TOP5_EDITORIAL_BODY_LINE_GAP * max(0, len(lines_body) - 1)
+                if body_language in {"hindi", "telugu"} and hasattr(font, "getmetrics"):
+                    ascent, descent = font.getmetrics()
+                    metric_h = ascent + descent + TOP5_EDITORIAL_STROKE_WIDTH * 2
+                    line_ink_h = max(
+                        (
+                            draw.textbbox((0, 0), " ".join(lw), font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)[3]
+                            - draw.textbbox((0, 0), " ".join(lw), font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)[1]
+                        )
+                        for lw in lines_body
+                    ) if lines_body else 0
+                    line_height = max(metric_h, line_ink_h)
+                    b_gap = max(TOP5_EDITORIAL_BODY_LINE_GAP, int(body_size * 0.18))
+                else:
+                    box = draw.textbbox((0, 0), "Ag", font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
+                    line_height = box[3] - box[1]
+                    b_gap = TOP5_EDITORIAL_BODY_LINE_GAP
+                height_body = line_height * len(lines_body) + b_gap * max(0, len(lines_body) - 1)
                 if y + height + TOP5_EDITORIAL_HEADLINE_BODY_GAP + height_body <= bottom:
                     body_font, body_lines, body_height = font, lines_body, height_body
                     break
@@ -994,7 +1026,7 @@ def _top5_editorial_layout(
             "body_gap": TOP5_EDITORIAL_HEADLINE_BODY_GAP if body_lines else 0,
             "total_height": total_height, "zone_bottom": bottom, "subject_overlap": 0.0,
             "subject_bbox": None, "composition_mode": "editorial", "region_mode": "static",
-            "story_number": story_number,
+            "story_number": story_number, "language": language, "body_language": body_language,
         }
 
     mask = subject_mask.convert("L").point(lambda value: 255 if value >= 96 else 0)
@@ -1009,11 +1041,14 @@ def _top5_editorial_layout(
     for size in range(TOP5_SUBJECT_HEADLINE_MAX_SIZE, TOP5_SUBJECT_HEADLINE_MIN_SIZE - 1, -2):
         fonts = _top5_headline_font_stack(size, language)
         width, height = _top5_editorial_measure(draw, clean_headline, fonts)
+        if language in {"hindi", "telugu"} and hasattr(fonts[0], "getmetrics"):
+            ascent, descent = fonts[0].getmetrics()
+            height = max(ascent + descent, height)
         lines = [words]
         if width > safe_width or height > (bottom - top):
             if max_headline_lines < 2:
                 continue
-            two = _top5_two_line_headline(draw, words, fonts)
+            two = _top5_two_line_headline(draw, words, fonts, language=language)
             if two[1] > safe_width or two[2] > (bottom - top):
                 continue
             lines, width, height = two[0], two[1], two[2]
@@ -1048,7 +1083,7 @@ def _top5_editorial_layout(
                     "body_gap": 0, "total_height": height, "zone_bottom": bottom,
                     "subject_overlap": overlap_ratio, "subject_bbox": bbox,
                     "composition_mode": "subject-cutout", "region_mode": "hero-overlay",
-                    "story_number": story_number,
+                    "story_number": story_number, "language": language, "body_language": body_language,
                 }
 
     raise ValueError("Top-5 Subject Cutout could not place the headline.")
@@ -1155,6 +1190,12 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     commands = []
     cursor_y = layout["y"]
 
+    h_lang = layout.get("language") or _indic_language_for_text(" ".join(" ".join(lw) for lw in layout["headline_lines"]))
+    headline_gap = (
+        max(TOP5_EDITORIAL_HEADLINE_LINE_GAP, int(layout["headline_size"] * 0.18))
+        if h_lang in {"hindi", "telugu"}
+        else TOP5_EDITORIAL_HEADLINE_LINE_GAP
+    )
     for line_words in layout["headline_lines"]:
         line = " ".join(line_words)
         cursor_x = layout["x"]
@@ -1162,14 +1203,35 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
             box = draw.textbbox((0, 0), run, font=font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
             commands.append((run, font, cursor_x, cursor_y))
             cursor_x += box[2] - box[0]
-        cursor_y += _top5_editorial_measure(draw, line, layout["headline_fonts"])[1] + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+        line_measure_h = _top5_editorial_measure(draw, line, layout["headline_fonts"])[1]
+        if h_lang in {"hindi", "telugu"} and hasattr(layout["headline_fonts"][0], "getmetrics"):
+            ascent, descent = layout["headline_fonts"][0].getmetrics()
+            line_measure_h = max(ascent + descent, line_measure_h)
+        cursor_y += line_measure_h + headline_gap
 
     if layout["body_lines"] and layout["body_font"] is not None:
         cursor_y = layout["y"] + layout["headline_height"] + TOP5_EDITORIAL_HEADLINE_BODY_GAP
+        b_font = layout["body_font"]
+        b_lang = layout.get("body_language") or h_lang
+        if b_lang in {"hindi", "telugu"} and hasattr(b_font, "getmetrics"):
+            ascent, descent = b_font.getmetrics()
+            metric_h = ascent + descent + TOP5_EDITORIAL_STROKE_WIDTH * 2
+            line_ink_h = max(
+                (
+                    draw.textbbox((0, 0), " ".join(lw), font=b_font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)[3]
+                    - draw.textbbox((0, 0), " ".join(lw), font=b_font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)[1]
+                )
+                for lw in layout["body_lines"]
+            ) if layout["body_lines"] else 0
+            b_line_height = max(metric_h, line_ink_h)
+            b_gap = max(TOP5_EDITORIAL_BODY_LINE_GAP, int(getattr(b_font, "size", 30) * 0.18))
+        else:
+            box = draw.textbbox((0, 0), "Ag", font=b_font, stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
+            b_line_height = box[3] - box[1]
+            b_gap = TOP5_EDITORIAL_BODY_LINE_GAP
         for line_words in layout["body_lines"]:
-            commands.append((" ".join(line_words), layout["body_font"], layout["x"], cursor_y))
-            box = draw.textbbox((0, 0), "Ag", font=layout["body_font"], stroke_width=TOP5_EDITORIAL_STROKE_WIDTH)
-            cursor_y += box[3] - box[1] + TOP5_EDITORIAL_BODY_LINE_GAP
+            commands.append((" ".join(line_words), b_font, layout["x"], cursor_y))
+            cursor_y += b_line_height + b_gap
 
     crop_box = (
         max(0, layout["x"]),
@@ -1421,20 +1483,46 @@ def _manual_subject_cutout_layout_data_uncached(
     else:
         # Preserve Pillow's established default layout engine for English.
         font = ImageFont.truetype(BytesIO(font_data), requested_size)
-    line_box = probe.textbbox(
-        (0, 0),
-        "Ag",
-        font=font,
-        stroke_width=stroke_width,
-    )
-    line_height = max(1, line_box[3] - line_box[1])
+    ascent, descent = font.getmetrics()
+    metric_height = ascent + descent + stroke_width * 2
+    if script_language in {"hindi", "telugu"}:
+        sample_text = (
+            "क्षेत्रों की उपलब्धियों"
+            if script_language == "hindi"
+            else "క్రీడాకారుల విజయం"
+        )
+        sample_box = probe.textbbox(
+            (0, 0),
+            sample_text,
+            font=font,
+            stroke_width=stroke_width,
+        )
+        sample_height = sample_box[3] - sample_box[1]
+        word_max_height = max(
+            (
+                probe.textbbox((0, 0), word, font=font, stroke_width=stroke_width)[3]
+                - probe.textbbox((0, 0), word, font=font, stroke_width=stroke_width)[1]
+            )
+            for word in words
+        ) if words else 0
+        line_height = max(metric_height, sample_height, word_max_height)
+        line_gap = max(TOP5_EDITORIAL_HEADLINE_LINE_GAP, int(requested_size * 0.18))
+    else:
+        line_box = probe.textbbox(
+            (0, 0),
+            "Ag",
+            font=font,
+            stroke_width=stroke_width,
+        )
+        line_height = max(1, line_box[3] - line_box[1])
+        line_gap = TOP5_EDITORIAL_HEADLINE_LINE_GAP
 
     max_line_count = min(
         len(words),
         max(
             0,
-            (box_height - 4 + TOP5_EDITORIAL_HEADLINE_LINE_GAP)
-            // (line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP),
+            (box_height - 4 + line_gap)
+            // (line_height + line_gap),
         ),
     )
     split_masks = (
@@ -1458,7 +1546,7 @@ def _manual_subject_cutout_layout_data_uncached(
 
         total_height = (
             line_height * len(lines)
-            + TOP5_EDITORIAL_HEADLINE_LINE_GAP * max(0, len(lines) - 1)
+            + line_gap * max(0, len(lines) - 1)
         )
         if total_height > box_height - 4:
             continue
@@ -1483,7 +1571,7 @@ def _manual_subject_cutout_layout_data_uncached(
             for line_index, end in enumerate(breaks):
                 line = " ".join(words[word_index:end])
                 line_top = cand_y + line_index * (
-                    line_height + TOP5_EDITORIAL_HEADLINE_LINE_GAP
+                    line_height + line_gap
                 )
                 line_bottom = line_top + line_height
                 position = line_position(line, font, line_top, line_bottom)
@@ -2196,18 +2284,21 @@ def _subtitle_render_geometry_cached(
         )
         for word in words
     )
+    ascent, descent = font.getmetrics()
+    metric_height = ascent + descent + SUBTITLE_STROKE_WIDTH * 2
+    is_indic = _normalise_indic_language(language) in {"hindi", "telugu"} or _indic_language_for_text(" ".join(word_texts)) in {"hindi", "telugu"}
+    subtitle_line_gap = max(SUBTITLE_LINE_GAP, int(font.size * 0.20)) if is_indic else SUBTITLE_LINE_GAP
     line_heights = []
     offset = 0
     for length in line_lengths:
         indices = range(offset, offset + length)
-        line_heights.append(
-            max(
-                measurements[index][3] - measurements[index][1]
-                for index in indices
-            )
+        ink_h = max(
+            measurements[index][3] - measurements[index][1]
+            for index in indices
         )
+        line_heights.append(max(metric_height, ink_h) if is_indic else ink_h)
         offset += length
-    total_height = sum(line_heights) + SUBTITLE_LINE_GAP * max(
+    total_height = sum(line_heights) + subtitle_line_gap * max(
         0, len(line_heights) - 1
     )
     return font, line_lengths, measurements, tuple(line_heights), total_height
@@ -2238,6 +2329,8 @@ def _draw_subtitles(
 
     y = (int(y_position) if y_position is not None else SUBTITLE_Y) - total_height // 2
     ascent, _ = font.getmetrics()
+    is_indic = _normalise_indic_language(language) in {"hindi", "telugu"} or _indic_language_for_text(" ".join(str(w.get("text") or "") for w in words)) in {"hindi", "telugu"}
+    subtitle_line_gap = max(SUBTITLE_LINE_GAP, int(font.size * 0.20)) if is_indic else SUBTITLE_LINE_GAP
 
     word_index = 0
     for row, line in enumerate(lines):
@@ -2271,7 +2364,7 @@ def _draw_subtitles(
             )
             cursor += width + SUBTITLE_WORD_SPACING
 
-        y += line_heights[row] + SUBTITLE_LINE_GAP
+        y += line_heights[row] + subtitle_line_gap
         word_index += len(line)
 
 
