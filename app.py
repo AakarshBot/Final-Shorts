@@ -1,4 +1,5 @@
 from __future__ import annotations
+import indic_bootstrap
 import base64
 import hashlib
 import json
@@ -2158,8 +2159,13 @@ def _render_manual_subject_cutout(
     polygon_flow: bool = True,
 ):
     from renderer import (
+        LANGUAGE_MANUAL_SUBJECT_FONTS,
+        LANGUAGE_MANUAL_SUBJECT_STYLES,
         MANUAL_SUBJECT_FONT_OPTIONS,
         MANUAL_SUBJECT_STYLE_OPTIONS,
+        MANUAL_SUBJECT_FONT_OPTIONS_EN,
+        MANUAL_SUBJECT_STYLE_OPTIONS_EN,
+        _indic_language_for_text,
         build_manual_subject_cutout_layout_previews,
         build_manual_subject_cutout_preview,
     )
@@ -2171,6 +2177,7 @@ def _render_manual_subject_cutout(
     for key, value in {
         "image_key": None,
         "mode": "Negative Space",
+        "language": "English",
         "font": "Barlow Condensed",
         "style": "Crisp Outline",
         "headline_source": "",
@@ -2395,16 +2402,64 @@ def _render_manual_subject_cutout(
         key=f"{state_id}-mode",
         label_visibility="collapsed",
     ) or state["mode"]
+
+    detected_lang = "English"
+    script_lang = _indic_language_for_text(headline)
+    if script_lang == "hindi":
+        detected_lang = "Hindi"
+    elif script_lang == "telugu":
+        detected_lang = "Telugu"
+
+    last_script = state.get("_last_script")
+    if script_lang and script_lang != last_script:
+        state["language"] = detected_lang
+        state["_last_script"] = script_lang
+    elif not state.get("language"):
+        state["language"] = detected_lang
+
+    current_lang = state.get("language", "English")
+    if current_lang not in ("English", "Hindi", "Telugu"):
+        current_lang = "English"
+
+    lang_key = f"{state_id}-language"
+    chosen_lang = st.pills(
+        "Language",
+        ["English", "Hindi", "Telugu"],
+        default=current_lang,
+        key=lang_key,
+        label_visibility="collapsed",
+    )
+    if chosen_lang and chosen_lang != state.get("language"):
+        state["language"] = chosen_lang
+        new_lang_key = chosen_lang.lower()
+        new_fonts = list(LANGUAGE_MANUAL_SUBJECT_FONTS.get(new_lang_key, MANUAL_SUBJECT_FONT_OPTIONS_EN))
+        new_styles = list(LANGUAGE_MANUAL_SUBJECT_STYLES.get(new_lang_key, MANUAL_SUBJECT_STYLE_OPTIONS_EN))
+        state["font"] = new_fonts[0]
+        state["style"] = new_styles[0]
+        st.session_state[f"{state_id}-font"] = new_fonts[0]
+        st.session_state[f"{state_id}-style"] = new_styles[0]
+
+    active_lang_key = state.get("language", "English").lower()
+    available_fonts = list(LANGUAGE_MANUAL_SUBJECT_FONTS.get(active_lang_key, MANUAL_SUBJECT_FONT_OPTIONS_EN))
+    available_styles = list(LANGUAGE_MANUAL_SUBJECT_STYLES.get(active_lang_key, MANUAL_SUBJECT_STYLE_OPTIONS_EN))
+
+    if state.get("font") not in available_fonts:
+        state["font"] = available_fonts[0]
+        st.session_state[f"{state_id}-font"] = available_fonts[0]
+    if state.get("style") not in available_styles:
+        state["style"] = available_styles[0]
+        st.session_state[f"{state_id}-style"] = available_styles[0]
+
     state["font"] = st.pills(
         "Font",
-        list(MANUAL_SUBJECT_FONT_OPTIONS),
+        available_fonts,
         default=state["font"],
         key=f"{state_id}-font",
         label_visibility="collapsed",
     ) or state["font"]
     state["style"] = st.pills(
         "Text style",
-        list(MANUAL_SUBJECT_STYLE_OPTIONS),
+        available_styles,
         default=state["style"],
         key=f"{state_id}-style",
         label_visibility="collapsed",

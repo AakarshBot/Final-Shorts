@@ -9,6 +9,8 @@ from functools import lru_cache
 from io import BytesIO
 from pathlib import Path
 
+import indic_bootstrap
+
 from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageStat, features
 
 

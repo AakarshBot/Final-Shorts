@@ -707,8 +707,14 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
         lambda _font_name: local_font,
     )
 
-    assert len(renderer.MANUAL_SUBJECT_FONT_OPTIONS) == 9
-    assert len(renderer.MANUAL_SUBJECT_STYLE_OPTIONS) == 9
+    assert len(renderer.MANUAL_SUBJECT_FONT_OPTIONS_EN) == 11
+    assert len(renderer.MANUAL_SUBJECT_STYLE_OPTIONS_EN) == 11
+    assert len(renderer.MANUAL_SUBJECT_FONT_OPTIONS_HI) == 3
+    assert len(renderer.MANUAL_SUBJECT_STYLE_OPTIONS_HI) == 3
+    assert len(renderer.MANUAL_SUBJECT_FONT_OPTIONS_TE) == 3
+    assert len(renderer.MANUAL_SUBJECT_STYLE_OPTIONS_TE) == 3
+    assert len(renderer.MANUAL_SUBJECT_FONT_OPTIONS) == 17
+    assert len(renderer.MANUAL_SUBJECT_STYLE_OPTIONS) == 11
 
     for font in renderer.MANUAL_SUBJECT_FONT_OPTIONS:
         preview = renderer.build_manual_subject_cutout_preview(
@@ -736,7 +742,7 @@ def test_top5_manual_subject_cutout_exposes_nine_fonts_and_nine_styles(monkeypat
 
     assert all(
         renderer.MANUAL_SUBJECT_FONT_OPTIONS[name].get("url")
-        for name in ("Bebas Neue", "Teko", "Khand", "Kanit", "Fjalla One")
+        for name in ("Bebas Neue", "Teko", "Khand", "Kanit", "Fjalla One", "Archivo Black", "Russo One", "Rozha One", "Yatra One", "Ramabhadra", "Mandali")
     )
 
 

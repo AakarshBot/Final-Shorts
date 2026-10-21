@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import indic_bootstrap
 from io import BytesIO
 import ctypes
 import hashlib
@@ -398,18 +399,39 @@ TOP5_SUBJECT_REMOVAL_MODEL = "ZhengPeng7/BiRefNet"
 MANUAL_SUBJECT_MIN_FONT_SIZE = 72
 MANUAL_SUBJECT_MAX_FONT_SIZE = 260
 MANUAL_SUBJECT_DEFAULT_FONT_SIZE = 150
-MANUAL_SUBJECT_FONT_OPTIONS = {
+MANUAL_SUBJECT_FONT_OPTIONS_EN = {
     "Barlow Condensed": {"file": "BarlowCondensed-Black.ttf"},
     "Anton": {"file": "Anton-Regular.ttf"},
     "Oswald": {"file": "Oswald-Bold.ttf"},
     "Barlow": {"file": "Barlow-Regular.ttf"},
-    "Bebas Neue": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf"},
-    "Teko": {"url": "https://raw.githubusercontent.com/itfoundry/teko/master/build/Teko-Bold.otf"},
-    "Khand": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/khand/Khand-Bold.ttf"},
-    "Kanit": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/kanit/Kanit-Black.ttf"},
-    "Fjalla One": {"url": "https://raw.githubusercontent.com/google/fonts/main/ofl/fjallaone/FjallaOne-Regular.ttf"},
+    "Bebas Neue": {"file": "BebasNeue-Regular.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/bebasneue/BebasNeue-Regular.ttf"},
+    "Teko": {"file": "Teko-Bold.otf", "url": "https://raw.githubusercontent.com/itfoundry/teko/master/build/Teko-Bold.otf"},
+    "Khand": {"file": "Khand-Bold.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/khand/Khand-Bold.ttf"},
+    "Kanit": {"file": "Kanit-Black.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/kanit/Kanit-Black.ttf"},
+    "Fjalla One": {"file": "FjallaOne-Regular.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/fjallaone/FjallaOne-Regular.ttf"},
+    "Archivo Black": {"file": "ArchivoBlack-Regular.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/archivoblack/ArchivoBlack-Regular.ttf"},
+    "Russo One": {"file": "RussoOne-Regular.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/russoone/RussoOne-Regular.ttf"},
 }
-MANUAL_SUBJECT_STYLE_OPTIONS = (
+
+MANUAL_SUBJECT_FONT_OPTIONS_HI = {
+    "Noto Sans Devanagari": {"file": "NotoSansDevanagari-Bold.ttf"},
+    "Rozha One": {"file": "RozhaOne-Regular.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/rozhaone/RozhaOne-Regular.ttf"},
+    "Yatra One": {"file": "YatraOne-Regular.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/yatraone/YatraOne-Regular.ttf"},
+}
+
+MANUAL_SUBJECT_FONT_OPTIONS_TE = {
+    "Noto Sans Telugu": {"file": "NotoSansTelugu-Bold.ttf"},
+    "Ramabhadra": {"file": "Ramabhadra-Regular.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/ramabhadra/Ramabhadra-Regular.ttf"},
+    "Mandali": {"file": "Mandali-Regular.ttf", "url": "https://raw.githubusercontent.com/google/fonts/main/ofl/mandali/Mandali-Regular.ttf"},
+}
+
+LANGUAGE_MANUAL_SUBJECT_FONTS = {
+    "english": MANUAL_SUBJECT_FONT_OPTIONS_EN,
+    "hindi": MANUAL_SUBJECT_FONT_OPTIONS_HI,
+    "telugu": MANUAL_SUBJECT_FONT_OPTIONS_TE,
+}
+
+MANUAL_SUBJECT_STYLE_OPTIONS_EN = (
     "Crisp Outline",
     "Soft Halo",
     "Long Fade",
@@ -419,7 +441,34 @@ MANUAL_SUBJECT_STYLE_OPTIONS = (
     "Split Shadow",
     "3D Extrusion",
     "Chromatic Echo",
+    "Neon Pulse",
+    "Deep Block",
 )
+
+MANUAL_SUBJECT_STYLE_OPTIONS_HI = (
+    "Crisp Outline",
+    "Heavy Drop",
+    "Soft Halo",
+)
+
+MANUAL_SUBJECT_STYLE_OPTIONS_TE = (
+    "Crisp Outline",
+    "Heavy Drop",
+    "Soft Halo",
+)
+
+LANGUAGE_MANUAL_SUBJECT_STYLES = {
+    "english": MANUAL_SUBJECT_STYLE_OPTIONS_EN,
+    "hindi": MANUAL_SUBJECT_STYLE_OPTIONS_HI,
+    "telugu": MANUAL_SUBJECT_STYLE_OPTIONS_TE,
+}
+
+MANUAL_SUBJECT_FONT_OPTIONS = {
+    **MANUAL_SUBJECT_FONT_OPTIONS_EN,
+    **MANUAL_SUBJECT_FONT_OPTIONS_HI,
+    **MANUAL_SUBJECT_FONT_OPTIONS_TE,
+}
+MANUAL_SUBJECT_STYLE_OPTIONS = MANUAL_SUBJECT_STYLE_OPTIONS_EN
 
 
 def _normalise_indic_language(language: str | None) -> str:
@@ -1171,35 +1220,42 @@ def _draw_top5_editorial_card(base: Image.Image, card: dict) -> Image.Image:
     return canvas
 
 
-@lru_cache(maxsize=16)
+@lru_cache(maxsize=64)
 def _manual_subject_font_bytes(font_name: str) -> bytes:
     source = MANUAL_SUBJECT_FONT_OPTIONS.get(font_name)
     if not source:
-        raise ValueError("Manual Subject Cutout has an invalid font.")
+        raise ValueError(f"Manual Subject Cutout has an invalid font: {font_name}")
     if source.get("file"):
         path = Path(__file__).resolve().parent / "fonts" / str(source["file"])
-        if not path.exists():
-            raise RuntimeError(f"Manual Subject Cutout requires the bundled {font_name} font.")
-        return path.read_bytes()
-    from urllib.request import urlopen
-    try:
-        with urlopen(str(source["url"]), timeout=20) as response:
-            return response.read()
-    except Exception as exc:
-        raise RuntimeError(f"Manual Subject Cutout could not load the {font_name} font.") from exc
+        if path.is_file():
+            return path.read_bytes()
+    if source.get("url"):
+        from urllib.request import urlopen
+        try:
+            with urlopen(str(source["url"]), timeout=20) as response:
+                return response.read()
+        except Exception as exc:
+            raise RuntimeError(f"Manual Subject Cutout could not load the {font_name} font.") from exc
+    raise RuntimeError(f"Manual Subject Cutout requires the bundled {font_name} font.")
 
 
 
 def _manual_subject_text_font_bytes(headline: str, font_name: str) -> bytes:
     script_language = _indic_language_for_text(headline)
-    if not script_language:
+    if script_language:
+        _require_raqm(script_language)
+        if script_language == "hindi":
+            if font_name in MANUAL_SUBJECT_FONT_OPTIONS_HI:
+                return _manual_subject_font_bytes(font_name)
+            return _manual_subject_font_bytes("Noto Sans Devanagari")
+        elif script_language == "telugu":
+            if font_name in MANUAL_SUBJECT_FONT_OPTIONS_TE:
+                return _manual_subject_font_bytes(font_name)
+            return _manual_subject_font_bytes("Noto Sans Telugu")
+
+    if font_name in MANUAL_SUBJECT_FONT_OPTIONS:
         return _manual_subject_font_bytes(font_name)
-    _require_raqm(script_language)
-    filename = "NotoSansDevanagari-Bold.ttf" if script_language == "hindi" else "NotoSansTelugu-Bold.ttf"
-    path = Path(__file__).resolve().parent / "fonts" / filename
-    if not path.is_file():
-        raise RuntimeError(f"Text Subject Cutout requires the bundled {filename} for {script_language.title()} copy.")
-    return path.read_bytes()
+    return _manual_subject_font_bytes("Barlow Condensed")
 
 
 
@@ -1270,7 +1326,9 @@ def _manual_subject_cutout_layout_data_uncached(
         "Split Shadow": 3,
         "3D Extrusion": 3,
         "Chromatic Echo": 3,
-    }[clean_style]
+        "Neon Pulse": 5,
+        "Deep Block": 4,
+    }.get(clean_style, 3)
 
     def polygon_intervals(y_value: float) -> list[tuple[float, float]]:
         y_value = max(0.0, min(HEIGHT - 0.001, y_value))
@@ -1634,6 +1692,16 @@ def _draw_manual_subject_cutout_frame(
         shifted_layer(-7, 5, 175, 1, ACCENT)
         shifted_layer(7, -4, 130, 2)
         shifted_layer(0, 6, 145, 5)
+    elif style == "Neon Pulse":
+        shifted_layer(0, 0, 190, 18, ACCENT)
+        shifted_layer(0, 0, 130, 30, (0, 215, 255))
+        shifted_layer(0, 5, 220, 3)
+    elif style == "Deep Block":
+        shifted_layer(3, 3, 255)
+        shifted_layer(6, 6, 255)
+        shifted_layer(9, 9, 255)
+        shifted_layer(12, 12, 255)
+        shifted_layer(15, 18, 190, 5)
 
     draw = ImageDraw.Draw(canvas, "RGBA")
     for line, line_top, cursor_x, bbox in placements:
