@@ -4142,7 +4142,9 @@ def _render_app_sidebar():
             labels = [stage["key"] for stage in STAGES]
             current = st.session_state.test_stage
             previously_rendered = st.session_state.get("_test_stage_switcher_rendered_stage")
-            if previously_rendered is None or current != previously_rendered:
+            if "test-stage-switcher" not in st.session_state or (
+                previously_rendered is not None and current != previously_rendered
+            ):
                 st.session_state["test-stage-switcher"] = current
             selected = st.pills(
                 "Pipeline",
@@ -4173,7 +4175,9 @@ def _render_app_sidebar():
                 if current not in live_labels:
                     current = live_labels[0]
                 previously_rendered = st.session_state.get("_live_stage_switcher_rendered_stage")
-                if previously_rendered is None or current != previously_rendered:
+                if "live-stage-switcher" not in st.session_state or (
+                    previously_rendered is not None and current != previously_rendered
+                ):
                     st.session_state["live-stage-switcher"] = current
                 st.markdown(
                     '<div style="display:flex;align-items:center;justify-content:space-between;margin:12px 0 6px 0;">'
