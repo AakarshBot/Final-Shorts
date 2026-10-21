@@ -980,6 +980,28 @@ def _normalise_name(value) -> str:
     return " ".join("".join(characters).split())
 
 
+def _spoken_entity_spelling(candidate, voiceover) -> str:
+    """Return a primary-entity spelling actually spoken, even if it has descriptors."""
+    candidate_text = _clean(candidate)
+    narration = _normalise_name(voiceover)
+    normalised_candidate = _normalise_name(candidate_text)
+    if not candidate_text or not narration:
+        return ""
+    if normalised_candidate and normalised_candidate in narration:
+        return candidate_text
+
+    # Models sometimes put qualifiers after a person's name in primary_entity.
+    # Match the longest contiguous native-script phrase that is actually spoken.
+    pieces = candidate_text.split()
+    for width in range(len(pieces) - 1, 1, -1):
+        for start in range(len(pieces) - width + 1):
+            phrase = " ".join(pieces[start : start + width]).strip(" \t\r\n.,:;()[]{}")
+            normalised_phrase = _normalise_name(phrase)
+            if normalised_phrase and normalised_phrase in narration:
+                return phrase
+    return ""
+
+
 def _normalize_profile(profile: str | None) -> str:
     p = str(profile or "").strip().lower().replace("-", "_")
     if p in {"cricket_india", "india_asia", "cricket_india_asia", "deep_dive"}:
@@ -1014,19 +1036,17 @@ def _prepare_generated_script(result, language_key: str):
         ))
         subject = _normalise_name(result.get("subject_name"))
         if not subject or subject not in narration:
-            # In native-script output, the first slide's primary entity is the
-            # strongest grounded alternative spelling for the spoken subject.
+            # A spoken native-script primary entity is stronger evidence than the
+            # model's separate subject_name field. Do not reject it because its
+            # word count differs or primary_entity includes an unspoken qualifier.
             for scene in scenes[:2]:
                 if not isinstance(scene, dict):
                     continue
-                candidate = _clean(scene.get("primary_entity"))
-                voiceover = _normalise_name(scene.get("voiceover"))
-                candidate_normalised = _normalise_name(candidate)
-                same_name_shape = (
-                    not subject
-                    or len(candidate_normalised.split()) == len(subject.split())
+                candidate = _spoken_entity_spelling(
+                    scene.get("primary_entity"),
+                    scene.get("voiceover"),
                 )
-                if candidate_normalised and candidate_normalised in voiceover and same_name_shape:
+                if candidate:
                     result["subject_name"] = candidate
                     break
 
@@ -1503,11 +1523,11 @@ def _request(
                 wait_seconds = float(rate_limit_error.retry_after) if rate_limit_error.retry_after else float(2 ** attempt)
             except (TypeError, ValueError):
                 wait_seconds = float(2 ** attempt)
-            # Respect Groq's retry window rather than immediately spending a
-            # backup-model call against the same organisation TPM limit. If the
-            # provider asks for a long wait, surface the error instead of sleeping
-            # for an unbounded period or retrying too early.
-            if 0 <= wait_seconds <= 30:
+            # Groq's TPM Retry-After can exceed 30 seconds. Respect a bounded
+            # provider retry window (including the common ~37s TPM reset) before
+            # trying again; otherwise the caller immediately fails over to another
+            # large request against the same organisation-wide token limit.
+            if 0 <= wait_seconds <= 90:
                 time.sleep(max(1.0, wait_seconds))
                 continue
         break

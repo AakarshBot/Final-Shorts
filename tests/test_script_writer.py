@@ -1126,7 +1126,40 @@ def test_name_normalisation_preserves_indic_marks_and_ignores_zero_width_formatt
     assert script_writer._normalise_name("शुभमन गिल") == script_writer._normalise_name("शुभमन गिल")
 
 
-def test_groq_request_retries_rate_limit_after_retry_after(monkeypatch):
+@pytest.mark.parametrize(
+    ("language", "spoken_name", "entity_with_qualifier", "lead"),
+    [
+        (
+            "hindi",
+            "शुभमन गिल",
+            "शुभमन गिल (भारत)",
+            "शुभमन गिल की फिटनेस पर सवाल उठ रहे हैं।",
+        ),
+        (
+            "telugu",
+            "శుభ్‌మన్ గిల్",
+            "శుభ్‌మన్ గిల్ (భారతం)",
+            "శుభ్‌మన్ గిల్ ఫిట్‌నెస్‌పై ప్రశ్నలు కొనసాగుతున్నాయి.",
+        ),
+    ],
+)
+def test_indic_subject_recovery_uses_spoken_native_name_despite_word_count_mismatch(
+    language, spoken_name, entity_with_qualifier, lead
+):
+    result = valid_result()
+    result["subject_name"] = "Shubman Gill injury update"
+    result["script"][0]["voiceover"] = lead
+    result["script"][0]["primary_entity"] = entity_with_qualifier
+
+    prepared = script_writer._prepare_generated_script(result, language)
+
+    assert prepared["subject_name"] == spoken_name
+    valid, reason = script_writer.validate_cricket_script(prepared, language=language)
+    assert valid, reason
+
+
+@pytest.mark.parametrize("retry_after", [8, 37])
+def test_groq_request_retries_rate_limit_after_retry_after(monkeypatch, retry_after):
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
     captured = []
     sleeps = []
@@ -1145,7 +1178,7 @@ def test_groq_request_retries_rate_limit_after_retry_after(monkeypatch):
         FakeResponse(
             429,
             {"error": {"message": "TPM rate limit reached", "code": "rate_limit_exceeded"}},
-            {"Retry-After": "8"},
+            {"Retry-After": str(retry_after)},
         ),
         FakeResponse(200, {"choices": [{"message": {"content": json.dumps(valid_result())}}]}),
     ]
@@ -1161,7 +1194,7 @@ def test_groq_request_retries_rate_limit_after_retry_after(monkeypatch):
 
     assert result == valid_result()
     assert len(captured) == 2
-    assert sleeps == [8.0]
+    assert sleeps == [float(retry_after)]
 
 
 @pytest.mark.parametrize(
