@@ -1784,7 +1784,7 @@ def _draw_manual_subject_cutout_frame(
             font=data["font"], fill=255,
             stroke_width=data["stroke_width"], stroke_fill=255,
             target_width=target_width,
-            stretch_spaces=bool(data.get("stretch_english_lines")),
+            stretch_spaces=(bool(data.get("stretch_english_lines")) and mode == "behind-subject"),
         )
 
     def shifted_layer(
@@ -1855,14 +1855,14 @@ def _draw_manual_subject_cutout_frame(
                 font=data["font"], fill=WHITE + (255,),
                 stroke_width=9, stroke_fill=DARK + (255,),
                 target_width=target_width,
-                stretch_spaces=bool(data.get("stretch_english_lines")),
+                stretch_spaces=(bool(data.get("stretch_english_lines")) and mode == "behind-subject"),
             )
             _draw_manual_subject_cutout_line(
                 draw, line, line_top, cursor_x, bbox,
                 font=data["font"], fill=WHITE + (255,),
                 stroke_width=2, stroke_fill=DARK + (245,),
                 target_width=target_width,
-                stretch_spaces=bool(data.get("stretch_english_lines")),
+                stretch_spaces=(bool(data.get("stretch_english_lines")) and mode == "behind-subject"),
             )
         else:
             _draw_manual_subject_cutout_line(
@@ -1870,7 +1870,7 @@ def _draw_manual_subject_cutout_frame(
                 font=data["font"], fill=WHITE + (255,),
                 stroke_width=data["stroke_width"], stroke_fill=DARK + (245,),
                 target_width=target_width,
-                stretch_spaces=bool(data.get("stretch_english_lines")),
+                stretch_spaces=(bool(data.get("stretch_english_lines")) and mode == "behind-subject"),
             )
 
     if subject_mask is not None:
