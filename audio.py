@@ -718,7 +718,6 @@ def _chatterbox_result_from_manifest(
                 "path": str(slide_file),
                 "duration": round(duration, 3),
                 "timings": synthesize_linear_timings(text, duration),
-                "continuous_master_path": str(output_dir / "full.wav"),
                 "from_cache": from_cache,
             }
         )
@@ -732,7 +731,7 @@ def _chatterbox_result_from_manifest(
         "total_duration": round(total_duration, 3),
         "model": "Chatterbox Full" if model_version == "full" else "Chatterbox Turbo",
         "model_version": model_version,
-        "continuous_audio": True,
+        "continuous_audio": False,
         "reference": str(actual_ref) if actual_ref else "Built-in Chatterbox voice",
         "voice_label": voice_label or ("Voice reference" if actual_ref else "Built-in voice"),
         "scenes": scenes,
@@ -759,7 +758,7 @@ def generate_chatterbox_audio(
     reference: Path | str | None = None,
     model_version: str | None = None,
 ) -> dict[str, Any]:
-    """Generate one continuous Chatterbox take for all spoken slides and cache exact outputs."""
+    """Generate and cache each English Chatterbox slide as its own narration clip."""
     if isinstance(version_or_slides, dict):
         language = str(version_or_slides.get("language_used") or "english").strip().casefold()
         if language not in {"english", "en"}:
@@ -814,7 +813,7 @@ def generate_chatterbox_audio(
         else {"temperature": 0.90, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.15}
     )
     signature_payload = {
-        "cache_version": "chatterbox-continuous-take-v5-expressive-turbo",
+        "cache_version": "chatterbox-per-slide-v1-expressive-turbo",
         "model_version": selected_model,
         "text": full_text,
         "scene_texts": texts,
@@ -881,45 +880,57 @@ def generate_chatterbox_audio(
             pass
     manifest_path.unlink(missing_ok=True)
 
-    audio_text = _chatterbox_audio_texts(texts)
-    full_text = _join_narration_texts(audio_text)
-    # Seed by the exact take signature: same input remains reproducible, while
-    # different stories no longer all start with the same random sequence.
-    take_seed = int(signature[:8], 16) & 0x7FFFFFFF
-    full_wave = _generate_chatterbox_take(
-        model, full_text, selected_model, seed=take_seed
-    )
+    audio_texts = _chatterbox_audio_texts(texts)
+    # English Shorts and Top-5 use separate TTS calls for every approved slide.
+    # The measured clip duration becomes the visual hold and subtitle offset.
+    # Stable per-slide seeds make the output repeatable without estimating where
+    # one scene ends inside a shared waveform.
+    scene_waves = []
+    for scene_number, text in enumerate(audio_texts, 1):
+        scene_seed = int(
+            hashlib.sha256(f"{signature}:{scene_number}".encode("utf-8")).hexdigest()[:8],
+            16,
+        ) & 0x7FFFFFFF
+        scene_waves.append(
+            _generate_chatterbox_take(
+                model, text, selected_model, seed=scene_seed
+            )
+        )
 
-    raw_duration = full_wave.shape[-1] / model.sr
+    raw_duration = sum(wave.shape[-1] for wave in scene_waves) / model.sr
     corrected = False
     if raw_duration >= 30.0:
         try:
             import librosa
             rate = min(1.05, raw_duration / 29.7)
-            stretched = librosa.effects.time_stretch(
-                full_wave.squeeze(0).numpy(), rate=rate
-            )
-            full_wave = torch.from_numpy(stretched).to(torch.float32).unsqueeze(0)
+            scene_waves = [
+                torch.from_numpy(
+                    librosa.effects.time_stretch(
+                        wave.squeeze(0).numpy(), rate=rate
+                    )
+                ).to(torch.float32).unsqueeze(0)
+                for wave in scene_waves
+            ]
         except Exception as exc:
             raise RuntimeError(
-                "Audio is over 30 seconds and continuous-track time-stretch failed."
+                "Audio is over 30 seconds and per-slide time-stretch failed."
             ) from exc
         corrected = True
 
-    total_duration = full_wave.shape[-1] / model.sr
+    total_duration = sum(wave.shape[-1] for wave in scene_waves) / model.sr
     if total_duration >= 30.0:
         raise RuntimeError(
             "The generated narration is too long to fit the 30-second Short, "
             "even after one slight pitch-preserving speed adjustment."
         )
 
-    peak = full_wave.abs().max()
-    if peak.item() > 0:
-        full_wave = full_wave * (0.94 / peak)
+    peak = max(float(wave.abs().max().item()) for wave in scene_waves)
+    if peak > 0:
+        scene_waves = [wave * (0.94 / peak) for wave in scene_waves]
 
+    full_wave = torch.cat(scene_waves, dim=-1)
     master_path = out_path / "full.wav"
     torchaudio.save(str(master_path), full_wave, model.sr)
-    scene_waves = _split_waveform_by_text(full_wave, texts)
     durations = []
     for number, (wave, text) in enumerate(zip(scene_waves, texts), 1):
         slide_file = out_path / f"slide_{number:02d}.wav"

@@ -473,7 +473,7 @@ def test_audio_approval_creates_visual_handoff(tmp_path):
     assert result["approved_for_visuals"] is True
 
 
-def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeypatch, tmp_path):
+def test_chatterbox_generates_and_caches_each_slide_separately(monkeypatch, tmp_path):
     import sys
     import types
     import torch
@@ -510,16 +510,18 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
     second = audio.generate_chatterbox_audio(script, output_dir=output_dir)
 
     assert all(not scene["from_cache"] for scene in first["scenes"])
-    assert model.generate_calls[0][0] == audio._join_narration_texts([scene["voiceover"] for scene in script["script"]])
-    assert model.generate_calls[0][1] == {
+    assert [call[0] for call in model.generate_calls] == ["India won.", "Bowlers held."]
+    assert all(call[1] == {
         "temperature": 0.90,
         "top_p": 0.95,
         "top_k": 1000,
         "repetition_penalty": 1.15,
-    }
-    assert all(scene["continuous_master_path"] == first["full_path"] for scene in first["scenes"])
+    } for call in model.generate_calls)
+    assert first["continuous_audio"] is False
+    assert all("continuous_master_path" not in scene for scene in first["scenes"])
+    assert sum(scene["duration"] for scene in first["scenes"]) == pytest.approx(2.0)
     assert all(scene["from_cache"] for scene in second["scenes"])
-    assert len(model.generate_calls) == 1
+    assert len(model.generate_calls) == 2
     assert len(model.conditioning_calls) == 0
     assert Path(second["full_path"]).is_file()
 
@@ -528,7 +530,7 @@ def test_chatterbox_reuses_matching_audio_and_invalidates_changed_script(monkeyp
     third = audio.generate_chatterbox_audio(changed_script, output_dir=output_dir)
 
     assert all(not scene["from_cache"] for scene in third["scenes"])
-    assert len(model.generate_calls) == 2
+    assert len(model.generate_calls) == 4
 
 
 def test_chatterbox_seed_varies_by_story_but_remains_cached_for_exact_takes(monkeypatch, tmp_path):
@@ -567,12 +569,13 @@ def test_chatterbox_seed_varies_by_story_but_remains_cached_for_exact_takes(monk
     changed["script"][0]["voiceover"] = "Australia won."
     audio.generate_chatterbox_audio(changed, output_dir=output_dir)
 
-    assert len(seeds) == 2
+    assert len(seeds) == 4
     assert seeds[0] != seeds[1]
+    assert seeds[:2] != seeds[2:]
     assert all(0 <= seed <= 0x7FFFFFFF for seed in seeds)
 
 
-def test_chatterbox_full_generates_one_continuous_take_with_stable_controls(monkeypatch, tmp_path):
+def test_chatterbox_full_generates_separate_slide_clips_with_stable_controls(monkeypatch, tmp_path):
     import sys
     import types
     import torch
@@ -610,19 +613,20 @@ def test_chatterbox_full_generates_one_continuous_take_with_stable_controls(monk
         model_version="full",
     )
 
-    assert len(model.calls) == 1
-    assert model.calls[0][0] == audio._join_narration_texts([scene["voiceover"] for scene in script["script"]])
-    assert model.calls[0][1] == {
+    assert len(model.calls) == 2
+    assert [call[0] for call in model.calls] == ["India won.", "Bowlers held."]
+    assert all(call[1] == {
         "temperature": 0.75,
         "cfg_weight": 0.35,
         "exaggeration": 0.35,
         "min_p": 0.05,
         "top_p": 1.0,
         "repetition_penalty": 1.2,
-    }
+    } for call in model.calls)
     assert result["model_version"] == "full"
-    assert result["continuous_audio"] is True
-    assert all(scene["continuous_master_path"] == result["full_path"] for scene in result["scenes"])
+    assert result["continuous_audio"] is False
+    assert all("continuous_master_path" not in scene for scene in result["scenes"])
+    assert result["total_duration"] == pytest.approx(8.0)
 
 
 def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_path):
@@ -666,7 +670,7 @@ def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_pat
     )
 
     assert model.conditioning_calls == 1
-    assert model.generate_calls == 2
+    assert model.generate_calls == 4
 
 
 def test_continuous_narration_join_preserves_sentence_boundaries():
@@ -758,7 +762,7 @@ def test_chatterbox_voice_variant_outputs_do_not_overwrite_each_other(monkeypatc
     assert first["full_path"] != second["full_path"]
     assert first["full_path"] == again["full_path"]
     assert all(s["from_cache"] for s in again["scenes"])
-    assert model.generated == 2
+    assert model.generated == 4
 
 
 
@@ -799,7 +803,7 @@ def test_chatterbox_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch
         conds = None
 
         def generate(self, text, **kwargs):
-            return torch.ones((1, self.sr * 30), dtype=torch.float32)
+            return torch.ones((1, self.sr * 15), dtype=torch.float32)
 
     model = FakeChatterbox()
     fake_torchaudio = types.SimpleNamespace(

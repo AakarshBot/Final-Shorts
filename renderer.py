@@ -1567,6 +1567,7 @@ def _manual_subject_cutout_layout_data_uncached(
             cand_valid = True
             trial_placements = []
             trial_fill_ratios = []
+            trial_target_widths = []
             word_index = 0
             for line_index, end in enumerate(breaks):
                 line = " ".join(words[word_index:end])
@@ -1583,6 +1584,7 @@ def _manual_subject_cutout_layout_data_uncached(
                 trial_fill_ratios.append(
                     (bbox[2] - bbox[0]) / max(1.0, usable_width)
                 )
+                trial_target_widths.append(usable_width)
                 word_index = end
 
             if cand_valid:
@@ -1600,6 +1602,7 @@ def _manual_subject_cutout_layout_data_uncached(
                 "line_breaks": tuple(breaks),
                 "lines": tuple(lines),
                 "placements": tuple(placements),
+                "target_widths": tuple(trial_target_widths),
                 "fill_ratio": h_fill,
                 "fill_score": fill_score,
             })
@@ -1620,6 +1623,7 @@ def _manual_subject_cutout_layout_data_uncached(
         "font_name": mode,
         "style": clean_style,
         "polygon_flow": bool(polygon_flow),
+        "stretch_english_lines": script_language is None,
         "font_data": font_data,
         "font": font,
         "stroke_width": stroke_width,
@@ -1697,6 +1701,47 @@ def _manual_subject_cutout_layout_data(
     )
 
 
+def _draw_manual_subject_cutout_line(
+    draw: ImageDraw.ImageDraw,
+    line: str,
+    line_top: float,
+    cursor_x: int,
+    bbox: tuple[int, int, int, int],
+    *,
+    font: ImageFont.FreeTypeFont,
+    fill,
+    stroke_width: int,
+    stroke_fill,
+    target_width: float,
+    stretch_spaces: bool,
+) -> None:
+    """Fill the available width by spacing English words, never by scaling glyphs."""
+    position = (cursor_x - bbox[0], line_top - bbox[1])
+    words = line.split()
+    if not stretch_spaces or len(words) < 2:
+        draw.text(
+            position, line, font=font, fill=fill,
+            stroke_width=stroke_width, stroke_fill=stroke_fill,
+        )
+        return
+
+    # The line already fits at the selected font size. Add the unused horizontal
+    # space only between words so glyph proportions and text height stay intact.
+    ink_width = max(1, bbox[2] - bbox[0])
+    added_per_gap = max(0.0, (float(target_width) - ink_width) / (len(words) - 1))
+    space_advance = float(draw.textlength(" ", font=font))
+    x = float(position[0])
+    y = position[1]
+    for index, word in enumerate(words):
+        draw.text(
+            (int(round(x)), y), word, font=font, fill=fill,
+            stroke_width=stroke_width, stroke_fill=stroke_fill,
+        )
+        x += float(draw.textlength(word, font=font))
+        if index < len(words) - 1:
+            x += space_advance + added_per_gap
+
+
 def _draw_manual_subject_cutout_frame(
     base: Image.Image,
     data: dict,
@@ -1704,8 +1749,10 @@ def _draw_manual_subject_cutout_frame(
     *,
     mode: str,
     subject_mask: Image.Image | None = None,
+    target_widths: tuple[float, ...] | list[float] | None = None,
 ) -> Image.Image:
     canvas = _top5_full_frame_image(base).convert("RGBA")
+    target_widths = tuple(target_widths or ())
 
     if mode == "behind-subject":
         if subject_mask is None:
@@ -1726,14 +1773,18 @@ def _draw_manual_subject_cutout_frame(
 
     text_mask = Image.new("L", canvas.size, 0)
     text_draw = ImageDraw.Draw(text_mask)
-    for line, line_top, cursor_x, bbox in placements:
-        text_draw.text(
-            (cursor_x - bbox[0], line_top - bbox[1]),
-            line,
-            font=data["font"],
-            fill=255,
-            stroke_width=data["stroke_width"],
-            stroke_fill=255,
+    for index, (line, line_top, cursor_x, bbox) in enumerate(placements):
+        target_width = (
+            target_widths[index]
+            if index < len(target_widths)
+            else bbox[2] - bbox[0]
+        )
+        _draw_manual_subject_cutout_line(
+            text_draw, line, line_top, cursor_x, bbox,
+            font=data["font"], fill=255,
+            stroke_width=data["stroke_width"], stroke_fill=255,
+            target_width=target_width,
+            stretch_spaces=bool(data.get("stretch_english_lines")),
         )
 
     def shifted_layer(
@@ -1792,33 +1843,34 @@ def _draw_manual_subject_cutout_frame(
         shifted_layer(15, 18, 190, 5)
 
     draw = ImageDraw.Draw(canvas, "RGBA")
-    for line, line_top, cursor_x, bbox in placements:
-        position = (cursor_x - bbox[0], line_top - bbox[1])
+    for index, (line, line_top, cursor_x, bbox) in enumerate(placements):
+        target_width = (
+            target_widths[index]
+            if index < len(target_widths)
+            else bbox[2] - bbox[0]
+        )
         if style == "Double Edge":
-            draw.text(
-                position,
-                line,
-                font=data["font"],
-                fill=WHITE + (255,),
-                stroke_width=9,
-                stroke_fill=DARK + (255,),
+            _draw_manual_subject_cutout_line(
+                draw, line, line_top, cursor_x, bbox,
+                font=data["font"], fill=WHITE + (255,),
+                stroke_width=9, stroke_fill=DARK + (255,),
+                target_width=target_width,
+                stretch_spaces=bool(data.get("stretch_english_lines")),
             )
-            draw.text(
-                position,
-                line,
-                font=data["font"],
-                fill=WHITE + (255,),
-                stroke_width=2,
-                stroke_fill=DARK + (245,),
+            _draw_manual_subject_cutout_line(
+                draw, line, line_top, cursor_x, bbox,
+                font=data["font"], fill=WHITE + (255,),
+                stroke_width=2, stroke_fill=DARK + (245,),
+                target_width=target_width,
+                stretch_spaces=bool(data.get("stretch_english_lines")),
             )
         else:
-            draw.text(
-                position,
-                line,
-                font=data["font"],
-                fill=WHITE + (255,),
-                stroke_width=data["stroke_width"],
-                stroke_fill=DARK + (245,),
+            _draw_manual_subject_cutout_line(
+                draw, line, line_top, cursor_x, bbox,
+                font=data["font"], fill=WHITE + (255,),
+                stroke_width=data["stroke_width"], stroke_fill=DARK + (245,),
+                target_width=target_width,
+                stretch_spaces=bool(data.get("stretch_english_lines")),
             )
 
     if subject_mask is not None:
@@ -1838,38 +1890,14 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
 
     font_size = int(config.get("font_size") or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
     headline = config.get("headline") or ""
-    data = None
-    step_size = font_size
-    while step_size >= MANUAL_SUBJECT_MIN_FONT_SIZE:
-        try:
-            cand_data = _manual_subject_cutout_layout_data(
-                headline,
-                config.get("text_polygon"),
-                step_size,
-                str(config.get("font") or "Barlow Condensed").strip(),
-                str(config.get("style") or "Crisp Outline").strip(),
-                bool(config.get("polygon_flow", True)),
-            )
-            if cand_data.get("layouts"):
-                data = cand_data
-                break
-        except RuntimeError:
-            raise
-        except RuntimeError:
-            raise
-        except Exception:
-            pass
-        step_size -= 10
-
-    if not data or not data.get("layouts"):
-        data = _manual_subject_cutout_layout_data(
-            headline,
-            config.get("text_polygon"),
-            font_size,
-            str(config.get("font") or "Barlow Condensed").strip(),
-            str(config.get("style") or "Crisp Outline").strip(),
-            bool(config.get("polygon_flow", True)),
-        )
+    data = _manual_subject_cutout_layout_data(
+        headline,
+        config.get("text_polygon"),
+        font_size,
+        str(config.get("font") or "Barlow Condensed").strip(),
+        str(config.get("style") or "Crisp Outline").strip(),
+        bool(config.get("polygon_flow", True)),
+    )
     layouts = data["layouts"]
     if not layouts:
         raise ValueError(
@@ -1910,6 +1938,7 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         layout["placements"],
         mode=mode,
         subject_mask=subject_mask,
+        target_widths=layout.get("target_widths"),
     )
 
 
@@ -1958,34 +1987,14 @@ def build_manual_subject_cutout_layout_previews(
     if selected_mode not in {"negative-space", "behind-subject"}:
         raise ValueError("Manual Subject Cutout has an invalid composition mode.")
 
-    data = None
-    step_size = int(font_size or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
-    while step_size >= MANUAL_SUBJECT_MIN_FONT_SIZE:
-        try:
-            cand_data = _manual_subject_cutout_layout_data(
-                headline,
-                text_polygon,
-                step_size,
-                font,
-                style,
-                polygon_flow,
-            )
-            if cand_data.get("layouts"):
-                data = cand_data
-                break
-        except Exception:
-            pass
-        step_size -= 10
-
-    if not data or not data.get("layouts"):
-        data = _manual_subject_cutout_layout_data(
-            headline,
-            text_polygon,
-            font_size,
-            font,
-            style,
-            polygon_flow,
-        )
+    data = _manual_subject_cutout_layout_data(
+        headline,
+        text_polygon,
+        int(font_size or MANUAL_SUBJECT_DEFAULT_FONT_SIZE),
+        font,
+        style,
+        polygon_flow,
+    )
     if not data["layouts"]:
         raise ValueError(
             f"Text size {data['font_size']}px does not fit the selected polygon. Make the polygon larger or choose a smaller size."
@@ -2021,6 +2030,7 @@ def build_manual_subject_cutout_layout_previews(
             layout["placements"],
             mode=selected_mode,
             subject_mask=subject_mask,
+            target_widths=layout.get("target_widths"),
         ).resize((360, 640), Image.Resampling.LANCZOS)
         buffer = BytesIO()
         frame.convert("RGB").save(buffer, format="JPEG", quality=84, optimize=True)
