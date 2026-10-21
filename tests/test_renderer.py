@@ -252,7 +252,8 @@ def test_manual_subject_cutout_line_stretches_word_spacing_not_glyphs():
     )
     bounds = image.getchannel("A").getbbox()
     assert bounds is not None
-    assert bounds[0] == 100
+    # Pillow's text bbox includes the 2px outline bearing before the glyph ink.
+    assert bounds[0] == 102
     assert 790 <= bounds[2] <= 802
 
     one_word_image = Image.new("RGBA", (1080, 240), (0, 0, 0, 0))
@@ -368,7 +369,7 @@ def test_visual_boundaries_follow_each_scene_audio_duration_even_when_a_card_hid
     ]
     # Slide 2 hides subtitles but still occupies its measured half-second. Slide 3
     # resumes subtitles on its own absolute timestamp, 1.0s into the same narration.
-    assert drawn == [((200, 0, 0), 0.0), ((0, 0, 200), 1.0)]
+    assert drawn == [((200, 0, 0, 255), 0.0), ((0, 0, 200, 255), 1.0)]
 
 
 def test_production_upload_encode_settings_are_youtube_ready():
