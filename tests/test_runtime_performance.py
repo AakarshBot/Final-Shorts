@@ -144,16 +144,17 @@ def test_balanced_text_wrap_handles_long_headlines_without_combination_search(mo
 
 
 
-def test_manual_subject_cutout_editor_shows_exact_bounding_text_box():
+def test_manual_subject_cutout_editor_uses_the_polygon_as_its_text_boundary():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    renderer_source = (ROOT / "renderer.py").read_text(encoding="utf-8")
 
-    assert '<rect id="text-box"' in app_source
-    assert 'const textBox = parentElement.querySelector("#text-box")' in app_source
-    assert 'textBox.setAttribute("x", left)' in app_source
-    assert 'textBox.setAttribute("y", top)' in app_source
-    assert 'Math.max(...xs) - left' in app_source
-    assert 'Math.max(...ys) - top' in app_source
-    assert "The dashed rectangle is the actual text box." in app_source
+    assert '<polygon id="polygon"' in app_source
+    assert 'id="text-box"' not in app_source
+    assert "The polygon itself is the text boundary." in app_source
+    assert "ImageDraw.Draw(polygon_mask).polygon(points, fill=255)" in renderer_source
+    assert "vertical_clearance[line_top] >= ink_height" in renderer_source
+    assert "stretch_english_lines" not in renderer_source
+    assert "stretch_spaces" not in renderer_source
 
 
 def test_manual_subject_cutout_reuses_layout_geometry(monkeypatch):
