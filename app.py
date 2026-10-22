@@ -5632,6 +5632,18 @@ def _render_two_pane_visual_workspace(
                                 slide_count,
                                 live=True,
                             )
+                elif fetcher_mode.startswith("Option 6"):
+                    st.caption("Upload one or more local images. They enter the same crop, preview and slide-attachment pool.")
+                    uploaded_files = st.file_uploader(
+                        "Choose local images",
+                        type=["jpg", "jpeg", "png", "webp"],
+                        accept_multiple_files=True,
+                        key="live-local-image-upload",
+                    )
+                    local_assets = _local_image_assets(uploaded_files)
+                    if uploaded_files and not local_assets:
+                        st.error("None of the selected files could be opened as images.")
+                    _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=True)
             else:
                 if fetcher_mode.startswith("Option 1"):
                     render_visuals_crawler()
@@ -5641,6 +5653,18 @@ def _render_two_pane_visual_workspace(
                     _render_manual_real_images()
                 elif fetcher_mode.startswith("Option 4"):
                     _render_manual_ai_images()
+                elif fetcher_mode.startswith("Option 6"):
+                    st.caption("Upload one or more local images. They enter the same crop, preview and slide-attachment pool.")
+                    uploaded_files = st.file_uploader(
+                        "Choose local images",
+                        type=["jpg", "jpeg", "png", "webp"],
+                        accept_multiple_files=True,
+                        key="test-local-image-upload",
+                    )
+                    local_assets = _local_image_assets(uploaded_files)
+                    if uploaded_files and not local_assets:
+                        st.error("None of the selected files could be opened as images.")
+                    _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=False)
 
     if col_studio is not None:
         with col_studio:
