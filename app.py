@@ -3012,12 +3012,12 @@ def _render_card_studio(
         if card_type == "Stat Highlight":
             st.session_state[value_key("value")] = translated_data.get("value", "")
             st.session_state[value_key("supporting-fields")] = list(
-                translated_data.get("supporting_fields") or translated_data.get("metrics") or [{"label": "", "value": ""}]
+                translated_data.get("supporting_fields") or translated_data.get("metrics") or []
             )
             st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
         elif card_type == "Quote / Reaction":
             st.session_state[value_key("supporting-fields")] = list(
-                translated_data.get("supporting_fields") or [{"label": "", "value": ""}]
+                translated_data.get("supporting_fields") or []
             )
             st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
             if translated_data.get("context"):
@@ -3038,14 +3038,12 @@ def _render_card_studio(
                 }
                 for item in metrics
             ]
-            st.session_state[value_key("comparison-metrics")] = translated_rows or [
-                {"label": "", "left_value": "", "right_value": ""}
-            ]
+            st.session_state[value_key("comparison-metrics")] = translated_rows
             st.session_state.pop(f"{value_key('comparison-metrics')}-editor", None)
         elif card_type == "Key Fact / Milestone":
             st.session_state[value_key("value")] = translated_data.get("value", "")
             st.session_state[value_key("supporting-fields")] = list(
-                translated_data.get("supporting_fields") or [{"label": "", "value": ""}]
+                translated_data.get("supporting_fields") or []
             )
             st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
             if translated_data.get("context"):
@@ -3481,7 +3479,7 @@ def _render_card_studio(
                 support_fields = list(generated.get("metrics") or [])
             if not support_fields and generated.get("context"):
                 support_fields = [{"label": "Context", "value": generated.get("context")}]
-            st.session_state[value_key("supporting-fields")] = support_fields or [{"label": "", "value": ""}]
+            st.session_state[value_key("supporting-fields")] = support_fields
             st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
 
         if card_type == "Head-to-Head":
@@ -3501,7 +3499,7 @@ def _render_card_studio(
                     right_value = str(right_values.get(label) or "")
                 if label:
                     metrics.append({"label": label, "left_value": left_value, "right_value": right_value})
-            st.session_state[value_key("comparison-metrics")] = metrics or [{"label": "", "left_value": "", "right_value": ""}]
+            st.session_state[value_key("comparison-metrics")] = metrics
             st.session_state.pop(f"{value_key('comparison-metrics')}-editor", None)
 
     auto_col, prompt_col = st.columns([1, 1], gap="small")
@@ -3568,8 +3566,8 @@ def _render_card_studio(
     support_editor_key = f"{support_key}-editor"
     comparison_key = value_key("comparison-metrics")
     comparison_editor_key = f"{comparison_key}-editor"
-    st.session_state.setdefault(support_key, list(defaults.get("supporting_fields") or [{"label": "", "value": ""}]))
-    st.session_state.setdefault(comparison_key, [{"label": "", "left_value": "", "right_value": ""}])
+    st.session_state.setdefault(support_key, list(defaults.get("supporting_fields") or []))
+    st.session_state.setdefault(comparison_key, [])
 
     if card_type == "Stat Highlight":
         st.markdown("#### Main statistic")
