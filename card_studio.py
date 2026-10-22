@@ -11,7 +11,7 @@ from pathlib import Path
 
 import indic_bootstrap
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageStat, features
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps, ImageStat, features
 
 
 WIDTH = 1080
@@ -49,9 +49,10 @@ CARD_LAYOUT_POSITIONS = (
     "Bottom half",
 )
 CARD_CONTRAST_TREATMENTS = (
-    "Soft gradient",
+    "Adaptive gradient",
     "Deep gradient",
     "Editorial panel",
+    "Edge-lit wash",
 )
 
 _CARD_COPY_LABELS = {
@@ -340,9 +341,16 @@ def _fit(
     for size in range(start_size, min_size - 1, -2):
         font = _font_for_text(text, size, getter)
         lines = _wrap(draw, text, font, max_width)
-        if lines and len(lines) <= max_lines:
+        if (
+            lines
+            and len(lines) <= max_lines
+            and all(_measure(draw, line, font)[0] <= max_width for line in lines)
+        ):
             return font, lines
-    raise CardStudioError("The card text is too long for this layout. Shorten the copy.")
+    raise CardStudioError(
+        "The card text does not fit inside its measured width at readable font sizes. "
+        "Shorten the copy or choose a wider text position."
+    )
 
 
 def _lines_metric_height(
@@ -466,70 +474,154 @@ def _resolve_layout_position(image: Image.Image, mask: Image.Image | None, data:
     return _choose_text_side(image, mask)
 
 
-def _contrast_bed(image: Image.Image, position: str, treatment: str = "Soft gradient") -> Image.Image:
-    """Keep a restrained contrast bed behind the safe text area, away from the portrait centre."""
+def _contrast_bed(
+    image: Image.Image,
+    position: str,
+    treatment: str = "Adaptive gradient",
+    content_bounds: tuple[int, int, int, int] | None = None,
+) -> Image.Image:
+    """Build a contrast treatment around measured copy bounds and local image brightness."""
     rgba = image.convert("RGBA")
-    overlay = Image.new("RGBA", (WIDTH, HEIGHT), INK + (0,))
-    max_alpha = 232 if treatment == "Deep gradient" else 174
+    selected = str(treatment or "Adaptive gradient")
+    if selected == "Soft gradient":
+        selected = "Adaptive gradient"
 
-    if treatment == "Editorial panel":
-        x, width = _content_region(position)
-        if position == "bottom":
-            box = (max(24, x - 28), 1020, min(SAFE_RIGHT + 80, WIDTH - 24), min(HEIGHT - 300, SAFE_BOTTOM + 190))
-        elif position == "left":
-            box = (max(24, x - 28), SAFE_TOP - 30, min(SAFE_RIGHT, x + width + 36), SAFE_BOTTOM + 190)
-        else:
-            box = (max(24, x - 28), SAFE_TOP - 30, min(WIDTH - 24, x + width + 36), SAFE_BOTTOM + 190)
-        ImageDraw.Draw(overlay).rounded_rectangle(
-            box, radius=28, fill=INK + (194,), outline=ACCENT + (112,), width=2
+    if content_bounds:
+        left, top, right, bottom = (int(value) for value in content_bounds)
+    elif position == "bottom":
+        left, top, right, bottom = SAFE_LEFT, 1200, SAFE_RIGHT, SAFE_BOTTOM
+    else:
+        region_x, region_width = _content_region(position)
+        left, top, right, bottom = region_x, SAFE_TOP, region_x + region_width, SAFE_BOTTOM
+
+    left = max(12, min(WIDTH - 12, left))
+    right = max(left + 1, min(WIDTH - 12, right))
+    top = max(40, min(HEIGHT - 80, top))
+    bottom = max(top + 1, min(HEIGHT - 80, bottom))
+    panel_box = (
+        max(20, left - 26),
+        max(40, top - 24),
+        min(WIDTH - 20, right + 26),
+        min(HEIGHT - 80, bottom + 24),
+    )
+    overlay = Image.new("RGBA", (WIDTH, HEIGHT), INK + (0,))
+
+    if selected == "Editorial panel":
+        panel_draw = ImageDraw.Draw(overlay, "RGBA")
+        panel_draw.rounded_rectangle(
+            panel_box,
+            radius=28,
+            fill=INK + (218,),
+            outline=(255, 255, 255, 58),
+            width=2,
         )
+        px1, py1, px2, _py2 = panel_box
+        if position == "bottom":
+            panel_draw.rounded_rectangle(
+                (px1 + 28, py1 + 22, min(px2 - 28, px1 + 108), py1 + 28),
+                radius=3,
+                fill=ACCENT + (245,),
+            )
+        else:
+            panel_draw.rounded_rectangle(
+                (px1 + 18, py1 + 28, px1 + 24, max(py1 + 34, panel_box[3] - 28)),
+                radius=3,
+                fill=ACCENT + (235,),
+            )
         return Image.alpha_composite(rgba, overlay)
 
+    fade = 300
+    horizontal = Image.new("L", (WIDTH, 1), 0)
     vertical = Image.new("L", (1, HEIGHT), 0)
-    vp = []
-    for y in range(HEIGHT):
-        if position == "bottom":
-            if y < 1020:
-                factor = 0.0
-            elif y < 1200:
-                factor = (y - 1020) / 180
-            elif y <= SAFE_BOTTOM + 120:
-                factor = 1.0
-            else:
-                factor = max(0.0, (1780 - y) / (1780 - (SAFE_BOTTOM + 120)))
-        else:
-            if y < 140:
-                factor = 0.0
-            elif y < 300:
-                factor = (y - 140) / 160
-            elif y <= SAFE_BOTTOM + 100:
-                factor = 1.0
-            else:
-                factor = max(0.0, (1780 - y) / (1780 - (SAFE_BOTTOM + 100)))
-        vp.append(int(255 * max(0.0, min(1.0, factor))))
-    vertical.putdata(vp)
     if position == "bottom":
-        alpha = Image.eval(vertical.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST), lambda value: int(value * max_alpha / 255))
-    else:
-        full_distance = SAFE_LEFT + CONTENT_WIDTH if position == "left" else WIDTH - SAFE_RIGHT + CONTENT_WIDTH
-        fade_span = 360
-        horizontal = Image.new("L", (WIDTH, 1), 0)
-        hp = []
-        for x in range(WIDTH):
-            distance = x if position == "left" else WIDTH - 1 - x
-            if distance <= full_distance:
-                factor = 0.58 + 0.42 * (1 - distance / max(1, full_distance))
-            elif distance < full_distance + fade_span:
-                factor = 0.58 * (full_distance + fade_span - distance) / fade_span
+        vertical_values = []
+        vertical_fade = 150
+        for y in range(HEIGHT):
+            if y < top - vertical_fade:
+                factor = 0.0
+            elif y < top:
+                factor = (y - (top - vertical_fade)) / max(1, vertical_fade)
+            elif y <= bottom:
+                factor = 1.0
+            elif y < bottom + vertical_fade:
+                factor = (bottom + vertical_fade - y) / max(1, vertical_fade)
             else:
                 factor = 0.0
-            hp.append(int(255 * max(0.0, min(1.0, factor))))
-        horizontal.putdata(hp)
-        horizontal = horizontal.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST)
-        vertical = vertical.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST)
-        alpha = Image.eval(ImageChops.multiply(horizontal, vertical), lambda value: int(value * max_alpha / 255))
+            vertical_values.append(int(255 * max(0.0, min(1.0, factor))))
+        vertical.putdata(vertical_values)
+        spatial = vertical.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST)
+    else:
+        horizontal_values = []
+        for x in range(WIDTH):
+            if position == "right":
+                if x >= left:
+                    factor = 1.0
+                elif x > left - fade:
+                    factor = (x - (left - fade)) / max(1, fade)
+                else:
+                    factor = 0.0
+            else:
+                if x <= right:
+                    factor = 1.0
+                elif x < right + fade:
+                    factor = (right + fade - x) / max(1, fade)
+                else:
+                    factor = 0.0
+            horizontal_values.append(int(255 * max(0.0, min(1.0, factor))))
+        horizontal.putdata(horizontal_values)
+        vertical_values = []
+        for y in range(HEIGHT):
+            if y < top - 110:
+                factor = 0.0
+            elif y < top:
+                factor = (y - (top - 110)) / 110
+            elif y <= bottom:
+                factor = 1.0
+            elif y < bottom + 150:
+                factor = (bottom + 150 - y) / 150
+            else:
+                factor = 0.0
+            vertical_values.append(int(255 * max(0.0, min(1.0, factor))))
+        vertical.putdata(vertical_values)
+        spatial = ImageChops.multiply(
+            horizontal.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST),
+            vertical.resize((WIDTH, HEIGHT), Image.Resampling.NEAREST),
+        )
+
+    if selected == "Deep gradient":
+        alpha = Image.eval(spatial, lambda value: value * 238 // 255)
+    else:
+        # Bright photo pixels receive a stronger scrim; darker pixels retain more image detail.
+        luminance = ImageOps.grayscale(rgba.convert("RGB"))
+        adaptive_strength = Image.eval(luminance, lambda value: min(238, 92 + int(value * 0.57)))
+        alpha = ImageChops.multiply(spatial, adaptive_strength)
+        if selected == "Edge-lit wash":
+            alpha = Image.eval(alpha, lambda value: int(value * 0.88))
     overlay.putalpha(alpha)
+
+    if selected == "Edge-lit wash":
+        accent_draw = ImageDraw.Draw(overlay, "RGBA")
+        px1, py1, px2, py2 = panel_box
+        if position == "bottom":
+            accent_draw.rounded_rectangle(
+                (px1 + 28, py1 + 20, min(px2 - 28, px1 + 100), py1 + 26),
+                radius=3,
+                fill=ACCENT + (235,),
+            )
+        elif position == "right":
+            accent_draw.rounded_rectangle(
+                (px2 - 7, py1 + 24, px2 - 2, py2 - 24),
+                radius=3,
+                fill=ACCENT + (235,),
+            )
+        else:
+            accent_draw.rounded_rectangle(
+                (px1 + 2, py1 + 24, px1 + 7, py2 - 24),
+                radius=3,
+                fill=ACCENT + (235,),
+            )
     return Image.alpha_composite(rgba, overlay)
+
 
 def _draw_kicker(
     canvas: Image.Image,
@@ -542,7 +634,7 @@ def _draw_kicker(
     clean = " ".join(str(text or "").split()).upper() or _card_label("sports_desk", language)
     draw.rounded_rectangle((x, y + 8, x + 42, y + 13), radius=2, fill=ACCENT)
     font = _font_for_text(clean, 25, _font_label)
-    available_width = max(100, SAFE_RIGHT - x)
+    available_width = max(100, SAFE_RIGHT - x - 58)
     if _measure(draw, clean, font)[0] > available_width:
         font, lines = _fit(draw, clean, available_width, 1, 25, 18, font_fn=_font_label)
         clean = lines[0]
@@ -554,171 +646,338 @@ def _draw_rule(canvas: Image.Image, x: int, y: int, width: int, alpha: int = 112
     ImageDraw.Draw(canvas, "RGBA").line((x, y, x + width, y), fill=(255, 255, 255, alpha), width=1)
 
 
-def _prepare_photo_card(source, subject_mask, data: dict | None = None):
-    image, mask = _cover_with_mask(source, subject_mask)
-    position = _resolve_layout_position(image, mask, data)
-    treatment = str((data or {}).get("contrast_treatment") or "Soft gradient")
-    canvas = _contrast_bed(image, position, treatment)
-    content_top = 1010 if position == "bottom" else 205
-    return canvas, mask, position, _content_region(position), content_top
+def _text_block(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    max_width: int,
+    *,
+    preferred_size: int,
+    minimum_size: int,
+    max_lines: int,
+    font_fn,
+    gap: int = 6,
+    bold: bool = True,
+) -> dict | None:
+    clean = " ".join(str(text or "").split())
+    if not clean:
+        return None
+    font, lines = _fit(
+        draw, clean, max_width, max_lines, preferred_size, minimum_size,
+        bold=bold, font_fn=font_fn,
+    )
+    line_height, line_gap = _lines_metric_height(draw, lines, font, gap)
+    height = line_height * len(lines) + line_gap * max(0, len(lines) - 1)
+    return {
+        "text": clean,
+        "font": font,
+        "lines": lines,
+        "line_height": line_height,
+        "line_gap": line_gap,
+        "height": height,
+    }
+
+
+def _supporting_fields(data: dict, card_type: str) -> list[dict]:
+    fields = data.get("supporting_fields")
+    if fields is None:
+        fields = data.get("metrics") or []
+        if not fields and data.get("context"):
+            fields = [{"label": "Context", "value": data.get("context")}]
+    result = []
+    for field in fields or []:
+        if not isinstance(field, dict):
+            continue
+        label = " ".join(str(field.get("label") or "").split())
+        value = " ".join(str(field.get("value") or "").split())
+        if label and value:
+            result.append({"label": label, "value": value})
+    return result
+
+
+def _support_rows_block(
+    draw: ImageDraw.ImageDraw,
+    fields: list[dict],
+    width: int,
+    *,
+    bottom_mode: bool = False,
+) -> dict | None:
+    rows = []
+    label_width = max(120, int(width * 0.52))
+    value_width = max(100, width - int(width * 0.61))
+    for item in fields:
+        label = " ".join(str(item.get("label") or "").split())
+        value = " ".join(str(item.get("value") or "").split())
+        if not label or not value:
+            continue
+        label_block = _text_block(
+            draw, label, label_width,
+            preferred_size=29 if not bottom_mode else 27,
+            minimum_size=25 if not bottom_mode else 24,
+            max_lines=2, font_fn=lambda size: _font_label(size, False), gap=3, bold=False,
+        )
+        value_block = _text_block(
+            draw, value, value_width,
+            preferred_size=42 if not bottom_mode else 36,
+            minimum_size=31 if not bottom_mode else 29,
+            max_lines=2, font_fn=_font_headline, gap=3,
+        )
+        if not label_block or not value_block:
+            continue
+        rows.append({
+            "label": label_block,
+            "value": value_block,
+            "height": max(label_block["height"], value_block["height"]) + 18,
+        })
+    if not rows:
+        return None
+    height = sum(row["height"] for row in rows) + max(0, len(rows) - 1) * 12
+    return {"kind": "support_rows", "rows": rows, "height": height}
+
+
+def _block_height(blocks: list[dict]) -> int:
+    return sum(block["height"] + block.get("gap_after", 0) for block in blocks)
+
+
+def _draw_text_block(
+    canvas: Image.Image,
+    block: dict,
+    x: int,
+    y: int,
+    fill: tuple[int, int, int],
+    *,
+    width: int | None = None,
+    centered: bool = False,
+) -> int:
+    draw = ImageDraw.Draw(canvas)
+    cursor_y = y
+    for line in block["lines"]:
+        if centered and width is not None:
+            draw.text((x + width // 2, cursor_y), line, font=block["font"], fill=fill, anchor="ma")
+        else:
+            draw.text((x, cursor_y), line, font=block["font"], fill=fill)
+        cursor_y += block["line_height"] + block["line_gap"]
+    return y + block["height"]
+
+
+def _draw_support_rows(canvas: Image.Image, block: dict, x: int, y: int, width: int) -> int:
+    draw = ImageDraw.Draw(canvas)
+    cursor_y = y
+    for index, row in enumerate(block["rows"]):
+        if index:
+            draw.line((x, cursor_y, x + width, cursor_y), fill=(255, 255, 255, 76), width=2)
+            cursor_y += 12
+        label_block = row["label"]
+        value_block = row["value"]
+        _draw_text_block(
+            canvas, label_block, x,
+            cursor_y + max(0, (row["height"] - label_block["height"]) // 2), MUTED,
+        )
+        value_x = x + int(width * 0.61)
+        value_width = width - (value_x - x)
+        _draw_text_block(
+            canvas, value_block, value_x,
+            cursor_y + max(0, (row["height"] - value_block["height"]) // 2),
+            WHITE, width=value_width, centered=True,
+        )
+        cursor_y += row["height"]
+    return y + block["height"]
+
+
+def _draw_editorial_stack(
+    image: Image.Image,
+    position: str,
+    treatment: str,
+    x: int,
+    width: int,
+    top: int,
+    blocks: list[dict],
+) -> Image.Image:
+    blocks = [block for block in blocks if block]
+    total_height = _block_height(blocks)
+    if top + total_height > SAFE_BOTTOM - 12:
+        raise CardStudioError(
+            "This card has more copy than the selected position can hold at readable font sizes. "
+            "Remove a supporting field or choose Auto / Left half / Right half."
+        )
+    content_bounds = (
+        max(24, x - 20),
+        max(40, top - 24),
+        min(WIDTH - 24, x + width + 18),
+        min(SAFE_BOTTOM, top + total_height + 18),
+    )
+    canvas = _contrast_bed(image, position, treatment, content_bounds)
+    cursor_y = top
+    for block in blocks:
+        kind = block.get("kind", "text")
+        if kind == "kicker":
+            cursor_y = _draw_kicker(canvas, x, cursor_y, block["text"], block.get("language", "english"))
+        elif kind == "rule":
+            ImageDraw.Draw(canvas, "RGBA").rounded_rectangle(
+                (x, cursor_y + 2, x + 72, cursor_y + 7),
+                radius=2, fill=ACCENT + (245,),
+            )
+            cursor_y += block["height"]
+        elif kind == "quote":
+            draw = ImageDraw.Draw(canvas)
+            if block.get("show_quote_mark", True):
+                draw.text((x - 2, cursor_y - 17), "“", font=_font_display(112), fill=ACCENT)
+                _draw_text_block(canvas, block["copy"], x + 30, cursor_y + 14, WHITE)
+            else:
+                draw.rounded_rectangle(
+                    (x, cursor_y + 8, x + 6, cursor_y + block["height"] - 6),
+                    radius=3,
+                    fill=ACCENT,
+                )
+                _draw_text_block(canvas, block["copy"], x + 24, cursor_y + 4, WHITE)
+            cursor_y += block["height"]
+        elif kind == "support_rows":
+            cursor_y = _draw_support_rows(canvas, block, x, cursor_y, width)
+        else:
+            _draw_text_block(canvas, block, x, cursor_y, block.get("fill", WHITE))
+            cursor_y += block["height"]
+        cursor_y += block.get("gap_after", 0)
+    return canvas.convert("RGB")
+
+
+def _make_support_rows(
+    draw: ImageDraw.ImageDraw,
+    fields: list[dict],
+    width: int,
+    *,
+    bottom_mode: bool = False,
+) -> dict | None:
+    block = _support_rows_block(draw, fields, width, bottom_mode=bottom_mode)
+    if block:
+        block["gap_after"] = 0
+    return block
+
 
 def _render_stat_highlight(source, data: dict, subject_mask: Image.Image | None) -> Image.Image:
-    canvas, _mask, position, (x, width), content_top = _prepare_photo_card(
-        source, subject_mask, data
-    )
-    draw = ImageDraw.Draw(canvas)
+    image, mask = _cover_with_mask(source, subject_mask)
+    position = _resolve_layout_position(image, mask, data)
+    x, width = _content_region(position)
     bottom_mode = position == "bottom"
+    top = 900 if bottom_mode else SAFE_TOP
     language = _normalise_card_language(data.get("language"))
-    y = _draw_kicker(
-        canvas, x, content_top,
-        data.get("eyebrow") or _card_label("performance", language),
-        language=language,
-    )
+    draw = ImageDraw.Draw(image)
     headline = " ".join(str(data.get("headline") or "").split())
     value = " ".join(str(data.get("value") or "").split())
     unit = " ".join(str(data.get("unit") or "").split())
-    metrics = list(data.get("metrics") or [])
+    if not value:
+        raise CardStudioError("Stat Highlight needs one hero value. Fill it from the story or enter a verified value.")
 
-    if not headline or not value:
-        raise CardStudioError("Stat Highlight needs a headline and a hero value.")
-    if len(metrics) > 3:
-        raise CardStudioError("Stat Highlight supports at most three supporting metrics.")
-
-    headline_font, headline_lines = _fit(
-        draw, headline, width, 2,
-        68 if bottom_mode else 94,
-        42 if bottom_mode else 58,
-        font_fn=_font_headline,
+    blocks = []
+    eyebrow = " ".join(str(data.get("eyebrow") or "").split())
+    if eyebrow:
+        blocks.append({
+            "kind": "kicker",
+            "text": eyebrow,
+            "language": language, "height": 56,
+            "gap_after": 14 if bottom_mode else 20,
+        })
+    headline_block = _text_block(
+        draw, headline, width,
+        preferred_size=64 if not bottom_mode else 52,
+        minimum_size=48 if not bottom_mode else 40,
+        max_lines=2, font_fn=_font_headline, gap=5,
     )
-    y = _draw_lines(
-        canvas, headline_lines, x, y + (4 if bottom_mode else 10),
-        headline_font, 5 if bottom_mode else 8, fill=WHITE,
-    ) + (10 if bottom_mode else 24)
-
-    value_font, value_lines = _fit(
-        draw, value, width, 1,
-        156 if bottom_mode else 250,
-        78 if bottom_mode else 112,
-        font_fn=_font_display,
+    if headline_block:
+        headline_block.update({"kind": "text", "fill": WHITE, "gap_after": 14 if bottom_mode else 24})
+        blocks.append(headline_block)
+    value_block = _text_block(
+        draw, value, width,
+        preferred_size=174 if not bottom_mode else 126,
+        minimum_size=82 if not bottom_mode else 72,
+        max_lines=2, font_fn=_font_display, gap=2,
     )
-    value = value_lines[0]
-    draw.text((x - 2, y), value, font=value_font, fill=WHITE)
-    y += _measure(draw, value, value_font)[1] + (2 if bottom_mode else 8)
+    if not value_block:
+        raise CardStudioError("Stat Highlight needs one hero value.")
+    value_block.update({"kind": "text", "fill": ACCENT, "gap_after": 3 if unit else (18 if bottom_mode else 26)})
+    blocks.append(value_block)
+    unit_block = _text_block(
+        draw, unit, width,
+        preferred_size=33 if not bottom_mode else 29,
+        minimum_size=27, max_lines=1,
+        font_fn=lambda size: _font_label(size, True), gap=2,
+    )
+    if unit_block:
+        unit_block.update({"kind": "text", "fill": WHITE, "gap_after": 14 if bottom_mode else 22})
+        blocks.append(unit_block)
+    support = _make_support_rows(draw, _supporting_fields(data, "Stat Highlight"), width, bottom_mode=bottom_mode)
+    if support:
+        blocks.append(support)
+    return _draw_editorial_stack(
+        image, position, str(data.get("contrast_treatment") or "Adaptive gradient"),
+        x, width, top, blocks,
+    )
 
-    if unit:
-        draw.rounded_rectangle((x, y + 4, x + 34, y + 8), radius=2, fill=ACCENT)
-        unit_size = 24 if bottom_mode else 28
-        draw.text(
-            (x + 48, y - 6), unit.upper(),
-            font=_font_for_text(unit, unit_size, _font_label), fill=ACCENT
-        )
-        y += 34 if bottom_mode else 42
-
-    if metrics and bottom_mode:
-        y += 10
-        _draw_rule(canvas, x, y, width, alpha=148)
-        y += 9
-        cell_width = width // len(metrics)
-        for index, metric in enumerate(metrics):
-            label = " ".join(str(metric.get("label") or "").split())
-            metric_value = " ".join(str(metric.get("value") or "").split())
-            if not label or not metric_value:
-                raise CardStudioError("Every supporting metric needs a label and value.")
-            cell_x = x + index * cell_width
-            available = cell_width - 18
-            label_font, label_lines = _fit(
-                draw, label.upper(), available, 1, 21, 15,
-                bold=False, font_fn=lambda size: _font_label(size, False),
-            )
-            value_font, value_lines = _fit(
-                draw, metric_value, available, 1, 39, 25,
-                font_fn=_font_headline,
-            )
-            if index:
-                draw.line((cell_x, y + 5, cell_x, y + 81), fill=(255, 255, 255, 72), width=1)
-            center_x = cell_x + cell_width // 2
-            draw.text((center_x, y + 11), label_lines[0], font=label_font, fill=MUTED, anchor="ma")
-            draw.text((center_x, y + 39), value_lines[0], font=value_font, fill=WHITE, anchor="ma")
-    elif metrics:
-        y = max(y + 16, 890)
-        for metric in metrics:
-            label = " ".join(str(metric.get("label") or "").split())
-            metric_value = " ".join(str(metric.get("value") or "").split())
-            if not label or not metric_value:
-                raise CardStudioError("Every supporting metric needs a label and value.")
-            _draw_rule(canvas, x, y, width, alpha=104)
-            draw.text(
-                (x, y + 14), label.upper(),
-                font=_font_for_text(label, 23, lambda size: _font_label(size, False)),
-                fill=MUTED,
-            )
-            value_font, value_lines = _fit(
-                draw, metric_value, width // 2, 1, 43, 27, font_fn=_font_headline
-            )
-            draw.text((x + width, y + 8), value_lines[0], font=value_font, fill=WHITE, anchor="ra")
-            y += 72
-
-    return canvas.convert("RGB")
 
 def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None) -> Image.Image:
-    canvas, _mask, position, (x, width), content_top = _prepare_photo_card(source, subject_mask, data)
-    draw = ImageDraw.Draw(canvas)
+    image, mask = _cover_with_mask(source, subject_mask)
+    position = _resolve_layout_position(image, mask, data)
+    x, width = _content_region(position)
     bottom_mode = position == "bottom"
+    top = 900 if bottom_mode else SAFE_TOP
     language = _normalise_card_language(data.get("language"))
-    y = _draw_kicker(
-        canvas, x, content_top + (12 if bottom_mode else 30),
-        data.get("eyebrow") or _card_label("reaction", language), language=language,
-    )
-
+    draw = ImageDraw.Draw(image)
     quote = " ".join(str(data.get("quote") or "").split())
     attribution = " ".join(str(data.get("attribution") or "").split())
-    context = " ".join(str(data.get("context") or "").split())
-    if not quote or not attribution:
-        raise CardStudioError("Quote / Reaction needs a quote and attribution.")
+    if not quote:
+        raise CardStudioError("Quote / Reaction needs a real quotation. Use story fill to avoid inventing quotes.")
 
-    text_x = x + (76 if width > CONTENT_WIDTH else 64)
-    text_width = width - (text_x - x)
-    draw.text((x - 5, y - 12), "“", font=_font_display(112 if bottom_mode else 132), fill=ACCENT)
-    quote_top = y + 24
-    quote_font, quote_lines = _fit(
-        draw, quote, text_width - 8, 4 if bottom_mode else 6,
-        66 if bottom_mode else 78, 38 if bottom_mode else 42,
-        bold=False, font_fn=_font_body,
+    blocks = []
+    eyebrow = " ".join(str(data.get("eyebrow") or "").split())
+    if eyebrow:
+        blocks.append({
+            "kind": "kicker",
+            "text": eyebrow,
+            "language": language, "height": 56,
+            "gap_after": 16 if bottom_mode else 22,
+        })
+    quote_block = _text_block(
+        draw, quote, max(100, width - 34),
+        preferred_size=54 if not bottom_mode else 46,
+        minimum_size=39 if not bottom_mode else 34,
+        max_lines=5, font_fn=_font_body, gap=7, bold=False,
     )
-    quote_bottom = _draw_lines(canvas, quote_lines, text_x, quote_top, quote_font, 8, fill=WHITE)
-
-    attr_font, attr_lines = _fit(
-        draw, attribution, text_width - 4, 2,
-        42 if bottom_mode else 46, 29 if bottom_mode else 32,
-        font_fn=_font_headline,
+    if not quote_block:
+        raise CardStudioError("Quote / Reaction needs a quote.")
+    attribution_key = attribution.casefold()
+    editorial_summary = (
+        not attribution
+        or "summary" in attribution_key
+        or "सारांश" in attribution
+        or "సారాంశం" in attribution
     )
-    context_font = None
-    context_lines = []
-    if context:
-        context_font, context_lines = _fit(
-            draw, context, text_width - 4, 2 if bottom_mode else 3,
-            27 if bottom_mode else 30, 20 if bottom_mode else 22,
-            bold=False, font_fn=_font_body,
+    blocks.append({
+        "kind": "quote",
+        "copy": quote_block,
+        "show_quote_mark": not editorial_summary,
+        "height": quote_block["height"] + (18 if not editorial_summary else 8),
+        "gap_after": 18 if attribution or data.get("supporting_fields") or data.get("context") else 0,
+    })
+    if attribution:
+        attr_block = _text_block(
+            draw, attribution, width,
+            preferred_size=36 if not bottom_mode else 32,
+            minimum_size=29, max_lines=2,
+            font_fn=_font_headline, gap=3,
         )
+        if attr_block:
+            blocks.append({"kind": "rule", "height": 22, "gap_after": 14})
+            attr_block.update({"kind": "text", "fill": WHITE, "gap_after": 14 if (data.get("supporting_fields") or data.get("context")) else 0})
+            blocks.append(attr_block)
+    support_fields = _supporting_fields(data, "Quote / Reaction")
+    if data.get("context") and not any(item["label"].casefold() == "context" for item in support_fields):
+        support_fields.append({"label": "Context", "value": str(data.get("context"))})
+    support = _make_support_rows(draw, support_fields, width, bottom_mode=bottom_mode)
+    if support:
+        blocks.append(support)
+    return _draw_editorial_stack(
+        image, position, str(data.get("contrast_treatment") or "Adaptive gradient"),
+        x, width, top, blocks,
+    )
 
-    attr_lh, attr_gap = _lines_metric_height(draw, attr_lines, attr_font, 4)
-    attr_height = attr_lh * len(attr_lines) + attr_gap * max(0, len(attr_lines) - 1)
-    if context_lines and context_font:
-        ctx_lh, ctx_gap = _lines_metric_height(draw, context_lines, context_font, 4)
-        context_height = ctx_lh * len(context_lines) + ctx_gap * max(0, len(context_lines) - 1)
-    else:
-        context_height = 0
-    tail_height = 30 + 5 + 24 + attr_height + (8 + context_height if context_lines else 0)
-    target_rule_y = SAFE_BOTTOM - tail_height
-    rule_y = max(quote_bottom + (24 if bottom_mode else 20), target_rule_y - 18)
-    if quote_bottom + tail_height > SAFE_BOTTOM:
-        rule_y = quote_bottom + 18
-    draw.rounded_rectangle((text_x, rule_y, text_x + 56, rule_y + 5), radius=2, fill=ACCENT)
-    y = rule_y + 24
-    y = _draw_lines(canvas, attr_lines, text_x, y, attr_font, 4, fill=WHITE) + 8
-    if context_lines and context_font is not None:
-        _draw_lines(canvas, context_lines, text_x, y, context_font, 4, fill=MUTED)
-    return canvas.convert("RGB")
 
 def _split_image_and_mask(source, mask, direction: str) -> tuple[Image.Image, Image.Image | None, Image.Image, Image.Image | None]:
     first_source, second_source = source
@@ -739,20 +998,15 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
     metrics = list(data.get("metrics") or [])
     image_mode = str(data.get("image_mode") or "One image")
     direction = str(data.get("split_direction") or "Vertical")
-
-    if not headline or not left.get("name") or not right.get("name"):
-        raise CardStudioError("Head-to-Head needs a headline and both names.")
-    if not 1 <= len(metrics) <= 3:
-        raise CardStudioError("Head-to-Head needs one to three comparison metrics.")
+    if not left.get("name") or not right.get("name"):
+        raise CardStudioError("Head-to-Head needs both names.")
 
     if image_mode == "Two images":
         if not isinstance(source, (tuple, list)) or len(source) != 2:
             raise CardStudioError("Two-image Head-to-Head needs two source images.")
         first, first_mask, second, second_mask = _split_image_and_mask(source, subject_mask, direction)
         image = Image.new("RGB", (WIDTH, HEIGHT), INK)
-        combined_mask = None
-        if first_mask is not None or second_mask is not None:
-            combined_mask = Image.new("L", (WIDTH, HEIGHT), 0)
+        combined_mask = Image.new("L", (WIDTH, HEIGHT), 0) if first_mask is not None or second_mask is not None else None
         if direction == "Horizontal":
             image.paste(first, (0, 0))
             image.paste(second, (0, HEIGHT // 2))
@@ -770,146 +1024,192 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
                 if second_mask is not None:
                     combined_mask.paste(second_mask, (WIDTH // 2, 0))
     else:
-        image, combined_mask = _cover_with_mask(
-            source, subject_mask if isinstance(subject_mask, Image.Image) else None
-        )
+        image, combined_mask = _cover_with_mask(source, subject_mask if isinstance(subject_mask, Image.Image) else None)
 
     position = _resolve_layout_position(image, combined_mask, data)
-    treatment = str(data.get("contrast_treatment") or "Soft gradient")
-    canvas = _contrast_bed(image, position, treatment)
+    treatment = str(data.get("contrast_treatment") or "Adaptive gradient")
     bottom_mode = position == "bottom"
-    language = _normalise_card_language(data.get("language"))
     header_x, header_width = _content_region(position)
-    kicker_y = _draw_kicker(
-        canvas, header_x, 765 if bottom_mode else 160,
-        data.get("eyebrow") or _card_label("head_to_head", language),
-        language=language,
+    header_top = 810 if bottom_mode else SAFE_TOP
+    draw = ImageDraw.Draw(image)
+    header_blocks = []
+    eyebrow = " ".join(str(data.get("eyebrow") or "").split())
+    if eyebrow:
+        header_blocks.append({
+            "kind": "kicker",
+            "text": eyebrow,
+            "language": _normalise_card_language(data.get("language")),
+            "height": 56, "gap_after": 12 if bottom_mode else 20,
+        })
+    headline_block = _text_block(
+        draw, headline, header_width,
+        preferred_size=55 if bottom_mode else 70,
+        minimum_size=42 if bottom_mode else 48,
+        max_lines=2, font_fn=_font_headline, gap=4,
     )
-    head_font, head_lines = _fit(
-        ImageDraw.Draw(canvas), headline, header_width, 2,
-        72 if bottom_mode else 88,
-        44 if bottom_mode else 56,
-        font_fn=_font_headline,
-    )
-    y = _draw_lines(
-        canvas, head_lines, header_x, kicker_y + (0 if bottom_mode else 8),
-        head_font, 5 if bottom_mode else 6, fill=WHITE,
-    )
-
-    panel_top = min(1120, max(980, y + 15)) if bottom_mode else min(820, max(720, y + 42))
-    panel = Image.new("RGBA", (WIDTH, HEIGHT - panel_top), CARD_BG)
-    canvas.alpha_composite(panel, (0, panel_top))
-    draw = ImageDraw.Draw(canvas)
-
-    left_x1 = SAFE_LEFT
-    left_x2 = WIDTH // 2 - 48
-    right_x1 = WIDTH // 2 + 48
-    right_x2 = SAFE_RIGHT
-    mid_x = WIDTH // 2
-
-    left_font, left_lines = _fit(
-        draw, str(left["name"]), left_x2 - left_x1 - 22, 2, 48, 31,
-        font_fn=_font_headline,
-    )
-    right_font, right_lines = _fit(
-        draw, str(right["name"]), right_x2 - right_x1 - 22, 2, 48, 31,
-        font_fn=_font_headline,
-    )
-    name_y = panel_top + (32 if bottom_mode else 48)
-    left_end = _draw_lines(canvas, left_lines, left_x1, name_y, left_font, 3, fill=WHITE)
-    right_end = _draw_lines(canvas, right_lines, right_x1, name_y, right_font, 3, fill=WHITE)
-
-    draw = ImageDraw.Draw(canvas)
-    vs_y = panel_top + (46 if bottom_mode else 62)
-    versus = _card_label("versus", language)
-    draw.text(
-        (mid_x, vs_y), versus,
-        font=_font_for_text(versus, 22, _font_label),
-        fill=ACCENT, anchor="mm",
-    )
-    names_bottom = max(left_end, right_end)
-    _draw_rule(canvas, SAFE_LEFT, names_bottom + 10, SAFE_RIGHT - SAFE_LEFT, alpha=148)
-
-    left_values = left.get("values") or {}
-    right_values = right.get("values") or {}
-    row_y = names_bottom + (21 if bottom_mode else 26)
-    row_height = (
-        min(120, max(72, (SAFE_BOTTOM - row_y) // len(metrics)))
-        if bottom_mode
-        else min(130, max(96, (SAFE_BOTTOM - row_y) // len(metrics)))
-    )
+    if headline_block:
+        headline_block["gap_after"] = 20
+        header_blocks.append(headline_block)
+    header_height = _block_height(header_blocks)
+    panel_top = max(760 if not bottom_mode else 990, header_top + header_height + 28)
+    if panel_top >= SAFE_BOTTOM - 180:
+        raise CardStudioError("The Head-to-Head heading leaves too little safe space for the comparison.")
+    panel_bottom = SAFE_BOTTOM
+    panel_height = panel_bottom - panel_top
+    table_width = SAFE_RIGHT - SAFE_LEFT
+    label_column_width = max(150, min(190, int(table_width * 0.24)))
+    column_gap = 12
+    side_width = (table_width - label_column_width - column_gap * 2) // 2
+    left_x = SAFE_LEFT
+    label_x = left_x + side_width + column_gap
+    right_x = label_x + label_column_width + column_gap
+    left_name_block = _text_block(draw, str(left.get("name") or ""), side_width, preferred_size=41, minimum_size=30, max_lines=2, font_fn=_font_headline, gap=3)
+    right_name_block = _text_block(draw, str(right.get("name") or ""), side_width, preferred_size=41, minimum_size=30, max_lines=2, font_fn=_font_headline, gap=3)
+    if not left_name_block or not right_name_block:
+        raise CardStudioError("Head-to-Head needs both names.")
+    names_height = max(left_name_block["height"], right_name_block["height"])
+    if not metrics:
+        raise CardStudioError("Add at least one evidence-backed comparison metric.")
+    parsed_rows = []
     for metric in metrics:
-        label = " ".join(str(metric).split())
-        left_value = " ".join(str(left_values.get(label) or "").split())
-        right_value = " ".join(str(right_values.get(label) or "").split())
-        if not left_value or not right_value:
-            raise CardStudioError(f"Both sides need a value for {label}.")
-        draw = ImageDraw.Draw(canvas)
-        left_value_font, left_value_lines = _fit(
-            draw, left_value, 220, 1, 42, 28, font_fn=_font_headline
-        )
-        label_font, label_lines = _fit(
-            draw, label.upper(), SAFE_RIGHT - SAFE_LEFT, 1, 23, 17,
-            font_fn=lambda size: _font_label(size, False),
-        )
-        right_value_font, right_value_lines = _fit(
-            draw, right_value, 220, 1, 42, 28, font_fn=_font_headline
-        )
-        label_y = row_y + (12 if bottom_mode else 18)
-        value_y = row_y + (48 if bottom_mode else 68)
-        draw.text((mid_x, label_y), label_lines[0], font=label_font, fill=MUTED, anchor="mm")
-        draw.text((SAFE_LEFT + 150, value_y), left_value_lines[0], font=left_value_font, fill=WHITE, anchor="mm")
-        draw.text((SAFE_RIGHT - 150, value_y), right_value_lines[0], font=right_value_font, fill=WHITE, anchor="mm")
-        _draw_rule(canvas, SAFE_LEFT, row_y + row_height - 4, SAFE_RIGHT - SAFE_LEFT, alpha=76)
-        row_y += row_height
+        if isinstance(metric, dict):
+            label = " ".join(str(metric.get("label") or "").split())
+            left_value = " ".join(str(metric.get("left_value") or "").split())
+            right_value = " ".join(str(metric.get("right_value") or "").split())
+        else:
+            label = " ".join(str(metric or "").split())
+            left_value = " ".join(str((left.get("values") or {}).get(label) or "").split())
+            right_value = " ".join(str((right.get("values") or {}).get(label) or "").split())
+        if label:
+            parsed_rows.append((label, left_value or "—", right_value or "—"))
+    if not parsed_rows:
+        raise CardStudioError("Add at least one evidence-backed comparison metric.")
 
+    panel_padding = 28
+    names_block_height = names_height + 52
+    row_area = panel_height - panel_padding * 2 - names_block_height
+    row_height = min(94, row_area // len(parsed_rows))
+    if row_height < 58:
+        raise CardStudioError(
+            "Too many comparison rows for this photo position at readable font sizes. "
+            "Remove a row or choose Auto / Left half / Right half."
+        )
+
+    canvas = _contrast_bed(
+        image, position, treatment,
+        (header_x - 20, header_top - 20, header_x + header_width + 20, min(panel_top - 20, header_top + header_height + 20)),
+    )
+    panel_draw = ImageDraw.Draw(canvas, "RGBA")
+    panel_draw.rounded_rectangle(
+        (28, panel_top, SAFE_RIGHT + 72, panel_bottom),
+        radius=28, fill=CARD_BG, outline=(255, 255, 255, 55), width=2,
+    )
+    panel_draw.rounded_rectangle(
+        (48, panel_top + 22, 122, panel_top + 28),
+        radius=3, fill=ACCENT + (245,),
+    )
+    cursor_y = panel_top + panel_padding + 10
+    versus = _card_label("versus", data.get("language"))
+    ImageDraw.Draw(canvas).text(
+        (label_x + label_column_width // 2, cursor_y + names_height // 2),
+        versus, font=_font_label(23), fill=ACCENT, anchor="mm",
+    )
+    _draw_text_block(canvas, left_name_block, left_x, cursor_y, WHITE, width=side_width, centered=True)
+    _draw_text_block(canvas, right_name_block, right_x, cursor_y, WHITE, width=side_width, centered=True)
+    cursor_y += names_block_height
+    line_x1, line_x2 = 48, SAFE_RIGHT + 48
+    for index, (label, left_value, right_value) in enumerate(parsed_rows):
+        if index:
+            ImageDraw.Draw(canvas, "RGBA").line((line_x1, cursor_y, line_x2, cursor_y), fill=(255, 255, 255, 75), width=2)
+        value_width = side_width - 8
+        label_font, label_lines = _fit(
+            ImageDraw.Draw(canvas), label.upper(), label_column_width - 12, 2, 27, 24,
+            font_fn=lambda size: _font_label(size, False), bold=False,
+        )
+        left_font, left_lines = _fit(ImageDraw.Draw(canvas), left_value, value_width, 2, 38, 29, font_fn=_font_headline)
+        right_font, right_lines = _fit(ImageDraw.Draw(canvas), right_value, value_width, 2, 38, 29, font_fn=_font_headline)
+        label_h, label_gap = _lines_metric_height(ImageDraw.Draw(canvas), label_lines, label_font, 2)
+        left_h, left_gap = _lines_metric_height(ImageDraw.Draw(canvas), left_lines, left_font, 2)
+        right_h, right_gap = _lines_metric_height(ImageDraw.Draw(canvas), right_lines, right_font, 2)
+        row_content_height = max(
+            label_h * len(label_lines) + label_gap * max(0, len(label_lines) - 1),
+            left_h * len(left_lines) + left_gap * max(0, len(left_lines) - 1),
+            right_h * len(right_lines) + right_gap * max(0, len(right_lines) - 1),
+        )
+        if row_content_height + 18 > row_height:
+            raise CardStudioError(
+                f"Comparison row '{label}' does not fit the available height at readable sizes. "
+                "Shorten the label/value or choose a position with more room."
+            )
+        row_y = cursor_y + max(0, (row_height - row_content_height) // 2)
+        _draw_text_block(canvas, {"font": left_font, "lines": left_lines, "line_height": left_h, "line_gap": left_gap, "height": left_h * len(left_lines) + left_gap * max(0, len(left_lines) - 1)}, left_x, row_y, WHITE, width=value_width, centered=True)
+        _draw_text_block(canvas, {"font": label_font, "lines": label_lines, "line_height": label_h, "line_gap": label_gap, "height": label_h * len(label_lines) + label_gap * max(0, len(label_lines) - 1)}, label_x, row_y, MUTED, width=label_column_width, centered=True)
+        _draw_text_block(canvas, {"font": right_font, "lines": right_lines, "line_height": right_h, "line_gap": right_gap, "height": right_h * len(right_lines) + right_gap * max(0, len(right_lines) - 1)}, right_x, row_y, WHITE, width=value_width, centered=True)
+        cursor_y += row_height
+
+    y = header_top
+    for block in header_blocks:
+        if block.get("kind") == "kicker":
+            y = _draw_kicker(canvas, header_x, y, block["text"], block.get("language", "english"))
+        else:
+            _draw_text_block(canvas, block, header_x, y, WHITE)
+            y += block["height"]
+        y += block.get("gap_after", 0)
     return canvas.convert("RGB")
 
-def _render_fact_milestone(source, data: dict, subject_mask: Image.Image | None) -> Image.Image:
-    canvas, _mask, position, (x, width), content_top = _prepare_photo_card(
-        source, subject_mask, data
-    )
-    draw = ImageDraw.Draw(canvas)
-    bottom_mode = position == "bottom"
-    language = _normalise_card_language(data.get("language"))
-    y = _draw_kicker(
-        canvas, x, content_top + (8 if bottom_mode else 15),
-        data.get("eyebrow") or _card_label("milestone", language),
-        language=language,
-    )
 
+def _render_fact_milestone(source, data: dict, subject_mask: Image.Image | None) -> Image.Image:
+    image, mask = _cover_with_mask(source, subject_mask)
+    position = _resolve_layout_position(image, mask, data)
+    x, width = _content_region(position)
+    bottom_mode = position == "bottom"
+    top = 900 if bottom_mode else SAFE_TOP
+    language = _normalise_card_language(data.get("language"))
+    draw = ImageDraw.Draw(image)
     value = " ".join(str(data.get("value") or "").split())
     label = " ".join(str(data.get("label") or "").split())
-    context = " ".join(str(data.get("context") or "").split())
     if not value or not label:
         raise CardStudioError("Key Fact / Milestone needs a value and label.")
 
-    value_font, value_lines = _fit(
-        draw, value, width, 2,
-        154 if bottom_mode else 236,
-        76 if bottom_mode else 94,
-        font_fn=_font_display,
+    blocks = []
+    eyebrow = " ".join(str(data.get("eyebrow") or "").split())
+    if eyebrow:
+        blocks.append({
+            "kind": "kicker",
+            "text": eyebrow,
+            "language": language, "height": 56,
+            "gap_after": 14 if bottom_mode else 20,
+        })
+    value_block = _text_block(
+        draw, value, width,
+        preferred_size=164 if not bottom_mode else 122,
+        minimum_size=78 if not bottom_mode else 70,
+        max_lines=2, font_fn=_font_display, gap=3,
     )
-    y = _draw_lines(canvas, value_lines, x, y + (12 if bottom_mode else 30), value_font, 3, fill=ACCENT) + (14 if bottom_mode else 26)
-    _draw_rule(canvas, x, y, width, alpha=170)
-    label_font, label_lines = _fit(
-        draw, label, width, 2 if bottom_mode else 3,
-        62 if bottom_mode else 82,
-        40 if bottom_mode else 49,
-        font_fn=_font_headline,
+    if value_block:
+        value_block.update({"kind": "text", "fill": ACCENT, "gap_after": 12 if bottom_mode else 22})
+        blocks.append(value_block)
+    label_block = _text_block(
+        draw, label, width,
+        preferred_size=60 if not bottom_mode else 49,
+        minimum_size=43 if not bottom_mode else 38,
+        max_lines=3 if not bottom_mode else 2,
+        font_fn=_font_headline, gap=5,
     )
-    y = _draw_lines(canvas, label_lines, x, y + (16 if bottom_mode else 28), label_font, 5 if bottom_mode else 8, fill=WHITE) + (12 if bottom_mode else 28)
+    if label_block:
+        label_block.update({"kind": "text", "fill": WHITE, "gap_after": 16 if bottom_mode else 22})
+        blocks.append(label_block)
+    support_fields = _supporting_fields(data, "Key Fact / Milestone")
+    if data.get("context") and not any(item["label"].casefold() == "context" for item in support_fields):
+        support_fields.append({"label": "Context", "value": str(data.get("context"))})
+    support = _make_support_rows(draw, support_fields, width, bottom_mode=bottom_mode)
+    if support:
+        blocks.append(support)
+    return _draw_editorial_stack(
+        image, position, str(data.get("contrast_treatment") or "Adaptive gradient"),
+        x, width, top, blocks,
+    )
 
-    if context:
-        context_font, context_lines = _fit(
-            draw, context, width, 2 if bottom_mode else 4,
-            28 if bottom_mode else 34,
-            21 if bottom_mode else 25,
-            bold=False, font_fn=_font_body,
-        )
-        _draw_lines(canvas, context_lines, x, y, context_font, 4 if bottom_mode else 7, fill=MUTED)
-
-    return canvas.convert("RGB")
 
 def _render(card_type: str, source, data: dict, subject_mask=None) -> Image.Image:
     normalized = " ".join(str(card_type or "").split())
@@ -934,140 +1234,30 @@ def render_card(card_type: str, source, data: dict, subject_mask=None) -> bytes:
 
 
 def card_data_for_type(card_type: str, language: str = "english") -> dict:
-    """Return editable starter copy in the selected language without changing card geometry."""
+    """Return blank editable content; story/prompt generation supplies variable supporting fields."""
     language_key = _normalise_card_language(language)
-
+    data = {
+        "layout_position": CARD_LAYOUT_POSITIONS[0],
+        "contrast_treatment": CARD_CONTRAST_TREATMENTS[0],
+        "language": language_key,
+        "eyebrow": "",
+    }
     if card_type == "Stat Highlight":
-        data = {
-            "eyebrow": "CAREER STAT",
-            "layout_position": "Auto · Best negative space",
-            "contrast_treatment": "Soft gradient",
-            "headline": "A huge scoring run",
-            "value": "1,203",
-            "unit": "RUNS",
-            "metrics": [
-                {"label": "Matches", "value": "38"},
-                {"label": "Average", "value": "46.27"},
-                {"label": "Strike rate", "value": "132.4"},
-            ],
-        }
+        data.update({"headline": "", "value": "", "unit": "", "supporting_fields": []})
     elif card_type == "Quote / Reaction":
-        data = {
-            "eyebrow": "POST-MATCH REACTION",
-            "layout_position": "Auto · Best negative space",
-            "contrast_treatment": "Soft gradient",
-            "quote": "We believed from the first ball.",
-            "attribution": "Player Name · after the final",
-            "context": "The reaction came after the latest match.",
-        }
+        data.update({"quote": "", "attribution": "", "supporting_fields": []})
     elif card_type == "Head-to-Head":
-        data = {
-            "eyebrow": "HEAD TO HEAD",
-            "layout_position": "Auto · Best negative space",
-            "contrast_treatment": "Soft gradient",
-            "headline": "Who has the edge?",
+        data.update({
+            "headline": "",
             "image_mode": "One image",
             "split_direction": "Vertical",
-            "left": {
-                "name": "Player A",
-                "values": {"Runs": "1,020", "Average": "48.4", "Strike Rate": "132.4"},
-            },
-            "right": {
-                "name": "Player B",
-                "values": {"Runs": "934", "Average": "42.1", "Strike Rate": "121.8"},
-            },
-            "metrics": ["Runs", "Average", "Strike Rate"],
-        }
+            "left": {"name": "", "values": {}},
+            "right": {"name": "", "values": {}},
+            "metrics": [],
+        })
     elif card_type == "Key Fact / Milestone":
-        data = {
-            "eyebrow": "MILESTONE",
-            "layout_position": "Auto · Best negative space",
-            "contrast_treatment": "Soft gradient",
-            "value": "100",
-            "label": "International appearances",
-            "context": "A landmark reached in the latest match.",
-        }
+        data.update({"value": "", "label": "", "supporting_fields": []})
     else:
         return {}
-
-    if language_key == "hindi":
-        if card_type == "Stat Highlight":
-            data.update({
-                "eyebrow": "करियर के आँकड़े",
-                "headline": "रनों की शानदार पारी",
-                "unit": "रन",
-                "metrics": [
-                    {"label": "मैच", "value": "38"},
-                    {"label": "औसत", "value": "46.27"},
-                    {"label": "स्ट्राइक रेट", "value": "132.4"},
-                ],
-            })
-        elif card_type == "Quote / Reaction":
-            data.update({
-                "eyebrow": "मैच के बाद प्रतिक्रिया",
-                "quote": "हमने पहली गेंद से भरोसा रखा।",
-                "attribution": "खिलाड़ी का नाम · मैच के बाद",
-                "context": "यह प्रतिक्रिया हालिया मैच के बाद आई।",
-            })
-        elif card_type == "Head-to-Head":
-            data.update({
-                "eyebrow": "आमने-सामने",
-                "headline": "किसका पलड़ा भारी?",
-                "left": {
-                    "name": "खिलाड़ी A",
-                    "values": {"रन": "1,020", "औसत": "48.4", "स्ट्राइक रेट": "132.4"},
-                },
-                "right": {
-                    "name": "खिलाड़ी B",
-                    "values": {"रन": "934", "औसत": "42.1", "स्ट्राइक रेट": "121.8"},
-                },
-                "metrics": ["रन", "औसत", "स्ट्राइक रेट"],
-            })
-        else:
-            data.update({
-                "eyebrow": "उपलब्धि",
-                "label": "अंतरराष्ट्रीय मुकाबले",
-                "context": "यह उपलब्धि हालिया मैच में हासिल हुई।",
-            })
-    elif language_key == "telugu":
-        if card_type == "Stat Highlight":
-            data.update({
-                "eyebrow": "కెరీర్ గణాంకాలు",
-                "headline": "అద్భుతమైన పరుగుల జోరు",
-                "unit": "పరుగులు",
-                "metrics": [
-                    {"label": "మ్యాచ్‌లు", "value": "38"},
-                    {"label": "సగటు", "value": "46.27"},
-                    {"label": "స్ట్రైక్ రేట్", "value": "132.4"},
-                ],
-            })
-        elif card_type == "Quote / Reaction":
-            data.update({
-                "eyebrow": "మ్యాచ్ తర్వాత స్పందన",
-                "quote": "మొదటి బంతి నుంచే మాకు నమ్మకం ఉంది.",
-                "attribution": "ఆటగాడి పేరు · మ్యాచ్ తర్వాత",
-                "context": "తాజా మ్యాచ్ అనంతరం ఈ స్పందన వచ్చింది.",
-            })
-        elif card_type == "Head-to-Head":
-            data.update({
-                "eyebrow": "ఎదురెదురు పోటీ",
-                "headline": "ఎవరిది పైచేయి?",
-                "left": {
-                    "name": "ఆటగాడు A",
-                    "values": {"పరుగులు": "1,020", "సగటు": "48.4", "స్ట్రైక్ రేట్": "132.4"},
-                },
-                "right": {
-                    "name": "ఆటగాడు B",
-                    "values": {"పరుగులు": "934", "సగటు": "42.1", "స్ట్రైక్ రేట్": "121.8"},
-                },
-                "metrics": ["పరుగులు", "సగటు", "స్ట్రైక్ రేట్"],
-            })
-        else:
-            data.update({
-                "eyebrow": "మైలురాయి",
-                "label": "అంతర్జాతీయ మ్యాచ్‌లు",
-                "context": "తాజా మ్యాచ్‌లో ఈ ఘనత సాధించారు.",
-            })
-
-    data["language"] = language_key
     return data
+

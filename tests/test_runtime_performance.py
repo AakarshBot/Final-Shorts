@@ -84,8 +84,8 @@ def test_card_studio_receives_original_visuals_and_uses_an_independent_crop_stor
 def test_card_studio_offers_explicit_story_and_manual_prompt_generation():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     studio_source = app_source[app_source.index("def _render_card_studio("):]
-    assert "Auto-fill this card from story" in studio_source
-    assert "Generate card from prompt" in studio_source
+    assert "Fill fields from story" in studio_source
+    assert "Generate fields from prompt" in studio_source
     assert "generate_card_copy(card_type, story_context, target_language=card_language)" in studio_source
     assert "manual_prompt=manual_prompt.strip()" in studio_source
     script_source = (ROOT / "script_writer.py").read_text(encoding="utf-8")
@@ -213,6 +213,26 @@ def test_card_studio_exposes_manual_composition_controls_for_all_editorial_cards
     assert "invalidate_card_studio_result_for_composition(" in studio_source
     assert "Card type or composition changed. Render the card again" in studio_source
     assert "Text Subject Cutout is unchanged." in studio_source
+
+
+def test_top5_test_ai_generation_preserves_provider_diagnostics():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    store_anchor = 'st.session_state.test_top5_visual_results[active_slide] = {'
+    store_start = app_source.index(store_anchor)
+    store_end = app_source.index('if result.get("source") == "ai":', store_start)
+    store_block = app_source[store_start:store_end]
+
+    assert '"message": str(result.get("message") or "")' in store_block
+    assert '"errors": dict(result.get("errors") or {})' in store_block
+
+    render_end = app_source.index(
+        '\n                    if visual_option == "Option 5 · Card Studio":',
+        store_end,
+    )
+    render_block = app_source[store_end:render_end]
+    assert 'elif not result.get("assets"):' in render_block
+    assert 'st.warning(result.get("message") or "No AI image provider returned a usable image.")' in render_block
+    assert 'for provider_name, provider_error in (result.get("errors") or {}).items()' in render_block
 
 
 def test_live_card_studio_uses_approved_card_allowlist():

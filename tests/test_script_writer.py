@@ -1258,10 +1258,9 @@ def test_generate_stat_card_copy_preserves_story_and_ascii_digits(monkeypatch):
         "headline": "शानदार पारी",
         "value": "१२३",
         "unit": "रन",
-        "metrics": [
+        "supporting_fields": [
             {"label": "औसत", "value": "४६.२७"},
             {"label": "मैच", "value": "१२"},
-            {"label": "शतक", "value": "३"},
         ],
     }
 
@@ -1277,8 +1276,8 @@ def test_generate_stat_card_copy_preserves_story_and_ascii_digits(monkeypatch):
         manual_prompt="Focus on the record.",
     )
     assert result["value"] == "123"
-    assert result["metrics"][0]["value"] == "46.27"
-    assert result["metrics"][1]["value"] == "12"
+    assert result["supporting_fields"][0]["value"] == "46.27"
+    assert result["supporting_fields"][1]["value"] == "12"
     assert "Hindi" in captured["prompt"]
     assert "Focus on the record." in captured["prompt"]
     assert "Gill scores 123" in captured["story"]
@@ -1292,14 +1291,15 @@ def test_generate_head_to_head_card_copy_returns_renderer_shape(monkeypatch):
         "metrics": [
             {"label": "Runs", "left_value": "1,020", "right_value": "990"},
             {"label": "Average", "left_value": "48.2", "right_value": "44.1"},
-            {"label": "Centuries", "left_value": "3", "right_value": "2"},
         ],
     })
     result = script_writer.generate_card_copy("Head-to-Head", {"title": "Comparison"})
-    assert result["metrics"] == ["Runs", "Average", "Centuries"]
+    assert result["metrics"] == [
+        {"label": "Runs", "left_value": "1,020", "right_value": "990"},
+        {"label": "Average", "left_value": "48.2", "right_value": "44.1"},
+    ]
     assert result["left"]["name"] == "Player One"
-    assert result["left"]["values"]["Runs"] == "1,020"
-    assert result["right"]["values"]["Centuries"] == "2"
+    assert result["right"]["name"] == "Player Two"
 
 
 def test_generate_card_copy_rejects_text_subject_cutout():
@@ -1316,7 +1316,7 @@ def test_generate_telugu_card_copy_uses_telugu_script_and_ascii_digits(monkeypat
             "eyebrow": "రికార్డు",
             "value": "౧౨౩",
             "label": "పరుగులు",
-            "context": "మ్యాచ్‌లో సాధించిన స్కోరు",
+            "supporting_fields": [{"label": "వివరాలు", "value": "మ్యాచ్‌లో సాధించిన స్కోరు"}],
         }
 
     monkeypatch.setattr(script_writer, "_request", fake_request)
@@ -1327,4 +1327,57 @@ def test_generate_telugu_card_copy_uses_telugu_script_and_ascii_digits(monkeypat
     )
     assert result["language"] == "telugu"
     assert result["value"] == "123"
+    assert result["supporting_fields"][0]["value"] == "మ్యాచ్‌లో సాధించిన స్కోరు"
     assert "Telugu" in captured["prompt"]
+
+
+def test_generate_card_copy_researches_a_prompt_without_a_selected_story(monkeypatch):
+    captured = {}
+    monkeypatch.setattr(
+        script_writer,
+        "_research_card_prompt",
+        lambda query: f"Verified source material for {query}.",
+    )
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        captured.update({"prompt": prompt, "story": json.loads(story), "schema": schema})
+        return {
+            "eyebrow": "CAREER RECORD",
+            "headline": "Test wickets",
+            "value": "704",
+            "unit": "WICKETS",
+            "supporting_fields": [
+                {"label": "Test appearances", "value": "188"},
+                {"label": "International career", "value": "1994–2024"},
+            ],
+        }
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    result = script_writer.generate_card_copy(
+        "Stat Highlight",
+        {},
+        manual_prompt="James Anderson career Test stats",
+    )
+
+    assert result["value"] == "704"
+    assert len(result["supporting_fields"]) == 2
+    assert "Verified source material for James Anderson career Test stats." in captured["story"]["description"]
+    assert captured["story"]["card_direction"] == "James Anderson career Test stats"
+    assert "variable-length arrays" in captured["prompt"]
+    assert "minItems" not in captured["schema"]["properties"]["supporting_fields"]
+
+
+def test_generate_card_copy_can_leave_unneeded_supporting_fields_empty(monkeypatch):
+    monkeypatch.setattr(script_writer, "_request", lambda *args, **kwargs: {
+        "eyebrow": "",
+        "quote": "The team remained composed.",
+        "attribution": "",
+        "supporting_fields": [],
+    })
+    result = script_writer.generate_card_copy(
+        "Quote / Reaction",
+        {"title": "A match report", "description": "The report says the team remained composed."},
+    )
+    assert result["quote"] == "The team remained composed."
+    assert result["attribution"] == ""
+    assert result["supporting_fields"] == []

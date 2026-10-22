@@ -14,6 +14,90 @@ def _image_bytes(color=(52, 84, 118), size=(900, 1600)):
     return buffer.getvalue()
 
 
+def _renderable_card_data(card_type, language="english"):
+    data = card_studio.card_data_for_type(card_type, language=language)
+    copy = {
+        "english": {
+            "stat_headline": "Career Test wicket record",
+            "unit": "WICKETS",
+            "quote": "We kept believing until the final ball.",
+            "attribution": "Player name",
+            "comparison": "Career comparison",
+            "left_name": "James Anderson",
+            "right_name": "Stuart Broad",
+            "metric": "Test wickets",
+            "metric_two": "Test matches",
+            "fact_label": "Test wickets",
+            "support_label": "Format",
+            "support_value": "Test cricket",
+        },
+        "hindi": {
+            "stat_headline": "टेस्ट विकेट का रिकॉर्ड",
+            "unit": "विकेट",
+            "quote": "हमने आखिरी गेंद तक विश्वास बनाए रखा।",
+            "attribution": "खिलाड़ी का नाम",
+            "comparison": "करियर की तुलना",
+            "left_name": "जेम्स एंडरसन",
+            "right_name": "स्टुअर्ट ब्रॉड",
+            "metric": "टेस्ट विकेट",
+            "metric_two": "टेस्ट मैच",
+            "fact_label": "टेस्ट विकेट",
+            "support_label": "प्रारूप",
+            "support_value": "टेस्ट क्रिकेट",
+        },
+        "telugu": {
+            "stat_headline": "టెస్ట్ వికెట్ల రికార్డు",
+            "unit": "వికెట్లు",
+            "quote": "చివరి బంతి వరకు మేము నమ్మకాన్ని కోల్పోలేదు.",
+            "attribution": "ఆటగాడి పేరు",
+            "comparison": "కెరీర్ పోలిక",
+            "left_name": "జేమ్స్ ఆండర్సన్",
+            "right_name": "స్టువర్ట్ బ్రాడ్",
+            "metric": "టెస్ట్ వికెట్లు",
+            "metric_two": "టెస్ట్ మ్యాచ్‌లు",
+            "fact_label": "టెస్ట్ వికెట్లు",
+            "support_label": "ఫార్మాట్",
+            "support_value": "టెస్ట్ క్రికెట్",
+        },
+    }[language]
+    if card_type == "Stat Highlight":
+        data.update({
+            "headline": copy["stat_headline"],
+            "value": "704",
+            "unit": copy["unit"],
+            "supporting_fields": [
+                {"label": copy["support_label"], "value": copy["support_value"]},
+                {"label": "Appearances" if language == "english" else ("मैच" if language == "hindi" else "మ్యాచ్‌లు"), "value": "188"},
+            ],
+        })
+    elif card_type == "Quote / Reaction":
+        data.update({
+            "quote": copy["quote"],
+            "attribution": copy["attribution"],
+            "supporting_fields": [],
+        })
+    elif card_type == "Head-to-Head":
+        data.update({
+            "headline": copy["comparison"],
+            "left": {"name": copy["left_name"], "values": {}},
+            "right": {"name": copy["right_name"], "values": {}},
+            "metrics": [
+                {"label": copy["metric"], "left_value": "704", "right_value": "604"},
+                {"label": copy["metric_two"], "left_value": "188", "right_value": "167"},
+            ],
+        })
+    elif card_type == "Key Fact / Milestone":
+        data.update({
+            "value": "704",
+            "label": copy["fact_label"],
+            "supporting_fields": [
+                {"label": copy["support_label"], "value": copy["support_value"]}
+            ],
+        })
+    return data
+
+
+
 def test_bottom_gradient_starts_below_the_main_portrait_zone():
     image = Image.new("RGB", (1080, 1920), (175, 100, 70))
     result = card_studio._contrast_bed(image, "bottom", "Soft gradient").convert("RGB")
@@ -39,7 +123,7 @@ def test_card_studio_outputs_1080x1920_png():
         output = card_studio.render_card(
             card_type,
             _image_bytes(),
-            card_studio.card_data_for_type(card_type),
+            _renderable_card_data(card_type),
         )
         with Image.open(BytesIO(output)) as image:
             assert image.size == (1080, 1920)
@@ -55,30 +139,31 @@ def test_card_studio_defaults_fill_every_wip_field():
     ):
         defaults = card_studio.card_data_for_type(card_type)
         assert defaults["layout_position"] == "Auto · Best negative space"
-        assert defaults["contrast_treatment"] == "Soft gradient"
-
+        assert defaults["contrast_treatment"] == "Adaptive gradient"
+        assert defaults["eyebrow"] == ""
 
     stat = card_studio.card_data_for_type("Stat Highlight")
-    assert all(stat[key] for key in ("eyebrow", "headline", "value", "unit"))
-    assert len(stat["metrics"]) == 3
-    assert all(metric["label"] and metric["value"] for metric in stat["metrics"])
+    assert stat["value"] == ""
+    assert stat["headline"] == ""
+    assert stat["unit"] == ""
+    assert stat["supporting_fields"] == []
 
     quote = card_studio.card_data_for_type("Quote / Reaction")
-    assert all(quote[key] for key in ("eyebrow", "quote", "attribution", "context"))
+    assert quote["quote"] == ""
+    assert quote["attribution"] == ""
+    assert quote["supporting_fields"] == []
+    assert "context" not in quote
 
     head_to_head = card_studio.card_data_for_type("Head-to-Head")
-    assert all(head_to_head[key] for key in ("eyebrow", "headline", "image_mode", "split_direction"))
-    assert head_to_head["left"]["name"]
-    assert head_to_head["right"]["name"]
-    assert len(head_to_head["metrics"]) == 3
-    assert all(
-        head_to_head["left"]["values"].get(metric)
-        and head_to_head["right"]["values"].get(metric)
-        for metric in head_to_head["metrics"]
-    )
+    assert head_to_head["image_mode"] == "One image"
+    assert head_to_head["left"]["name"] == ""
+    assert head_to_head["right"]["name"] == ""
+    assert head_to_head["metrics"] == []
 
     milestone = card_studio.card_data_for_type("Key Fact / Milestone")
-    assert all(milestone[key] for key in ("eyebrow", "value", "label", "context"))
+    assert milestone["value"] == ""
+    assert milestone["label"] == ""
+    assert milestone["supporting_fields"] == []
 
 
 def test_recropping_source_invalidates_cached_card_results_for_all_source_images():
@@ -120,7 +205,7 @@ def test_all_editorial_cards_support_manual_photo_compositions():
         "Key Fact / Milestone",
     ):
         for position in card_studio.CARD_LAYOUT_POSITIONS:
-            data = card_studio.card_data_for_type(card_type)
+            data = _renderable_card_data(card_type)
             data["layout_position"] = position
             data["contrast_treatment"] = "Soft gradient"
             output = card_studio.render_card(card_type, _image_bytes(), data)
@@ -167,7 +252,7 @@ def test_contrast_treatments_are_manual_and_visually_distinct():
 def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
     mask = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(mask).rectangle((88, 220, 620, 1300), fill=255)
-    data = card_studio.card_data_for_type("Quote / Reaction")
+    data = _renderable_card_data("Quote / Reaction")
 
     output = card_studio.render_card(
         "Quote / Reaction",
@@ -184,7 +269,7 @@ def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
 def test_head_to_head_supports_two_images_with_manual_split_direction():
     left = _image_bytes((180, 60, 60))
     right = _image_bytes((60, 80, 180))
-    data = card_studio.card_data_for_type("Head-to-Head")
+    data = _renderable_card_data("Head-to-Head")
     data["image_mode"] = "Two images"
 
     left_mask = Image.new("L", (900, 1600), 0)
@@ -205,15 +290,16 @@ def test_head_to_head_supports_two_images_with_manual_split_direction():
             assert image.format == "PNG"
 
 
-def test_card_studio_rejects_overloaded_stat_card():
-    data = card_studio.card_data_for_type("Stat Highlight")
-    data["metrics"].append({"label": "Extra", "value": "5"})
-    try:
-        card_studio.render_card("Stat Highlight", _image_bytes(), data)
-    except card_studio.CardStudioError as exc:
-        assert "at most three" in str(exc)
-    else:
-        raise AssertionError("Expected CardStudioError")
+def test_card_studio_accepts_variable_supporting_stat_rows():
+    data = _renderable_card_data("Stat Highlight")
+    data["supporting_fields"].extend(
+        {"label": f"Extra metric {index}", "value": str(index)}
+        for index in range(1, 5)
+    )
+    output = card_studio.render_card("Stat Highlight", _image_bytes(), data)
+    with Image.open(BytesIO(output)) as image:
+        assert image.size == (1080, 1920)
+        assert image.format == "PNG"
 
 
 def test_card_studio_keeps_subject_cutout_on_shared_editor():
@@ -271,7 +357,7 @@ def test_all_non_cutout_cards_render_with_subject_masks():
         output = card_studio.render_card(
             card_type,
             source,
-            card_studio.card_data_for_type(card_type),
+            _renderable_card_data(card_type),
             subject_mask=mask,
         )
         with Image.open(BytesIO(output)) as image:
@@ -293,8 +379,9 @@ def test_localized_card_starter_copy_and_native_script_rendering():
         ("telugu", 0x0C00, 0x0C7F, "NotoSansTelugu-Bold.ttf"),
     ):
         for card_type in card_types:
-            data = card_studio.card_data_for_type(card_type, language=language)
+            data = _renderable_card_data(card_type, language=language)
             assert data["language"] == language
+            assert card_studio.card_data_for_type(card_type, language=language)["eyebrow"] == ""
             serialized = repr(data)
             assert any(start <= ord(char) <= end for char in serialized), (language, card_type)
             output = card_studio.render_card(card_type, _image_bytes(), data)
@@ -353,3 +440,79 @@ def test_changing_card_language_invalidates_the_old_render():
     )
     assert changed is True
     assert state["card-result"] is None
+
+
+def test_fit_rejects_a_word_that_cannot_fit_any_readable_size():
+    draw = ImageDraw.Draw(Image.new("RGB", (100, 100), (0, 0, 0)))
+    with pytest.raises(card_studio.CardStudioError, match="does not fit inside its measured width"):
+        card_studio._fit(
+            draw,
+            "UNBREAKABLYLONGWORD",
+            48,
+            1,
+            36,
+            26,
+            font_fn=card_studio._font_headline,
+        )
+
+
+def test_adaptive_gradient_strength_responds_to_photo_brightness():
+    bounds = (100, 300, 500, 900)
+    dark = Image.new("RGB", (1080, 1920), (15, 15, 15))
+    bright = Image.new("RGB", (1080, 1920), (240, 240, 240))
+
+    dark_result = card_studio._contrast_bed(
+        dark, "left", "Adaptive gradient", content_bounds=bounds
+    ).convert("RGB")
+    bright_result = card_studio._contrast_bed(
+        bright, "left", "Adaptive gradient", content_bounds=bounds
+    ).convert("RGB")
+
+    assert dark_result.getpixel((300, 600)) != dark.getpixel((300, 600))
+    assert bright_result.getpixel((300, 600)) != bright.getpixel((300, 600))
+    assert bright_result.getpixel((300, 600))[0] > dark_result.getpixel((300, 600))[0]
+    assert bright_result.getpixel((900, 600)) == bright.getpixel((900, 600))
+
+
+def test_quote_editorial_summary_does_not_render_as_a_verbatim_quote(monkeypatch):
+    captured = {}
+
+    def capture(_image, _position, _treatment, _x, _width, _top, blocks):
+        captured["blocks"] = blocks
+        return Image.new("RGB", (1080, 1920), (0, 0, 0))
+
+    monkeypatch.setattr(card_studio, "_draw_editorial_stack", capture)
+    data = card_studio.card_data_for_type("Quote / Reaction")
+    data.update({
+        "quote": "The team remained composed in the final overs.",
+        "attribution": "Editorial summary",
+    })
+    card_studio._render_quote_reaction(_image_bytes(), data, None)
+    quote = next(block for block in captured["blocks"] if block.get("kind") == "quote")
+    assert quote["show_quote_mark"] is False
+
+    data["attribution"] = "James Anderson"
+    card_studio._render_quote_reaction(_image_bytes(), data, None)
+    quote = next(block for block in captured["blocks"] if block.get("kind") == "quote")
+    assert quote["show_quote_mark"] is True
+
+
+def test_quote_card_can_render_without_attribution_or_context():
+    data = card_studio.card_data_for_type("Quote / Reaction")
+    data["quote"] = "We kept believing until the final ball."
+    output = card_studio.render_card("Quote / Reaction", _image_bytes(), data)
+    with Image.open(BytesIO(output)) as image:
+        assert image.size == (1080, 1920)
+        assert image.format == "PNG"
+
+
+def test_head_to_head_support_rows_adapt_to_the_count_and_safe_columns():
+    data = _renderable_card_data("Head-to-Head")
+    data["metrics"] = [
+        {"label": "Test wickets", "left_value": "704", "right_value": "604"},
+        {"label": "Test matches", "left_value": "188", "right_value": "167"},
+    ]
+    output = card_studio.render_card("Head-to-Head", _image_bytes(), data)
+    with Image.open(BytesIO(output)) as image:
+        assert image.size == (1080, 1920)
+        assert image.format == "PNG"
