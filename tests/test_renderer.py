@@ -98,30 +98,32 @@ def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
     one_line = next(layout for layout in data["layouts"] if len(layout["lines"]) == 1)
     assert one_line["placements"][0][2] == 82
 
-def test_manual_subject_cutout_polygon_flow_uses_vertical_indentation(monkeypatch):
+def test_manual_subject_cutout_uses_rectangular_bounds_for_every_line(monkeypatch):
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     monkeypatch.setattr(
         renderer,
         "_manual_subject_font_bytes",
         lambda _font_name: font_path.read_bytes(),
     )
-
-    polygon = ((100, 700), (900, 700), (900, 1500), (500, 1500))
-    flowed = renderer._manual_subject_cutout_layout_data(
-        "India win",
+    polygon = ((100, 700), (900, 700), (900, 1100), (500, 1500))
+    data = renderer._manual_subject_cutout_layout_data(
+        "India cricket team wins today",
         polygon,
         120,
         "Barlow Condensed",
         "Crisp Outline",
-        polygon_flow=True,
     )
-
-    assert flowed["layouts"]
-    layout = next(layout for layout in flowed["layouts"] if len(layout["lines"]) == 2)
-    assert flowed["polygon_flow"] is True
-
-    lefts = [placement[2] for placement in layout["placements"]]
-    assert lefts[1] > lefts[0]
+    assert data["layouts"]
+    assert data["box_bounds"] == (100, 700, 900, 1500)
+    placements = data["layouts"][0]["placements"]
+    assert len(placements) >= 2
+    assert {placement[2] for placement in placements} == {102}
+    assert placements[0][1] == 702
+    assert all(
+        placement[1] + (placement[3][3] - placement[3][1]) <= 1498
+        and placement[2] + (placement[3][2] - placement[3][0]) <= 898
+        for placement in placements
+    )
 
 
 def test_manual_subject_cutout_polygon_half_screen_vertical_alignment(monkeypatch):
@@ -231,7 +233,6 @@ def test_manual_subject_cutout_uses_exact_font_size_without_retry(monkeypatch):
                 "font_size": 150,
                 "font": "Barlow Condensed",
                 "style": "Crisp Outline",
-                "polygon_flow": True,
             },
         )
     assert sizes == [150]
@@ -269,7 +270,7 @@ def test_manual_subject_cutout_line_stretches_word_spacing_not_glyphs():
     assert one_word_bounds[2] - one_word_bounds[0] < 400
 
 
-def test_manual_subject_cutout_layout_previews_do_not_shrink_font_size(monkeypatch):
+def test_manual_subject_cutout_empty_layout_keeps_selected_font_size(monkeypatch):
     sizes = []
 
     def no_layout(_headline, _polygon, font_size, *_args):
@@ -278,7 +279,7 @@ def test_manual_subject_cutout_layout_previews_do_not_shrink_font_size(monkeypat
 
     monkeypatch.setattr(renderer, "_manual_subject_cutout_layout_data", no_layout)
     with pytest.raises(ValueError, match="Text size 140px"):
-        renderer.build_manual_subject_cutout_layout_previews(
+        renderer.build_manual_subject_cutout_preview(
             _test_base(),
             "INDIA WINS",
             mode="behind-subject",
@@ -973,51 +974,11 @@ def test_production_renderer_keeps_text_cutout_frame_free_of_overlays(monkeypatc
     expected = Image.open(BytesIO(rendered.getvalue())).convert("RGB")
     assert ImageChops.difference(rendered_frames[0], expected).getbbox() is None
 
-def test_manual_subject_cutout_previews_all_valid_line_breaks(monkeypatch):
+def test_manual_subject_cutout_manual_line_breaks_are_used_exactly(monkeypatch):
     local_font = (
-        renderer.Path(__file__).resolve().parents[1]
-        / "fonts"
-        / "BarlowCondensed-Black.ttf"
+        renderer.Path(__file__).resolve().parents[1] / "fonts" / "BarlowCondensed-Black.ttf"
     ).read_bytes()
-    monkeypatch.setattr(
-        renderer,
-        "_manual_subject_font_bytes",
-        lambda _font_name: local_font,
-    )
-
-    options = renderer.build_manual_subject_cutout_layout_previews(
-        Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        "India win today",
-        mode="negative-space",
-        text_polygon=((60, 700), (1020, 700), (1020, 1400), (60, 1400)),
-        font_size=140,
-    )
-
-    assert len(options) == 4
-    assert {tuple(option["line_breaks"]) for option in options} == {
-        (3,),
-        (1, 3),
-        (2, 3),
-        (1, 2, 3),
-    }
-    assert all(
-        Image.open(BytesIO(option["preview"])).size == (360, 640)
-        for option in options
-    )
-
-
-def test_manual_subject_cutout_uses_selected_line_breaks(monkeypatch):
-    local_font = (
-        renderer.Path(__file__).resolve().parents[1]
-        / "fonts"
-        / "BarlowCondensed-Black.ttf"
-    ).read_bytes()
-    monkeypatch.setattr(
-        renderer,
-        "_manual_subject_font_bytes",
-        lambda _font_name: local_font,
-    )
-
+    monkeypatch.setattr(renderer, "_manual_subject_font_bytes", lambda _name: local_font)
     common = {
         "mode": "negative-space",
         "text_polygon": ((60, 700), (1020, 700), (1020, 1400), (60, 1400)),
@@ -1025,45 +986,54 @@ def test_manual_subject_cutout_uses_selected_line_breaks(monkeypatch):
         "font": "Barlow Condensed",
         "style": "Crisp Outline",
     }
-    one_line = renderer.build_manual_subject_cutout_preview(
-        Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        "India win today",
-        line_breaks=(3,),
-        **common,
+    data = renderer._manual_subject_cutout_layout_data(
+        "India wins", common["text_polygon"], common["font_size"],
+        common["font"], common["style"], manual_lines="India\nwins"
     )
-    three_lines = renderer.build_manual_subject_cutout_preview(
-        Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        "India win today",
-        line_breaks=(1, 2, 3),
-        **common,
+    assert data["layouts"][0]["lines"] == ("INDIA", "WINS")
+    assert {placement[2] for placement in data["layouts"][0]["placements"]} == {62}
+    automatic = renderer.build_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)), "India wins", **common
     )
-
+    manual = renderer.build_manual_subject_cutout_preview(
+        Image.new("RGB", (1080, 1920), (40, 40, 40)),
+        "India wins", manual_lines="India\nwins", **common
+    )
     assert ImageChops.difference(
-        Image.open(BytesIO(one_line)).convert("RGB"),
-        Image.open(BytesIO(three_lines)).convert("RGB"),
+        Image.open(BytesIO(automatic)).convert("RGB"),
+        Image.open(BytesIO(manual)).convert("RGB"),
     ).getbbox() is not None
 
 
-def test_manual_subject_cutout_rejects_invalid_line_breaks(monkeypatch):
+def test_manual_subject_cutout_rejects_incomplete_or_reordered_manual_lines(monkeypatch):
     local_font = (
-        renderer.Path(__file__).resolve().parents[1]
-        / "fonts"
-        / "BarlowCondensed-Black.ttf"
+        renderer.Path(__file__).resolve().parents[1] / "fonts" / "BarlowCondensed-Black.ttf"
     ).read_bytes()
-    monkeypatch.setattr(
-        renderer,
-        "_manual_subject_font_bytes",
-        lambda _font_name: local_font,
-    )
-
-    with pytest.raises(ValueError, match="line-break layout"):
+    monkeypatch.setattr(renderer, "_manual_subject_font_bytes", lambda _name: local_font)
+    with pytest.raises(ValueError, match="every headline word exactly once"):
         renderer.build_manual_subject_cutout_preview(
             Image.new("RGB", (1080, 1920), (40, 40, 40)),
             "India win today",
             mode="negative-space",
             text_polygon=((60, 700), (1020, 700), (1020, 1400), (60, 1400)),
             font_size=140,
-            line_breaks=(1, 1, 3),
+            manual_lines="India today\nwin",
+        )
+
+
+def test_manual_subject_cutout_rejects_manual_line_that_exceeds_box_width(monkeypatch):
+    local_font = (
+        renderer.Path(__file__).resolve().parents[1] / "fonts" / "BarlowCondensed-Black.ttf"
+    ).read_bytes()
+    monkeypatch.setattr(renderer, "_manual_subject_font_bytes", lambda _name: local_font)
+    with pytest.raises(ValueError, match="Manual line 1 is wider than the text box"):
+        renderer.build_manual_subject_cutout_preview(
+            Image.new("RGB", (1080, 1920), (40, 40, 40)),
+            "CHAMPIONS",
+            mode="negative-space",
+            text_polygon=((100, 700), (220, 700), (220, 1000), (100, 1000)),
+            font_size=140,
+            manual_lines="CHAMPIONS",
         )
 
 

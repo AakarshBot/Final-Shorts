@@ -16,7 +16,6 @@ import tempfile
 import time
 import warnings
 from functools import lru_cache
-from itertools import combinations
 import sysconfig
 import zipfile
 from urllib.request import urlopen
@@ -1327,21 +1326,17 @@ def _manual_subject_cutout_layout_data_uncached(
     font_size: int,
     font_name: str,
     style: str,
-    polygon_flow: bool = True,
+    manual_lines: str | tuple[str, ...] | list[str] | None = None,
 ):
     clean_headline = " ".join(str(headline or "").split()).upper()
     if not clean_headline:
         raise ValueError("Manual Subject Cutout requires a headline.")
-
     if not isinstance(polygon, (list, tuple)) or len(polygon) < 3:
         raise ValueError("Manual Subject Cutout requires a polygon text area.")
 
     try:
         points = [
-            (
-                max(0, min(WIDTH, int(point[0]))),
-                max(0, min(HEIGHT, int(point[1]))),
-            )
+            (max(0, min(WIDTH, int(point[0]))), max(0, min(HEIGHT, int(point[1]))))
             for point in polygon
         ]
     except (TypeError, ValueError, IndexError) as exc:
@@ -1353,25 +1348,45 @@ def _manual_subject_cutout_layout_data_uncached(
     box_bottom = max(y for _, y in points)
     box_width = box_right - box_left
     box_height = box_bottom - box_top
-    if box_width <= 0 or box_height <= 0:
-        raise ValueError("Manual Subject Cutout text area must have positive dimensions.")
+    padding = 2
+    available_width = box_width - padding * 2
+    available_height = box_height - padding * 2
+    if available_width <= 0 or available_height <= 0:
+        raise ValueError("Manual Subject Cutout text box must have positive usable width and height.")
 
     try:
         requested_size = int(font_size or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
     except (TypeError, ValueError) as exc:
         raise ValueError("Manual Subject Cutout has invalid font size.") from exc
-    requested_size = max(
-        MANUAL_SUBJECT_MIN_FONT_SIZE,
-        min(MANUAL_SUBJECT_MAX_FONT_SIZE, requested_size),
-    )
+    requested_size = max(MANUAL_SUBJECT_MIN_FONT_SIZE, min(MANUAL_SUBJECT_MAX_FONT_SIZE, requested_size))
 
     mode = str(font_name or "").strip()
     if mode not in MANUAL_SUBJECT_FONT_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid font.")
-
     clean_style = str(style or "").strip()
     if clean_style not in MANUAL_SUBJECT_STYLE_OPTIONS:
         raise ValueError("Manual Subject Cutout has an invalid text style.")
+
+    words = clean_headline.split()
+    if isinstance(manual_lines, str):
+        raw_manual_lines = manual_lines.splitlines()
+    elif isinstance(manual_lines, (tuple, list)):
+        raw_manual_lines = manual_lines
+    elif manual_lines is None:
+        raw_manual_lines = []
+    else:
+        raise ValueError("Manual line breaks must be entered as one text line per row.")
+    clean_manual_lines = tuple(
+        " ".join(str(line or "").split()).upper()
+        for line in raw_manual_lines
+        if " ".join(str(line or "").split())
+    )
+    if clean_manual_lines:
+        manual_words = tuple(word for line in clean_manual_lines for word in line.split())
+        if manual_words != tuple(words):
+            raise ValueError(
+                "Manual line breaks must include every headline word exactly once and in the original order."
+            )
 
     script_language = _indic_language_for_text(clean_headline)
     if script_language:
@@ -1392,242 +1407,150 @@ def _manual_subject_cutout_layout_data_uncached(
         "Deep Block": 4,
     }.get(clean_style, 3)
 
-    def polygon_intervals(y_value: float) -> list[tuple[float, float]]:
-        y_value = max(0.0, min(HEIGHT - 0.001, y_value))
-        intersections = []
-        for index, (x1, y1) in enumerate(points):
-            x2, y2 = points[(index + 1) % len(points)]
-            if y1 == y2:
-                continue
-            if (y1 <= y_value < y2) or (y2 <= y_value < y1):
-                intersections.append(
-                    x1 + (y_value - y1) * (x2 - x1) / (y2 - y1)
-                )
-        intersections.sort()
-        return [
-            (left, right)
-            for left, right in zip(intersections[0::2], intersections[1::2])
-            if right > left
-        ]
-
-    def line_position(
-        line: str,
-        font: ImageFont.FreeTypeFont,
-        line_top: float,
-        line_bottom: float,
-    ):
-        bbox = probe.textbbox(
-            (0, 0),
-            line,
-            font=font,
-            stroke_width=stroke_width,
-        )
-        line_width = bbox[2] - bbox[0]
-        sample_y = [
-            line_top + (line_bottom - line_top) * fraction
-            for fraction in (0.05, 0.25, 0.5, 0.75, 0.95)
-        ]
-        regions = [polygon_intervals(y_value) for y_value in sample_y]
-        if any(not region for region in regions):
-            return None
-
-        center_y = (line_top + line_bottom) / 2
-        center_regions = polygon_intervals(center_y)
-        if not center_regions:
-            return None
-
-        c_left, c_right = max(
-            center_regions,
-            key=lambda interval: interval[1] - interval[0],
-        )
-
-        left_edges = []
-        right_edges = []
-        for region in regions:
-            overlapping = [
-                iv for iv in region
-                if not (iv[1] <= c_left or iv[0] >= c_right)
-            ]
-            if not overlapping:
-                return None
-            best = max(overlapping, key=lambda iv: iv[1] - iv[0])
-            left_edges.append(best[0])
-            right_edges.append(best[1])
-
-        line_left = max(left_edges)
-        line_right = min(right_edges)
-        usable_width = line_right - line_left - 4
-        if usable_width < line_width:
-            return None
-
-        left = int(round(line_left + 2))
-        right = left + line_width
-        if right > line_right - 2:
-            return None
-        return left, bbox, usable_width
-
-    words = clean_headline.split()
-    layouts = []
     if script_language:
         try:
-            font = ImageFont.truetype(
-                BytesIO(font_data),
-                requested_size,
-                layout_engine=ImageFont.Layout.RAQM,
-            )
+            font = ImageFont.truetype(BytesIO(font_data), requested_size, layout_engine=ImageFont.Layout.RAQM)
         except (OSError, ValueError) as exc:
             raise RuntimeError(
-                f"Text Subject Cutout could not load the bundled Indic font with RAQM. "
-                f"On Windows, confirm the FriBiDi runtime DLL is available and restart the factory."
+                "Text Subject Cutout could not load the bundled Indic font with RAQM. "
+                "On Windows, confirm the FriBiDi runtime DLL is available and restart the factory."
             ) from exc
     else:
-        # Preserve Pillow's established default layout engine for English.
         font = ImageFont.truetype(BytesIO(font_data), requested_size)
+
     ascent, descent = font.getmetrics()
     metric_height = ascent + descent + stroke_width * 2
     if script_language in {"hindi", "telugu"}:
-        sample_text = (
-            "क्षेत्रों की उपलब्धियों"
-            if script_language == "hindi"
-            else "క్రీడాకారుల విజయం"
-        )
-        sample_box = probe.textbbox(
-            (0, 0),
-            sample_text,
-            font=font,
-            stroke_width=stroke_width,
-        )
+        sample_text = "क्षेत्रों की उपलब्धियों" if script_language == "hindi" else "క్రీడాకారుల విజయం"
+        sample_box = probe.textbbox((0, 0), sample_text, font=font, stroke_width=stroke_width)
         sample_height = sample_box[3] - sample_box[1]
         word_max_height = max(
-            (
-                probe.textbbox((0, 0), word, font=font, stroke_width=stroke_width)[3]
-                - probe.textbbox((0, 0), word, font=font, stroke_width=stroke_width)[1]
-            )
+            probe.textbbox((0, 0), word, font=font, stroke_width=stroke_width)[3]
+            - probe.textbbox((0, 0), word, font=font, stroke_width=stroke_width)[1]
             for word in words
         ) if words else 0
         line_height = max(metric_height, sample_height, word_max_height)
         line_gap = max(TOP5_EDITORIAL_HEADLINE_LINE_GAP, int(requested_size * 0.18))
     else:
-        line_box = probe.textbbox(
-            (0, 0),
-            "Ag",
-            font=font,
-            stroke_width=stroke_width,
-        )
+        line_box = probe.textbbox((0, 0), "Ag", font=font, stroke_width=stroke_width)
         line_height = max(1, line_box[3] - line_box[1])
         line_gap = TOP5_EDITORIAL_HEADLINE_LINE_GAP
 
-    max_line_count = min(
-        len(words),
-        max(
-            0,
-            (box_height - 4 + line_gap)
-            // (line_height + line_gap),
-        ),
-    )
-    split_masks = (
-        sum(1 << (position - 1) for position in split_positions)
-        for line_count in range(1, max_line_count + 1)
-        for split_positions in combinations(range(1, len(words)), line_count - 1)
-    )
+    max_line_count = min(len(words), max(0, (available_height + line_gap) // (line_height + line_gap)))
+    measurements = {}
 
-    for mask in split_masks:
-        breaks = [
-            index + 1
-            for index in range(len(words) - 1)
-            if mask & (1 << index)
-        ]
-        breaks.append(len(words))
-        lines = []
-        start = 0
-        for end in breaks:
-            lines.append(" ".join(words[start:end]))
-            start = end
+    def measure(line: str):
+        if line not in measurements:
+            bbox = probe.textbbox((0, 0), line, font=font, stroke_width=stroke_width)
+            measurements[line] = (bbox, bbox[2] - bbox[0])
+        return measurements[line]
 
-        total_height = (
-            line_height * len(lines)
-            + line_gap * max(0, len(lines) - 1)
-        )
-        if total_height > box_height - 4:
-            continue
-
-        max_start_y = box_bottom - total_height - 2
-        cand_starts = [box_top + 2]
-        if max_start_y > box_top + 2:
-            step = max(2, int(line_height // 8))
-            cand_starts.extend(
-                range(box_top + 2 + step, int(max_start_y) + 1, step)
+    lines = list(clean_manual_lines)
+    if clean_manual_lines:
+        if len(lines) > max_line_count:
+            raise ValueError(
+                f"Manual line breaks need {len(lines)} lines, but only {max_line_count} fit "
+                f"in the text box at {requested_size}px. Remove a line break, enlarge the box, or reduce the text size."
             )
-
-        valid = False
-        placements = []
-        fill_ratios = []
-        start_y = box_top + 2
-        for cand_y in cand_starts:
-            cand_valid = True
-            trial_placements = []
-            trial_fill_ratios = []
-            trial_target_widths = []
-            word_index = 0
-            for line_index, end in enumerate(breaks):
-                line = " ".join(words[word_index:end])
-                line_top = cand_y + line_index * (
-                    line_height + line_gap
+        for index, line in enumerate(lines, 1):
+            _bbox, line_width = measure(line)
+            if line_width > available_width:
+                raise ValueError(
+                    f"Manual line {index} is wider than the text box at {requested_size}px. "
+                    "Change that line break, widen the box, or reduce the text size."
                 )
-                line_bottom = line_top + line_height
-                position = line_position(line, font, line_top, line_bottom)
-                if position is None:
-                    cand_valid = False
-                    break
-                cursor_x, bbox, usable_width = position
-                trial_placements.append((line, line_top, cursor_x, bbox))
-                trial_fill_ratios.append(
-                    (bbox[2] - bbox[0]) / max(1.0, usable_width)
+    else:
+        for word in words:
+            _bbox, word_width = measure(word)
+            if word_width > available_width:
+                raise ValueError(
+                    f"The word '{word}' is wider than the text box at {requested_size}px. "
+                    "Widen the box or reduce the text size."
                 )
-                trial_target_widths.append(usable_width)
-                word_index = end
 
-            if cand_valid:
-                valid = True
-                placements = trial_placements
-                fill_ratios = trial_fill_ratios
-                start_y = cand_y
-                break
+        @lru_cache(maxsize=None)
+        def best_wrap(start: int, remaining_lines: int):
+            if remaining_lines == 0:
+                return (0.0, ()) if start == len(words) else None
+            if len(words) - start < remaining_lines:
+                return None
+            best = None
+            last_end = len(words) - remaining_lines + 1
+            for end in range(start + 1, last_end + 1):
+                line = " ".join(words[start:end])
+                _bbox, line_width = measure(line)
+                if line_width > available_width:
+                    continue
+                remainder = best_wrap(end, remaining_lines - 1)
+                if remainder is None:
+                    continue
+                slack = (available_width - line_width) / available_width
+                cost = slack * slack * (0.25 if remaining_lines == 1 else 1.0) + 0.035
+                if len(words) > 1 and end - start == 1:
+                    cost += 0.12
+                candidate = (cost + remainder[0], (line,) + remainder[1])
+                if best is None or candidate < best:
+                    best = candidate
+            return best
 
-        if valid:
-            h_fill = sum(fill_ratios) / len(fill_ratios)
-            v_fill = total_height / max(1.0, box_height - 4)
-            fill_score = (h_fill * 0.5) + (v_fill * 0.5)
-            layouts.append({
-                "line_breaks": tuple(breaks),
-                "lines": tuple(lines),
-                "placements": tuple(placements),
-                "target_widths": tuple(trial_target_widths),
-                "fill_ratio": h_fill,
-                "fill_score": fill_score,
-            })
+        automatic = [
+            candidate
+            for line_count in range(1, max_line_count + 1)
+            if (candidate := best_wrap(0, line_count)) is not None
+        ]
+        if not automatic:
+            return {
+                "headline": clean_headline, "points": points,
+                "box_bounds": (box_left, box_top, box_right, box_bottom),
+                "box_height": box_height, "available_width": available_width,
+                "font_size": requested_size, "font_name": mode, "style": clean_style,
+                "stretch_english_lines": script_language is None,
+                "font_data": font_data, "font": font, "stroke_width": stroke_width,
+                "layouts": [],
+            }
+        lines = list(min(automatic, key=lambda item: (item[0], len(item[1]), item[1]))[1])
 
-    layouts.sort(
-        key=lambda item: (
-            item["fill_score"],
-            item["fill_ratio"],
-            item["line_breaks"],
-        ),
-        reverse=True,
-    )
+    total_height = line_height * len(lines) + line_gap * max(0, len(lines) - 1)
+    if total_height > available_height:
+        raise ValueError(
+            f"The selected {requested_size}px text needs {total_height}px of height, "
+            f"but the text box has {available_height}px available."
+        )
+
+    placements, target_widths = [], []
+    for index, line in enumerate(lines):
+        bbox, _line_width = measure(line)
+        line_top = box_top + padding + index * (line_height + line_gap)
+        placements.append((line, line_top, box_left + padding, bbox))
+        target_widths.append(available_width)
+
+    consumed_words, line_breaks = 0, []
+    for line in lines:
+        consumed_words += len(line.split())
+        line_breaks.append(consumed_words)
+    fill_ratio = sum(min(1.0, measure(line)[1] / max(1.0, available_width)) for line in lines) / max(1, len(lines))
     return {
         "headline": clean_headline,
         "points": points,
+        "box_bounds": (box_left, box_top, box_right, box_bottom),
         "box_height": box_height,
+        "available_width": available_width,
         "font_size": requested_size,
         "font_name": mode,
         "style": clean_style,
-        "polygon_flow": bool(polygon_flow),
         "stretch_english_lines": script_language is None,
         "font_data": font_data,
         "font": font,
         "stroke_width": stroke_width,
-        "layouts": layouts,
+        "manual_lines": bool(clean_manual_lines),
+        "layouts": [{
+            "line_breaks": tuple(line_breaks),
+            "lines": tuple(lines),
+            "placements": tuple(placements),
+            "target_widths": tuple(target_widths),
+            "fill_ratio": fill_ratio,
+            "fill_score": fill_ratio,
+        }],
     }
 
 
@@ -1638,18 +1561,11 @@ def _manual_subject_cutout_layout_data_cached(
     font_size: int,
     font_name: str,
     style: str,
-    polygon_flow: bool,
     font_signature: str,
+    manual_lines: str,
 ):
-    # Geometry is independent of the source photo. Keep a small cache for ordinary
-    # Short headlines so Preview Options and Render Now can reuse the same layout.
     return _manual_subject_cutout_layout_data_uncached(
-        headline,
-        polygon,
-        font_size,
-        font_name,
-        style,
-        polygon_flow,
+        headline, polygon, font_size, font_name, style, manual_lines
     )
 
 
@@ -1659,45 +1575,36 @@ def _manual_subject_cutout_layout_data(
     font_size: int,
     font_name: str,
     style: str,
-    polygon_flow: bool = True,
+    manual_lines: str | tuple[str, ...] | list[str] | None = None,
 ):
     clean_headline = " ".join(str(headline or "").split()).upper()
     if not clean_headline or not isinstance(polygon, (list, tuple)) or len(polygon) < 3:
         return _manual_subject_cutout_layout_data_uncached(
-            headline, polygon, font_size, font_name, style, polygon_flow
+            headline, polygon, font_size, font_name, style, manual_lines
         )
-
     try:
         polygon_key = tuple((int(point[0]), int(point[1])) for point in polygon)
         size_key = int(font_size or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
     except (TypeError, ValueError, IndexError):
         return _manual_subject_cutout_layout_data_uncached(
-            headline, polygon, font_size, font_name, style, polygon_flow
+            headline, polygon, font_size, font_name, style, manual_lines
         )
-
-    # The line-break search has exponential complexity in word count. Keep long
-    # headlines out of the cache so a single large layout cannot retain excessive RAM.
-    if len(clean_headline.split()) > 10:
-        return _manual_subject_cutout_layout_data_uncached(
-            headline, polygon, font_size, font_name, style, polygon_flow
-        )
-
     font_key = str(font_name or "").strip()
     style_key = str(style or "").strip()
     if font_key not in MANUAL_SUBJECT_FONT_OPTIONS or style_key not in MANUAL_SUBJECT_STYLE_OPTIONS:
         return _manual_subject_cutout_layout_data_uncached(
-            headline, polygon, font_size, font_name, style, polygon_flow
+            headline, polygon, font_size, font_name, style, manual_lines
         )
-
-    font_signature = hashlib.sha1(_manual_subject_text_font_bytes(clean_headline, font_key)).hexdigest()
+    if isinstance(manual_lines, (tuple, list)):
+        manual_lines_key = "\n".join(str(line or "") for line in manual_lines)
+    else:
+        manual_lines_key = str(manual_lines or "")
+    font_signature = hashlib.sha1(
+        _manual_subject_text_font_bytes(clean_headline, font_key)
+    ).hexdigest()
     return _manual_subject_cutout_layout_data_cached(
-        clean_headline,
-        polygon_key,
-        size_key,
-        font_key,
-        style_key,
-        bool(polygon_flow),
-        font_signature,
+        clean_headline, polygon_key, size_key, font_key, style_key,
+        font_signature, manual_lines_key
     )
 
 
@@ -1896,28 +1803,16 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         font_size,
         str(config.get("font") or "Barlow Condensed").strip(),
         str(config.get("style") or "Crisp Outline").strip(),
-        bool(config.get("polygon_flow", True)),
+        config.get("manual_lines"),
     )
     layouts = data["layouts"]
     if not layouts:
         raise ValueError(
-            f"Text size {data['font_size']}px does not fit the selected polygon. Make the polygon larger or choose a smaller size."
+            f"Text size {data['font_size']}px does not fit the selected rectangular text box. "
+            "Make the box wider or taller, or choose a smaller size."
         )
 
-    selected_breaks = config.get("line_breaks")
-    if selected_breaks is not None:
-        try:
-            selected_breaks = tuple(int(value) for value in selected_breaks)
-        except (TypeError, ValueError):
-            raise ValueError("Manual Subject Cutout has invalid line breaks.")
-        layout = next(
-            (item for item in layouts if item["line_breaks"] == selected_breaks),
-            None,
-        )
-        if layout is None:
-            raise ValueError("The selected line-break layout does not fit the current polygon or text size.")
-    else:
-        layout = layouts[0]
+    layout = layouts[0]
 
     subject_mask = None
     if mode == "behind-subject":
@@ -1951,8 +1846,7 @@ def build_manual_subject_cutout_preview(
     font: str = "Barlow Condensed",
     style: str = "Crisp Outline",
     text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
-    line_breaks: tuple[int, ...] | list[int] | None = None,
-    polygon_flow: bool = True,
+    manual_lines: str | tuple[str, ...] | list[str] | None = None,
 ) -> bytes:
     frame = _draw_manual_subject_cutout(
         source_image,
@@ -1963,84 +1857,12 @@ def build_manual_subject_cutout_preview(
             "font_size": int(font_size),
             "font": font,
             "style": style,
-            "line_breaks": line_breaks,
-            "polygon_flow": polygon_flow,
+            "manual_lines": manual_lines,
         },
     )
     buffer = BytesIO()
     frame.convert("RGB").save(buffer, format="PNG", optimize=True)
     return buffer.getvalue()
-
-
-def build_manual_subject_cutout_layout_previews(
-    source_image: bytes | bytearray | Image.Image,
-    headline: str,
-    *,
-    mode: str,
-    font_size: int,
-    font: str = "Barlow Condensed",
-    style: str = "Crisp Outline",
-    text_polygon: list[tuple[int, int]] | tuple[tuple[int, int], ...] = (),
-    polygon_flow: bool = True,
-) -> list[dict]:
-    selected_mode = str(mode or "negative-space").strip().casefold()
-    if selected_mode not in {"negative-space", "behind-subject"}:
-        raise ValueError("Manual Subject Cutout has an invalid composition mode.")
-
-    data = _manual_subject_cutout_layout_data(
-        headline,
-        text_polygon,
-        int(font_size or MANUAL_SUBJECT_DEFAULT_FONT_SIZE),
-        font,
-        style,
-        polygon_flow,
-    )
-    if not data["layouts"]:
-        raise ValueError(
-            f"Text size {data['font_size']}px does not fit the selected polygon. Make the polygon larger or choose a smaller size."
-        )
-
-    subject_mask = None
-    if selected_mode == "behind-subject":
-        base = _top5_full_frame_image(
-            source_image if isinstance(source_image, Image.Image) else Image.open(BytesIO(bytes(source_image)))
-        ).convert("RGBA")
-        source = BytesIO()
-        base.convert("RGB").save(source, format="PNG", optimize=False)
-        try:
-            subject_mask = _top5_subject_mask(source.getvalue())
-        except Exception:
-            subject_mask = None
-        if subject_mask is not None:
-            subject_mask = subject_mask.convert("L").point(
-                lambda value: 255 if value >= 96 else value
-            )
-
-    base_image = (
-        source_image.convert("RGB")
-        if isinstance(source_image, Image.Image)
-        else Image.open(BytesIO(bytes(source_image))).convert("RGB")
-    )
-
-    previews = []
-    for index, layout in enumerate(data["layouts"], 1):
-        frame = _draw_manual_subject_cutout_frame(
-            base_image,
-            data,
-            layout["placements"],
-            mode=selected_mode,
-            subject_mask=subject_mask,
-            target_widths=layout.get("target_widths"),
-        ).resize((360, 640), Image.Resampling.LANCZOS)
-        buffer = BytesIO()
-        frame.convert("RGB").save(buffer, format="JPEG", quality=84, optimize=True)
-        previews.append({
-            "index": index,
-            "line_breaks": layout["line_breaks"],
-            "lines": layout["lines"],
-            "preview": buffer.getvalue(),
-        })
-    return previews
 
 
 def _paste_top5_source(base: Image.Image, source_label: str | None) -> None:

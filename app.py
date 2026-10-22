@@ -45,9 +45,10 @@ if not st.get_option("global.appTest"):
   <svg viewBox="0 0 1080 1920" aria-label="Manual Subject Cutout polygon editor">
     <image id="background" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
     <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
+    <rect id="text-box" x="0" y="0" width="0" height="0" fill="none" stroke="#f5b942" stroke-width="5" stroke-dasharray="14 10" pointer-events="none" vector-effect="non-scaling-stroke"></rect>
     <g id="handles"></g>
   </svg>
-  <div class="help">Drag a point to reshape. Drag inside the highlighted area to move the whole polygon. Click an edge to add a point.</div>
+  <div class="help">The dashed rectangle is the actual text box. Text uses its outer left/right/top/bottom edges; the polygon's inner shape does not affect wrapping. Drag outer points to resize it, or drag the polygon to move it.</div>
 </div>
 """,
         css="""
@@ -56,6 +57,7 @@ if not st.get_option("global.appTest"):
 .text-cutout-editor .handle{cursor:move}
 .text-cutout-editor #polygon{cursor:grab}
 .text-cutout-editor #polygon:active{cursor:grabbing}
+.text-cutout-editor #text-box{pointer-events:none;stroke:#f5b942;stroke-dasharray:14 10;vector-effect:non-scaling-stroke}
 .text-cutout-editor .help{margin:6px 0;color:#52574f;font-size:12px;line-height:1.2;opacity:.78}
 """,
         js="""
@@ -64,8 +66,9 @@ export default function(component) {
     const svg = parentElement.querySelector("svg");
     const image = parentElement.querySelector("#background");
     const polygon = parentElement.querySelector("#polygon");
+    const textBox = parentElement.querySelector("#text-box");
     const handles = parentElement.querySelector("#handles");
-    if (!svg || !image || !polygon || !handles) return;
+    if (!svg || !image || !polygon || !textBox || !handles) return;
 
     image.setAttribute("href", "data:image/jpeg;base64," + data.image);
 
@@ -97,6 +100,16 @@ export default function(component) {
             },
             render() {
                 polygon.setAttribute("points", this.points.map((point) => point.join(",")).join(" "));
+                if (this.points.length) {
+                    const xs = this.points.map((point) => point[0]);
+                    const ys = this.points.map((point) => point[1]);
+                    const left = Math.min(...xs);
+                    const top = Math.min(...ys);
+                    textBox.setAttribute("x", left);
+                    textBox.setAttribute("y", top);
+                    textBox.setAttribute("width", Math.max(...xs) - left);
+                    textBox.setAttribute("height", Math.max(...ys) - top);
+                }
                 while (this.handles.length < this.points.length) {
                     const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                     handle.setAttribute("class", "handle");
@@ -2156,7 +2169,6 @@ def _render_manual_subject_cutout(
     active_slide: int | None = None,
     assignment_store: dict | None = None,
     approval_state: str | None = None,
-    polygon_flow: bool = True,
 ):
     from renderer import (
         LANGUAGE_MANUAL_SUBJECT_FONTS,
@@ -2166,7 +2178,6 @@ def _render_manual_subject_cutout(
         MANUAL_SUBJECT_FONT_OPTIONS_EN,
         MANUAL_SUBJECT_STYLE_OPTIONS_EN,
         _indic_language_for_text,
-        build_manual_subject_cutout_layout_previews,
         build_manual_subject_cutout_preview,
     )
 
@@ -2183,9 +2194,7 @@ def _render_manual_subject_cutout(
         "headline_source": "",
         "polygon_points": None,
         "font_size": 150,
-        "line_breaks": None,
-        "layout_options": None,
-        "layout_signature": None,
+        "manual_lines": "",
         "rendered_config": None,
         "rendered_preview": None,
         "source_key": None,
@@ -2198,6 +2207,7 @@ def _render_manual_subject_cutout(
     default_headline = str(default_headline or "").strip()
     headline_key = f"{state_id}-headline"
     size_key = f"{state_id}-font-size"
+    manual_lines_key = f"{state_id}-manual-lines"
 
     if state["headline_source"] != default_headline:
         state.update(
@@ -2205,12 +2215,11 @@ def _render_manual_subject_cutout(
             rendered_config=None,
             rendered_preview=None,
             font_size=150,
-            line_breaks=None,
-            layout_options=None,
-            layout_signature=None,
+            manual_lines="",
         )
         st.session_state.pop(headline_key, None)
         st.session_state.pop(size_key, None)
+        st.session_state.pop(manual_lines_key, None)
 
     asset_map = {str(asset["asset_key"]): asset for asset in assets}
     selected_key = str(state.get("image_key") or "")
@@ -2284,9 +2293,7 @@ def _render_manual_subject_cutout(
                                 rendered_config=None,
                                 rendered_preview=None,
                                 font_size=150,
-                                line_breaks=None,
-                                layout_options=None,
-                                layout_signature=None,
+                                manual_lines="",
                                 source_key=None,
                                 source_digest=None,
                                 editor_image_digest=None,
@@ -2294,6 +2301,7 @@ def _render_manual_subject_cutout(
                             )
                             st.session_state["card_studio_selected_asset_key"] = asset_key
                             st.session_state.pop(size_key, None)
+                            st.session_state.pop(manual_lines_key, None)
 
     selected = asset_map.get(str(state.get("image_key") or ""))
     if selected is None:
@@ -2314,13 +2322,12 @@ def _render_manual_subject_cutout(
             rendered_config=None,
             rendered_preview=None,
             font_size=150,
-            line_breaks=None,
-            layout_options=None,
-            layout_signature=None,
+            manual_lines="",
             editor_image_digest=None,
             editor_image_data=None,
         )
         st.session_state.pop(size_key, None)
+        st.session_state.pop(manual_lines_key, None)
 
     if (handoff == "cricket" and assignment_store is not None and slide_count > 0) or (handoff == "top5" and active_slide is not None):
         with st.container():
@@ -2547,6 +2554,10 @@ def _render_manual_subject_cutout(
             pass
 
     state["polygon_points"] = polygon_points
+    st.caption(
+        "The polygon's outermost left, right, top and bottom points define a rectangular text box. "
+        "The shape inside those edges does not indent or reposition text."
+    )
 
     st.session_state.setdefault(size_key, int(state["font_size"]))
     font_size = int(st.slider(
@@ -2559,111 +2570,24 @@ def _render_manual_subject_cutout(
     ))
     state["font_size"] = font_size
 
-    layout_signature = hashlib.sha1(
-        repr(
-            (
-                headline,
-                selected_mode,
-                state["font"],
-                state["style"],
-                font_size,
-                tuple(polygon_points),
-                bool(polygon_flow),
-                source_digest,
-            )
-        ).encode("utf-8")
-    ).hexdigest()
-
-    current_layouts = (
-        state.get("layout_options")
-        if state.get("layout_signature") == layout_signature
-        else None
+    st.session_state.setdefault(manual_lines_key, str(state.get("manual_lines") or ""))
+    manual_lines = st.text_area(
+        "Manual line breaks (optional)",
+        key=manual_lines_key,
+        height=108,
+        placeholder="INDIA DOMINATE\nTHE FINAL MATCH\nTODAY",
+        help=(
+            "Enter one line per row to control every break. Keep every headline word once and in order. "
+            "Leave this empty for automatic balanced wrapping based on the measured font size and box width."
+        ),
     )
-    selected_line_breaks = (
-        tuple(state.get("line_breaks") or ())
-        if current_layouts
-        else None
-    )
-
-    if st.button(
-        "Preview all valid line-break options",
-        width="stretch",
-        key=f"{state_id}-preview-line-breaks",
-    ):
-        try:
-            with st.spinner("Rendering every valid line-break layout…"):
-                current_layouts = build_manual_subject_cutout_layout_previews(
-                    working_bytes,
-                    headline,
-                    mode=selected_mode,
-                    font_size=font_size,
-                    font=state["font"],
-                    style=state["style"],
-                    text_polygon=tuple(polygon_points),
-                    polygon_flow=polygon_flow,
-                )
-            state["layout_options"] = current_layouts
-            state["layout_signature"] = layout_signature
-            state["line_breaks"] = tuple(current_layouts[0]["line_breaks"]) if current_layouts else None
-            selected_line_breaks = tuple(state["line_breaks"] or ())
-        except (ValueError, OSError, RuntimeError, ImportError) as exc:
-            state["layout_options"] = None
-            state["layout_signature"] = None
-            state["line_breaks"] = None
-            current_layouts = None
-            st.error(str(exc))
-
-    if current_layouts:
-        st.markdown(
-            '<div class="section-head"><div><div class="eyebrow">LINE-BREAK OPTIONS</div>'
-            '<div class="section-title">Choose the exact text layout</div></div>'
-            f'<div class="section-count">{len(current_layouts)} valid combinations</div></div>',
-            unsafe_allow_html=True,
-        )
-        st.caption(
-            "Every option keeps the requested font size and uses the polygon as the actual end-to-end text space from left to right and top to bottom. "
-            "More lines are created as needed to fill the space."
-        )
-        for start in range(0, len(current_layouts), 3):
-            cols = st.columns(min(3, len(current_layouts) - start), gap="medium")
-            for col, option in zip(cols, current_layouts[start:start + 3]):
-                with col:
-                    st.image(option["preview"], width=300)
-                    st.markdown(
-                        '<div class="visual-detail">'
-                        + " / ".join(option["lines"])
-                        + "</div>",
-                        unsafe_allow_html=True,
-                    )
-                    is_selected_layout = tuple(option["line_breaks"]) == tuple(state.get("line_breaks") or ())
-                    if st.button(
-                        "Selected" if is_selected_layout else "Use this layout",
-                        type="primary" if is_selected_layout else "secondary",
-                        width="stretch",
-                        key=f"{state_id}-line-break-{option['index']}",
-                    ):
-                        state["line_breaks"] = tuple(option["line_breaks"])
-                        selected_line_breaks = tuple(option["line_breaks"])
-        state["layout_signature"] = layout_signature
+    state["manual_lines"] = manual_lines
 
     st.caption(
-        "English, Hindi and Telugu are supported. Hindi/Telugu use the bundled Noto font with a verified Pillow RAQM shaping check. "
-        "Negative Space does not detect subjects; Behind Subject uses BiRefNet. "
-        "The polygon is the full text field from one end to the other: text spans left to right and aligns top to bottom inside its boundaries. "
-        "Render Now replaces the rendered frame."
+        "The outer polygon bounds are the exact text box. Every line uses the same left edge; "
+        "automatic wrapping measures the selected font and never shrinks it. Behind Subject may expand "
+        "English word spacing to fill each line, without stretching letters. Render Now shows the actual frame."
     )
-
-    if selected_line_breaks:
-        selected_lines = next(
-            (
-                option["lines"]
-                for option in (current_layouts or [])
-                if tuple(option["line_breaks"]) == selected_line_breaks
-            ),
-            (),
-        )
-        if selected_lines:
-            st.caption("Selected layout: " + " / ".join(selected_lines))
 
     if st.button("Render Now", type="primary", width="stretch", key=f"{state_id}-cutout-render", help="Generate and render card frame"):
         if not headline:
@@ -2678,8 +2602,7 @@ def _render_manual_subject_cutout(
                         "font_size": font_size,
                         "font": state["font"],
                         "style": state["style"],
-                        "line_breaks": selected_line_breaks or None,
-                        "polygon_flow": bool(polygon_flow),
+                        "manual_lines": manual_lines.strip() or None,
                         "source_key": selected["asset_key"],
                         "source_digest": source_digest,
                     }
@@ -2691,8 +2614,7 @@ def _render_manual_subject_cutout(
                         font=state["font"],
                         style=state["style"],
                         text_polygon=config["text_polygon"],
-                        line_breaks=config["line_breaks"],
-                        polygon_flow=polygon_flow,
+                        manual_lines=config["manual_lines"],
                     )
                     state["font_size"] = font_size
                     state["rendered_config"] = config
@@ -2813,7 +2735,6 @@ def _render_card_studio(
     active_slide: int | None = None,
     current_image=None,
     current_source: str = "Test image",
-    polygon_flow: bool = True,
     active_mode: str = "",
     split_view: bool = False,
 ):
@@ -2912,7 +2833,6 @@ def _render_card_studio(
                 crop_store_name="card-studio-top5",
                 state_id=state_id,
                 default_headline=st.session_state.get("test_top5_visual_playground_headline", ""),
-                polygon_flow=polygon_flow,
             )
             return
 
@@ -2942,7 +2862,6 @@ def _render_card_studio(
                 default_headline=headline,
                 handoff="top5",
                 active_slide=active_slide,
-                polygon_flow=polygon_flow,
             )
             return
 
@@ -3039,7 +2958,6 @@ def _render_card_studio(
                 else st.session_state.visual_assignments
             ),
             approval_state="live_visuals_approved" if live else "visuals_approved",
-            polygon_flow=polygon_flow,
         )
         return
 
@@ -5333,7 +5251,6 @@ def _render_two_pane_visual_workspace(
     active_mode: str,
     slide_count: int,
     live: bool = False,
-    polygon_flow: bool = True,
 ):
     prefix = "live_" if live else "test_"
     pane_key = f"{prefix}visuals_pane_view"
@@ -5633,7 +5550,6 @@ def _render_two_pane_visual_workspace(
             _render_card_studio(
                 live=live,
                 slide_count=slide_count,
-                polygon_flow=polygon_flow,
                 active_mode=active_mode,
                 split_view=show_fetcher,
             )
@@ -5785,7 +5701,7 @@ def _render_live_visuals(slide_count: int):
                 except (RuntimeError, ValueError, OSError) as exc:
                     st.session_state.live_render_error = str(exc)
 
-    _render_two_pane_visual_workspace(visual_option, slide_count, live=True, polygon_flow=True)
+    _render_two_pane_visual_workspace(visual_option, slide_count, live=True)
 
     ready = all(
         slide in st.session_state.live_visual_assignments
@@ -6896,7 +6812,6 @@ def render_live_top5():
                 slide_count=6,
                 top5=True,
                 active_slide=active_slide,
-                polygon_flow=True,
             )
             assets = []
             result_key = "card"
@@ -9611,7 +9526,7 @@ def render_visuals():
 
     st.divider()
 
-    _render_two_pane_visual_workspace(mode, slide_count, live=False, polygon_flow=True)
+    _render_two_pane_visual_workspace(mode, slide_count, live=False)
 
 
 
@@ -11851,7 +11766,7 @@ elif st.session_state.app_mode == "test":
                                     font_size=int(card_data.get("font_size") or 150),
                                     font=str(card_data.get("font") or "Barlow Condensed"),
                                     style=str(card_data.get("style") or "Crisp Outline"),
-                                    polygon_flow=True,
+                                    manual_lines=card_data.get("manual_lines"),
                                 )
                             except Exception:
                                 preview_bytes = None

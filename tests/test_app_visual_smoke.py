@@ -204,7 +204,7 @@ def test_cricket_test_exposes_shared_text_cutout():
     )
 
 
-def test_manual_subject_cutout_renders_after_layout_preview():
+def test_manual_subject_cutout_renders_with_manual_line_breaks():
     asset = {
         "bytes": _image_bytes(),
         "source": "source-a",
@@ -219,21 +219,24 @@ def test_manual_subject_cutout_renders_after_layout_preview():
     at.session_state["visual_result"] = {"assets": [asset]}
     at.session_state["script_data"] = {
         "headline": "India win again",
-        "script": [{"voiceover": "One."}] * 4,
+        "source_title": "India win again",
+        "script": [{"voiceover": "India win again"}] * 4,
     }
     at.run()
 
     assert not at.exception, at.exception
     next(button for button in at.button if button.label == "Select image").click().run()
     assert not at.exception, at.exception
-    next(
-        button for button in at.button
-        if button.label == "Preview all valid line-break options"
-    ).click().run()
+    manual_lines = next(
+        widget for widget in at.text_area
+        if widget.label == "Manual line breaks (optional)"
+    )
+    manual_lines.set_value("India win\nagain").run()
     assert not at.exception, at.exception
     next(button for button in at.button if button.label == "Render Now").click().run()
     assert not at.exception, at.exception
     assert at.session_state["manual_subject_cutout"]["rendered_config"]["source_key"]
+    assert at.session_state["manual_subject_cutout"]["rendered_config"]["manual_lines"] == "India win\nagain"
 
 def test_yt_trends_test_exposes_shared_text_cutout_option_7():
     asset = {
