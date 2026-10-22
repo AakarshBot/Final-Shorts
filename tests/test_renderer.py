@@ -50,91 +50,98 @@ def _test_base():
     return Image.new("RGB", (renderer.WIDTH, renderer.HEIGHT), "white")
 
 
-def test_manual_subject_cutout_anchors_text_to_polygon_left_edge(monkeypatch):
+def _assert_text_bounding_boxes_inside_polygon(points, placements):
+    polygon_mask = Image.new("L", (renderer.WIDTH, renderer.HEIGHT), 0)
+    ImageDraw.Draw(polygon_mask).polygon(points, fill=255)
+    for _line, line_top, left, bbox in placements:
+        width = bbox[2] - bbox[0]
+        height = bbox[3] - bbox[1]
+        assert width > 0 and height > 0
+        assert 0 <= left <= renderer.WIDTH - width
+        assert 0 <= line_top <= renderer.HEIGHT - height
+        inside = polygon_mask.crop((left, line_top, left + width, line_top + height))
+        assert inside.size == (width, height)
+        assert inside.getextrema() == (255, 255)
+
+
+def test_manual_subject_cutout_uses_full_rectangle_edges_without_padding(monkeypatch):
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     monkeypatch.setattr(
         renderer,
         "_manual_subject_font_bytes",
         lambda _font_name: font_path.read_bytes(),
     )
-
+    polygon = ((80, 700), (1000, 700), (1000, 1200), (80, 1200))
     data = renderer._manual_subject_cutout_layout_data(
         "India win today",
-        ((80, 700), (1000, 700), (1000, 1200), (80, 1200)),
+        polygon,
         140,
         "Barlow Condensed",
         "Crisp Outline",
     )
 
     assert data["layouts"]
-    for layout in data["layouts"]:
-        assert layout["placements"][0][1] == 702
-        last_line, last_top, left, bbox = layout["placements"][-1]
-        assert last_top + (bbox[3] - bbox[1]) <= 1198
-        for _line, _line_top, left, bbox in layout["placements"]:
-            line_width = bbox[2] - bbox[0]
-            assert left == 82
-            assert left + line_width <= 998
+    layout = data["layouts"][0]
+    assert layout["placements"][0][1] == 700
+    assert layout["placements"][0][2] == 80
+    assert data["box_bounds"] == (80, 700, 1000, 1200)
+    _assert_text_bounding_boxes_inside_polygon(polygon, layout["placements"])
+    assert data["font_size"] == 140
+    assert data["stretch_english_lines"] is False
 
 
-
-def test_manual_subject_cutout_follows_left_edge_of_skewed_polygon(monkeypatch):
+def test_manual_subject_cutout_flows_lines_along_a_tapered_polygon(monkeypatch):
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     monkeypatch.setattr(
         renderer,
         "_manual_subject_font_bytes",
         lambda _font_name: font_path.read_bytes(),
     )
-
+    polygon = ((540, 100), (960, 1000), (120, 1000))
     data = renderer._manual_subject_cutout_layout_data(
-        "India win",
-        ((80, 700), (1000, 700), (1000, 1600), (300, 1600), (80, 1200)),
-        140,
-        "Barlow Condensed",
-        "Crisp Outline",
-    )
-
-    assert data["layouts"]
-    one_line = next(layout for layout in data["layouts"] if len(layout["lines"]) == 1)
-    assert one_line["placements"][0][2] == 82
-
-def test_manual_subject_cutout_uses_rectangular_bounds_for_every_line(monkeypatch):
-    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
-    monkeypatch.setattr(
-        renderer,
-        "_manual_subject_font_bytes",
-        lambda _font_name: font_path.read_bytes(),
-    )
-    polygon = ((100, 700), (900, 700), (900, 1100), (500, 1500))
-    data = renderer._manual_subject_cutout_layout_data(
-        "India cricket team wins today",
+        "Cricket team wins today",
         polygon,
         120,
         "Barlow Condensed",
         "Crisp Outline",
     )
-    assert data["layouts"]
-    assert data["box_bounds"] == (100, 700, 900, 1500)
+
+    assert data["layouts"], data.get("layout_error")
     placements = data["layouts"][0]["placements"]
     assert len(placements) >= 2
-    assert {placement[2] for placement in placements} == {102}
-    assert placements[0][1] == 702
-    assert all(
-        placement[1] + (placement[3][3] - placement[3][1]) <= 1498
-        and placement[2] + (placement[3][2] - placement[3][0]) <= 898
-        for placement in placements
-    )
+    assert len({placement[2] for placement in placements}) > 1
+    assert len({placement[3][2] - placement[3][0] for placement in placements}) > 1
+    _assert_text_bounding_boxes_inside_polygon(polygon, placements)
 
 
-def test_manual_subject_cutout_polygon_half_screen_vertical_alignment(monkeypatch):
+def test_manual_subject_cutout_respects_the_real_left_edge_of_a_skewed_polygon(monkeypatch):
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     monkeypatch.setattr(
         renderer,
         "_manual_subject_font_bytes",
         lambda _font_name: font_path.read_bytes(),
     )
+    polygon = ((80, 700), (1000, 700), (1000, 1000), (360, 1400), (80, 1400))
+    data = renderer._manual_subject_cutout_layout_data(
+        "India win",
+        polygon,
+        140,
+        "Barlow Condensed",
+        "Crisp Outline",
+    )
 
-    # Vertical left half of the screen
+    assert data["layouts"]
+    _assert_text_bounding_boxes_inside_polygon(polygon, data["layouts"][0]["placements"])
+    assert data["layouts"][0]["placements"][0][2] == 80
+
+
+def test_manual_subject_cutout_polygon_half_screen_uses_exact_edges(monkeypatch):
+    font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
+    monkeypatch.setattr(
+        renderer,
+        "_manual_subject_font_bytes",
+        lambda _font_name: font_path.read_bytes(),
+    )
     polygon = ((0, 0), (540, 0), (540, 1920), (0, 1920))
     data = renderer._manual_subject_cutout_layout_data(
         "India dominate the final match today",
@@ -145,28 +152,20 @@ def test_manual_subject_cutout_polygon_half_screen_vertical_alignment(monkeypatc
     )
 
     assert data["layouts"]
-    top_layout = data["layouts"][0]
-    # Spans vertically down the half-screen column
-    assert len(top_layout["lines"]) >= 3
-    first_placement = top_layout["placements"][0]
-    assert first_placement[1] == 2  # Starts 2px inside top boundary
-    assert first_placement[2] == 2  # Starts 2px inside left boundary
-    for _line, line_top, left, bbox in top_layout["placements"]:
-        line_w = bbox[2] - bbox[0]
-        assert left == 2
-        assert left + line_w <= 538  # Stays inside right boundary of 540
-        assert line_top + (bbox[3] - bbox[1]) <= 1918  # Stays inside bottom boundary
+    placements = data["layouts"][0]["placements"]
+    assert len(placements) >= 3
+    assert placements[0][1] == 0
+    assert placements[0][2] == 0
+    _assert_text_bounding_boxes_inside_polygon(polygon, placements)
 
 
-def test_manual_subject_cutout_polygon_bottom_half_vertical_bounds(monkeypatch):
+def test_manual_subject_cutout_polygon_bottom_half_uses_exact_edges(monkeypatch):
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     monkeypatch.setattr(
         renderer,
         "_manual_subject_font_bytes",
         lambda _font_name: font_path.read_bytes(),
     )
-
-    # Bottom half of screen
     polygon = ((0, 960), (1080, 960), (1080, 1920), (0, 1920))
     data = renderer._manual_subject_cutout_layout_data(
         "India win the cricket world cup",
@@ -177,25 +176,19 @@ def test_manual_subject_cutout_polygon_bottom_half_vertical_bounds(monkeypatch):
     )
 
     assert data["layouts"]
-    layout = data["layouts"][0]
-    assert layout["placements"][0][1] == 962  # Starts 2px inside top boundary of 960
-    assert layout["placements"][0][2] == 2    # Starts 2px inside left boundary
-    for _line, line_top, left, bbox in layout["placements"]:
-        line_w = bbox[2] - bbox[0]
-        assert left == 2
-        assert left + line_w <= 1078
-        assert line_top + (bbox[3] - bbox[1]) <= 1918
+    placements = data["layouts"][0]["placements"]
+    assert placements[0][1] == 960
+    assert placements[0][2] == 0
+    _assert_text_bounding_boxes_inside_polygon(polygon, placements)
 
 
-def test_manual_subject_cutout_polygon_adapts_to_irregular_end_to_end_shape(monkeypatch):
+def test_manual_subject_cutout_lines_adapt_to_each_horizontal_polygon_slice(monkeypatch):
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     monkeypatch.setattr(
         renderer,
         "_manual_subject_font_bytes",
         lambda _font_name: font_path.read_bytes(),
     )
-
-    # Triangle with tapered top
     polygon = ((540, 100), (900, 1000), (180, 1000))
     data = renderer._manual_subject_cutout_layout_data(
         "Cricket win today",
@@ -205,14 +198,11 @@ def test_manual_subject_cutout_polygon_adapts_to_irregular_end_to_end_shape(monk
         "Crisp Outline",
     )
 
-    assert data["layouts"]
+    assert data["layouts"], data.get("layout_error")
     layout = data["layouts"][0]
-    for _line, line_top, left, bbox in layout["placements"]:
-        line_w = bbox[2] - bbox[0]
-        assert left >= 182
-        assert left + line_w <= 898
-        assert line_top >= 102
-        assert line_top + (bbox[3] - bbox[1]) <= 998
+    _assert_text_bounding_boxes_inside_polygon(polygon, layout["placements"])
+    assert len(layout["lines"]) >= 2
+    assert len({placement[2] for placement in layout["placements"]}) > 1
 
 
 def test_manual_subject_cutout_uses_exact_font_size_without_retry(monkeypatch):
