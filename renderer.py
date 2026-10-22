@@ -1676,34 +1676,17 @@ def _draw_manual_subject_cutout_line(
     fill,
     stroke_width: int,
     stroke_fill,
-    target_width: float,
-    stretch_spaces: bool,
 ) -> None:
-    """Fill the available width by spacing English words, never by scaling glyphs."""
+    """Draw a line at its natural font-measured width with normal word spacing."""
     position = (cursor_x - bbox[0], line_top - bbox[1])
-    words = line.split()
-    if not stretch_spaces or len(words) < 2:
-        draw.text(
-            position, line, font=font, fill=fill,
-            stroke_width=stroke_width, stroke_fill=stroke_fill,
-        )
-        return
-
-    # The line already fits at the selected font size. Add the unused horizontal
-    # space only between words so glyph proportions and text height stay intact.
-    ink_width = max(1, bbox[2] - bbox[0])
-    added_per_gap = max(0.0, (float(target_width) - ink_width) / (len(words) - 1))
-    space_advance = float(draw.textlength(" ", font=font))
-    x = float(position[0])
-    y = position[1]
-    for index, word in enumerate(words):
-        draw.text(
-            (int(round(x)), y), word, font=font, fill=fill,
-            stroke_width=stroke_width, stroke_fill=stroke_fill,
-        )
-        x += float(draw.textlength(word, font=font))
-        if index < len(words) - 1:
-            x += space_advance + added_per_gap
+    draw.text(
+        position,
+        line,
+        font=font,
+        fill=fill,
+        stroke_width=stroke_width,
+        stroke_fill=stroke_fill,
+    )
 
 
 def _draw_manual_subject_cutout_frame(
@@ -1716,8 +1699,6 @@ def _draw_manual_subject_cutout_frame(
     target_widths: tuple[float, ...] | list[float] | None = None,
 ) -> Image.Image:
     canvas = _top5_full_frame_image(base).convert("RGBA")
-    target_widths = tuple(target_widths or ())
-
     if mode == "behind-subject":
         if subject_mask is None:
             source = BytesIO()
@@ -1735,21 +1716,26 @@ def _draw_manual_subject_cutout_frame(
         )
         canvas = Image.composite(canvas, backdrop, subject_mask)
 
+    polygon_mask = Image.new("L", (WIDTH, HEIGHT), 0)
+    ImageDraw.Draw(polygon_mask).polygon(data["points"], fill=255)
+
     text_mask = Image.new("L", canvas.size, 0)
-    text_draw = ImageDraw.Draw(text_mask)
-    for index, (line, line_top, cursor_x, bbox) in enumerate(placements):
-        target_width = (
-            target_widths[index]
-            if index < len(target_widths)
-            else bbox[2] - bbox[0]
-        )
+    text_mask_draw = ImageDraw.Draw(text_mask)
+    for line, line_top, cursor_x, bbox in placements:
         _draw_manual_subject_cutout_line(
-            text_draw, line, line_top, cursor_x, bbox,
-            font=data["font"], fill=255,
-            stroke_width=data["stroke_width"], stroke_fill=255,
-            target_width=target_width,
-            stretch_spaces=(bool(data.get("stretch_english_lines")) and mode == "behind-subject"),
+            text_mask_draw,
+            line,
+            line_top,
+            cursor_x,
+            bbox,
+            font=data["font"],
+            fill=255,
+            stroke_width=data["stroke_width"],
+            stroke_fill=255,
         )
+    text_mask = ImageChops.multiply(text_mask, polygon_mask)
+
+    effects = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
 
     def shifted_layer(
         offset_x: int,
@@ -1759,10 +1745,12 @@ def _draw_manual_subject_cutout_frame(
         fill=DARK,
     ) -> None:
         layer_mask = text_mask.filter(ImageFilter.GaussianBlur(blur)) if blur else text_mask
+        # Glow/shadow treatments must never spill beyond the manually drawn polygon.
+        layer_mask = ImageChops.multiply(layer_mask, polygon_mask)
         layer_mask = layer_mask.point(lambda value: value * alpha // 255)
         layer = Image.new("RGBA", canvas.size, fill + (0,))
         layer.putalpha(layer_mask)
-        canvas.alpha_composite(layer, dest=(offset_x, offset_y))
+        effects.alpha_composite(layer, dest=(offset_x, offset_y))
 
     style = data["style"]
     if style == "Soft Halo":
@@ -1806,36 +1794,32 @@ def _draw_manual_subject_cutout_frame(
         shifted_layer(12, 12, 255)
         shifted_layer(15, 18, 190, 5)
 
-    draw = ImageDraw.Draw(canvas, "RGBA")
-    for index, (line, line_top, cursor_x, bbox) in enumerate(placements):
-        target_width = (
-            target_widths[index]
-            if index < len(target_widths)
-            else bbox[2] - bbox[0]
-        )
+    canvas.alpha_composite(effects)
+
+    text_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
+    text_draw = ImageDraw.Draw(text_layer, "RGBA")
+    for line, line_top, cursor_x, bbox in placements:
         if style == "Double Edge":
             _draw_manual_subject_cutout_line(
-                draw, line, line_top, cursor_x, bbox,
+                text_draw, line, line_top, cursor_x, bbox,
                 font=data["font"], fill=WHITE + (255,),
                 stroke_width=9, stroke_fill=DARK + (255,),
-                target_width=target_width,
-                stretch_spaces=(bool(data.get("stretch_english_lines")) and mode == "behind-subject"),
             )
             _draw_manual_subject_cutout_line(
-                draw, line, line_top, cursor_x, bbox,
+                text_draw, line, line_top, cursor_x, bbox,
                 font=data["font"], fill=WHITE + (255,),
                 stroke_width=2, stroke_fill=DARK + (245,),
-                target_width=target_width,
-                stretch_spaces=(bool(data.get("stretch_english_lines")) and mode == "behind-subject"),
             )
         else:
             _draw_manual_subject_cutout_line(
-                draw, line, line_top, cursor_x, bbox,
+                text_draw, line, line_top, cursor_x, bbox,
                 font=data["font"], fill=WHITE + (255,),
                 stroke_width=data["stroke_width"], stroke_fill=DARK + (245,),
-                target_width=target_width,
-                stretch_spaces=(bool(data.get("stretch_english_lines")) and mode == "behind-subject"),
             )
+
+    text_alpha = ImageChops.multiply(text_layer.getchannel("A"), polygon_mask)
+    text_layer.putalpha(text_alpha)
+    canvas.alpha_composite(text_layer)
 
     if subject_mask is not None:
         canvas = Image.composite(
@@ -1843,7 +1827,6 @@ def _draw_manual_subject_cutout_frame(
             canvas,
             subject_mask,
         )
-
     return canvas
 
 
