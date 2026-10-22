@@ -228,36 +228,31 @@ def test_manual_subject_cutout_uses_exact_font_size_without_retry(monkeypatch):
     assert sizes == [150]
 
 
-def test_manual_subject_cutout_line_stretches_word_spacing_not_glyphs():
+def test_manual_subject_cutout_keeps_normal_word_spacing():
     font_path = Path(renderer.__file__).resolve().parent / "fonts" / "BarlowCondensed-Black.ttf"
     font = ImageFont.truetype(str(font_path), 80)
-    image = Image.new("RGBA", (1080, 240), (0, 0, 0, 0))
-    draw = ImageDraw.Draw(image)
     line = "INDIA WINS"
-    bbox = draw.textbbox((0, 0), line, font=font, stroke_width=4)
 
+    actual = Image.new("RGBA", (1080, 240), (0, 0, 0, 0))
+    actual_draw = ImageDraw.Draw(actual)
+    actual_bbox = actual_draw.textbbox((0, 0), line, font=font, stroke_width=4)
     renderer._draw_manual_subject_cutout_line(
-        draw, line, 40, 100, bbox,
+        actual_draw, line, 40, 100, actual_bbox,
         font=font, fill=(255, 255, 255, 255), stroke_width=4,
-        stroke_fill=(0, 0, 0, 255), target_width=700, stretch_spaces=True,
+        stroke_fill=(0, 0, 0, 255),
     )
-    bounds = image.getchannel("A").getbbox()
-    assert bounds is not None
-    # Pillow's text bbox includes the 2px outline bearing before the glyph ink.
-    assert bounds[0] == 102
-    assert 790 <= bounds[2] <= 802
 
-    one_word_image = Image.new("RGBA", (1080, 240), (0, 0, 0, 0))
-    one_word_draw = ImageDraw.Draw(one_word_image)
-    one_word_bbox = one_word_draw.textbbox((0, 0), "INDIA", font=font, stroke_width=4)
-    renderer._draw_manual_subject_cutout_line(
-        one_word_draw, "INDIA", 40, 100, one_word_bbox,
-        font=font, fill=(255, 255, 255, 255), stroke_width=4,
-        stroke_fill=(0, 0, 0, 255), target_width=700, stretch_spaces=True,
+    expected = Image.new("RGBA", (1080, 240), (0, 0, 0, 0))
+    expected_draw = ImageDraw.Draw(expected)
+    expected_draw.text(
+        (100 - actual_bbox[0], 40 - actual_bbox[1]),
+        line,
+        font=font,
+        fill=(255, 255, 255, 255),
+        stroke_width=4,
+        stroke_fill=(0, 0, 0, 255),
     )
-    one_word_bounds = one_word_image.getchannel("A").getbbox()
-    assert one_word_bounds is not None
-    assert one_word_bounds[2] - one_word_bounds[0] < 400
+    assert ImageChops.difference(actual, expected).getbbox() is None
 
 
 def test_manual_subject_cutout_empty_layout_keeps_selected_font_size(monkeypatch):
@@ -981,7 +976,7 @@ def test_manual_subject_cutout_manual_line_breaks_are_used_exactly(monkeypatch):
         common["font"], common["style"], manual_lines="India\nwins"
     )
     assert data["layouts"][0]["lines"] == ("INDIA", "WINS")
-    assert {placement[2] for placement in data["layouts"][0]["placements"]} == {62}
+    assert {placement[2] for placement in data["layouts"][0]["placements"]} == {60}
     automatic = renderer.build_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)), "India wins", **common
     )
