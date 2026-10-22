@@ -627,7 +627,7 @@ def _draw_kicker(
     clean = " ".join(str(text or "").split()).upper() or _card_label("sports_desk", language)
     draw.rounded_rectangle((x, y + 8, x + 42, y + 13), radius=2, fill=ACCENT)
     font = _font_for_text(clean, 25, _font_label)
-    available_width = max(100, SAFE_RIGHT - x)
+    available_width = max(100, SAFE_RIGHT - x - 58)
     if _measure(draw, clean, font)[0] > available_width:
         font, lines = _fit(draw, clean, available_width, 1, 25, 18, font_fn=_font_label)
         clean = lines[0]
@@ -812,8 +812,16 @@ def _draw_editorial_stack(
             cursor_y += block["height"]
         elif kind == "quote":
             draw = ImageDraw.Draw(canvas)
-            draw.text((x - 2, cursor_y - 17), "“", font=_font_display(112), fill=ACCENT)
-            _draw_text_block(canvas, block["copy"], x + 30, cursor_y + 14, WHITE)
+            if block.get("show_quote_mark", True):
+                draw.text((x - 2, cursor_y - 17), "“", font=_font_display(112), fill=ACCENT)
+                _draw_text_block(canvas, block["copy"], x + 30, cursor_y + 14, WHITE)
+            else:
+                draw.rounded_rectangle(
+                    (x, cursor_y + 8, x + 6, cursor_y + block["height"] - 6),
+                    radius=3,
+                    fill=ACCENT,
+                )
+                _draw_text_block(canvas, block["copy"], x + 24, cursor_y + 4, WHITE)
             cursor_y += block["height"]
         elif kind == "support_rows":
             cursor_y = _draw_support_rows(canvas, block, x, cursor_y, width)
@@ -921,10 +929,18 @@ def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None)
     )
     if not quote_block:
         raise CardStudioError("Quote / Reaction needs a quote.")
+    attribution_key = attribution.casefold()
+    editorial_summary = (
+        not attribution
+        or "summary" in attribution_key
+        or "सारांश" in attribution
+        or "సారాంశం" in attribution
+    )
     blocks.append({
         "kind": "quote",
         "copy": quote_block,
-        "height": quote_block["height"] + 18,
+        "show_quote_mark": not editorial_summary,
+        "height": quote_block["height"] + (18 if not editorial_summary else 8),
         "gap_after": 18 if attribution or data.get("supporting_fields") or data.get("context") else 0,
     })
     if attribution:
@@ -1024,7 +1040,13 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
         raise CardStudioError("The Head-to-Head heading leaves too little safe space for the comparison.")
     panel_bottom = SAFE_BOTTOM
     panel_height = panel_bottom - panel_top
-    side_width = max(170, (SAFE_RIGHT - SAFE_LEFT) // 2 - 24)
+    table_width = SAFE_RIGHT - SAFE_LEFT
+    label_column_width = max(150, min(190, int(table_width * 0.24)))
+    column_gap = 12
+    side_width = (table_width - label_column_width - column_gap * 2) // 2
+    left_x = SAFE_LEFT
+    label_x = left_x + side_width + column_gap
+    right_x = label_x + label_column_width + column_gap
     left_name_block = _text_block(draw, str(left.get("name") or ""), side_width, preferred_size=41, minimum_size=30, max_lines=2, font_fn=_font_headline, gap=3)
     right_name_block = _text_block(draw, str(right.get("name") or ""), side_width, preferred_size=41, minimum_size=30, max_lines=2, font_fn=_font_headline, gap=3)
     if not left_name_block or not right_name_block:
@@ -1071,25 +1093,23 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
         radius=3, fill=ACCENT + (245,),
     )
     cursor_y = panel_top + panel_padding + 10
-    left_x = SAFE_LEFT
-    right_x = SAFE_RIGHT - side_width
-    left_cx = left_x + side_width // 2
-    right_cx = right_x + side_width // 2
     versus = _card_label("versus", data.get("language"))
     ImageDraw.Draw(canvas).text(
-        ((SAFE_LEFT + SAFE_RIGHT) // 2, cursor_y + names_height // 2),
+        (label_x + label_column_width // 2, cursor_y + names_height // 2),
         versus, font=_font_label(23), fill=ACCENT, anchor="mm",
     )
     _draw_text_block(canvas, left_name_block, left_x, cursor_y, WHITE, width=side_width, centered=True)
     _draw_text_block(canvas, right_name_block, right_x, cursor_y, WHITE, width=side_width, centered=True)
     cursor_y += names_block_height
     line_x1, line_x2 = 48, SAFE_RIGHT + 48
-    centre_x = (SAFE_LEFT + SAFE_RIGHT) // 2
     for index, (label, left_value, right_value) in enumerate(parsed_rows):
         if index:
             ImageDraw.Draw(canvas, "RGBA").line((line_x1, cursor_y, line_x2, cursor_y), fill=(255, 255, 255, 75), width=2)
-        value_width = side_width - 4
-        label_font, label_lines = _fit(ImageDraw.Draw(canvas), label.upper(), 184, 2, 27, 24, font_fn=lambda size: _font_label(size, False), bold=False)
+        value_width = side_width - 8
+        label_font, label_lines = _fit(
+            ImageDraw.Draw(canvas), label.upper(), label_column_width - 12, 2, 27, 24,
+            font_fn=lambda size: _font_label(size, False), bold=False,
+        )
         left_font, left_lines = _fit(ImageDraw.Draw(canvas), left_value, value_width, 2, 38, 29, font_fn=_font_headline)
         right_font, right_lines = _fit(ImageDraw.Draw(canvas), right_value, value_width, 2, 38, 29, font_fn=_font_headline)
         label_h, label_gap = _lines_metric_height(ImageDraw.Draw(canvas), label_lines, label_font, 2)
@@ -1107,7 +1127,7 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
             )
         row_y = cursor_y + max(0, (row_height - row_content_height) // 2)
         _draw_text_block(canvas, {"font": left_font, "lines": left_lines, "line_height": left_h, "line_gap": left_gap, "height": left_h * len(left_lines) + left_gap * max(0, len(left_lines) - 1)}, left_x, row_y, WHITE, width=value_width, centered=True)
-        _draw_text_block(canvas, {"font": label_font, "lines": label_lines, "line_height": label_h, "line_gap": label_gap, "height": label_h * len(label_lines) + label_gap * max(0, len(label_lines) - 1)}, centre_x - 92, row_y, MUTED, width=184, centered=True)
+        _draw_text_block(canvas, {"font": label_font, "lines": label_lines, "line_height": label_h, "line_gap": label_gap, "height": label_h * len(label_lines) + label_gap * max(0, len(label_lines) - 1)}, label_x, row_y, MUTED, width=label_column_width, centered=True)
         _draw_text_block(canvas, {"font": right_font, "lines": right_lines, "line_height": right_h, "line_gap": right_gap, "height": right_h * len(right_lines) + right_gap * max(0, len(right_lines) - 1)}, right_x, row_y, WHITE, width=value_width, centered=True)
         cursor_y += row_height
 
