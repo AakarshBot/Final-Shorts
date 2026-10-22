@@ -684,7 +684,7 @@ def test_card_studio_cutout_direct_attach_photo_to_slide():
 
 
 
-def test_hindi_live_card_studio_exposes_translation_and_hindi_starter_copy():
+def test_hindi_live_card_studio_exposes_translation_and_optional_fields():
     asset = {
         "bytes": _image_bytes(),
         "source": "source-a",
@@ -732,7 +732,7 @@ def test_hindi_live_card_studio_exposes_translation_and_hindi_starter_copy():
     values = {field.label: field.value for field in at.text_input}
     assert values["Category label (optional)"] == "करियर के आँकड़े"
     assert values["What the number means (optional)"] == ""
-    assert values["Unit (optional)"] == "रन"
+    assert values["Unit (optional)"] == ""
 
 
 
