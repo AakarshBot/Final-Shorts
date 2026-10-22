@@ -6925,9 +6925,15 @@ def render_live_top5():
                     else:
                         st.warning("Enter a prompt first.")
                 result = st.session_state.live_top5_ai_image_results.get(active_slide) or {}
+                assets = list(result.get("assets") or [])
                 if result.get("error"):
                     st.error(result["error"])
-                assets = list(result.get("assets") or [])
+                elif result.get("message") and not assets:
+                    st.warning(result["message"])
+                    for provider_name, provider_error in (result.get("errors") or {}).items():
+                        st.caption(f"{provider_name}: {provider_error}")
+                elif result.get("message"):
+                    st.caption(result["message"])
                 result_key = "ai"
 
             if assets:
