@@ -11,7 +11,7 @@ from pathlib import Path
 
 import indic_bootstrap
 
-from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageStat, features
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, ImageOps, ImageStat, features
 
 
 WIDTH = 1080
@@ -695,8 +695,8 @@ def _support_rows_block(
     bottom_mode: bool = False,
 ) -> dict | None:
     rows = []
-    label_width = max(120, int(width * 0.55))
-    value_width = max(100, width - label_width - 18)
+    label_width = max(120, int(width * 0.52))
+    value_width = max(100, width - int(width * 0.61))
     for item in fields:
         label = " ".join(str(item.get("label") or "").split())
         value = " ".join(str(item.get("value") or "").split())
