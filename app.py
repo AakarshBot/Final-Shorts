@@ -5502,7 +5502,9 @@ def _render_two_pane_visual_workspace(
                             live=True,
                         )
                 elif fetcher_mode.startswith("Option 4"):
-                    providers_label = ["Pollinations.ai (Flux)"]
+                    providers_label = ["AI Horde (free community queue)"]
+    if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+        providers_label.append("Pollinations.ai")
                     if os.getenv("HF_TOKEN"):
                         providers_label.append("Hugging Face")
                     if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
@@ -9436,7 +9438,9 @@ def _render_manual_ai_images():
     from visual_generator import generate_images
 
     st.subheader("AI Generation")
-    providers_label = ["Pollinations.ai (Flux)"]
+    providers_label = ["AI Horde (free community queue)"]
+    if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+        providers_label.append("Pollinations.ai")
     if os.getenv("HF_TOKEN"):
         providers_label.append("Hugging Face")
     if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
@@ -9486,7 +9490,11 @@ def _render_manual_ai_images():
         )
     )
     if not assets:
-        st.warning("No configured AI provider returned an image.")
+        st.warning(result.get("message") or "No AI image provider returned a usable image.")
+        if result.get("errors"):
+            with st.expander("AI provider diagnostics"):
+                for provider_name, provider_error in result["errors"].items():
+                    st.caption(f"{provider_name}: {provider_error}")
         last_query = query if generate else str(result.get("query") or "").strip()
         if last_query:
             if st.button("Search Real Images for this query instead →", type="primary", key="ai-fallback-to-real-search"):
@@ -11533,7 +11541,9 @@ elif st.session_state.app_mode == "test":
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
             elif visual_option == "Option 4 · AI Generation":
-                providers_label = ["Pollinations.ai (Flux)"]
+                providers_label = ["AI Horde (free community queue)"]
+                if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+                    providers_label.append("Pollinations.ai")
                 if os.getenv("HF_TOKEN"):
                     providers_label.append("Hugging Face")
                 if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
@@ -11554,8 +11564,11 @@ elif st.session_state.app_mode == "test":
                             try:
                                 result = generate_images(prompt)
                                 st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
+                                st.session_state.test_top5_visual_playground_ai_result = result
                                 if not st.session_state.test_top5_visual_playground_results:
-                                    st.warning("No configured AI provider returned an image.")
+                                    st.warning(result.get("message") or "No AI image provider returned a usable image.")
+                                    for provider_name, provider_error in (result.get("errors") or {}).items():
+                                        st.caption(f"{provider_name}: {provider_error}")
                             except Exception as exc:
                                 st.session_state.test_top5_visual_playground_results = []
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
@@ -11959,7 +11972,8 @@ elif st.session_state.app_mode == "test":
                                             "source": "manual",
                                             "query": query,
                                             "assets": list(result.get("assets") or []),
-                                            "error": str(result.get("error") or ""),
+                                            "error": str(result.get("error") or (result.get("message") if not result.get("assets") else "")),
+                                            "message": str(result.get("message") or ""),
                                         }
                                     except Exception as exc:
                                         st.session_state.test_top5_visual_results[active_slide] = {
@@ -12059,6 +12073,8 @@ elif st.session_state.app_mode == "test":
                             if result.get("error"):
                                 st.error(result["error"])
                             else:
+                                if result.get("message"):
+                                    st.caption(result["message"])
                                 st.caption(f'{len(result.get("assets") or [])} AI images returned.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "ai")
 
