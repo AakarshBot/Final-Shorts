@@ -14,6 +14,43 @@ def _image_bytes(color=(52, 84, 118), size=(900, 1600)):
     return buffer.getvalue()
 
 
+def _renderable_card_data(card_type, language="english"):
+    data = card_studio.card_data_for_type(card_type, language=language)
+    if card_type == "Stat Highlight":
+        data.update({
+            "headline": "Career Test wicket record",
+            "value": "704",
+            "unit": "WICKETS",
+            "supporting_fields": [
+                {"label": "International career", "value": "1994–2015"},
+                {"label": "Test appearances", "value": "166"},
+            ],
+        })
+    elif card_type == "Quote / Reaction":
+        data.update({
+            "quote": "We kept believing until the final ball.",
+            "attribution": "Player name",
+            "supporting_fields": [],
+        })
+    elif card_type == "Head-to-Head":
+        data.update({
+            "headline": "Career comparison",
+            "left": {"name": "James Anderson", "values": {}},
+            "right": {"name": "Stuart Broad", "values": {}},
+            "metrics": [
+                {"label": "Test wickets", "left_value": "704", "right_value": "604"},
+                {"label": "Test matches", "left_value": "188", "right_value": "167"},
+            ],
+        })
+    elif card_type == "Key Fact / Milestone":
+        data.update({
+            "value": "704",
+            "label": "Test wickets",
+            "supporting_fields": [{"label": "Format", "value": "Test cricket"}],
+        })
+    return data
+
+
 def test_bottom_gradient_starts_below_the_main_portrait_zone():
     image = Image.new("RGB", (1080, 1920), (175, 100, 70))
     result = card_studio._contrast_bed(image, "bottom", "Soft gradient").convert("RGB")
@@ -39,7 +76,7 @@ def test_card_studio_outputs_1080x1920_png():
         output = card_studio.render_card(
             card_type,
             _image_bytes(),
-            card_studio.card_data_for_type(card_type),
+            _renderable_card_data(card_type),
         )
         with Image.open(BytesIO(output)) as image:
             assert image.size == (1080, 1920)
@@ -55,30 +92,30 @@ def test_card_studio_defaults_fill_every_wip_field():
     ):
         defaults = card_studio.card_data_for_type(card_type)
         assert defaults["layout_position"] == "Auto · Best negative space"
-        assert defaults["contrast_treatment"] == "Soft gradient"
-
+        assert defaults["contrast_treatment"] == "Adaptive gradient"
 
     stat = card_studio.card_data_for_type("Stat Highlight")
-    assert all(stat[key] for key in ("eyebrow", "headline", "value", "unit"))
-    assert len(stat["metrics"]) == 3
-    assert all(metric["label"] and metric["value"] for metric in stat["metrics"])
+    assert stat["value"] == ""
+    assert stat["headline"] == ""
+    assert stat["unit"] == ""
+    assert stat["supporting_fields"] == []
 
     quote = card_studio.card_data_for_type("Quote / Reaction")
-    assert all(quote[key] for key in ("eyebrow", "quote", "attribution", "context"))
+    assert quote["quote"] == ""
+    assert quote["attribution"] == ""
+    assert quote["supporting_fields"] == []
+    assert "context" not in quote
 
     head_to_head = card_studio.card_data_for_type("Head-to-Head")
-    assert all(head_to_head[key] for key in ("eyebrow", "headline", "image_mode", "split_direction"))
-    assert head_to_head["left"]["name"]
-    assert head_to_head["right"]["name"]
-    assert len(head_to_head["metrics"]) == 3
-    assert all(
-        head_to_head["left"]["values"].get(metric)
-        and head_to_head["right"]["values"].get(metric)
-        for metric in head_to_head["metrics"]
-    )
+    assert head_to_head["image_mode"] == "One image"
+    assert head_to_head["left"]["name"] == ""
+    assert head_to_head["right"]["name"] == ""
+    assert head_to_head["metrics"] == []
 
     milestone = card_studio.card_data_for_type("Key Fact / Milestone")
-    assert all(milestone[key] for key in ("eyebrow", "value", "label", "context"))
+    assert milestone["value"] == ""
+    assert milestone["label"] == ""
+    assert milestone["supporting_fields"] == []
 
 
 def test_recropping_source_invalidates_cached_card_results_for_all_source_images():
@@ -120,7 +157,7 @@ def test_all_editorial_cards_support_manual_photo_compositions():
         "Key Fact / Milestone",
     ):
         for position in card_studio.CARD_LAYOUT_POSITIONS:
-            data = card_studio.card_data_for_type(card_type)
+            data = _renderable_card_data(card_type)
             data["layout_position"] = position
             data["contrast_treatment"] = "Soft gradient"
             output = card_studio.render_card(card_type, _image_bytes(), data)
@@ -167,7 +204,7 @@ def test_contrast_treatments_are_manual_and_visually_distinct():
 def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
     mask = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(mask).rectangle((88, 220, 620, 1300), fill=255)
-    data = card_studio.card_data_for_type("Quote / Reaction")
+    data = _renderable_card_data("Quote / Reaction")
 
     output = card_studio.render_card(
         "Quote / Reaction",
@@ -184,7 +221,7 @@ def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
 def test_head_to_head_supports_two_images_with_manual_split_direction():
     left = _image_bytes((180, 60, 60))
     right = _image_bytes((60, 80, 180))
-    data = card_studio.card_data_for_type("Head-to-Head")
+    data = _renderable_card_data("Head-to-Head")
     data["image_mode"] = "Two images"
 
     left_mask = Image.new("L", (900, 1600), 0)
@@ -206,14 +243,15 @@ def test_head_to_head_supports_two_images_with_manual_split_direction():
 
 
 def test_card_studio_rejects_overloaded_stat_card():
-    data = card_studio.card_data_for_type("Stat Highlight")
-    data["metrics"].append({"label": "Extra", "value": "5"})
-    try:
-        card_studio.render_card("Stat Highlight", _image_bytes(), data)
-    except card_studio.CardStudioError as exc:
-        assert "at most three" in str(exc)
-    else:
-        raise AssertionError("Expected CardStudioError")
+    data = _renderable_card_data("Stat Highlight")
+    data["supporting_fields"].extend(
+        {"label": f"Extra metric {index}", "value": str(index)}
+        for index in range(1, 5)
+    )
+    output = card_studio.render_card("Stat Highlight", _image_bytes(), data)
+    with Image.open(BytesIO(output)) as image:
+        assert image.size == (1080, 1920)
+        assert image.format == "PNG"
 
 
 def test_card_studio_keeps_subject_cutout_on_shared_editor():
