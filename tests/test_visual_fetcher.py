@@ -414,7 +414,7 @@ def test_news_search_applies_date_filter_to_providers_but_scores_base_query(monk
     assert result[0]["query"] == "Virat Kohli century"
 
 
-def test_manual_crawl_returns_scraped_assets(monkeypatch):def test_manual_crawl_uses_image_search_first_and_skips_page_crawl_when_full(monkeypatch):
+def test_manual_crawl_uses_image_search_first_and_skips_page_crawl_when_full(monkeypatch):
     import visual_search
 
     calls = []
@@ -508,14 +508,15 @@ def test_manual_crawl_falls_back_to_recent_publisher_pages_when_image_search_is_
     assert result["date_cutoff"] == cutoff
 
 
-
+def test_manual_crawl_returns_scraped_assets(monkeypatch):
     import visual_search
+
+    monkeypatch.setattr(visual_fetcher, "_image_bytes_ok", lambda data: data == b"image")
     monkeypatch.setattr(
         visual_search,
         "search_images",
         lambda query: {"query": query, "assets": [], "providers": {}, "errors": {}},
     )
-
     monkeypatch.setattr(
         visual_fetcher,
         "_manual_query_plan",
