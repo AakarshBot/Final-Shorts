@@ -578,6 +578,26 @@ def search_images(query: str) -> dict[str, Any]:
                 seen_urls.add(image_url)
             assets.append(asset)
 
+    query_terms = {
+        token.casefold()
+        for token in re.findall(r"[\\w]+", q, flags=re.UNICODE)
+        if len(token) > 1
+    }
+
+    def quality_rank(asset):
+        title = " ".join(str(asset.get(key) or "") for key in ("title", "article_title", "alt")).casefold()
+        title_terms = set(re.findall(r"[\\w]+", title, flags=re.UNICODE))
+        relevance = len(query_terms & title_terms) / max(1, len(query_terms))
+        width = int(asset.get("width") or 0)
+        height = int(asset.get("height") or 0)
+        pixels = width * height
+        resolution = min(18.0, pixels / 250_000)
+        url = str(asset.get("source_image_url") or "").casefold()
+        source_is_thumbnail = any(term in url for term in ("/thumb/", "thumbnail", "tse", "w=320", "w=480"))
+        original_penalty = -12.0 if source_is_thumbnail else 0.0
+        return (relevance * 80.0 + resolution + original_penalty, pixels)
+
+    assets.sort(key=quality_rank, reverse=True)
     return {
         "query": q,
         "assets": assets,
