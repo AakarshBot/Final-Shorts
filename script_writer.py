@@ -1565,7 +1565,7 @@ def _request(
 
 
 def translate_card_copy(card_type: str, data: dict, target_language: str) -> dict:
-    """Translate only human-facing card copy; preserve names and all numeric/stat data."""
+    """Translate only text fields in a card, preserving values and variable supporting rows."""
     from copy import deepcopy
 
     language = str(target_language or "english").strip().casefold()
@@ -1577,13 +1577,14 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
     }
     if language not in language_names:
         raise ValueError(f"Unsupported card-copy language: {target_language}")
+    card_type = " ".join(str(card_type or "").split())
+    if card_type == "Text Subject Cutout":
+        raise ValueError("Text Subject Cutout is not supported by editorial-card translation.")
+    result = deepcopy(data)
     if language == "english":
-        result = deepcopy(data)
         result["language"] = language
         return result
 
-    card_type = " ".join(str(card_type or "").split())
-    result = deepcopy(data)
     paths: list[tuple[str, str]] = []
 
     def add(path: str, value) -> None:
@@ -1591,7 +1592,7 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
         if text:
             paths.append((path, text))
 
-    def add_if_textual_value(path: str, value) -> None:
+    def add_textual_value(path: str, value) -> None:
         text = str(value or "").strip()
         if text and any(char.isalpha() for char in text):
             add(path, text)
@@ -1599,22 +1600,45 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
     add("eyebrow", data.get("eyebrow"))
     if card_type == "Stat Highlight":
         add("headline", data.get("headline"))
-        add_if_textual_value("value", data.get("value"))
+        add_textual_value("value", data.get("value"))
         add("unit", data.get("unit"))
-        for index, metric in enumerate(data.get("metrics") or []):
-            add(f"metrics.{index}.label", (metric or {}).get("label"))
+        rows = data.get("supporting_fields")
+        if rows is None:
+            rows = data.get("metrics") or []
+            field_root = "metrics"
+        else:
+            field_root = "supporting_fields"
+        for index, row in enumerate(rows or []):
+            if isinstance(row, dict):
+                add(f"{field_root}.{index}.label", row.get("label"))
+                add_textual_value(f"{field_root}.{index}.value", row.get("value"))
     elif card_type == "Quote / Reaction":
         add("quote", data.get("quote"))
         add("attribution", data.get("attribution"))
         add("context", data.get("context"))
+        for index, row in enumerate(data.get("supporting_fields") or []):
+            if isinstance(row, dict):
+                add(f"supporting_fields.{index}.label", row.get("label"))
+                add_textual_value(f"supporting_fields.{index}.value", row.get("value"))
     elif card_type == "Head-to-Head":
         add("headline", data.get("headline"))
-        for index, metric in enumerate(data.get("metrics") or []):
-            add(f"metrics.{index}", metric)
+        metrics = list(data.get("metrics") or [])
+        if metrics and isinstance(metrics[0], dict):
+            for index, metric in enumerate(metrics):
+                add(f"metrics.{index}.label", metric.get("label"))
+                add_textual_value(f"metrics.{index}.left_value", metric.get("left_value"))
+                add_textual_value(f"metrics.{index}.right_value", metric.get("right_value"))
+        else:
+            for index, metric in enumerate(metrics):
+                add(f"metrics.{index}", metric)
     elif card_type == "Key Fact / Milestone":
-        add_if_textual_value("value", data.get("value"))
+        add_textual_value("value", data.get("value"))
         add("label", data.get("label"))
         add("context", data.get("context"))
+        for index, row in enumerate(data.get("supporting_fields") or []):
+            if isinstance(row, dict):
+                add(f"supporting_fields.{index}.label", row.get("label"))
+                add_textual_value(f"supporting_fields.{index}.value", row.get("value"))
     else:
         raise ValueError(f"Card-copy translation is not supported for '{card_type}'.")
 
@@ -1636,13 +1660,9 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
     prompt = (
         "Translate the supplied JSON values into "
         + language_names[language]
-        + " for text displayed on a sports editorial card. Return only the required JSON object. "
-        "Translate every supplied value naturally and concisely; do not explain your work. "
-        "Preserve proper names, player/team/competition names and their spelling. "
-        "Do not add or remove facts. This request contains only copy fields: statistics, score values, "
-        "dates, numeric values and player/team name fields are intentionally excluded and must remain untouched. "
-        "A quoted sentence may be translated for the target-language card, but preserve its exact meaning. "
-        "Keep output values suitable for a compact vertical sports card."
+        + " for a sports editorial card. Return only the required JSON. Translate each supplied string naturally "
+        "and concisely. Preserve player/team/competition names, numeric facts, score values and proper-name spelling. "
+        "Translate labels and explanatory text but do not turn a numeric value into prose. Do not add or remove facts."
     )
     errors = []
     translated = None
@@ -1654,7 +1674,7 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
                 json.dumps(payload, ensure_ascii=False),
                 schema=schema,
                 schema_name="card_copy_translation",
-                max_completion_tokens=1000,
+                max_completion_tokens=1200,
             )
             if not isinstance(candidate, dict) or any(
                 not isinstance(candidate.get(key), str) or not candidate[key].strip()
@@ -1666,9 +1686,7 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
         except GroqAPIError as exc:
             errors.append(f"{model}: {exc}")
             if 400 <= exc.status_code < 500 and exc.status_code != 429:
-                raise RuntimeError(
-                    "Groq rejected the card-copy translation request: " + str(exc)
-                ) from exc
+                raise RuntimeError("Groq rejected the card-copy translation request: " + str(exc)) from exc
         except Exception as exc:
             errors.append(f"{model}: {type(exc).__name__}: {exc}")
     if translated is None:
@@ -1685,15 +1703,19 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
         else:
             current[final] = value
 
-    old_metrics = list(data.get("metrics") or []) if card_type == "Head-to-Head" else []
-    new_metric_labels = []
+    legacy_h2h = (
+        card_type == "Head-to-Head"
+        and all(not isinstance(item, dict) for item in (data.get("metrics") or []))
+    )
+    old_metrics = list(data.get("metrics") or []) if legacy_h2h else []
+    translated_metric_labels = []
     for key, item in field_map.items():
         value = translated[key].strip()
         set_path(result, item["path"], value)
-        if card_type == "Head-to-Head" and item["path"].startswith("metrics."):
-            new_metric_labels.append(value)
+        if legacy_h2h and item["path"].startswith("metrics."):
+            translated_metric_labels.append(value)
 
-    if card_type == "Head-to-Head" and new_metric_labels:
+    if legacy_h2h and translated_metric_labels:
         for side in ("left", "right"):
             side_data = result.get(side) or {}
             old_values = dict((data.get(side) or {}).get("values") or {})
@@ -1709,6 +1731,8 @@ def translate_card_copy(card_type: str, data: dict, target_language: str) -> dic
 
     result["language"] = language
     return result
+
+
 
 
 def _research_card_prompt(query: str) -> str:
