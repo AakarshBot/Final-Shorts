@@ -159,8 +159,7 @@ def test_cricket_test_exposes_shared_text_cutout():
     at.session_state["visual_result"] = {"assets": [asset]}
     at.session_state["script_data"] = {
         "headline": "India win again",
-        "source_title": "India win again",
-        "script": [{"voiceover": "India win again"}] * 4,
+        "script": [{"voiceover": "One."}] * 4,
     }
     at.run()
 
@@ -220,7 +219,8 @@ def test_manual_subject_cutout_renders_with_manual_line_breaks():
     at.session_state["visual_result"] = {"assets": [asset]}
     at.session_state["script_data"] = {
         "headline": "India win again",
-        "script": [{"voiceover": "One."}] * 4,
+        "source_title": "India win again",
+        "script": [{"voiceover": "India win again"}] * 4,
     }
     at.run()
 
