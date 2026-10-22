@@ -15,7 +15,7 @@ def _image_bytes(color=(52, 84, 118), size=(900, 1600)):
 
 
 def _renderable_card_data(card_type, language="english"):
-    data = card_studio.card_data_for_type(card_type, language=language)
+    data = _renderable_card_data(card_type, language=language)
     if card_type == "Stat Highlight":
         data.update({
             "headline": "Career Test wicket record",
@@ -309,7 +309,7 @@ def test_all_non_cutout_cards_render_with_subject_masks():
         output = card_studio.render_card(
             card_type,
             source,
-            card_studio.card_data_for_type(card_type),
+            _renderable_card_data(card_type),
             subject_mask=mask,
         )
         with Image.open(BytesIO(output)) as image:
