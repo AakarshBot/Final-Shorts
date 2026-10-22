@@ -987,17 +987,17 @@ def test_manual_subject_cutout_manual_line_breaks_are_used_exactly(monkeypatch):
         "style": "Crisp Outline",
     }
     data = renderer._manual_subject_cutout_layout_data(
-        "India win today", common["text_polygon"], common["font_size"],
-        common["font"], common["style"], manual_lines="India win\ntoday"
+        "India wins", common["text_polygon"], common["font_size"],
+        common["font"], common["style"], manual_lines="India\nwins"
     )
-    assert data["layouts"][0]["lines"] == ("INDIA WIN", "TODAY")
+    assert data["layouts"][0]["lines"] == ("INDIA", "WINS")
     assert {placement[2] for placement in data["layouts"][0]["placements"]} == {62}
     automatic = renderer.build_manual_subject_cutout_preview(
-        Image.new("RGB", (1080, 1920), (40, 40, 40)), "India win today", **common
+        Image.new("RGB", (1080, 1920), (40, 40, 40)), "India wins", **common
     )
     manual = renderer.build_manual_subject_cutout_preview(
         Image.new("RGB", (1080, 1920), (40, 40, 40)),
-        "India win today", manual_lines="India win\ntoday", **common
+        "India wins", manual_lines="India\nwins", **common
     )
     assert ImageChops.difference(
         Image.open(BytesIO(automatic)).convert("RGB"),
