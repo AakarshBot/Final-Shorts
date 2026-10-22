@@ -786,7 +786,7 @@ def test_dashboard_exposes_full_and_turbo_for_every_chatterbox_audio_route():
 
     assert app_source.count('["Turbo", "Full"]') == 5
     assert 'model_version=chatterbox_model_choice.casefold()' in app_source
-    assert 'model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold()' in app_source
+    assert 'model_version=st.session_state.get("live_audio_chatterbox_model", "Full").casefold()' in app_source
     assert 'model_version=t5_chatterbox_model_choice.casefold()' in app_source
     assert 'model_version=live_top5_chatterbox_model_choice.casefold()' in app_source
     assert 'model_version=longform_chatterbox_model_choice.casefold()' in app_source
