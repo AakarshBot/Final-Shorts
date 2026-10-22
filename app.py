@@ -7,6 +7,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from dataclasses import replace
+import pandas as pd
 from PIL import Image, ImageOps
 from pathlib import Path
 
@@ -3605,7 +3606,7 @@ def _render_card_studio(
             st.text_input("Unit (optional)", key=unit_key, placeholder="e.g. TEST WICKETS")
             st.caption("Add only the supporting facts this story actually needs. Use the row controls to add or remove fields.")
             support_rows = st.data_editor(
-                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
+                (_editable_rows(st.session_state.get(support_key)) or pd.DataFrame(columns=["label", "value"])),
                 key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
@@ -3647,7 +3648,7 @@ def _render_card_studio(
             )
             st.caption("Add only context that improves the quote. Exact quotations must be source-backed.")
             support_rows = st.data_editor(
-                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
+                (_editable_rows(st.session_state.get(support_key)) or pd.DataFrame(columns=["label", "value"])),
                 key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
@@ -3684,7 +3685,7 @@ def _render_card_studio(
             right_name_val = st.text_input("Second player / side", key=right_name_key, placeholder="e.g. Glenn McGrath")
         st.caption("Comparison fields are dynamic. Add one or more comparable, source-backed rows; rows are not limited to three.")
         comparison_rows = st.data_editor(
-            (_editable_rows(st.session_state.get(comparison_key)) or {"label": [], "left_value": [], "right_value": []}),
+            (_editable_rows(st.session_state.get(comparison_key)) or pd.DataFrame(columns=["label", "left_value", "right_value"])),
             key=comparison_editor_key,
             num_rows="dynamic",
             hide_index=True,
