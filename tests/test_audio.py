@@ -669,7 +669,7 @@ def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_pat
     )
 
     assert model.conditioning_calls == 1
-    assert model.generate_calls == 4
+    assert model.generate_calls == 2
 
 
 def test_continuous_narration_join_preserves_sentence_boundaries():
