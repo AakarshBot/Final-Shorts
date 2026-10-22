@@ -511,7 +511,7 @@ def test_chatterbox_synthesizes_the_full_script_once_and_caches_scene_cuts(monke
     assert all(not scene["from_cache"] for scene in first["scenes"])
     assert [call[0] for call in model.generate_calls] == ["India won. Bowlers held."]
     assert model.generate_calls[0][1] == {
-        "temperature": 0.62,
+        "temperature": 0.55,
         "top_p": 0.90,
         "top_k": 1000,
         "repetition_penalty": 1.15,
@@ -615,7 +615,7 @@ def test_chatterbox_full_generates_one_contextual_take_with_stable_controls(monk
     assert len(model.calls) == 1
     assert model.calls[0][0] == "India won. Bowlers held."
     assert model.calls[0][1] == {
-        "temperature": 0.65,
+        "temperature": 0.60,
         "cfg_weight": 0.35,
         "exaggeration": 0.50,
         "min_p": 0.05,
@@ -793,6 +793,9 @@ def test_dashboard_exposes_full_and_turbo_for_every_chatterbox_audio_route():
     assert "def _audio_selection_mismatch(" in app_source
     assert "disabled=model_mismatch" in app_source
     assert "Chatterbox Turbo (Voice Cloning)" not in app_source
+    assert app_source.count('["Turbo", "Full"],') == 5
+    assert app_source.count('index=1,') >= 5
+    assert "Full adapts expression to the approved narration." in app_source
 
 
 def test_chatterbox_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch, tmp_path):
@@ -861,3 +864,53 @@ def test_indic_first_scene_duration_validation_canonicalizes_locale_tags(locale)
             [{"scene": 1, "duration": 5.21}],
             locale,
         )
+
+def test_chatterbox_delivery_profile_uses_the_full_script_meaning(monkeypatch):
+    import script_writer
+
+    audio._infer_chatterbox_delivery_profile.cache_clear()
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(script_writer, "MODELS", ["tone-model"])
+    captured = {}
+
+    def fake_request(model, prompt, story, **kwargs):
+        captured.update({"model": model, "prompt": prompt, "story": story, "kwargs": kwargs})
+        return {
+            "delivery_tone": "triumphant and celebratory",
+            "exaggeration": 0.65,
+            "cfg_weight": 0.30,
+        }
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    script = "The underdogs held their nerve, then sealed the title with a record-breaking final over."
+    profile = audio._infer_chatterbox_delivery_profile(script, "full")
+
+    assert profile == {
+        "delivery_tone": "triumphant and celebratory",
+        "exaggeration": 0.65,
+        "cfg_weight": 0.30,
+    }
+    assert captured["model"] == "tone-model"
+    assert script in captured["story"]
+    assert "Infer its intended delivery from the meaning" in captured["prompt"]
+    assert "do not rewrite it" in captured["prompt"]
+    assert captured["kwargs"]["schema_name"] == "chatterbox_delivery_profile"
+    audio._infer_chatterbox_delivery_profile.cache_clear()
+
+
+def test_chatterbox_profile_does_not_inject_acting_text_or_change_narration(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    audio._infer_chatterbox_delivery_profile.cache_clear()
+    script = ["A pressure-filled final over.", "India wins the trophy."]
+    assert audio._chatterbox_audio_texts(script) == script
+    profile = audio._infer_chatterbox_delivery_profile(" ".join(script), "full")
+    assert "delivery_tone" in profile
+    assert "[excited]" not in " ".join(audio._chatterbox_audio_texts(script)).casefold()
+    audio._infer_chatterbox_delivery_profile.cache_clear()
+
+
+def test_chatterbox_turbo_does_not_claim_adaptive_expression():
+    profile = audio._infer_chatterbox_delivery_profile("A major upset changed the tournament.", "turbo")
+    assert profile["exaggeration"] is None
+    assert profile["cfg_weight"] is None
+    assert "unavailable" in profile["delivery_tone"].casefold()
