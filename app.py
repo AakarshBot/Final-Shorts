@@ -45,9 +45,10 @@ if not st.get_option("global.appTest"):
   <svg viewBox="0 0 1080 1920" aria-label="Manual Subject Cutout polygon editor">
     <image id="background" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
     <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
+    <rect id="text-box" x="0" y="0" width="0" height="0" fill="none" stroke="#f5b942" stroke-width="5" stroke-dasharray="14 10" pointer-events="none" vector-effect="non-scaling-stroke"></rect>
     <g id="handles"></g>
   </svg>
-  <div class="help">Drag a point to reshape. Drag inside the highlighted area to move the whole polygon. Click an edge to add a point.</div>
+  <div class="help">The dashed rectangle is the actual text box. Text uses its outer left/right/top/bottom edges; the polygon's inner shape does not affect wrapping. Drag outer points to resize it, or drag the polygon to move it.</div>
 </div>
 """,
         css="""
@@ -56,6 +57,7 @@ if not st.get_option("global.appTest"):
 .text-cutout-editor .handle{cursor:move}
 .text-cutout-editor #polygon{cursor:grab}
 .text-cutout-editor #polygon:active{cursor:grabbing}
+.text-cutout-editor #text-box{pointer-events:none;stroke:#f5b942;stroke-dasharray:14 10;vector-effect:non-scaling-stroke}
 .text-cutout-editor .help{margin:6px 0;color:#52574f;font-size:12px;line-height:1.2;opacity:.78}
 """,
         js="""
@@ -64,8 +66,9 @@ export default function(component) {
     const svg = parentElement.querySelector("svg");
     const image = parentElement.querySelector("#background");
     const polygon = parentElement.querySelector("#polygon");
+    const textBox = parentElement.querySelector("#text-box");
     const handles = parentElement.querySelector("#handles");
-    if (!svg || !image || !polygon || !handles) return;
+    if (!svg || !image || !polygon || !textBox || !handles) return;
 
     image.setAttribute("href", "data:image/jpeg;base64," + data.image);
 
@@ -97,6 +100,16 @@ export default function(component) {
             },
             render() {
                 polygon.setAttribute("points", this.points.map((point) => point.join(",")).join(" "));
+                if (this.points.length) {
+                    const xs = this.points.map((point) => point[0]);
+                    const ys = this.points.map((point) => point[1]);
+                    const left = Math.min(...xs);
+                    const top = Math.min(...ys);
+                    textBox.setAttribute("x", left);
+                    textBox.setAttribute("y", top);
+                    textBox.setAttribute("width", Math.max(...xs) - left);
+                    textBox.setAttribute("height", Math.max(...ys) - top);
+                }
                 while (this.handles.length < this.points.length) {
                     const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                     handle.setAttribute("class", "handle");
@@ -2288,6 +2301,7 @@ def _render_manual_subject_cutout(
                             )
                             st.session_state["card_studio_selected_asset_key"] = asset_key
                             st.session_state.pop(size_key, None)
+                            st.session_state.pop(manual_lines_key, None)
 
     selected = asset_map.get(str(state.get("image_key") or ""))
     if selected is None:
@@ -2313,6 +2327,7 @@ def _render_manual_subject_cutout(
             editor_image_data=None,
         )
         st.session_state.pop(size_key, None)
+        st.session_state.pop(manual_lines_key, None)
 
     if (handoff == "cricket" and assignment_store is not None and slide_count > 0) or (handoff == "top5" and active_slide is not None):
         with st.container():
