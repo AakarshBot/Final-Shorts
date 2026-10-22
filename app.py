@@ -5517,12 +5517,21 @@ def _render_two_pane_visual_workspace(
                     elif result.get("error"):
                         st.error(result["error"])
                     elif result:
+                        assets = list(result.get("assets") or [])
                         st.caption(
-                            f'{len(result.get("assets") or [])} images · '
-                            f'{int(result.get("pages_scraped") or 0)} pages · last five years'
+                            f'{len(assets)} images · '
+                            f'{int(result.get("pages_scraped") or 0)} publisher pages · '
+                            f'{str(result.get("search_mode") or "image search").replace("-", " ")}'
                         )
+                        if result.get("message"):
+                            (st.info if assets else st.warning)(result["message"])
+                        image_errors = result.get("image_search_errors") or {}
+                        if image_errors:
+                            with st.expander("Image-search provider diagnostics"):
+                                for provider_name, provider_error in image_errors.items():
+                                    st.caption(f"{provider_name}: {provider_error}")
                         _render_visual_asset_pool(
-                            list(result.get("assets") or []),
+                            assets,
                             "manual",
                             slide_count,
                             live=True,
@@ -7000,6 +7009,15 @@ def render_live_top5():
                 result = st.session_state.live_top5_manual_visual_results.get(active_slide) or {}
                 if result.get("error"):
                     st.error(result["error"])
+                elif result.get("message") and not result.get("assets"):
+                    st.warning(result["message"])
+                elif result.get("message"):
+                    st.info(result["message"])
+                image_errors = result.get("image_search_errors") or {}
+                if image_errors:
+                    with st.expander("Image-search provider diagnostics"):
+                        for provider_name, provider_error in image_errors.items():
+                            st.caption(f"{provider_name}: {provider_error}")
                 assets = list(result.get("assets") or [])
                 result_key = "manual"
             else:
@@ -11629,11 +11647,27 @@ elif st.session_state.app_mode == "test":
                         with st.spinner("Searching image engines and, if needed, recent publisher pages…"):
                             try:
                                 result = manual_crawl_visuals(query)
+                                st.session_state.test_top5_visual_playground_manual_result = {
+                                    **result, "query": query
+                                }
                                 st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
                             except Exception as exc:
                                 st.session_state.test_top5_visual_playground_results = []
                                 st.error(f"{type(exc).__name__}: {exc}")
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
+                manual_result = st.session_state.get("test_top5_visual_playground_manual_result") or {}
+                if (
+                    visual_option == "Option 2 · Manual Scraper"
+                    and manual_result.get("query")
+                    == str(st.session_state.get("test_top5_visual_playground_crawler_query") or "").strip()
+                ):
+                    if manual_result.get("message"):
+                        (st.info if assets else st.warning)(manual_result["message"])
+                    image_errors = manual_result.get("image_search_errors") or {}
+                    if image_errors:
+                        with st.expander("Image-search provider diagnostics"):
+                            for provider_name, provider_error in image_errors.items():
+                                st.caption(f"{provider_name}: {provider_error}")
 
             elif visual_option == "Option 3 · Manual Fetcher":
                 query = st.text_input(
@@ -12126,6 +12160,8 @@ elif st.session_state.app_mode == "test":
                                             "assets": list(result.get("assets") or []),
                                             "error": str(result.get("error") or (result.get("message") if not result.get("assets") else "")),
                                             "message": str(result.get("message") or ""),
+                                            "image_search_errors": dict(result.get("image_search_errors") or {}),
+                                            "search_mode": str(result.get("search_mode") or ""),
                                         }
                                     except Exception as exc:
                                         st.session_state.test_top5_visual_results[active_slide] = {
@@ -12140,6 +12176,13 @@ elif st.session_state.app_mode == "test":
                             if result.get("error"):
                                 st.error(result["error"])
                             else:
+                                if result.get("message"):
+                                    st.info(result["message"])
+                                image_errors = result.get("image_search_errors") or {}
+                                if image_errors:
+                                    with st.expander("Image-search provider diagnostics"):
+                                        for provider_name, provider_error in image_errors.items():
+                                            st.caption(f"{provider_name}: {provider_error}")
                                 st.caption(f'{len(result.get("assets") or [])} images returned by the Manual Scraper.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "manual")
 
