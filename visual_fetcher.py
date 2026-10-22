@@ -164,19 +164,16 @@ def _manual_query_plan(query):
 
     key = _clean(os.getenv("GROQ_API_KEY"), 300)
     if key:
-        prompt = """You are a sports web-image search planner.
-Decide whether the query is name_only or contextual.
-
-name_only means the user supplied only an entity/person/team name.
-contextual means they added a specific event, object, action, milestone or occasion.
+        prompt = """You are a visual-search query planner for a Google-Images-style image results page.
 
 Rules:
-- name_only: return exactly the original query and historical=false.
-- contextual: return the original query plus up to two concise search variants using useful synonyms.
-- Preserve every named entity and the user's intent.
-- Do not invent dates, opponents, scores, events or other facts.
-- Set historical=true for contextual searches so older publisher pages can be found.
-- Queries should help find photographs on publisher/news pages.
+- Preserve the user's original query as the first query. Never replace it with your own interpretation.
+- Add at most two variants only if they should find a genuinely different but relevant image set.
+- Preserve every named entity and the user's intended event, action, season or competition.
+- Do not invent dates, opponents, scores, results, or events.
+- For a person-only query, keep the name-only query and do not invent a moment.
+- For an event/action query, keep the original action and add image-oriented synonyms where useful.
+- Use historical=true only when the query specifically asks for a career, landmark, older event or historical moment.
 - Return JSON only.
 """
         try:
@@ -1920,81 +1917,164 @@ def _manual_cutoff_date(today=None):
 
 
 def manual_crawl_visuals(query):
-    """Scrape query-matched publisher pages from the last five years, never older."""
+    """Return a Google-Images-style result pool, with recent publisher-page fallback."""
     query = _clean(query, 260)
     if not query:
         raise ValueError("Manual scraper requires a search query.")
 
     plan = _manual_query_plan(query)
-    queries = list(plan["queries"])
+    queries = list(plan.get("queries") or [query])[:3]
     cutoff = _manual_cutoff_date()
-    # Search engines understand the after: operator. _news_search removes this clause
-    # before relevance ranking, and older known publication dates are also rejected locally.
-    bounded_queries = [f"{value} after:{cutoff.isoformat()}" for value in queries]
-    related_pages = _collect_related_pages(
-        bounded_queries,
-        "",
-        "",
-        "",
-        historical=True,
-    )
-    page_requests = []
-    for page in related_pages:
-        published = _parse_date(page.get("published_at"))
-        if published is not None and published.date() < cutoff:
-            continue
-        query_value = _clean(page.get("query"), 260)
-        if not query_value:
-            query_value = queries[0] if queries else query
-        page_requests.append({
-            "url": page["url"],
-            "title": page.get("title", ""),
-            "publisher": page.get("source", ""),
-            "published_at": page.get("published_at", ""),
-            "query": query_value,
-            "entity": "",
-            "story_title": "",
-        })
+    image_errors = {}
+    direct_assets = []
+    image_search_queries = [query]
+    try:
+        from visual_search import search_images
+        direct_result = search_images(query) or {}
+        direct_assets.extend(direct_result.get("assets") or [])
+        image_errors.update(direct_result.get("errors") or {})
+    except Exception as exc:
+        image_errors["Image search"] = f"{type(exc).__name__}: {exc}"
 
-    results = _crawl_pages(page_requests)
-    assets = []
+    def add_image_search_assets(candidates, search_query):
+        for asset in candidates or []:
+            if not isinstance(asset, dict):
+                continue
+            data = asset.get("bytes")
+            image_url = _clean(asset.get("source_image_url"), 3000)
+            page_url = _clean(asset.get("source_page_url"), 3000)
+            title = _clean(asset.get("title") or asset.get("article_title"), 600)
+            published_at = _parse_date(asset.get("published_at") or asset.get("date"))
+            if published_at is not None and published_at.date() < cutoff:
+                continue
+            if _bad_image_url(image_url) or _bad_image_url(page_url):
+                continue
+            if not _image_bytes_ok(data):
+                continue
+            query_tokens = _tokens(search_query)
+            title_tokens = _tokens(title)
+            overlap = len(query_tokens & title_tokens)
+            coverage = overlap / max(1, len(query_tokens))
+            asset["query"] = search_query
+            asset["article_title"] = title or query
+            asset["publisher"] = _clean(asset.get("source") or "", 160)
+            asset["source_page_url"] = page_url or image_url
+            asset["published_at"] = published_at.isoformat() if published_at else str(asset.get("published_at") or "")
+            asset["manual_image_search"] = True
+            asset["score"] = max(float(asset.get("score") or 0), 38.0 + 45.0 * coverage)
+            asset["action_score"] = max(
+                int(asset.get("action_score") or 0),
+                sum(1 for word in ACTION_TERMS if word in f"{title} {search_query}".casefold()),
+            )
+            if title_tokens and overlap == 0:
+                asset["score"] = min(float(asset["score"]), 48.0)
+            direct_assets.append(asset)
+
+    # Keep the exact query first. Only broaden to one model-planned image query
+    # when the image engine result pool is short, rather than blindly multiplying
+    # requests for every variant.
+    normalized_direct = []
+    first_direct = list(direct_assets)
+    direct_assets = []
+    add_image_search_assets(first_direct, query)
+    if len(_dedupe(direct_assets)) < SUCCESS:
+        for variant in queries[1:]:
+            if variant.casefold() == query.casefold():
+                continue
+            image_search_queries.append(variant)
+            try:
+                variant_result = search_images(variant) or {}
+                image_errors.update({
+                    str(name): str(error)
+                    for name, error in (variant_result.get("errors") or {}).items()
+                })
+                add_image_search_assets(variant_result.get("assets") or [], variant)
+            except Exception as exc:
+                image_errors[f"Image search: {variant}"] = f"{type(exc).__name__}: {exc}"
+            if len(_dedupe(direct_assets)) >= SUCCESS:
+                break
+
+    selected = _dedupe(direct_assets)
     diagnostics = []
+    related_pages = []
+    page_requests = []
 
-    for request, result in zip(page_requests, results):
-        diagnostics.append({
-            "url": result.get("url") or request["url"],
-            "title": result.get("title") or request.get("title", ""),
-            "assets": len(result.get("assets") or []),
-            "candidates": int(result.get("candidate_count") or 0),
-            "dom_images": int(result.get("dom_image_count") or 0),
-            "network_images": int(result.get("network_image_count") or 0),
-            "direct_download_failures": int(result.get("direct_download_failures") or 0),
-            "direct_invalid_images": int(result.get("direct_invalid_images") or 0),
-            "network_fallback_hits": int(result.get("network_fallback_hits") or 0),
-            "static_fallback_attempted": bool(result.get("static_fallback_attempted")),
-            "static_candidates": int(result.get("static_candidates") or 0),
-            "static_assets": int(result.get("static_assets") or 0),
-            "static_error": str(result.get("static_error") or ""),
-            "error": str(result.get("error") or ""),
-            "query": request.get("query") or query,
-        })
-        for asset in result.get("assets") or []:
-            asset["query"] = asset.get("query") or request.get("query") or query
-            asset["article_title"] = asset.get("article_title") or request.get("title", "")
-            asset["source_page_url"] = asset.get("source_page_url") or request["url"]
-            asset["publisher"] = asset.get("publisher") or request.get("publisher", "")
-            assets.append(asset)
+    # Publisher-page scraping is the relevance fallback if image-index results are
+    # sparse. These pages keep the explicit five-year publication-date filter.
+    if len(selected) < SUCCESS:
+        bounded_queries = [f"{value} after:{cutoff.isoformat()}" for value in queries]
+        related_pages = _collect_related_pages(
+            bounded_queries,
+            "",
+            "",
+            "",
+            historical=True,
+        )
+        for page in related_pages:
+            published = _parse_date(page.get("published_at"))
+            if published is not None and published.date() < cutoff:
+                continue
+            query_value = _clean(page.get("query"), 260) or query
+            page_requests.append({
+                "url": page["url"],
+                "title": page.get("title", ""),
+                "publisher": page.get("source", ""),
+                "published_at": page.get("published_at", ""),
+                "query": query_value,
+                "entity": "",
+                "story_title": "",
+            })
 
-    selected = _dedupe(assets)
+        results = _crawl_pages(page_requests) if page_requests else []
+        publisher_assets = []
+        for request, result in zip(page_requests, results):
+            diagnostics.append({
+                "url": result.get("url") or request["url"],
+                "title": result.get("title") or request.get("title", ""),
+                "assets": len(result.get("assets") or []),
+                "candidates": int(result.get("candidate_count") or 0),
+                "dom_images": int(result.get("dom_image_count") or 0),
+                "network_images": int(result.get("network_image_count") or 0),
+                "direct_download_failures": int(result.get("direct_download_failures") or 0),
+                "direct_invalid_images": int(result.get("direct_invalid_images") or 0),
+                "network_fallback_hits": int(result.get("network_fallback_hits") or 0),
+                "static_fallback_attempted": bool(result.get("static_fallback_attempted")),
+                "static_candidates": int(result.get("static_candidates") or 0),
+                "static_assets": int(result.get("static_assets") or 0),
+                "static_error": str(result.get("static_error") or ""),
+                "error": str(result.get("error") or ""),
+                "query": request.get("query") or query,
+            })
+            for asset in result.get("assets") or []:
+                asset["query"] = asset.get("query") or request.get("query") or query
+                asset["article_title"] = asset.get("article_title") or request.get("title", "")
+                asset["source_page_url"] = asset.get("source_page_url") or request["url"]
+                asset["publisher"] = asset.get("publisher") or request.get("publisher", "")
+                asset["score"] = max(float(asset.get("score") or 0), 50.0)
+                publisher_assets.append(asset)
+        selected = _dedupe(direct_assets + publisher_assets)
+
     failure_state = (
         "ready" if len(selected) >= SUCCESS
         else "underfilled" if selected
         else "no_images"
     )
+    image_errors_text = " | ".join(
+        f"{name}: {error}" for name, error in image_errors.items() if error
+    )
+    if image_errors_text and not selected:
+        message = f"No image-engine results were usable. {image_errors_text}"
+    elif len(selected) < SUCCESS:
+        message = (
+            f"Only {len(selected)} usable images were found. Try adding the sport, event, action or year to the query."
+        )
+    else:
+        message = ""
+
     print(
         f"   [Visual Fetcher] manual_query={query!r} "
-        f"queries={len(queries)} window={cutoff.isoformat()}..today "
-        f"pages={len(page_requests)} final_pool={len(selected)}/{TARGET} "
+        f"image_queries={len(image_search_queries)} pages={len(page_requests)} "
+        f"window={cutoff.isoformat()}..today final_pool={len(selected)}/{TARGET} "
         f"state={failure_state}",
         flush=True,
     )
@@ -2004,14 +2084,20 @@ def manual_crawl_visuals(query):
         "success_threshold": SUCCESS,
         "manual_query": query,
         "search_queries": queries,
-        "historical": bool(plan["historical"]),
+        "image_search_queries": image_search_queries,
+        "image_search_errors": image_errors,
+        "historical": bool(plan.get("historical")),
         "lookback_years": MANUAL_LOOKBACK_YEARS,
         "date_cutoff": cutoff.isoformat(),
         "pages_scraped": len(page_requests),
         "related_pages": len(related_pages),
+        "search_mode": "image-search" if not page_requests else "image-search+recent-publisher-pages",
         "failure_state": failure_state,
+        "message": message,
         "diagnostics": diagnostics,
     }
 
+
+__all__ = ["TARGET", "SUCCESS", "build_queries", "crawl_visuals", "manual_crawl_visuals", "ranked_visual_search"]
 
 __all__ = ["TARGET", "SUCCESS", "build_queries", "crawl_visuals", "manual_crawl_visuals", "ranked_visual_search"]
