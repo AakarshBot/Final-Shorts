@@ -18,7 +18,9 @@ from PIL import Image, UnidentifiedImageError
 
 TIMEOUT = 6
 MAX_RESULTS_PER_SOURCE = max(4, min(20, int(os.getenv("VISUAL_SEARCH_RESULTS_PER_SOURCE", "12"))))
-MAX_IMAGE_BYTES = 12_000_000
+MIN_IMAGE_SIDE = 720
+MIN_IMAGE_PIXELS = 800_000
+MAX_IMAGE_BYTES = 40_000_000
 HEADERS = {"User-Agent": "FinalShorts/1.0 (https://github.com/aakarsh/final-shorts; visual-qc@finalshorts.local)"}
 
 _SESSION: requests.Session | None = None
@@ -39,15 +41,22 @@ def _clean_query(query: Any) -> str:
     return " ".join(str(query or "").split()).strip()[:300]
 
 
-def _valid_image(data: bytes) -> bool:
+def _image_info(data: bytes) -> tuple[int, int] | None:
     if not data or len(data) > MAX_IMAGE_BYTES:
-        return False
+        return None
     try:
         with Image.open(io.BytesIO(data)) as image:
+            width, height = image.size
             image.verify()
-        return True
+        if min(width, height) < MIN_IMAGE_SIDE or width * height < MIN_IMAGE_PIXELS:
+            return None
+        return width, height
     except (UnidentifiedImageError, OSError, ValueError):
-        return False
+        return None
+
+
+def _valid_image(data: bytes) -> bool:
+    return _image_info(data) is not None
 
 
 def _download(url: str, meta: dict[str, Any]) -> dict[str, Any] | None:
@@ -60,7 +69,7 @@ def _download(url: str, meta: dict[str, Any]) -> dict[str, Any] | None:
         try:
             response = _get_session().get(
                 str(candidate_url),
-                timeout=min(TIMEOUT, 4),
+                timeout=15,
                 headers={**HEADERS, "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
                 allow_redirects=True,
             )
@@ -69,14 +78,18 @@ def _download(url: str, meta: dict[str, Any]) -> dict[str, Any] | None:
             content_type = str(response.headers.get("content-type", "")).lower()
             if content_type and "image" not in content_type and not content_type.startswith("application/octet-stream"):
                 continue
-            if not _valid_image(data):
+            dimensions = _image_info(data)
+            if dimensions is None:
                 continue
+            width, height = dimensions
             return {
                 "bytes": data,
                 "hash": hashlib.sha256(data).hexdigest(),
                 "source": meta.get("source", "Web"),
                 "source_page_url": meta.get("source_page_url") or response.url or str(candidate_url),
                 "source_image_url": response.url or str(candidate_url),
+                "width": width,
+                "height": height,
                 "title": str(meta.get("title") or ""),
             }
         except requests.RequestException:
@@ -102,8 +115,7 @@ def _commons(query: str) -> list[dict[str, Any]]:
             "gsrnamespace": 6,
             "gsrlimit": MAX_RESULTS_PER_SOURCE,
             "prop": "imageinfo",
-            "iiprop": "url|mime|extmetadata",
-            "iiurlwidth": 1600,
+            "iiprop": "url|mime|extmetadata|size",
             "format": "json",
         },
         timeout=TIMEOUT,
@@ -114,10 +126,12 @@ def _commons(query: str) -> list[dict[str, Any]]:
     items = []
     for page in pages.values() if isinstance(pages, dict) else []:
         info = (page.get("imageinfo") or [{}])[0]
-        image_url = info.get("thumburl") or info.get("url")
+        image_url = info.get("url") or info.get("thumburl")
         page_url = info.get("descriptionurl")
         if image_url:
             items.append((str(image_url), {
+                "width": int(info.get("width") or 0),
+                "height": int(info.get("height") or 0),
                 "source": "Commons",
                 "source_page_url": str(page_url or image_url),
                 "title": str(page.get("title") or "").removeprefix("File:"),
@@ -137,9 +151,13 @@ def _ddg(query: str) -> list[dict[str, Any]]:
     for result in results or []:
         if not isinstance(result, dict):
             continue
-        image_url = result.get("image") or result.get("thumbnail") or result.get("url")
+        image_url = result.get("image") or result.get("url") or result.get("thumbnail")
+        fallback_url = result.get("thumbnail") if result.get("thumbnail") != image_url else None
         if image_url:
             items.append((str(image_url), {
+                "fallback_url": fallback_url,
+                "width": int(result.get("width") or 0),
+                "height": int(result.get("height") or 0),
                 "source": "DuckDuckGo",
                 "source_page_url": str(result.get("url") or image_url),
                 "title": str(result.get("title") or ""),
@@ -238,7 +256,7 @@ def _pexels(query: str) -> list[dict[str, Any]]:
     items = []
     for result in response.json().get("photos", []):
         src = result.get("src") or {}
-        image_url = src.get("large2x") or src.get("large") or src.get("original")
+        image_url = src.get("original") or src.get("large2x") or src.get("large")
         if image_url:
             items.append((str(image_url), {
                 "source": "Pexels",
@@ -262,7 +280,7 @@ def _unsplash(query: str) -> list[dict[str, Any]]:
     items = []
     for result in response.json().get("results", []):
         urls = result.get("urls") or {}
-        image_url = urls.get("regular") or urls.get("full") or urls.get("raw")
+        image_url = urls.get("raw") or urls.get("full") or urls.get("regular")
         links = result.get("links") or {}
         if image_url:
             items.append((str(image_url), {
