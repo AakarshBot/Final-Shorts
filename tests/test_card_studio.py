@@ -15,7 +15,7 @@ def _image_bytes(color=(52, 84, 118), size=(900, 1600)):
 
 
 def _renderable_card_data(card_type, language="english"):
-    data = _renderable_card_data(card_type, language=language)
+    data = card_studio.card_data_for_type(card_type, language=language)
     if card_type == "Stat Highlight":
         data.update({
             "headline": "Career Test wicket record",
