@@ -124,7 +124,6 @@ def test_indic_text_subject_cutout_multiline_spacing_no_overlap():
         font_size=80,
         font_name="Noto Sans Devanagari",
         style="Crisp Outline",
-        polygon_flow=False,
     )
     assert data_hi["layouts"], "Expected at least one valid layout"
     layout_hi = data_hi["layouts"][0]
@@ -145,7 +144,6 @@ def test_indic_text_subject_cutout_multiline_spacing_no_overlap():
         font_size=80,
         font_name="Noto Sans Telugu",
         style="Crisp Outline",
-        polygon_flow=False,
     )
     assert data_te["layouts"], "Expected at least one valid layout"
     layout_te = data_te["layouts"][0]
