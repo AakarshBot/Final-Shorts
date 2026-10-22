@@ -6934,6 +6934,18 @@ def render_live_top5():
                 st.error(result["error"])
             assets = list(result.get("assets") or [])
             result_key = "real"
+        elif option == "Option 6 · Upload Local Image":
+            st.caption("Upload local images for this slide. They use the same crop, preview and attachment controls.")
+            uploaded_files = st.file_uploader(
+                "Choose local images",
+                type=["jpg", "jpeg", "png", "webp"],
+                accept_multiple_files=True,
+                key=f"live-top5-local-upload-{active_slide}",
+            )
+            assets = _local_image_assets(uploaded_files)
+            if uploaded_files and not assets:
+                st.error("None of the selected files could be opened as images.")
+            result_key = "local-upload"
         elif option == "Option 5 · Card Studio":
             _render_card_studio(
                 live=True,
