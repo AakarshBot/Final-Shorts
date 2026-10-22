@@ -26,8 +26,9 @@ PROFILE_PAGES = 2
 MANUAL_LOOKBACK_YEARS = 5
 PROFILE_IMAGES = 5
 IMAGES_PER_PAGE = 6
-MIN_SIDE = 500
-MAX_IMAGE_BYTES = 8_000_000
+MIN_SIDE = 720
+MIN_IMAGE_PIXELS = 800_000
+MAX_IMAGE_BYTES = 40_000_000
 SEARCH_RESULTS = 15
 SEARCH_TIMEOUT = 8
 PAGE_TIMEOUT_MS = 10_000
@@ -779,9 +780,10 @@ def _image_bytes_ok(data):
     try:
         with Image.open(io.BytesIO(data)) as image:
             image.load()
+            width, height = image.size
             return (
-                min(image.size) >= MIN_SIDE
-                and image.size[0] * image.size[1] >= 300_000
+                min(width, height) >= MIN_SIDE
+                and width * height >= MIN_IMAGE_PIXELS
             )
     except (UnidentifiedImageError, OSError, ValueError):
         return False
@@ -1158,7 +1160,9 @@ async def _browser_page(context, request):
                 "bytes": data_bytes,
                 "hash": digest,
                 "source_page_url": base_url,
-                "source_image_url": candidate["url"],
+                "source_image_url": response.url or candidate["url"],
+                "width": width,
+                "height": height,
                 "publisher": _clean(
                     meta.get("og:site_name")
                     or request.get("publisher")
@@ -1961,7 +1965,14 @@ def manual_crawl_visuals(query):
             asset["source_page_url"] = page_url or image_url
             asset["published_at"] = published_at.isoformat() if published_at else str(asset.get("published_at") or "")
             asset["manual_image_search"] = True
-            asset["score"] = max(float(asset.get("score") or 0), 38.0 + 45.0 * coverage)
+            width = int(asset.get("width") or 0)
+            height = int(asset.get("height") or 0)
+            pixels = width * height
+            resolution_bonus = 16.0 if pixels >= 2_000_000 else 9.0 if pixels >= 1_000_000 else 0.0
+            asset["score"] = max(
+                float(asset.get("score") or 0),
+                38.0 + 45.0 * coverage + resolution_bonus,
+            )
             asset["action_score"] = max(
                 int(asset.get("action_score") or 0),
                 sum(1 for word in ACTION_TERMS if word in f"{title} {search_query}".casefold()),
