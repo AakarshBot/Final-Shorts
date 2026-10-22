@@ -45,10 +45,9 @@ if not st.get_option("global.appTest"):
   <svg viewBox="0 0 1080 1920" aria-label="Manual Subject Cutout polygon editor">
     <image id="background" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
     <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
-    <rect id="text-box" x="0" y="0" width="0" height="0" fill="none" stroke="#f5b942" stroke-width="5" stroke-dasharray="14 10" pointer-events="none" vector-effect="non-scaling-stroke"></rect>
     <g id="handles"></g>
   </svg>
-  <div class="help">The dashed rectangle is the actual text box. Text uses its outer left/right/top/bottom edges; the polygon's inner shape does not affect wrapping. Drag outer points to resize it, or drag the polygon to move it.</div>
+  <div class="help">The polygon itself is the text boundary. Lines wrap where its real edges leave enough width for the selected font size. Drag any corner or edge point to shape the text area.</div>
 </div>
 """,
         css="""
@@ -57,7 +56,6 @@ if not st.get_option("global.appTest"):
 .text-cutout-editor .handle{cursor:move}
 .text-cutout-editor #polygon{cursor:grab}
 .text-cutout-editor #polygon:active{cursor:grabbing}
-.text-cutout-editor #text-box{pointer-events:none;stroke:#f5b942;stroke-dasharray:14 10;vector-effect:non-scaling-stroke}
 .text-cutout-editor .help{margin:6px 0;color:#52574f;font-size:12px;line-height:1.2;opacity:.78}
 """,
         js="""
@@ -66,9 +64,8 @@ export default function(component) {
     const svg = parentElement.querySelector("svg");
     const image = parentElement.querySelector("#background");
     const polygon = parentElement.querySelector("#polygon");
-    const textBox = parentElement.querySelector("#text-box");
     const handles = parentElement.querySelector("#handles");
-    if (!svg || !image || !polygon || !textBox || !handles) return;
+    if (!svg || !image || !polygon || !handles) return;
 
     image.setAttribute("href", "data:image/jpeg;base64," + data.image);
 
@@ -100,16 +97,6 @@ export default function(component) {
             },
             render() {
                 polygon.setAttribute("points", this.points.map((point) => point.join(",")).join(" "));
-                if (this.points.length) {
-                    const xs = this.points.map((point) => point[0]);
-                    const ys = this.points.map((point) => point[1]);
-                    const left = Math.min(...xs);
-                    const top = Math.min(...ys);
-                    textBox.setAttribute("x", left);
-                    textBox.setAttribute("y", top);
-                    textBox.setAttribute("width", Math.max(...xs) - left);
-                    textBox.setAttribute("height", Math.max(...ys) - top);
-                }
                 while (this.handles.length < this.points.length) {
                     const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                     handle.setAttribute("class", "handle");
@@ -2577,16 +2564,16 @@ def _render_manual_subject_cutout(
         height=108,
         placeholder="INDIA DOMINATE\nTHE FINAL MATCH\nTODAY",
         help=(
-            "Enter one line per row to control every break. Keep every headline word once and in order. "
-            "Leave this empty for automatic balanced wrapping based on the measured font size and box width."
+            "Enter one line per row to set explicit breaks. Keep every headline word once and in order. "
+            "Leave this empty to wrap automatically against the full polygon shape at your selected font size."
         ),
     )
     state["manual_lines"] = manual_lines
 
     st.caption(
-        "The outer polygon bounds are the exact text box. Every line uses the same left edge; "
-        "automatic wrapping measures the selected font and never shrinks it. Behind Subject may expand "
-        "English word spacing to fill each line, without stretching letters. Render Now shows the actual frame."
+        "The polygon edges are the exact text boundary—no inset box or padding. Automatic wrapping measures "
+        "each line against the polygon shape. Your selected font size and normal word spacing stay unchanged; "
+        "if the words cannot fit, the renderer reports it instead of resizing or stretching them."
     )
 
     if st.button("Render Now", type="primary", width="stretch", key=f"{state_id}-cutout-render", help="Generate and render card frame"):
@@ -2747,6 +2734,29 @@ def _render_card_studio(
         card_data_for_type,
         render_card,
     )
+
+    def _editable_rows(value):
+        if value is None:
+            return []
+        if hasattr(value, "to_dict"):
+            try:
+                value = value.to_dict("records")
+            except TypeError:
+                return []
+        if isinstance(value, dict):
+            if value and all(isinstance(column, (list, tuple)) for column in value.values()):
+                row_count = max((len(column) for column in value.values()), default=0)
+                return [
+                    {
+                        key: column[index] if index < len(column) else ""
+                        for key, column in value.items()
+                    }
+                    for index in range(row_count)
+                ]
+            return [dict(value)] if value else []
+        if isinstance(value, (list, tuple)):
+            return [dict(row) for row in value if isinstance(row, dict)]
+        return []
 
     card_types = LIVE_CARD_TYPES if live else TEST_CARD_TYPES
     state_id = (
@@ -3000,22 +3010,55 @@ def _render_card_studio(
         and pending_translation.get("language") == card_language
     ):
         translated_data = pending_translation.get("data") or {}
+        simple_fields = {
+            "Stat Highlight": ("eyebrow", "headline", "unit"),
+            "Quote / Reaction": ("eyebrow", "quote", "attribution"),
+            "Head-to-Head": ("eyebrow", "headline"),
+            "Key Fact / Milestone": ("eyebrow", "label"),
+        }.get(card_type, ())
+        for field in simple_fields:
+            st.session_state[value_key(field)] = translated_data.get(field, "")
         if card_type == "Stat Highlight":
-            for field in ("eyebrow", "headline", "unit"):
-                st.session_state[value_key(field)] = translated_data.get(field, "")
-            for index, metric in enumerate(translated_data.get("metrics") or [], 1):
-                st.session_state[value_key(f"metric-{index}-label")] = metric.get("label", "")
+            st.session_state[value_key("value")] = translated_data.get("value", "")
+            st.session_state[value_key("supporting-fields")] = list(
+                translated_data.get("supporting_fields") or translated_data.get("metrics") or []
+            )
+            st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
         elif card_type == "Quote / Reaction":
-            for field in ("eyebrow", "quote", "attribution", "context"):
-                st.session_state[value_key(field)] = translated_data.get(field, "")
+            st.session_state[value_key("supporting-fields")] = list(
+                translated_data.get("supporting_fields") or []
+            )
+            st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
+            if translated_data.get("context"):
+                st.session_state[value_key("supporting-fields")].append(
+                    {"label": "Context", "value": translated_data["context"]}
+                )
         elif card_type == "Head-to-Head":
-            for field in ("eyebrow", "headline"):
-                st.session_state[value_key(field)] = translated_data.get(field, "")
-            for index, metric in enumerate(translated_data.get("metrics") or [], 1):
-                st.session_state[value_key(f"metric-{index}-label")] = metric
+            st.session_state[value_key("left-name")] = (translated_data.get("left") or {}).get("name", "")
+            st.session_state[value_key("right-name")] = (translated_data.get("right") or {}).get("name", "")
+            metrics = translated_data.get("metrics") or []
+            left_values = (translated_data.get("left") or {}).get("values") or {}
+            right_values = (translated_data.get("right") or {}).get("values") or {}
+            translated_rows = [
+                {
+                    "label": item.get("label", "") if isinstance(item, dict) else str(item or ""),
+                    "left_value": item.get("left_value", "") if isinstance(item, dict) else left_values.get(item, ""),
+                    "right_value": item.get("right_value", "") if isinstance(item, dict) else right_values.get(item, ""),
+                }
+                for item in metrics
+            ]
+            st.session_state[value_key("comparison-metrics")] = translated_rows
+            st.session_state.pop(f"{value_key('comparison-metrics')}-editor", None)
         elif card_type == "Key Fact / Milestone":
-            for field in ("eyebrow", "label", "context"):
-                st.session_state[value_key(field)] = translated_data.get(field, "")
+            st.session_state[value_key("value")] = translated_data.get("value", "")
+            st.session_state[value_key("supporting-fields")] = list(
+                translated_data.get("supporting_fields") or []
+            )
+            st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
+            if translated_data.get("context"):
+                st.session_state[value_key("supporting-fields")].append(
+                    {"label": "Context", "value": translated_data["context"]}
+                )
         del st.session_state[pending_translation_key]
 
     defaults = card_data_for_type(card_type, language=card_language)
@@ -3370,6 +3413,8 @@ def _render_card_studio(
     contrast_key = value_key("contrast-treatment")
     st.session_state.setdefault(layout_key, defaults.get("layout_position", CARD_LAYOUT_POSITIONS[0]))
     st.session_state.setdefault(contrast_key, defaults.get("contrast_treatment", CARD_CONTRAST_TREATMENTS[0]))
+    if st.session_state.get(contrast_key) == "Soft gradient":
+        st.session_state[contrast_key] = "Adaptive gradient"
     comp_col_position, comp_col_contrast = st.columns(2, gap="medium")
     with comp_col_position:
         layout_position = st.selectbox(
@@ -3383,7 +3428,7 @@ def _render_card_studio(
             "Contrast treatment",
             list(CARD_CONTRAST_TREATMENTS),
             key=contrast_key,
-            help="Soft gradient preserves the photo; Deep gradient darkens the text area; Editorial panel adds a contained contrast panel.",
+            help="Adaptive gradient reads local photo brightness; Deep gradient applies a stronger dark scrim; Editorial panel creates a measured type panel; Edge-lit wash adds a restrained accent edge.",
         )
     st.caption("These controls apply to all four editorial card types in Test and Live. Text Subject Cutout is unchanged.")
     language_label = {"english": "English", "hindi": "Hindi (Devanagari)", "telugu": "Telugu"}.get(card_language, "English")
@@ -3433,33 +3478,42 @@ def _render_card_studio(
         }
 
     def _set_generated_card_fields(generated):
-        if card_type == "Stat Highlight":
-            for field in ("eyebrow", "headline", "value", "unit"):
+        for field in ("eyebrow", "headline", "value", "unit", "quote", "attribution", "label"):
+            if field in generated:
                 st.session_state[value_key(field)] = str(generated.get(field) or "")
-            for index, metric in enumerate(generated.get("metrics") or [], 1):
-                st.session_state[value_key(f"metric-{index}-label")] = str(metric.get("label") or "")
-                st.session_state[value_key(f"metric-{index}-value")] = str(metric.get("value") or "")
-        elif card_type == "Quote / Reaction":
-            for field in ("eyebrow", "quote", "attribution", "context"):
-                st.session_state[value_key(field)] = str(generated.get(field) or "")
-        elif card_type == "Head-to-Head":
-            for field in ("eyebrow", "headline"):
-                st.session_state[value_key(field)] = str(generated.get(field) or "")
-            st.session_state[value_key("left-name")] = str((generated.get("left") or {}).get("name") or "")
-            st.session_state[value_key("right-name")] = str((generated.get("right") or {}).get("name") or "")
+
+        if card_type in {"Stat Highlight", "Quote / Reaction", "Key Fact / Milestone"}:
+            support_fields = list(generated.get("supporting_fields") or [])
+            if not support_fields and generated.get("metrics"):
+                support_fields = list(generated.get("metrics") or [])
+            if not support_fields and generated.get("context"):
+                support_fields = [{"label": "Context", "value": generated.get("context")}]
+            st.session_state[value_key("supporting-fields")] = support_fields
+            st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
+
+        if card_type == "Head-to-Head":
+            st.session_state[value_key("left-name")] = str((generated.get("left") or {}).get("name") or generated.get("left_name") or "")
+            st.session_state[value_key("right-name")] = str((generated.get("right") or {}).get("name") or generated.get("right_name") or "")
             left_values = (generated.get("left") or {}).get("values") or {}
             right_values = (generated.get("right") or {}).get("values") or {}
-            for index, metric in enumerate(generated.get("metrics") or [], 1):
-                st.session_state[value_key(f"metric-{index}-label")] = str(metric or "")
-                st.session_state[value_key(f"metric-{index}-left")] = str(left_values.get(metric) or "")
-                st.session_state[value_key(f"metric-{index}-right")] = str(right_values.get(metric) or "")
-        else:
-            for field in ("eyebrow", "value", "label", "context"):
-                st.session_state[value_key(field)] = str(generated.get(field) or "")
+            metrics = []
+            for metric in generated.get("metrics") or []:
+                if isinstance(metric, dict):
+                    label = str(metric.get("label") or "")
+                    left_value = str(metric.get("left_value") or left_values.get(label) or "")
+                    right_value = str(metric.get("right_value") or right_values.get(label) or "")
+                else:
+                    label = str(metric or "")
+                    left_value = str(left_values.get(label) or "")
+                    right_value = str(right_values.get(label) or "")
+                if label:
+                    metrics.append({"label": label, "left_value": left_value, "right_value": right_value})
+            st.session_state[value_key("comparison-metrics")] = metrics
+            st.session_state.pop(f"{value_key('comparison-metrics')}-editor", None)
 
     auto_col, prompt_col = st.columns([1, 1], gap="small")
     with auto_col:
-        if st.button("Auto-fill this card from story", type="secondary", width="stretch", key=f"{state_id}-autofill-{card_type}"):
+        if st.button("Fill fields from story", type="secondary", width="stretch", key=f"{state_id}-autofill-{card_type}"):
             try:
                 from script_writer import generate_card_copy
                 story_context = _card_story_context()
@@ -3478,24 +3532,24 @@ def _render_card_studio(
                 st.error(f"Card auto-fill failed: {exc}")
     with prompt_col:
         manual_prompt = st.text_area(
-            "Manual prompt for this card (optional)",
+            "Describe this card (optional)",
             height=84,
             key=value_key("manual-prompt"),
-            placeholder="e.g. Focus on the confirmed record and explain why it matters.",
+            placeholder="e.g. Anderson career Test wickets, appearances and best figures. Use only verified stats.",
         )
-        if st.button("Generate card from prompt", type="secondary", width="stretch", key=f"{state_id}-prompt-generate-{card_type}"):
+        if st.button("Generate fields from prompt", type="secondary", width="stretch", key=f"{state_id}-prompt-generate-{card_type}"):
             if not manual_prompt.strip():
                 st.warning("Enter a prompt describing how you want this card written.")
             else:
                 try:
                     from script_writer import generate_card_copy
                     story_context = _card_story_context()
-                    if not (
+                    if not manual_prompt.strip() and not (
                         story_context.get("title")
                         or story_context.get("description")
                         or story_context.get("script")
                     ):
-                        raise ValueError("Select a story or generate its Scriptwriter result before using a card prompt.")
+                        raise ValueError("Enter a card prompt or select a story first.")
                     with st.spinner("Generating prompted card copy…"):
                         generated = generate_card_copy(
                             card_type, story_context,
@@ -3507,174 +3561,187 @@ def _render_card_studio(
                 except Exception as exc:
                     st.error(f"Prompted card generation failed: {exc}")
 
-    if card_type == "Stat Highlight":
-        st.markdown(
-            '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
-            '<strong style="color: #0F172A; font-size: 0.9rem;">FEATURE STAT · PERFORMANCE STORY</strong><br>'
-            '<span style="font-size: 0.86rem; color: #475569;">Photo-led editorial layout with an oversized record number, a concise headline and supporting figures in a clean ruled list. Text placement adapts around the detected subject when available.</span>'
-            '</div>',
-            unsafe_allow_html=True,
+    eyebrow_key = value_key("eyebrow")
+    eyebrow_default = str(defaults.get("eyebrow") or "")
+    st.session_state.setdefault(eyebrow_key, eyebrow_default)
+    with st.expander("Optional category label", expanded=False):
+        eyebrow_val = st.text_input(
+            "Category label (optional)",
+            key=eyebrow_key,
+            placeholder="e.g. CAREER RECORD",
         )
-        eyebrow_key = value_key("eyebrow")
+
+    support_key = value_key("supporting-fields")
+    support_editor_key = f"{support_key}-editor"
+    comparison_key = value_key("comparison-metrics")
+    comparison_editor_key = f"{comparison_key}-editor"
+    st.session_state.setdefault(support_key, list(defaults.get("supporting_fields") or []))
+    st.session_state.setdefault(comparison_key, [])
+
+    if card_type == "Stat Highlight":
+        st.markdown("#### Main statistic")
         headline_key = value_key("headline")
-        hero_value_key = value_key("value")
+        value_key_main = value_key("value")
         unit_key = value_key("unit")
-        for key, default in (
-            (eyebrow_key, defaults["eyebrow"]),
-            (headline_key, defaults["headline"]),
-            (hero_value_key, defaults["value"]),
-            (unit_key, defaults["unit"]),
-        ):
-            st.session_state.setdefault(key, default)
-        col_top = st.columns(2)
-        with col_top[0]:
-            eyebrow_val = st.text_input("Eyebrow", key=eyebrow_key)
-        with col_top[1]:
-            headline_val = st.text_input("Headline", key=headline_key)
-        col_hero = st.columns(2)
-        with col_hero[0]:
-            hero_val = st.text_input("Hero value", key=hero_value_key)
-        with col_hero[1]:
-            unit_val = st.text_input("Unit", key=unit_key)
+        st.session_state.setdefault(headline_key, str(defaults.get("headline") or ""))
+        st.session_state.setdefault(value_key_main, str(defaults.get("value") or ""))
+        st.session_state.setdefault(unit_key, str(defaults.get("unit") or ""))
+        st.text_input(
+            "What the number means (optional)",
+            key=headline_key,
+            placeholder="e.g. Most Test wickets by a fast bowler",
+        )
+        st.text_input(
+            "Hero value",
+            key=value_key_main,
+            placeholder="e.g. 704",
+            help="Enter a verified number or have the card filled from the story/prompt.",
+        )
+        with st.expander("Optional unit and supporting statistics", expanded=any(
+            str(row.get("label") or "").strip() or str(row.get("value") or "").strip()
+            for row in (st.session_state.get(support_key) or [])
+            if isinstance(row, dict)
+        )):
+            st.text_input("Unit (optional)", key=unit_key, placeholder="e.g. TEST WICKETS")
+            st.caption("Add only the supporting facts this story actually needs. Use the row controls to add or remove fields.")
+            support_rows = st.data_editor(
+                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
+                key=support_editor_key,
+                num_rows="dynamic",
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "label": st.column_config.TextColumn("Statistic / label", width="medium"),
+                    "value": st.column_config.TextColumn("Verified value", width="small"),
+                },
+            )
+        support_records = _editable_rows(support_rows if "support_rows" in locals() else st.session_state.get(support_key))
         data = {
             "eyebrow": eyebrow_val,
-            "headline": headline_val,
-            "value": hero_val,
-            "unit": unit_val,
-            "metrics": [],
+            "headline": st.session_state.get(headline_key, ""),
+            "value": st.session_state.get(value_key_main, ""),
+            "unit": st.session_state.get(unit_key, ""),
+            "supporting_fields": [
+                row for row in support_records
+                if str(row.get("label") or "").strip() and str(row.get("value") or "").strip()
+            ],
         }
-        st.caption("Scorecard Shelf · Supporting Metrics (Up to 3)")
-        for index, metric in enumerate(defaults["metrics"], 1):
-            label_key = value_key(f"metric-{index}-label")
-            metric_value_key = value_key(f"metric-{index}-value")
-            st.session_state.setdefault(label_key, metric["label"])
-            st.session_state.setdefault(metric_value_key, metric["value"])
-            cols = st.columns(2)
-            with cols[0]:
-                label = st.text_input(f"Metric {index} label", key=label_key)
-            with cols[1]:
-                value = st.text_input(f"Metric {index} value", key=metric_value_key)
-            data["metrics"].append({"label": label, "value": value})
+
     elif card_type == "Quote / Reaction":
-        st.markdown(
-            '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
-            '<strong style="color: #0F172A; font-size: 0.9rem;">THE PULL QUOTE · REACTION OR INTERVIEW</strong><br>'
-            '<span style="font-size: 0.86rem; color: #475569;">An editorial pull quote with an oversized opening mark, strong type hierarchy and a clean attribution lockup. Choose the text zone and contrast treatment to suit each photo.</span>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        eyebrow_key = value_key("eyebrow")
+        st.markdown("#### Main quote")
         quote_key = value_key("quote")
         attribution_key = value_key("attribution")
-        context_key = value_key("context")
-        for key, default in (
-            (eyebrow_key, defaults["eyebrow"]),
-            (quote_key, defaults["quote"]),
-            (attribution_key, defaults["attribution"]),
-            (context_key, defaults["context"]),
-        ):
-            st.session_state.setdefault(key, default)
-        eyebrow_val = st.text_input("Eyebrow", key=eyebrow_key)
-        quote_val = st.text_area("Quote", height=120, key=quote_key)
-        col_attr = st.columns(2)
-        with col_attr[0]:
-            attr_val = st.text_input("Attribution", key=attribution_key)
-        with col_attr[1]:
-            context_val = st.text_input("Context", key=context_key)
+        st.session_state.setdefault(quote_key, str(defaults.get("quote") or ""))
+        st.session_state.setdefault(attribution_key, str(defaults.get("attribution") or ""))
+        quote_val = st.text_area(
+            "Quote or clearly labelled editorial summary",
+            height=150,
+            key=quote_key,
+            placeholder="The exact words from the source, or an editorial summary when no verbatim quote is available.",
+        )
+        with st.expander("Optional attribution and supporting details", expanded=False):
+            st.text_input(
+                "Attribution (optional)",
+                key=attribution_key,
+                placeholder="Name and verified role",
+            )
+            st.caption("Add only context that improves the quote. Exact quotations must be source-backed.")
+            support_rows = st.data_editor(
+                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
+                key=support_editor_key,
+                num_rows="dynamic",
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "label": st.column_config.TextColumn("Detail", width="medium"),
+                    "value": st.column_config.TextColumn("Supporting text", width="large"),
+                },
+            )
+        support_records = _editable_rows(support_rows if "support_rows" in locals() else st.session_state.get(support_key))
         data = {
             "eyebrow": eyebrow_val,
             "quote": quote_val,
-            "attribution": attr_val,
-            "context": context_val,
+            "attribution": st.session_state.get(attribution_key, ""),
+            "supporting_fields": [
+                row for row in support_records
+                if str(row.get("label") or "").strip() and str(row.get("value") or "").strip()
+            ],
         }
+
     elif card_type == "Head-to-Head":
-        st.markdown(
-            '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
-            '<strong style="color: #0F172A; font-size: 0.9rem;">THE COMPARISON · HEAD TO HEAD</strong><br>'
-            '<span style="font-size: 0.86rem; color: #475569;">A clean comparison layout with matched names and values. Use one image or a two-image split; the comparison table keeps its hierarchy and stays inside the Shorts-safe area.</span>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        eyebrow_key = value_key("eyebrow")
+        st.markdown("#### Participants and comparison")
         headline_key = value_key("headline")
         left_name_key = value_key("left-name")
         right_name_key = value_key("right-name")
-        for key, default in (
-            (eyebrow_key, defaults["eyebrow"]),
-            (headline_key, defaults["headline"]),
-            (left_name_key, defaults["left"]["name"]),
-            (right_name_key, defaults["right"]["name"]),
-        ):
-            st.session_state.setdefault(key, default)
-        col_h2h_top = st.columns(2)
-        with col_h2h_top[0]:
-            eyebrow_val = st.text_input("Eyebrow", key=eyebrow_key)
-        with col_h2h_top[1]:
-            headline_val = st.text_input("Headline", key=headline_key)
-        col_names = st.columns(2)
+        st.session_state.setdefault(headline_key, str(defaults.get("headline") or ""))
+        st.session_state.setdefault(left_name_key, str((defaults.get("left") or {}).get("name") or ""))
+        st.session_state.setdefault(right_name_key, str((defaults.get("right") or {}).get("name") or ""))
+        st.text_input("Comparison headline (optional)", key=headline_key, placeholder="e.g. The all-time Test wicket record")
+        col_names = st.columns(2, gap="small")
         with col_names[0]:
-            left_name_val = st.text_input("Left name", key=left_name_key)
+            left_name_val = st.text_input("First player / side", key=left_name_key, placeholder="e.g. James Anderson")
         with col_names[1]:
-            right_name_val = st.text_input("Right name", key=right_name_key)
+            right_name_val = st.text_input("Second player / side", key=right_name_key, placeholder="e.g. Glenn McGrath")
+        st.caption("Comparison fields are dynamic. Add one or more comparable, source-backed rows; rows are not limited to three.")
+        comparison_rows = st.data_editor(
+            (_editable_rows(st.session_state.get(comparison_key)) or {"label": [], "left_value": [], "right_value": []}),
+            key=comparison_editor_key,
+            num_rows="dynamic",
+            hide_index=True,
+            width="stretch",
+            column_config={
+                "label": st.column_config.TextColumn("Metric", width="medium", required=True),
+                "left_value": st.column_config.TextColumn(str(left_name_val or "First side"), width="small"),
+                "right_value": st.column_config.TextColumn(str(right_name_val or "Second side"), width="small"),
+            },
+        )
+        comparison_records = _editable_rows(comparison_rows)
         data = {
             "eyebrow": eyebrow_val,
-            "headline": headline_val,
+            "headline": st.session_state.get(headline_key, ""),
             "left": {"name": left_name_val, "values": {}},
             "right": {"name": right_name_val, "values": {}},
-            "metrics": [],
+            "metrics": [
+                row for row in comparison_records
+                if str(row.get("label") or "").strip()
+            ],
             "image_mode": image_mode,
             "split_direction": split_direction,
         }
-        st.caption("Comparison Scorecard · Metric Duel Rows (Up to 3)")
-        for index, metric in enumerate(defaults["metrics"], 1):
-            label_key = value_key(f"metric-{index}-label")
-            left_key = value_key(f"metric-{index}-left")
-            right_key = value_key(f"metric-{index}-right")
-            st.session_state.setdefault(label_key, metric)
-            st.session_state.setdefault(left_key, defaults["left"]["values"].get(metric, ""))
-            st.session_state.setdefault(right_key, defaults["right"]["values"].get(metric, ""))
-            cols = st.columns(3)
-            with cols[0]:
-                label = st.text_input(f"Metric {index}", key=label_key)
-            with cols[1]:
-                left_value = st.text_input(f"Left {index}", key=left_key)
-            with cols[2]:
-                right_value = st.text_input(f"Right {index}", key=right_key)
-            if label.strip():
-                data["metrics"].append(label.strip())
-                data["left"]["values"][label.strip()] = left_value.strip()
-                data["right"]["values"][label.strip()] = right_value.strip()
+
     else:
-        st.markdown(
-            '<div class="archetype-badge" style="background: rgba(15, 23, 42, 0.04); border-left: 3px solid #F4CA3D; padding: 10px 14px; border-radius: 4px; margin: 12px 0 16px 0;">'
-            '<strong style="color: #0F172A; font-size: 0.9rem;">THE RECORD · MILESTONE OR KEY FACT</strong><br>'
-            '<span style="font-size: 0.86rem; color: #475569;">A record-led editorial layout with a large value, a clear achievement label and concise context. Its text position adapts to the subject and image composition when a subject mask is available.</span>'
-            '</div>',
-            unsafe_allow_html=True,
-        )
-        eyebrow_key = value_key("eyebrow")
+        st.markdown("#### Main fact")
         hero_value_key = value_key("value")
         label_key = value_key("label")
-        context_key = value_key("context")
-        for key, default in (
-            (eyebrow_key, defaults["eyebrow"]),
-            (hero_value_key, defaults["value"]),
-            (label_key, defaults["label"]),
-            (context_key, defaults["context"]),
-        ):
-            st.session_state.setdefault(key, default)
-        col_m_top = st.columns(2)
-        with col_m_top[0]:
-            eyebrow_val = st.text_input("Eyebrow", key=eyebrow_key)
-        with col_m_top[1]:
-            hero_val = st.text_input("Value", key=hero_value_key)
-        label_val = st.text_input("Label", key=label_key)
-        context_val = st.text_area("Context", height=90, key=context_key)
+        st.session_state.setdefault(hero_value_key, str(defaults.get("value") or ""))
+        st.session_state.setdefault(label_key, str(defaults.get("label") or ""))
+        col_fact = st.columns([0.7, 1.3], gap="small")
+        with col_fact[0]:
+            hero_val = st.text_input("Hero value", key=hero_value_key, placeholder="e.g. 704")
+        with col_fact[1]:
+            label_val = st.text_input("What it represents", key=label_key, placeholder="e.g. Test wickets")
+        with st.expander("Optional supporting detail", expanded=False):
+            st.caption("Only add extra explanation if it helps the story.")
+            support_rows = st.data_editor(
+                _editable_rows(st.session_state.get(support_key)),
+                key=support_editor_key,
+                num_rows="dynamic",
+                hide_index=True,
+                width="stretch",
+                column_config={
+                    "label": st.column_config.TextColumn("Detail", width="medium"),
+                    "value": st.column_config.TextColumn("Supporting text", width="large"),
+                },
+            )
+        support_records = _editable_rows(support_rows if "support_rows" in locals() else st.session_state.get(support_key))
         data = {
             "eyebrow": eyebrow_val,
             "value": hero_val,
             "label": label_val,
-            "context": context_val,
+            "supporting_fields": [
+                row for row in support_records
+                if str(row.get("label") or "").strip() and str(row.get("value") or "").strip()
+            ],
         }
 
     data["layout_position"] = layout_position
@@ -5468,7 +5535,9 @@ def _render_two_pane_visual_workspace(
                             live=True,
                         )
                 elif fetcher_mode.startswith("Option 4"):
-                    providers_label = ["Pollinations.ai (Flux)"]
+                    providers_label = ["AI Horde (free community queue)"]
+                    if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+                        providers_label.append("Pollinations.ai")
                     if os.getenv("HF_TOKEN"):
                         providers_label.append("Hugging Face")
                     if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
@@ -5504,7 +5573,9 @@ def _render_two_pane_visual_workspace(
                     elif result:
                         assets = list(result.get("assets") or [])
                         if not assets:
-                            st.warning("No configured AI provider returned an image.")
+                            st.warning(result.get("message") or "No AI image provider returned a usable image.")
+                            for provider_name, provider_error in (result.get("errors") or {}).items():
+                                st.caption(f"{provider_name}: {provider_error}")
                             last_query = query if run else str(result.get("query") or "").strip()
                             if last_query:
                                 if st.button("Search Real Images for this query instead →", type="primary", key="live-ai-fallback-to-real-search"):
@@ -6887,9 +6958,15 @@ def render_live_top5():
                     else:
                         st.warning("Enter a prompt first.")
                 result = st.session_state.live_top5_ai_image_results.get(active_slide) or {}
+                assets = list(result.get("assets") or [])
                 if result.get("error"):
                     st.error(result["error"])
-                assets = list(result.get("assets") or [])
+                elif result.get("message") and not assets:
+                    st.warning(result["message"])
+                    for provider_name, provider_error in (result.get("errors") or {}).items():
+                        st.caption(f"{provider_name}: {provider_error}")
+                elif result.get("message"):
+                    st.caption(result["message"])
                 result_key = "ai"
 
             if assets:
@@ -9402,7 +9479,9 @@ def _render_manual_ai_images():
     from visual_generator import generate_images
 
     st.subheader("AI Generation")
-    providers_label = ["Pollinations.ai (Flux)"]
+    providers_label = ["AI Horde (free community queue)"]
+    if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+        providers_label.append("Pollinations.ai")
     if os.getenv("HF_TOKEN"):
         providers_label.append("Hugging Face")
     if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
@@ -9452,7 +9531,11 @@ def _render_manual_ai_images():
         )
     )
     if not assets:
-        st.warning("No configured AI provider returned an image.")
+        st.warning(result.get("message") or "No AI image provider returned a usable image.")
+        if result.get("errors"):
+            with st.expander("AI provider diagnostics"):
+                for provider_name, provider_error in result["errors"].items():
+                    st.caption(f"{provider_name}: {provider_error}")
         last_query = query if generate else str(result.get("query") or "").strip()
         if last_query:
             if st.button("Search Real Images for this query instead →", type="primary", key="ai-fallback-to-real-search"):
@@ -11499,7 +11582,9 @@ elif st.session_state.app_mode == "test":
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
             elif visual_option == "Option 4 · AI Generation":
-                providers_label = ["Pollinations.ai (Flux)"]
+                providers_label = ["AI Horde (free community queue)"]
+                if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+                    providers_label.append("Pollinations.ai")
                 if os.getenv("HF_TOKEN"):
                     providers_label.append("Hugging Face")
                 if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
@@ -11520,11 +11605,33 @@ elif st.session_state.app_mode == "test":
                             try:
                                 result = generate_images(prompt)
                                 st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
+                                st.session_state.test_top5_visual_playground_ai_result = result
                                 if not st.session_state.test_top5_visual_playground_results:
-                                    st.warning("No configured AI provider returned an image.")
+                                    st.warning(result.get("message") or "No AI image provider returned a usable image.")
+                                    for provider_name, provider_error in (result.get("errors") or {}).items():
+                                        st.caption(f"{provider_name}: {provider_error}")
                             except Exception as exc:
                                 st.session_state.test_top5_visual_playground_results = []
+                                st.session_state.test_top5_visual_playground_ai_result = {
+                                    "query": prompt,
+                                    "assets": [],
+                                    "error": f"{type(exc).__name__}: {exc}",
+                                    "message": f"AI image generation failed before a provider returned: {type(exc).__name__}: {exc}",
+                                    "errors": {},
+                                }
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
+                ai_result = st.session_state.get("test_top5_visual_playground_ai_result") or {}
+                if (
+                    not assets
+                    and ai_result.get("query")
+                    == str(st.session_state.get("test_top5_visual_playground_ai_query") or "").strip()
+                ):
+                    if ai_result.get("error"):
+                        st.error(ai_result["error"])
+                    elif ai_result.get("message"):
+                        st.warning(ai_result["message"])
+                    for provider_name, provider_error in (ai_result.get("errors") or {}).items():
+                        st.caption(f"{provider_name}: {provider_error}")
 
             elif visual_option == "Option 5 · Card Studio":
                 _render_card_studio(
@@ -11925,7 +12032,8 @@ elif st.session_state.app_mode == "test":
                                             "source": "manual",
                                             "query": query,
                                             "assets": list(result.get("assets") or []),
-                                            "error": str(result.get("error") or ""),
+                                            "error": str(result.get("error") or (result.get("message") if not result.get("assets") else "")),
+                                            "message": str(result.get("message") or ""),
                                         }
                                     except Exception as exc:
                                         st.session_state.test_top5_visual_results[active_slide] = {
@@ -12025,6 +12133,8 @@ elif st.session_state.app_mode == "test":
                             if result.get("error"):
                                 st.error(result["error"])
                             else:
+                                if result.get("message"):
+                                    st.caption(result["message"])
                                 st.caption(f'{len(result.get("assets") or [])} AI images returned.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "ai")
 
