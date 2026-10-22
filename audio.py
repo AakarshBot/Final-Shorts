@@ -612,8 +612,8 @@ def _scene_duration_weights(texts: list[str]) -> list[float]:
     return weights
 
 
-def _split_waveform_by_text(waveform, texts: list[str]) -> list[Any]:
-    """Cut one generated take into approximate slide-preview segments without re-synthesizing."""
+def _split_waveform_by_text(waveform, texts: list[str], sample_rate: int = 24000) -> list[Any]:
+    """Split one narrative take at text-estimated boundaries, preferring nearby quiet pauses."""
     if not texts:
         return []
     if waveform.ndim == 1:
@@ -627,14 +627,45 @@ def _split_waveform_by_text(waveform, texts: list[str]) -> list[Any]:
 
     weights = _scene_duration_weights(texts)
     total_weight = sum(weights)
-    boundaries = [0]
+    proposed = []
     cumulative = 0.0
-    for index, weight in enumerate(weights[:-1], 1):
+    for weight in weights[:-1]:
         cumulative += weight
-        proposed = int(round(sample_count * cumulative / total_weight))
+        proposed.append(int(round(sample_count * cumulative / total_weight)))
+
+    # Estimate speech energy in 10 ms frames. A low-energy frame close to a
+    # sentence boundary is more likely to be a natural pause than a word interior.
+    frame_samples = max(1, int(sample_rate * 0.01))
+    frame_count = sample_count // frame_samples
+    if frame_count >= 2:
+        mono = waveform.abs().mean(dim=0)[:frame_count * frame_samples]
+        frame_rms = mono.reshape(frame_count, frame_samples).square().mean(dim=1).sqrt()
+        typical_rms = float(frame_rms.median().item())
+        quiet_threshold = max(0.001, typical_rms * 0.24)
+    else:
+        frame_rms = None
+        quiet_threshold = 0.0
+
+    boundaries = [0]
+    search_radius = max(frame_samples, int(sample_rate * 0.42))
+    for index, target in enumerate(proposed, 1):
+        lower = max(boundaries[-1] + 1, target - search_radius)
+        upper = min(sample_count - (len(texts) - index), target + search_radius)
+        selected = target
+        if frame_rms is not None and upper > lower:
+            first_frame = max(0, lower // frame_samples)
+            last_frame = min(frame_count - 1, upper // frame_samples)
+            if last_frame >= first_frame:
+                energies = frame_rms[first_frame:last_frame + 1]
+                pause_offset = int(energies.argmin().item())
+                pause_frame = first_frame + pause_offset
+                pause_sample = pause_frame * frame_samples
+                pause_energy = float(energies[pause_offset].item())
+                if pause_energy <= quiet_threshold and lower <= pause_sample <= upper:
+                    selected = pause_sample
         minimum = boundaries[-1] + 1
         maximum = sample_count - (len(texts) - index)
-        boundaries.append(max(minimum, min(maximum, proposed)))
+        boundaries.append(max(minimum, min(maximum, selected)))
     boundaries.append(sample_count)
     return [
         waveform[..., boundaries[index]:boundaries[index + 1]].contiguous()
@@ -643,7 +674,7 @@ def _split_waveform_by_text(waveform, texts: list[str]) -> list[Any]:
 
 
 def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
-    """Generate one continuous take with stable settings for the selected model family."""
+    """Generate the complete narration as one context-aware, repeatable performance."""
     import torch
 
     torch.manual_seed(seed)
@@ -653,21 +684,19 @@ def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
     if model_version == "full":
         wav = model.generate(
             text,
-            temperature=0.75,
+            temperature=0.65,
             cfg_weight=0.35,
-            exaggeration=0.35,
+            exaggeration=0.50,
             min_p=0.05,
             top_p=1.0,
             repetition_penalty=1.2,
         )
     else:
-        # Turbo has no CFG/exaggeration controls; slightly warmer sampling helps
-        # reduce flat delivery without inserting fake acting cues. Filter settings
-        # by the installed model signature so older compatible package versions
-        # still receive the temperature setting instead of failing on new kwargs.
+        # Turbo ignores CFG/exaggeration, so a cooler sampling temperature keeps
+        # pitch and cadence from changing randomly across separate scene calls.
         turbo_controls = {
-            "temperature": 0.90,
-            "top_p": 0.95,
+            "temperature": 0.62,
+            "top_p": 0.90,
             "top_k": 1000,
             "repetition_penalty": 1.15,
         }
@@ -684,7 +713,7 @@ def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
                     if key in parameters
                 }
         except (TypeError, ValueError):
-            turbo_controls = {"temperature": 0.90}
+            turbo_controls = {"temperature": 0.62}
         wav = model.generate(text, **turbo_controls)
 
     wav = wav.detach().cpu()
@@ -804,16 +833,16 @@ def generate_chatterbox_audio(
             "sha256": _file_sha256(actual_ref),
         }
 
-    # Full supports CFG/exaggeration. Turbo uses its supported sampling controls;
-    # its modestly warmer temperature is intended to avoid flat, robotic cadence.
+    # One sampling configuration applies to the complete narration; there is no
+    # per-slide random temperature, pitch shift or style reset.
     settings = (
-        {"temperature": 0.75, "cfg_weight": 0.35, "exaggeration": 0.35,
+        {"temperature": 0.65, "cfg_weight": 0.35, "exaggeration": 0.50,
          "min_p": 0.05, "top_p": 1.0, "repetition_penalty": 1.2}
         if selected_model == "full"
-        else {"temperature": 0.90, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.15}
+        else {"temperature": 0.62, "top_p": 0.90, "top_k": 1000, "repetition_penalty": 1.15}
     )
     signature_payload = {
-        "cache_version": "chatterbox-per-slide-v1-expressive-turbo",
+        "cache_version": "chatterbox-continuous-v2-contextual-delivery",
         "model_version": selected_model,
         "text": full_text,
         "scene_texts": texts,
@@ -881,54 +910,48 @@ def generate_chatterbox_audio(
     manifest_path.unlink(missing_ok=True)
 
     audio_texts = _chatterbox_audio_texts(texts)
-    # English Shorts and Top-5 use separate TTS calls for every approved slide.
-    # The measured clip duration becomes the visual hold and subtitle offset.
-    # Stable per-slide seeds make the output repeatable without estimating where
-    # one scene ends inside a shared waveform.
-    scene_waves = []
-    for scene_number, text in enumerate(audio_texts, 1):
-        scene_seed = int(
-            hashlib.sha256(f"{signature}:{scene_number}".encode("utf-8")).hexdigest()[:8],
-            16,
-        ) & 0x7FFFFFFF
-        scene_waves.append(
-            _generate_chatterbox_take(
-                model, text, selected_model, seed=scene_seed
-            )
-        )
+    # Chatterbox hears the entire approved narration in one pass. That gives it
+    # sentence-to-sentence context for emphasis and cadence, and avoids a fresh
+    # stochastic voice/style reset at every slide.
+    take_seed = int(
+        hashlib.sha256(f"{signature}:continuous-narration".encode("utf-8")).hexdigest()[:8],
+        16,
+    ) & 0x7FFFFFFF
+    full_wave = _generate_chatterbox_take(
+        model, _join_narration_texts(audio_texts), selected_model, seed=take_seed
+    )
 
-    raw_duration = sum(wave.shape[-1] for wave in scene_waves) / model.sr
+    raw_duration = full_wave.shape[-1] / model.sr
     corrected = False
     if raw_duration >= 30.0:
         try:
             import librosa
             rate = min(1.05, raw_duration / 29.7)
-            scene_waves = [
-                torch.from_numpy(
-                    librosa.effects.time_stretch(
-                        wave.squeeze(0).numpy(), rate=rate
-                    )
-                ).to(torch.float32).unsqueeze(0)
-                for wave in scene_waves
-            ]
+            full_wave = torch.from_numpy(
+                librosa.effects.time_stretch(
+                    full_wave.squeeze(0).numpy(), rate=rate
+                )
+            ).to(torch.float32).unsqueeze(0)
         except Exception as exc:
             raise RuntimeError(
-                "Audio is over 30 seconds and per-slide time-stretch failed."
+                "Audio is over 30 seconds and pitch-preserving time-stretch failed."
             ) from exc
         corrected = True
 
-    total_duration = sum(wave.shape[-1] for wave in scene_waves) / model.sr
+    total_duration = full_wave.shape[-1] / model.sr
     if total_duration >= 30.0:
         raise RuntimeError(
             "The generated narration is too long to fit the 30-second Short, "
             "even after one slight pitch-preserving speed adjustment."
         )
 
-    peak = max(float(wave.abs().max().item()) for wave in scene_waves)
+    peak = float(full_wave.abs().max().item())
     if peak > 0:
-        scene_waves = [wave * (0.94 / peak) for wave in scene_waves]
+        full_wave = full_wave * (0.94 / peak)
 
-    full_wave = torch.cat(scene_waves, dim=-1)
+    scene_waves = _split_waveform_by_text(full_wave, texts, sample_rate=model.sr)
+    # The individual slide WAVs are exact adjacent slices of the one master take.
+    # Their concatenation therefore preserves the original continuous delivery.
     master_path = out_path / "full.wav"
     torchaudio.save(str(master_path), full_wave, model.sr)
     durations = []
