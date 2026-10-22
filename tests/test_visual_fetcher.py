@@ -769,7 +769,7 @@ def test_browser_image_downloads_run_in_bounded_parallel_batches(monkeypatch):
     image_bytes = {}
     image_candidates = []
     for index in range(8):
-        image = Image.new("RGB", (900, 600), (index * 25, 90, 140))
+        image = Image.new("RGB", (1000, 1000), (index * 25, 90, 140))
         buffer = BytesIO()
         image.save(buffer, format="JPEG")
         image_bytes[f"https://cdn.example.com/gill-{index}.jpg"] = buffer.getvalue()
@@ -864,3 +864,18 @@ def test_browser_image_downloads_run_in_bounded_parallel_batches(monkeypatch):
     assert peak_active > 1
     assert peak_active <= 4
     assert len(result["assets"]) == 6
+
+
+def test_image_quality_policy_rejects_thumbnails_but_allows_full_resolution():
+    from io import BytesIO
+    from PIL import Image
+
+    small_buffer = BytesIO()
+    Image.new("RGB", (500, 400), "black").save(small_buffer, format="JPEG")
+    large_buffer = BytesIO()
+    Image.new("RGB", (1600, 2200), "black").save(large_buffer, format="JPEG", quality=92)
+
+    assert visual_fetcher._image_bytes_ok(small_buffer.getvalue()) is False
+    assert visual_fetcher._image_bytes_ok(large_buffer.getvalue()) is True
+    assert visual_fetcher.MAX_IMAGE_BYTES >= 40_000_000
+    assert visual_fetcher.MIN_SIDE >= 720
