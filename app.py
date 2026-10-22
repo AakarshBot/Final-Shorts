@@ -12125,6 +12125,8 @@ elif st.session_state.app_mode == "test":
                                             "query": query,
                                             "assets": list(result.get("assets") or []),
                                             "error": str(result.get("error") or ""),
+                                            "message": str(result.get("message") or ""),
+                                            "errors": dict(result.get("errors") or {}),
                                         }
                                     except Exception as exc:
                                         st.session_state.test_top5_visual_results[active_slide] = {
@@ -12138,6 +12140,10 @@ elif st.session_state.app_mode == "test":
                         if result.get("source") == "ai":
                             if result.get("error"):
                                 st.error(result["error"])
+                            elif not result.get("assets"):
+                                st.warning(result.get("message") or "No AI image provider returned a usable image.")
+                                for provider_name, provider_error in (result.get("errors") or {}).items():
+                                    st.caption(f"{provider_name}: {provider_error}")
                             else:
                                 if result.get("message"):
                                     st.caption(result["message"])
