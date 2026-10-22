@@ -12210,6 +12210,19 @@ elif st.session_state.app_mode == "test":
                                 st.caption(f'{len(result.get("assets") or [])} AI images returned.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "ai")
 
+                    if visual_option == "Option 6 · Upload Local Image":
+                        st.caption("Upload one or more local images, then select/crop one for this slide.")
+                        uploaded_files = st.file_uploader(
+                            "Choose local images",
+                            type=["jpg", "jpeg", "png", "webp"],
+                            accept_multiple_files=True,
+                            key=f"test-top5-local-upload-{active_slide}",
+                        )
+                        local_assets = _local_image_assets(uploaded_files)
+                        if uploaded_files and not local_assets:
+                            st.error("None of the selected files could be opened as images.")
+                        _top5_render_asset_pool(local_assets, "local-upload")
+
                     if visual_option == "Option 5 · Card Studio":
                         _render_card_studio(top5=True, active_slide=active_slide)
 
