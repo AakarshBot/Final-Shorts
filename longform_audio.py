@@ -278,6 +278,7 @@ class LongformAudioEngine:
                 chunk_text,
                 selected_model,
                 seed=chunk_seed,
+                generation_settings=settings,
             )
             generated_chunks.append((start, end, wav))
 

@@ -763,15 +763,27 @@ def _split_waveform_by_text(waveform, texts: list[str], sample_rate: int = 24000
     ]
 
 
-def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
-    """Generate the complete narration as one context-aware, repeatable performance."""
+def _generate_chatterbox_take(
+    model,
+    text: str,
+    model_version: str,
+    seed: int,
+    generation_settings: dict[str, float] | None = None,
+):
+    """Generate a complete narration as one repeatable performance.
+
+    Standard Shorts use the script-derived Full delivery profile. Callers such
+    as Long-form can pass their established sampling settings explicitly.
+    """
     import torch
 
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    if model_version == "full":
+    if generation_settings is not None:
+        wav = model.generate(text, **dict(generation_settings))
+    elif model_version == "full":
         profile = _infer_chatterbox_delivery_profile(text, model_version)
         wav = model.generate(
             text,

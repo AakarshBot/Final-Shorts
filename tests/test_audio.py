@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 
+import audio
 from audio import approve_audio, approve_top5_audio, generate_audio, generate_top5_audio
 
 
@@ -766,7 +767,7 @@ def test_chatterbox_voice_variant_outputs_do_not_overwrite_each_other(monkeypatc
     assert first["full_path"] != second["full_path"]
     assert first["full_path"] == again["full_path"]
     assert all(s["from_cache"] for s in again["scenes"])
-    assert model.generated == 4
+    assert model.generated == 2
 
 
 

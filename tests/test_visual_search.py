@@ -5,7 +5,7 @@ import visual_search
 
 
 def _jpeg_bytes(value):
-    image = Image.new("RGB", (800, 900), value)
+    image = Image.new("RGB", (900, 1000), value)
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG")
     return buffer.getvalue()

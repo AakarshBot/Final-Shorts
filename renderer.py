@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import indic_bootstrap
+import numpy as np
 from io import BytesIO
 import ctypes
 import hashlib

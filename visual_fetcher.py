@@ -1160,7 +1160,7 @@ async def _browser_page(context, request):
                 "bytes": data_bytes,
                 "hash": digest,
                 "source_page_url": base_url,
-                "source_image_url": response.url or candidate["url"],
+                "source_image_url": getattr(response, "url", "") or candidate["url"],
                 "width": width,
                 "height": height,
                 "publisher": _clean(
