@@ -341,9 +341,16 @@ def _fit(
     for size in range(start_size, min_size - 1, -2):
         font = _font_for_text(text, size, getter)
         lines = _wrap(draw, text, font, max_width)
-        if lines and len(lines) <= max_lines:
+        if (
+            lines
+            and len(lines) <= max_lines
+            and all(_measure(draw, line, font)[0] <= max_width for line in lines)
+        ):
             return font, lines
-    raise CardStudioError("The card text is too long for this layout. Shorten the copy.")
+    raise CardStudioError(
+        "The card text does not fit inside its measured width at readable font sizes. "
+        "Shorten the copy or choose a wider text position."
+    )
 
 
 def _lines_metric_height(
