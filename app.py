@@ -3011,11 +3011,11 @@ def _render_card_studio(
         if card_type == "Stat Highlight":
             st.session_state[value_key("value")] = translated_data.get("value", "")
             st.session_state[value_key("supporting-fields")] = list(
-                translated_data.get("supporting_fields") or translated_data.get("metrics") or []
+                translated_data.get("supporting_fields") or translated_data.get("metrics") or [{"label": "", "value": ""}]
             )
         elif card_type == "Quote / Reaction":
             st.session_state[value_key("supporting-fields")] = list(
-                translated_data.get("supporting_fields") or []
+                translated_data.get("supporting_fields") or [{"label": "", "value": ""}]
             )
             if translated_data.get("context"):
                 st.session_state[value_key("supporting-fields")].append(
@@ -3027,7 +3027,7 @@ def _render_card_studio(
             metrics = translated_data.get("metrics") or []
             left_values = (translated_data.get("left") or {}).get("values") or {}
             right_values = (translated_data.get("right") or {}).get("values") or {}
-            st.session_state[value_key("comparison-metrics")] = [
+            translated_rows = [
                 {
                     "label": item.get("label", "") if isinstance(item, dict) else str(item or ""),
                     "left_value": item.get("left_value", "") if isinstance(item, dict) else left_values.get(item, ""),
@@ -3035,10 +3035,13 @@ def _render_card_studio(
                 }
                 for item in metrics
             ]
+            st.session_state[value_key("comparison-metrics")] = translated_rows or [
+                {"label": "", "left_value": "", "right_value": ""}
+            ]
         elif card_type == "Key Fact / Milestone":
             st.session_state[value_key("value")] = translated_data.get("value", "")
             st.session_state[value_key("supporting-fields")] = list(
-                translated_data.get("supporting_fields") or []
+                translated_data.get("supporting_fields") or [{"label": "", "value": ""}]
             )
             if translated_data.get("context"):
                 st.session_state[value_key("supporting-fields")].append(
@@ -3473,7 +3476,7 @@ def _render_card_studio(
                 support_fields = list(generated.get("metrics") or [])
             if not support_fields and generated.get("context"):
                 support_fields = [{"label": "Context", "value": generated.get("context")}]
-            st.session_state[value_key("supporting-fields")] = support_fields
+            st.session_state[value_key("supporting-fields")] = support_fields or [{"label": "", "value": ""}]
 
         if card_type == "Head-to-Head":
             st.session_state[value_key("left-name")] = str((generated.get("left") or {}).get("name") or generated.get("left_name") or "")
@@ -3492,7 +3495,7 @@ def _render_card_studio(
                     right_value = str(right_values.get(label) or "")
                 if label:
                     metrics.append({"label": label, "left_value": left_value, "right_value": right_value})
-            st.session_state[value_key("comparison-metrics")] = metrics
+            st.session_state[value_key("comparison-metrics")] = metrics or [{"label": "", "left_value": "", "right_value": ""}]
 
     auto_col, prompt_col = st.columns([1, 1], gap="small")
     with auto_col:
@@ -3556,8 +3559,8 @@ def _render_card_studio(
 
     support_key = value_key("supporting-fields")
     comparison_key = value_key("comparison-metrics")
-    st.session_state.setdefault(support_key, list(defaults.get("supporting_fields") or []))
-    st.session_state.setdefault(comparison_key, [])
+    st.session_state.setdefault(support_key, list(defaults.get("supporting_fields") or [{"label": "", "value": ""}]))
+    st.session_state.setdefault(comparison_key, [{"label": "", "left_value": "", "right_value": ""}])
 
     if card_type == "Stat Highlight":
         st.markdown("#### Main statistic")
@@ -3578,7 +3581,11 @@ def _render_card_studio(
             placeholder="e.g. 704",
             help="Enter a verified number or have the card filled from the story/prompt.",
         )
-        with st.expander("Optional unit and supporting statistics", expanded=bool(st.session_state.get(support_key))):
+        with st.expander("Optional unit and supporting statistics", expanded=any(
+            str(row.get("label") or "").strip() or str(row.get("value") or "").strip()
+            for row in (st.session_state.get(support_key) or [])
+            if isinstance(row, dict)
+        )):
             st.text_input("Unit (optional)", key=unit_key, placeholder="e.g. TEST WICKETS")
             st.caption("Add only the supporting facts this story actually needs. Use the row controls to add or remove fields.")
             support_rows = st.data_editor(
@@ -3597,9 +3604,10 @@ def _render_card_studio(
             "headline": st.session_state.get(headline_key, ""),
             "value": st.session_state.get(value_key_main, ""),
             "unit": st.session_state.get(unit_key, ""),
-            "supporting_fields": support_rows if "support_rows" in locals() else (
-                st.session_state.get(support_key) or []
-            ),
+            "supporting_fields": [
+                row for row in (support_rows if "support_rows" in locals() else st.session_state.get(support_key) or [])
+                if isinstance(row, dict) and str(row.get("label") or "").strip() and str(row.get("value") or "").strip()
+            ],
         }
 
     elif card_type == "Quote / Reaction":
@@ -3673,7 +3681,10 @@ def _render_card_studio(
             "headline": st.session_state.get(headline_key, ""),
             "left": {"name": left_name_val, "values": {}},
             "right": {"name": right_name_val, "values": {}},
-            "metrics": comparison_rows,
+            "metrics": [
+                row for row in comparison_rows
+                if isinstance(row, dict) and str(row.get("label") or "").strip()
+            ],
             "image_mode": image_mode,
             "split_direction": split_direction,
         }
