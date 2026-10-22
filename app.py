@@ -3647,7 +3647,7 @@ def _render_card_studio(
             )
             st.caption("Add only context that improves the quote. Exact quotations must be source-backed.")
             support_rows = st.data_editor(
-                _editable_rows(st.session_state.get(support_key)),
+                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
                 key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
