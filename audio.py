@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from functools import lru_cache
 from typing import Any
 
 import edge_tts
@@ -587,6 +588,100 @@ def _join_narration_texts(texts: list[str]) -> str:
     if joined and not re.search(r"[.!?]$", joined):
         joined = re.sub(r"[,;:]$", "", joined) + "."
     return joined
+
+
+@lru_cache(maxsize=128)
+def _infer_chatterbox_delivery_profile(text: str, model_version: str = "full") -> dict[str, Any]:
+    """Infer how an approved script should sound and map intent to Full's prosody controls."""
+    clean = " ".join(str(text or "").split())
+    selected_model = _normalise_chatterbox_model_version(model_version)
+    neutral = {
+        "delivery_tone": "balanced editorial",
+        "exaggeration": 0.50,
+        "cfg_weight": 0.35,
+    }
+    if selected_model != "full" or not clean or not os.getenv("GROQ_API_KEY"):
+        return neutral if selected_model == "full" else {
+            "delivery_tone": "Turbo stable sampling; adaptive expression unavailable",
+            "exaggeration": None,
+            "cfg_weight": None,
+        }
+
+    try:
+        import script_writer
+    except Exception:
+        return neutral
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "delivery_tone": {
+                "type": "string",
+                "enum": [
+                    "measured and factual",
+                    "serious and authoritative",
+                    "reflective and empathetic",
+                    "tense and suspenseful",
+                    "urgent and high-stakes",
+                    "confident and assertive",
+                    "triumphant and celebratory",
+                    "warm and conversational",
+                    "emotionally intense",
+                ],
+            },
+            "exaggeration": {
+                "type": "number",
+                "enum": [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70],
+            },
+            "cfg_weight": {
+                "type": "number",
+                "enum": [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60],
+            },
+        },
+        "required": ["delivery_tone", "exaggeration", "cfg_weight"],
+        "additionalProperties": False,
+    }
+    prompt = (
+        "Read this approved sports narration as an experienced voice director. Infer its intended delivery from "
+        "the meaning, stakes, factual register and narrative arc—not by counting emotionally loaded words. "
+        "Return a restrained Chatterbox Full prosody profile that helps the voice sound like this particular "
+        "script. The settings affect vocal expression only; the narration text must remain unchanged. "
+        "Use exaggeration from 0.30 to 0.70 and CFG weight from 0.25 to 0.60. Hard-news/statistical explanation "
+        "should sound composed; reflective human stories should sound warm; a high-stakes turn may be more tense; "
+        "a genuinely decisive victory or achievement may be celebratory. Do not make every sports story sound hyped. "
+        "Avoid extreme pitch/cadence, shouting or melodrama. Higher exaggeration needs lower CFG, while restrained "
+        "delivery can use higher CFG. Prefer a modest adjustment when the intent is uncertain. "
+        "Analyze how to perform the exact narration; do not rewrite it.\n\n"
+        "Approved narration:\n" + clean[:8000]
+    )
+    for model in getattr(script_writer, "MODELS", []):
+        try:
+            candidate = script_writer._request(
+                model,
+                prompt,
+                clean[:8000],
+                schema=schema,
+                schema_name="chatterbox_delivery_profile",
+                max_completion_tokens=180,
+            )
+            tone = str(candidate.get("delivery_tone") or "").strip()
+            exaggeration = float(candidate.get("exaggeration"))
+            cfg_weight = float(candidate.get("cfg_weight"))
+            allowed_tones = set(schema["properties"]["delivery_tone"]["enum"])
+            if (
+                tone not in allowed_tones
+                or not 0.30 <= exaggeration <= 0.70
+                or not 0.25 <= cfg_weight <= 0.60
+            ):
+                raise ValueError("Prosody analysis returned values outside supported controls.")
+            return {
+                "delivery_tone": tone,
+                "exaggeration": round(exaggeration, 2),
+                "cfg_weight": round(cfg_weight, 2),
+            }
+        except Exception:
+            continue
+    return neutral
 
 
 def _scene_duration_weights(texts: list[str]) -> list[float]:
