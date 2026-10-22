@@ -298,3 +298,54 @@ def test_longform_render_uses_monotonic_scene_cursor():
     assert "billboard_index = 0" in frame_source
     assert "for c in cues" not in frame_source
     assert "for bb in act_billboards" not in frame_source
+
+
+def test_local_image_upload_preserves_original_bytes_and_image_dimensions():
+    import ast
+    import hashlib
+    from io import BytesIO
+    from PIL import Image, ImageOps
+
+    app_path = ROOT / "app.py"
+    tree = ast.parse(app_path.read_text(encoding="utf-8"))
+    helper_node = next(
+        node for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "_local_image_assets"
+    )
+    namespace = {
+        "BytesIO": BytesIO,
+        "Image": Image,
+        "ImageOps": ImageOps,
+        "Path": Path,
+        "hashlib": hashlib,
+    }
+    exec(compile(ast.Module(body=[helper_node], type_ignores=[]), str(app_path), "exec"), namespace)
+
+    image = Image.new("RGB", (1440, 2160), (35, 75, 115))
+    buffer = BytesIO()
+    image.save(buffer, format="PNG", optimize=True)
+    original = buffer.getvalue()
+
+    class LocalUpload:
+        name = "my-original-frame.png"
+
+        def getvalue(self):
+            return original
+
+    assets = namespace["_local_image_assets"]([LocalUpload()])
+    assert len(assets) == 1
+    assert assets[0]["bytes"] == original
+    assert assets[0]["hash"] == hashlib.sha256(original).hexdigest()
+    assert assets[0]["width"] == 1440
+    assert assets[0]["height"] == 2160
+    assert assets[0]["original_bytes_preserved"] is True
+
+
+def test_visual_studio_offers_local_upload_across_pipelines():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert '"Option 6 · Upload Local Image"' in app_source
+    assert 'key="test-local-image-upload"' in app_source
+    assert 'key="live-local-image-upload"' in app_source
+    assert 'key="test-top5-playground-local-upload"' in app_source
+    assert 'key=f"test-top5-local-upload-{active_slide}"' in app_source
+    assert 'key=f"live-top5-local-upload-{active_slide}"' in app_source
