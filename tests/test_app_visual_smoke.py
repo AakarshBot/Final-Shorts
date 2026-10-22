@@ -730,9 +730,9 @@ def test_hindi_live_card_studio_exposes_translation_and_hindi_starter_copy():
     assert not at.exception, at.exception
     assert any(button.label == "Translate card text to Hindi" for button in at.button)
     values = {field.label: field.value for field in at.text_input}
-    assert values["Eyebrow"] == "करियर के आँकड़े"
-    assert values["Headline"] == "रनों की शानदार पारी"
-    assert values["Unit"] == "रन"
+    assert values["Category label (optional)"] == "करियर के आँकड़े"
+    assert values["What the number means (optional)"] == ""
+    assert values["Unit (optional)"] == "रन"
 
 
 
