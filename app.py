@@ -6744,12 +6744,12 @@ def render_live_top5():
             live_top5_chatterbox_model_choice = st.selectbox(
                 "Chatterbox model",
                 ["Turbo", "Full"],
-                index=0,
+                index=1,
                 key="live_top5_chatterbox_model",
                 disabled=not is_live_top5_chatterbox,
             )
             if is_live_top5_chatterbox:
-                st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
+                st.caption("Full adapts expression to the approved narration. Turbo is faster but ignores Chatterbox’s emotion/CFG controls. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
             live_top5_reference = None
             live_top5_reference_ready = True
             if is_live_top5_chatterbox:
@@ -7573,7 +7573,7 @@ def render_live_dashboard():
         st.selectbox(
             "Chatterbox model",
             ["Turbo", "Full"],
-            index=0,
+            index=1,
             key="live_audio_chatterbox_model",
             disabled=not is_live_chatterbox,
         )
@@ -7720,7 +7720,7 @@ def render_live_dashboard():
                 approved_script,
                 selected_engine,
                 reference,
-                model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold(),
+                model_version=st.session_state.get("live_audio_chatterbox_model", "Full").casefold(),
             )
             st.session_state.live_audio_status = "running"
             st.session_state.live_stage = "04 · Visuals + Render"
@@ -8267,7 +8267,7 @@ def render_longform_audio(live: bool = False):
     longform_chatterbox_model_choice = st.selectbox(
         "Chatterbox model",
         ["Turbo", "Full"],
-        index=0,
+        index=1,
         key=f"{prefix}audio_chatterbox_model",
     )
     st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading. Long-form narration is grouped into paragraph-sized chunks to respect model limits, with brief gaps between chunks and the existing act pauses.")
@@ -8279,7 +8279,7 @@ def render_longform_audio(live: bool = False):
         f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{ref_status}</span>'
         f'</div>'
         f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Documentary Narration Suite (6 Acts · ~8 Min)</div>'
-        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led narration · Shared Chatterbox model · Cached master and scene audio</div>'
+        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led narration · Full adapts vocal expression to this script · Cached master and scene audio</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -10319,7 +10319,7 @@ def render_audio():
         chatterbox_model_choice = st.selectbox(
             "Chatterbox model",
             ["Turbo", "Full"],
-            index=0,
+            index=1,
             key="audio_chatterbox_model_choice",
             disabled=not is_cb,
         )
@@ -11336,7 +11336,7 @@ elif st.session_state.app_mode == "test":
                 t5_chatterbox_model_choice = st.selectbox(
                     "Chatterbox model",
                     ["Turbo", "Full"],
-                    index=0,
+                    index=1,
                     key="test_top5_chatterbox_model",
                     disabled=not is_t5_chatterbox,
                 )
