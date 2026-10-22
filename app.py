@@ -3027,10 +3027,12 @@ def _render_card_studio(
             st.session_state[value_key("supporting-fields")] = list(
                 translated_data.get("supporting_fields") or translated_data.get("metrics") or [{"label": "", "value": ""}]
             )
+            st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
         elif card_type == "Quote / Reaction":
             st.session_state[value_key("supporting-fields")] = list(
                 translated_data.get("supporting_fields") or [{"label": "", "value": ""}]
             )
+            st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
             if translated_data.get("context"):
                 st.session_state[value_key("supporting-fields")].append(
                     {"label": "Context", "value": translated_data["context"]}
@@ -3052,11 +3054,13 @@ def _render_card_studio(
             st.session_state[value_key("comparison-metrics")] = translated_rows or [
                 {"label": "", "left_value": "", "right_value": ""}
             ]
+            st.session_state.pop(f"{value_key('comparison-metrics')}-editor", None)
         elif card_type == "Key Fact / Milestone":
             st.session_state[value_key("value")] = translated_data.get("value", "")
             st.session_state[value_key("supporting-fields")] = list(
                 translated_data.get("supporting_fields") or [{"label": "", "value": ""}]
             )
+            st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
             if translated_data.get("context"):
                 st.session_state[value_key("supporting-fields")].append(
                     {"label": "Context", "value": translated_data["context"]}
@@ -3491,6 +3495,7 @@ def _render_card_studio(
             if not support_fields and generated.get("context"):
                 support_fields = [{"label": "Context", "value": generated.get("context")}]
             st.session_state[value_key("supporting-fields")] = support_fields or [{"label": "", "value": ""}]
+            st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
 
         if card_type == "Head-to-Head":
             st.session_state[value_key("left-name")] = str((generated.get("left") or {}).get("name") or generated.get("left_name") or "")
@@ -3510,6 +3515,7 @@ def _render_card_studio(
                 if label:
                     metrics.append({"label": label, "left_value": left_value, "right_value": right_value})
             st.session_state[value_key("comparison-metrics")] = metrics or [{"label": "", "left_value": "", "right_value": ""}]
+            st.session_state.pop(f"{value_key('comparison-metrics')}-editor", None)
 
     auto_col, prompt_col = st.columns([1, 1], gap="small")
     with auto_col:
@@ -3572,7 +3578,9 @@ def _render_card_studio(
         )
 
     support_key = value_key("supporting-fields")
+    support_editor_key = f"{support_key}-editor"
     comparison_key = value_key("comparison-metrics")
+    comparison_editor_key = f"{comparison_key}-editor"
     st.session_state.setdefault(support_key, list(defaults.get("supporting_fields") or [{"label": "", "value": ""}]))
     st.session_state.setdefault(comparison_key, [{"label": "", "left_value": "", "right_value": ""}])
 
@@ -3603,8 +3611,8 @@ def _render_card_studio(
             st.text_input("Unit (optional)", key=unit_key, placeholder="e.g. TEST WICKETS")
             st.caption("Add only the supporting facts this story actually needs. Use the row controls to add or remove fields.")
             support_rows = st.data_editor(
-                st.session_state.get(support_key) or [],
-                key=support_key,
+                _editable_rows(st.session_state.get(support_key)),
+                key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
                 width="stretch",
@@ -3645,8 +3653,8 @@ def _render_card_studio(
             )
             st.caption("Add only context that improves the quote. Exact quotations must be source-backed.")
             support_rows = st.data_editor(
-                st.session_state.get(support_key) or [],
-                key=support_key,
+                _editable_rows(st.session_state.get(support_key)),
+                key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
                 width="stretch",
@@ -3682,8 +3690,8 @@ def _render_card_studio(
             right_name_val = st.text_input("Second player / side", key=right_name_key, placeholder="e.g. Glenn McGrath")
         st.caption("Comparison fields are dynamic. Add one or more comparable, source-backed rows; rows are not limited to three.")
         comparison_rows = st.data_editor(
-            st.session_state.get(comparison_key) or [],
-            key=comparison_key,
+            _editable_rows(st.session_state.get(comparison_key)),
+            key=comparison_editor_key,
             num_rows="dynamic",
             hide_index=True,
             width="stretch",
@@ -3721,8 +3729,8 @@ def _render_card_studio(
         with st.expander("Optional supporting detail", expanded=False):
             st.caption("Only add extra explanation if it helps the story.")
             support_rows = st.data_editor(
-                st.session_state.get(support_key) or [],
-                key=support_key,
+                _editable_rows(st.session_state.get(support_key)),
+                key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
                 width="stretch",
