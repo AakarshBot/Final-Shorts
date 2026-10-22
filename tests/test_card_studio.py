@@ -249,6 +249,32 @@ def test_contrast_treatments_are_manual_and_visually_distinct():
     assert soft.getpixel((1010, 800))[:3] == image.getpixel((1010, 800))
 
 
+def test_editorial_text_block_uses_measured_glyph_bounds_when_centering():
+    font = card_studio._font_headline(64)
+    line = "JUMP"
+    canvas = Image.new("RGBA", (500, 220), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas)
+    bbox = draw.textbbox((0, 0), line, font=font)
+    block = {
+        "lines": [line],
+        "font": font,
+        "line_height": max(90, bbox[3] - bbox[1]),
+        "line_gap": 0,
+        "height": max(90, bbox[3] - bbox[1]),
+    }
+    x, y, container_width = 35, 50, 320
+
+    card_studio._draw_text_block(
+        canvas, block, x, y, (255, 255, 255),
+        width=container_width, centered=True,
+    )
+
+    bounds = canvas.getchannel("A").getbbox()
+    assert bounds is not None
+    assert abs((bounds[0] + bounds[2]) / 2 - (x + container_width / 2)) <= 2
+    assert y <= bounds[1] < y + block["line_height"]
+
+
 def test_quote_reaction_uses_editorial_layout_with_subject_aware_placement():
     mask = Image.new("L", (1080, 1920), 0)
     ImageDraw.Draw(mask).rectangle((88, 220, 620, 1300), fill=255)
