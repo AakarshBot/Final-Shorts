@@ -1797,24 +1797,25 @@ def generate_card_copy(
         _clean(packet.get(key))
         for key in ("title", "description", "article", "summary", "source_title")
     )
+    source_text = _clean(
+        packet.get("description") or packet.get("article") or packet.get("summary")
+    )
+    title_text = _clean(packet.get("title") or packet.get("source_title"))
     if prompt_text:
         packet = dict(packet)
         packet["card_direction"] = prompt_text
-        source_text = _clean(
-            packet.get("description") or packet.get("article") or packet.get("summary")
-        )
-        if not source_text or len(source_text) < 180:
-            research_query = " ".join(
-                part for part in (_clean(packet.get("title") or packet.get("source_title")), prompt_text) if part
-            )
-            research = _research_card_prompt(research_query)
-            if research:
-                packet["description"] = (source_text + "\n\n" + research).strip()
-            elif not source_text:
-                packet["description"] = "No source material could be retrieved for this prompt."
-        if not has_story_material:
-            packet["title"] = prompt_text
-            packet["source"] = "Prompt research"
+    if prompt_text or (title_text and len(source_text) < 180):
+        research_query = " ".join(
+            part for part in (title_text, prompt_text) if part
+        ) or prompt_text
+        research = _research_card_prompt(research_query)
+        if research:
+            packet["description"] = (source_text + "\n\n" + research).strip()
+        elif not source_text:
+            packet["description"] = "No source material could be retrieved for this card request."
+    if prompt_text and not has_story_material:
+        packet["title"] = prompt_text
+        packet["source"] = "Prompt research"
 
     text = {"type": "string"}
     support_field = {
