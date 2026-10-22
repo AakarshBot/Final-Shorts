@@ -866,12 +866,15 @@ def _render_stat_highlight(source, data: dict, subject_mask: Image.Image | None)
     if not value:
         raise CardStudioError("Stat Highlight needs one hero value. Fill it from the story or enter a verified value.")
 
-    blocks = [{
-        "kind": "kicker",
-        "text": str(data.get("eyebrow") or _card_label("performance", language)),
-        "language": language, "height": 56,
-        "gap_after": 14 if bottom_mode else 20,
-    }]
+    blocks = []
+    eyebrow = " ".join(str(data.get("eyebrow") or "").split())
+    if eyebrow:
+        blocks.append({
+            "kind": "kicker",
+            "text": eyebrow,
+            "language": language, "height": 56,
+            "gap_after": 14 if bottom_mode else 20,
+        })
     headline_block = _text_block(
         draw, headline, width,
         preferred_size=64 if not bottom_mode else 52,
@@ -922,12 +925,15 @@ def _render_quote_reaction(source, data: dict, subject_mask: Image.Image | None)
     if not quote:
         raise CardStudioError("Quote / Reaction needs a real quotation. Use story fill to avoid inventing quotes.")
 
-    blocks = [{
-        "kind": "kicker",
-        "text": str(data.get("eyebrow") or _card_label("reaction", language)),
-        "language": language, "height": 56,
-        "gap_after": 16 if bottom_mode else 22,
-    }]
+    blocks = []
+    eyebrow = " ".join(str(data.get("eyebrow") or "").split())
+    if eyebrow:
+        blocks.append({
+            "kind": "kicker",
+            "text": eyebrow,
+            "language": language, "height": 56,
+            "gap_after": 16 if bottom_mode else 22,
+        })
     quote_block = _text_block(
         draw, quote, max(100, width - 34),
         preferred_size=54 if not bottom_mode else 46,
@@ -1026,12 +1032,15 @@ def _render_head_to_head(source, data: dict, subject_mask=None) -> Image.Image:
     header_x, header_width = _content_region(position)
     header_top = 810 if bottom_mode else SAFE_TOP
     draw = ImageDraw.Draw(image)
-    header_blocks = [{
-        "kind": "kicker",
-        "text": str(data.get("eyebrow") or _card_label("head_to_head", data.get("language"))),
-        "language": _normalise_card_language(data.get("language")),
-        "height": 56, "gap_after": 12 if bottom_mode else 20,
-    }]
+    header_blocks = []
+    eyebrow = " ".join(str(data.get("eyebrow") or "").split())
+    if eyebrow:
+        header_blocks.append({
+            "kind": "kicker",
+            "text": eyebrow,
+            "language": _normalise_card_language(data.get("language")),
+            "height": 56, "gap_after": 12 if bottom_mode else 20,
+        })
     headline_block = _text_block(
         draw, headline, header_width,
         preferred_size=55 if bottom_mode else 70,
@@ -1162,12 +1171,15 @@ def _render_fact_milestone(source, data: dict, subject_mask: Image.Image | None)
     if not value or not label:
         raise CardStudioError("Key Fact / Milestone needs a value and label.")
 
-    blocks = [{
-        "kind": "kicker",
-        "text": str(data.get("eyebrow") or _card_label("milestone", language)),
-        "language": language, "height": 56,
-        "gap_after": 14 if bottom_mode else 20,
-    }]
+    blocks = []
+    eyebrow = " ".join(str(data.get("eyebrow") or "").split())
+    if eyebrow:
+        blocks.append({
+            "kind": "kicker",
+            "text": eyebrow,
+            "language": language, "height": 56,
+            "gap_after": 14 if bottom_mode else 20,
+        })
     value_block = _text_block(
         draw, value, width,
         preferred_size=164 if not bottom_mode else 122,
@@ -1247,19 +1259,5 @@ def card_data_for_type(card_type: str, language: str = "english") -> dict:
         data.update({"value": "", "label": "", "supporting_fields": []})
     else:
         return {}
-    if language_key == "hindi":
-        data["eyebrow"] = {
-            "Stat Highlight": "करियर के आँकड़े",
-            "Quote / Reaction": "प्रतिक्रिया",
-            "Head-to-Head": "आमने-सामने",
-            "Key Fact / Milestone": "उपलब्धि",
-        }.get(card_type, "")
-    elif language_key == "telugu":
-        data["eyebrow"] = {
-            "Stat Highlight": "కెరీర్ గణాంకాలు",
-            "Quote / Reaction": "స్పందన",
-            "Head-to-Head": "ఎదురెదురు పోటీ",
-            "Key Fact / Milestone": "మైలురాయి",
-        }.get(card_type, "")
     return data
 
