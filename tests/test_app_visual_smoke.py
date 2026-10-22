@@ -588,7 +588,7 @@ def test_card_studio_uses_dynamic_story_generated_fields(monkeypatch):
     fields_key = "test-standalone-card-studio-stat-highlight-supporting-fields"
     assert at.session_state[value_key] == ""
     assert at.session_state[headline_key] == ""
-    assert at.session_state[fields_key] == [{"label": "", "value": ""}]
+    assert at.session_state[fields_key] == []
     assert not any(field.label.startswith("Metric ") for field in at.text_input)
 
     next(button for button in at.button if button.label == "Fill fields from story").click().run()
