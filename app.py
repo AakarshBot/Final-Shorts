@@ -5540,7 +5540,9 @@ def _render_two_pane_visual_workspace(
                     elif result:
                         assets = list(result.get("assets") or [])
                         if not assets:
-                            st.warning("No configured AI provider returned an image.")
+                            st.warning(result.get("message") or "No AI image provider returned a usable image.")
+                            for provider_name, provider_error in (result.get("errors") or {}).items():
+                                st.caption(f"{provider_name}: {provider_error}")
                             last_query = query if run else str(result.get("query") or "").strip()
                             if last_query:
                                 if st.button("Search Real Images for this query instead →", type="primary", key="live-ai-fallback-to-real-search"):
@@ -11572,6 +11574,16 @@ elif st.session_state.app_mode == "test":
                             except Exception as exc:
                                 st.session_state.test_top5_visual_playground_results = []
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
+                ai_result = st.session_state.get("test_top5_visual_playground_ai_result") or {}
+                if (
+                    not assets
+                    and ai_result.get("query")
+                    == str(st.session_state.get("test_top5_visual_playground_ai_query") or "").strip()
+                ):
+                    if ai_result.get("message"):
+                        st.warning(ai_result["message"])
+                    for provider_name, provider_error in (ai_result.get("errors") or {}).items():
+                        st.caption(f"{provider_name}: {provider_error}")
 
             elif visual_option == "Option 5 · Card Studio":
                 _render_card_studio(
