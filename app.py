@@ -5503,8 +5503,8 @@ def _render_two_pane_visual_workspace(
                         )
                 elif fetcher_mode.startswith("Option 4"):
                     providers_label = ["AI Horde (free community queue)"]
-    if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
-        providers_label.append("Pollinations.ai")
+                    if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+                        providers_label.append("Pollinations.ai")
                     if os.getenv("HF_TOKEN"):
                         providers_label.append("Hugging Face")
                     if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
