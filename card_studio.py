@@ -666,6 +666,12 @@ def _text_block(
         bold=bold, font_fn=font_fn,
     )
     line_height, line_gap = _lines_metric_height(draw, lines, font, gap)
+    # Use the tallest actual line, not just the font's generic "Ag" metrics.
+    # Accents, punctuation and Indic glyphs can extend beyond that generic sample.
+    line_height = max(
+        line_height,
+        max((_measure(draw, line, font)[1] for line in lines), default=0),
+    )
     height = line_height * len(lines) + line_gap * max(0, len(lines) - 1)
     return {
         "text": clean,
