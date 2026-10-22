@@ -132,7 +132,7 @@ def test_balanced_text_wrap_handles_long_headlines_without_combination_search(mo
     data = renderer._manual_subject_cutout_layout_data(
         headline,
         ((60, 700), (1020, 700), (1020, 1500), (60, 1500)),
-        140,
+        100,
         "Barlow Condensed",
         "Crisp Outline",
     )
