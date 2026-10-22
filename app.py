@@ -8279,7 +8279,7 @@ def render_longform_audio(live: bool = False):
         f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{ref_status}</span>'
         f'</div>'
         f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Documentary Narration Suite (6 Acts · ~8 Min)</div>'
-        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led narration · Full adapts vocal expression to this script · Cached master and scene audio</div>'
+        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Continuous narration · Stable Full sampling settings · Cached master and scene audio</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
