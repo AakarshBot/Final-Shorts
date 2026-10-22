@@ -242,7 +242,7 @@ def test_head_to_head_supports_two_images_with_manual_split_direction():
             assert image.format == "PNG"
 
 
-def test_card_studio_rejects_overloaded_stat_card():
+def test_card_studio_accepts_variable_supporting_stat_rows():
     data = _renderable_card_data("Stat Highlight")
     data["supporting_fields"].extend(
         {"label": f"Extra metric {index}", "value": str(index)}
@@ -391,3 +391,65 @@ def test_changing_card_language_invalidates_the_old_render():
     )
     assert changed is True
     assert state["card-result"] is None
+
+
+def test_adaptive_gradient_strength_responds_to_photo_brightness():
+    bounds = (100, 300, 500, 900)
+    dark = Image.new("RGB", (1080, 1920), (15, 15, 15))
+    bright = Image.new("RGB", (1080, 1920), (240, 240, 240))
+
+    dark_result = card_studio._contrast_bed(
+        dark, "left", "Adaptive gradient", content_bounds=bounds
+    ).convert("RGB")
+    bright_result = card_studio._contrast_bed(
+        bright, "left", "Adaptive gradient", content_bounds=bounds
+    ).convert("RGB")
+
+    assert dark_result.getpixel((300, 600)) != dark.getpixel((300, 600))
+    assert bright_result.getpixel((300, 600)) != bright.getpixel((300, 600))
+    assert bright_result.getpixel((300, 600))[0] > dark_result.getpixel((300, 600))[0]
+    assert bright_result.getpixel((900, 600)) == bright.getpixel((900, 600))
+
+
+def test_quote_editorial_summary_does_not_render_as_a_verbatim_quote(monkeypatch):
+    captured = {}
+
+    def capture(_image, _position, _treatment, _x, _width, _top, blocks):
+        captured["blocks"] = blocks
+        return Image.new("RGB", (1080, 1920), (0, 0, 0))
+
+    monkeypatch.setattr(card_studio, "_draw_editorial_stack", capture)
+    data = card_studio.card_data_for_type("Quote / Reaction")
+    data.update({
+        "quote": "The team remained composed in the final overs.",
+        "attribution": "Editorial summary",
+    })
+    card_studio._render_quote_reaction(_image_bytes(), data, None)
+    quote = next(block for block in captured["blocks"] if block.get("kind") == "quote")
+    assert quote["show_quote_mark"] is False
+
+    data["attribution"] = "James Anderson"
+    card_studio._render_quote_reaction(_image_bytes(), data, None)
+    quote = next(block for block in captured["blocks"] if block.get("kind") == "quote")
+    assert quote["show_quote_mark"] is True
+
+
+def test_quote_card_can_render_without_attribution_or_context():
+    data = card_studio.card_data_for_type("Quote / Reaction")
+    data["quote"] = "We kept believing until the final ball."
+    output = card_studio.render_card("Quote / Reaction", _image_bytes(), data)
+    with Image.open(BytesIO(output)) as image:
+        assert image.size == (1080, 1920)
+        assert image.format == "PNG"
+
+
+def test_head_to_head_support_rows_adapt_to_the_count_and_safe_columns():
+    data = _renderable_card_data("Head-to-Head")
+    data["metrics"] = [
+        {"label": "Test wickets", "left_value": "704", "right_value": "604"},
+        {"label": "Test matches", "left_value": "188", "right_value": "167"},
+    ]
+    output = card_studio.render_card("Head-to-Head", _image_bytes(), data)
+    with Image.open(BytesIO(output)) as image:
+        assert image.size == (1080, 1920)
+        assert image.format == "PNG"
