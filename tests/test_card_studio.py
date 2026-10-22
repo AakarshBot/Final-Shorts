@@ -331,10 +331,10 @@ def test_localized_card_starter_copy_and_native_script_rendering():
         ("telugu", 0x0C00, 0x0C7F, "NotoSansTelugu-Bold.ttf"),
     ):
         for card_type in card_types:
-            data = card_studio.card_data_for_type(card_type, language=language)
+            data = _renderable_card_data(card_type, language=language)
             assert data["language"] == language
-            serialized = repr(data)
-            assert any(start <= ord(char) <= end for char in serialized), (language, card_type)
+            localized_label = card_studio.card_data_for_type(card_type, language=language)["eyebrow"]
+            assert any(start <= ord(char) <= end for char in localized_label), (language, card_type)
             output = card_studio.render_card(card_type, _image_bytes(), data)
             with Image.open(BytesIO(output)) as image:
                 assert image.size == (1080, 1920)
