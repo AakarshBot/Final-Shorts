@@ -589,7 +589,7 @@ def test_card_studio_shows_image_pool_crop_controls_and_default_fields(monkeypat
     assert values["Unit"] == "RUNS"
     assert any(field.label == "Metric 1 label" and field.value == "Matches" for field in at.text_input)
 
-    next(button for button in at.button if button.label == "Auto-fill this card from story").click().run()
+    next(button for button in at.button if button.label == "Fill fields from story").click().run()
     assert not at.exception, at.exception
     generated_values = {field.label: field.value for field in at.text_input}
     assert generated_values["Eyebrow"] == "AUTO CAREER STAT"
