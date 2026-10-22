@@ -45,10 +45,9 @@ if not st.get_option("global.appTest"):
   <svg viewBox="0 0 1080 1920" aria-label="Manual Subject Cutout polygon editor">
     <image id="background" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
     <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
-    <rect id="text-box" x="0" y="0" width="0" height="0" fill="none" stroke="#f5b942" stroke-width="5" stroke-dasharray="14 10" pointer-events="none" vector-effect="non-scaling-stroke"></rect>
     <g id="handles"></g>
   </svg>
-  <div class="help">The dashed rectangle is the actual text box. Text uses its outer left/right/top/bottom edges; the polygon's inner shape does not affect wrapping. Drag outer points to resize it, or drag the polygon to move it.</div>
+  <div class="help">The polygon itself is the text boundary. Lines wrap where its real edges leave enough width for the selected font size. Drag any corner or edge point to shape the text area.</div>
 </div>
 """,
         css="""
@@ -57,7 +56,6 @@ if not st.get_option("global.appTest"):
 .text-cutout-editor .handle{cursor:move}
 .text-cutout-editor #polygon{cursor:grab}
 .text-cutout-editor #polygon:active{cursor:grabbing}
-.text-cutout-editor #text-box{pointer-events:none;stroke:#f5b942;stroke-dasharray:14 10;vector-effect:non-scaling-stroke}
 .text-cutout-editor .help{margin:6px 0;color:#52574f;font-size:12px;line-height:1.2;opacity:.78}
 """,
         js="""
@@ -66,9 +64,8 @@ export default function(component) {
     const svg = parentElement.querySelector("svg");
     const image = parentElement.querySelector("#background");
     const polygon = parentElement.querySelector("#polygon");
-    const textBox = parentElement.querySelector("#text-box");
     const handles = parentElement.querySelector("#handles");
-    if (!svg || !image || !polygon || !textBox || !handles) return;
+    if (!svg || !image || !polygon || !handles) return;
 
     image.setAttribute("href", "data:image/jpeg;base64," + data.image);
 
@@ -100,16 +97,6 @@ export default function(component) {
             },
             render() {
                 polygon.setAttribute("points", this.points.map((point) => point.join(",")).join(" "));
-                if (this.points.length) {
-                    const xs = this.points.map((point) => point[0]);
-                    const ys = this.points.map((point) => point[1]);
-                    const left = Math.min(...xs);
-                    const top = Math.min(...ys);
-                    textBox.setAttribute("x", left);
-                    textBox.setAttribute("y", top);
-                    textBox.setAttribute("width", Math.max(...xs) - left);
-                    textBox.setAttribute("height", Math.max(...ys) - top);
-                }
                 while (this.handles.length < this.points.length) {
                     const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                     handle.setAttribute("class", "handle");
@@ -2577,16 +2564,16 @@ def _render_manual_subject_cutout(
         height=108,
         placeholder="INDIA DOMINATE\nTHE FINAL MATCH\nTODAY",
         help=(
-            "Enter one line per row to control every break. Keep every headline word once and in order. "
-            "Leave this empty for automatic balanced wrapping based on the measured font size and box width."
+            "Enter one line per row to set explicit breaks. Keep every headline word once and in order. "
+            "Leave this empty to wrap automatically against the full polygon shape at your selected font size."
         ),
     )
     state["manual_lines"] = manual_lines
 
     st.caption(
-        "The outer polygon bounds are the exact text box. Every line uses the same left edge; "
-        "automatic wrapping measures the selected font and never shrinks it. Behind Subject may expand "
-        "English word spacing to fill each line, without stretching letters. Render Now shows the actual frame."
+        "The polygon edges are the exact text boundary—no inset box or padding. Automatic wrapping measures "
+        "each line against the polygon shape. Your selected font size and normal word spacing stay unchanged; "
+        "if the words cannot fit, the renderer reports it instead of resizing or stretching them."
     )
 
     if st.button("Render Now", type="primary", width="stretch", key=f"{state_id}-cutout-render", help="Generate and render card frame"):
@@ -2757,6 +2744,15 @@ def _render_card_studio(
             except TypeError:
                 return []
         if isinstance(value, dict):
+            if value and all(isinstance(column, (list, tuple)) for column in value.values()):
+                row_count = max((len(column) for column in value.values()), default=0)
+                return [
+                    {
+                        key: column[index] if index < len(column) else ""
+                        for key, column in value.items()
+                    }
+                    for index in range(row_count)
+                ]
             return [dict(value)] if value else []
         if isinstance(value, (list, tuple)):
             return [dict(row) for row in value if isinstance(row, dict)]
@@ -3025,12 +3021,12 @@ def _render_card_studio(
         if card_type == "Stat Highlight":
             st.session_state[value_key("value")] = translated_data.get("value", "")
             st.session_state[value_key("supporting-fields")] = list(
-                translated_data.get("supporting_fields") or translated_data.get("metrics") or [{"label": "", "value": ""}]
+                translated_data.get("supporting_fields") or translated_data.get("metrics") or []
             )
             st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
         elif card_type == "Quote / Reaction":
             st.session_state[value_key("supporting-fields")] = list(
-                translated_data.get("supporting_fields") or [{"label": "", "value": ""}]
+                translated_data.get("supporting_fields") or []
             )
             st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
             if translated_data.get("context"):
@@ -3051,9 +3047,7 @@ def _render_card_studio(
                 }
                 for item in metrics
             ]
-            st.session_state[value_key("comparison-metrics")] = translated_rows or [
-                {"label": "", "left_value": "", "right_value": ""}
-            ]
+            st.session_state[value_key("comparison-metrics")] = translated_rows
             st.session_state.pop(f"{value_key('comparison-metrics')}-editor", None)
         elif card_type == "Key Fact / Milestone":
             st.session_state[value_key("value")] = translated_data.get("value", "")
@@ -3494,7 +3488,7 @@ def _render_card_studio(
                 support_fields = list(generated.get("metrics") or [])
             if not support_fields and generated.get("context"):
                 support_fields = [{"label": "Context", "value": generated.get("context")}]
-            st.session_state[value_key("supporting-fields")] = support_fields or [{"label": "", "value": ""}]
+            st.session_state[value_key("supporting-fields")] = support_fields
             st.session_state.pop(f"{value_key('supporting-fields')}-editor", None)
 
         if card_type == "Head-to-Head":
@@ -3514,7 +3508,7 @@ def _render_card_studio(
                     right_value = str(right_values.get(label) or "")
                 if label:
                     metrics.append({"label": label, "left_value": left_value, "right_value": right_value})
-            st.session_state[value_key("comparison-metrics")] = metrics or [{"label": "", "left_value": "", "right_value": ""}]
+            st.session_state[value_key("comparison-metrics")] = metrics
             st.session_state.pop(f"{value_key('comparison-metrics')}-editor", None)
 
     auto_col, prompt_col = st.columns([1, 1], gap="small")
@@ -3581,8 +3575,8 @@ def _render_card_studio(
     support_editor_key = f"{support_key}-editor"
     comparison_key = value_key("comparison-metrics")
     comparison_editor_key = f"{comparison_key}-editor"
-    st.session_state.setdefault(support_key, list(defaults.get("supporting_fields") or [{"label": "", "value": ""}]))
-    st.session_state.setdefault(comparison_key, [{"label": "", "left_value": "", "right_value": ""}])
+    st.session_state.setdefault(support_key, list(defaults.get("supporting_fields") or []))
+    st.session_state.setdefault(comparison_key, [])
 
     if card_type == "Stat Highlight":
         st.markdown("#### Main statistic")
@@ -3611,7 +3605,7 @@ def _render_card_studio(
             st.text_input("Unit (optional)", key=unit_key, placeholder="e.g. TEST WICKETS")
             st.caption("Add only the supporting facts this story actually needs. Use the row controls to add or remove fields.")
             support_rows = st.data_editor(
-                _editable_rows(st.session_state.get(support_key)),
+                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
                 key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
@@ -3653,7 +3647,7 @@ def _render_card_studio(
             )
             st.caption("Add only context that improves the quote. Exact quotations must be source-backed.")
             support_rows = st.data_editor(
-                _editable_rows(st.session_state.get(support_key)),
+                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
                 key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
@@ -3690,7 +3684,7 @@ def _render_card_studio(
             right_name_val = st.text_input("Second player / side", key=right_name_key, placeholder="e.g. Glenn McGrath")
         st.caption("Comparison fields are dynamic. Add one or more comparable, source-backed rows; rows are not limited to three.")
         comparison_rows = st.data_editor(
-            _editable_rows(st.session_state.get(comparison_key)),
+            (_editable_rows(st.session_state.get(comparison_key)) or {"label": [], "left_value": [], "right_value": []}),
             key=comparison_editor_key,
             num_rows="dynamic",
             hide_index=True,
@@ -3729,7 +3723,7 @@ def _render_card_studio(
         with st.expander("Optional supporting detail", expanded=False):
             st.caption("Only add extra explanation if it helps the story.")
             support_rows = st.data_editor(
-                _editable_rows(st.session_state.get(support_key)),
+                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
                 key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
