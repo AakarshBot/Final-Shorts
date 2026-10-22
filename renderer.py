@@ -9,6 +9,7 @@ import hashlib
 import os
 from pathlib import Path
 import math
+import numpy as np
 import shutil
 import subprocess
 import sys
@@ -1348,17 +1349,18 @@ def _manual_subject_cutout_layout_data_uncached(
     box_bottom = max(y for _, y in points)
     box_width = box_right - box_left
     box_height = box_bottom - box_top
-    padding = 2
-    available_width = box_width - padding * 2
-    available_height = box_height - padding * 2
-    if available_width <= 0 or available_height <= 0:
-        raise ValueError("Manual Subject Cutout text box must have positive usable width and height.")
+    if box_width <= 0 or box_height <= 0:
+        raise ValueError("Manual Subject Cutout polygon must have positive width and height.")
 
     try:
         requested_size = int(font_size or MANUAL_SUBJECT_DEFAULT_FONT_SIZE)
     except (TypeError, ValueError) as exc:
         raise ValueError("Manual Subject Cutout has invalid font size.") from exc
-    requested_size = max(MANUAL_SUBJECT_MIN_FONT_SIZE, min(MANUAL_SUBJECT_MAX_FONT_SIZE, requested_size))
+    if not MANUAL_SUBJECT_MIN_FONT_SIZE <= requested_size <= MANUAL_SUBJECT_MAX_FONT_SIZE:
+        raise ValueError(
+            f"Manual Subject Cutout font size must be between {MANUAL_SUBJECT_MIN_FONT_SIZE}px "
+            f"and {MANUAL_SUBJECT_MAX_FONT_SIZE}px. The selected size is never changed automatically."
+        )
 
     mode = str(font_name or "").strip()
     if mode not in MANUAL_SUBJECT_FONT_OPTIONS:
@@ -1436,109 +1438,163 @@ def _manual_subject_cutout_layout_data_uncached(
         line_height = max(1, line_box[3] - line_box[1])
         line_gap = TOP5_EDITORIAL_HEADLINE_LINE_GAP
 
-    max_line_count = min(len(words), max(0, (available_height + line_gap) // (line_height + line_gap)))
+    polygon_mask = Image.new("L", (WIDTH, HEIGHT), 0)
+    ImageDraw.Draw(polygon_mask).polygon(points, fill=255)
+    inside = np.asarray(polygon_mask, dtype=np.uint8) > 0
+    vertical_clearance = np.zeros((HEIGHT, WIDTH), dtype=np.uint16)
+    vertical_clearance[-1] = inside[-1].astype(np.uint16)
+    for row_y in range(HEIGHT - 2, -1, -1):
+        vertical_clearance[row_y] = np.where(
+            inside[row_y],
+            np.minimum(vertical_clearance[row_y + 1].astype(np.uint32) + 1, 65535),
+            0,
+        ).astype(np.uint16)
+
+    span_cache = {}
+
+    def available_spans(line_top: int, ink_height: int):
+        key = (int(line_top), int(ink_height))
+        if key in span_cache:
+            return span_cache[key]
+        if line_top < 0 or ink_height < 1 or line_top + ink_height > HEIGHT:
+            return ()
+        # A column is available only if every pixel in the line's stroked
+        # bounding height remains inside the actual hand-drawn polygon.
+        valid = vertical_clearance[line_top] >= ink_height
+        edges = np.diff(np.concatenate((
+            np.asarray([False]),
+            valid,
+            np.asarray([False]),
+        )).astype(np.int8))
+        starts = np.flatnonzero(edges == 1)
+        ends = np.flatnonzero(edges == -1)
+        spans = tuple((int(left), int(right)) for left, right in zip(starts, ends))
+        span_cache[key] = spans
+        return spans
+
     measurements = {}
 
     def measure(line: str):
         if line not in measurements:
             bbox = probe.textbbox((0, 0), line, font=font, stroke_width=stroke_width)
-            measurements[line] = (bbox, bbox[2] - bbox[0])
+            measurements[line] = (bbox, max(1, bbox[2] - bbox[0]), max(1, bbox[3] - bbox[1]))
         return measurements[line]
 
-    lines = list(clean_manual_lines)
-    if clean_manual_lines:
-        if len(lines) > max_line_count:
-            raise ValueError(
-                f"Manual line breaks need {len(lines)} lines, but only {max_line_count} fit "
-                f"in the text box at {requested_size}px. Remove a line break, enlarge the box, or reduce the text size."
-            )
-        for index, line in enumerate(lines, 1):
-            _bbox, line_width = measure(line)
-            if line_width > available_width:
-                raise ValueError(
-                    f"Manual line {index} is wider than the text box at {requested_size}px. "
-                    "Change that line break, widen the box, or reduce the text size."
-                )
-    else:
-        for word in words:
-            _bbox, word_width = measure(word)
-            if word_width > available_width:
-                raise ValueError(
-                    f"The word '{word}' is wider than the text box at {requested_size}px. "
-                    "Widen the box or reduce the text size."
-                )
-
-        @lru_cache(maxsize=None)
-        def best_wrap(start: int, remaining_lines: int):
-            if remaining_lines == 0:
-                return (0.0, ()) if start == len(words) else None
-            if len(words) - start < remaining_lines:
-                return None
-            best = None
-            last_end = len(words) - remaining_lines + 1
-            for end in range(start + 1, last_end + 1):
-                line = " ".join(words[start:end])
-                _bbox, line_width = measure(line)
-                if line_width > available_width:
-                    continue
-                remainder = best_wrap(end, remaining_lines - 1)
-                if remainder is None:
-                    continue
-                slack = (available_width - line_width) / available_width
-                cost = slack * slack * (0.25 if remaining_lines == 1 else 1.0) + 0.035
-                if len(words) > 1 and end - start == 1:
-                    cost += 0.12
-                candidate = (cost + remainder[0], (line,) + remainder[1])
-                if best is None or candidate < best:
-                    best = candidate
-            return best
-
-        automatic = [
-            candidate
-            for line_count in range(1, max_line_count + 1)
-            if (candidate := best_wrap(0, line_count)) is not None
+    def best_span(line_top: int, ink_height: int, line_width: int):
+        options = [
+            (right - left, left, right)
+            for left, right in available_spans(line_top, ink_height)
+            if right - left >= line_width
         ]
-        if not automatic:
-            return {
-                "headline": clean_headline, "points": points,
-                "box_bounds": (box_left, box_top, box_right, box_bottom),
-                "box_height": box_height, "available_width": available_width,
-                "font_size": requested_size, "font_name": mode, "style": clean_style,
-                "stretch_english_lines": script_language is None,
-                "font_data": font_data, "font": font, "stroke_width": stroke_width,
-                "layouts": [],
-            }
-        lines = list(min(automatic, key=lambda item: (item[0], len(item[1]), item[1]))[1])
+        if not options:
+            return None
+        _span_width, left, right = max(options, key=lambda item: (item[0], -item[1]))
+        return left, right
 
-    total_height = line_height * len(lines) + line_gap * max(0, len(lines) - 1)
-    if total_height > available_height:
-        raise ValueError(
-            f"The selected {requested_size}px text needs {total_height}px of height, "
-            f"but the text box has {available_height}px available."
-        )
+    placements = []
+    lines = []
+    target_widths = []
+    line_breaks = []
+    next_allowed_y = box_top
+    consumed_words = 0
 
-    placements, target_widths = [], []
-    for index, line in enumerate(lines):
-        bbox, _line_width = measure(line)
-        line_top = box_top + padding + index * (line_height + line_gap)
-        placements.append((line, line_top, box_left + padding, bbox))
-        target_widths.append(available_width)
+    if clean_manual_lines:
+        manual_candidates = list(clean_manual_lines)
+    else:
+        manual_candidates = None
 
-    consumed_words, line_breaks = 0, []
-    for line in lines:
-        consumed_words += len(line.split())
-        line_breaks.append(consumed_words)
-    fill_ratio = sum(min(1.0, measure(line)[1] / max(1.0, available_width)) for line in lines) / max(1, len(lines))
+    if manual_candidates is not None:
+        for line_index, line in enumerate(manual_candidates, 1):
+            bbox, line_width, ink_height = measure(line)
+            selected = None
+            for line_top in range(next_allowed_y, box_bottom):
+                span = best_span(line_top, ink_height, line_width)
+                if span is not None:
+                    selected = (line_top, span)
+                    break
+            if selected is None:
+                layout_error = (
+                    f"Manual line {line_index} does not fit anywhere in the remaining polygon "
+                    f"at the selected {requested_size}px font size. Change the line break or draw a larger polygon."
+                )
+                return {
+                    "headline": clean_headline, "points": points,
+                    "box_bounds": (box_left, box_top, box_right, box_bottom),
+                    "box_height": box_height, "available_width": box_width,
+                    "font_size": requested_size, "font_name": mode, "style": clean_style,
+                    "stretch_english_lines": False, "font_data": font_data, "font": font,
+                    "stroke_width": stroke_width, "manual_lines": True,
+                    "layout_error": layout_error, "layouts": [],
+                }
+            line_top, (cursor_x, _span_right) = selected
+            placements.append((line, line_top, cursor_x, bbox))
+            lines.append(line)
+            target_widths.append(line_width)
+            consumed_words += len(line.split())
+            line_breaks.append(consumed_words)
+            next_allowed_y = line_top + max(line_height, ink_height) + line_gap
+    else:
+        word_index = 0
+        while word_index < len(words):
+            selected = None
+            last_y = min(box_bottom, HEIGHT)
+            for line_top in range(next_allowed_y, last_y):
+                best = None
+                for end in range(word_index + 1, len(words) + 1):
+                    line = " ".join(words[word_index:end])
+                    bbox, line_width, ink_height = measure(line)
+                    span = best_span(line_top, ink_height, line_width)
+                    if span is None:
+                        continue
+                    candidate = (end, line, bbox, line_width, ink_height, span)
+                    if best is None or end > best[0]:
+                        best = candidate
+                if best is not None:
+                    selected = (line_top, best)
+                    break
+            if selected is None:
+                missing_word = words[word_index]
+                layout_error = (
+                    f"The remaining words starting with '{missing_word}' do not fit inside the drawn polygon "
+                    f"at the selected {requested_size}px font size. The renderer kept the font size and normal "
+                    "word spacing unchanged; enlarge or reshape the polygon, shorten the headline, or choose "
+                    "a smaller size yourself."
+                )
+                return {
+                    "headline": clean_headline, "points": points,
+                    "box_bounds": (box_left, box_top, box_right, box_bottom),
+                    "box_height": box_height, "available_width": box_width,
+                    "font_size": requested_size, "font_name": mode, "style": clean_style,
+                    "stretch_english_lines": False, "font_data": font_data, "font": font,
+                    "stroke_width": stroke_width, "manual_lines": False,
+                    "layout_error": layout_error, "layouts": [],
+                }
+            line_top, best = selected
+            end, line, bbox, line_width, ink_height, (cursor_x, _span_right) = best
+            placements.append((line, line_top, cursor_x, bbox))
+            lines.append(line)
+            target_widths.append(line_width)
+            word_index = end
+            consumed_words += len(line.split())
+            line_breaks.append(consumed_words)
+            next_allowed_y = line_top + max(line_height, ink_height) + line_gap
+
+    last_placement = placements[-1]
+    total_height = last_placement[1] + (last_placement[3][3] - last_placement[3][1]) - box_top
+    fill_ratio = sum(
+        min(1.0, measure(line)[1] / max(1.0, box_width))
+        for line in lines
+    ) / max(1, len(lines))
     return {
         "headline": clean_headline,
         "points": points,
         "box_bounds": (box_left, box_top, box_right, box_bottom),
         "box_height": box_height,
-        "available_width": available_width,
+        "available_width": box_width,
         "font_size": requested_size,
         "font_name": mode,
         "style": clean_style,
-        "stretch_english_lines": script_language is None,
+        "stretch_english_lines": False,
         "font_data": font_data,
         "font": font,
         "stroke_width": stroke_width,
@@ -1550,6 +1606,7 @@ def _manual_subject_cutout_layout_data_uncached(
             "target_widths": tuple(target_widths),
             "fill_ratio": fill_ratio,
             "fill_score": fill_ratio,
+            "occupied_height": total_height,
         }],
     }
 
@@ -1808,8 +1865,10 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
     layouts = data["layouts"]
     if not layouts:
         raise ValueError(
-            f"Text size {data['font_size']}px does not fit the selected rectangular text box. "
-            "Make the box wider or taller, or choose a smaller size."
+            data.get("layout_error")
+            or f"Text size {data['font_size']}px does not fit inside the drawn polygon. "
+            "The selected font size is unchanged. Enlarge or reshape the polygon, shorten the headline, "
+            "or choose a smaller size yourself."
         )
 
     layout = layouts[0]
