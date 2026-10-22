@@ -5,7 +5,7 @@ import visual_search
 
 
 def _jpeg_bytes(value):
-    image = Image.new("RGB", (10, 10), value)
+    image = Image.new("RGB", (800, 900), value)
     buffer = io.BytesIO()
     image.save(buffer, format="JPEG")
     return buffer.getvalue()
@@ -227,3 +227,81 @@ def test_wikidata_extracts_claims_and_builds_items(monkeypatch):
     url, meta = items[0]
     assert "upload.wikimedia.org" in url
     assert meta["source"] == "Wikidata"
+
+def test_valid_image_rejects_a_low_resolution_thumbnail():
+    small = Image.new("RGB", (500, 400), "blue")
+    buffer = io.BytesIO()
+    small.save(buffer, format="JPEG")
+    assert visual_search._valid_image(buffer.getvalue()) is False
+
+
+def test_valid_image_keeps_large_original_bytes_and_dimensions():
+    large = Image.new("RGB", (1600, 2200), "blue")
+    buffer = io.BytesIO()
+    large.save(buffer, format="PNG")
+    original = buffer.getvalue()
+    assert visual_search._image_info(original) == (1600, 2200)
+    assert visual_search._valid_image(original) is True
+
+
+def test_commons_requests_and_uses_original_image_url(monkeypatch):
+    calls = {}
+
+    class MockResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"query": {"pages": {"1": {
+                "title": "File:Player.jpg",
+                "imageinfo": [{
+                    "url": "https://upload.wikimedia.org/original.jpg",
+                    "thumburl": "https://upload.wikimedia.org/thumbnail.jpg",
+                    "descriptionurl": "https://commons.wikimedia.org/wiki/File:Player.jpg",
+                    "width": 3000,
+                    "height": 2000,
+                }],
+            }}}}
+
+    def mock_get(url, **kwargs):
+        calls.update(kwargs.get("params") or {})
+        return MockResponse()
+
+    monkeypatch.setattr(visual_search.requests, "get", mock_get)
+    monkeypatch.setattr(visual_search, "_download_many", lambda items: items)
+    items = visual_search._commons("cricket player")
+
+    assert items[0][0] == "https://upload.wikimedia.org/original.jpg"
+    assert items[0][1]["width"] == 3000
+    assert items[0][1]["height"] == 2000
+    assert "iiurlwidth" not in calls
+    assert "size" in calls.get("iiprop", "")
+
+
+def test_download_keeps_original_image_bytes_without_reencoding(monkeypatch):
+    original_buffer = io.BytesIO()
+    Image.new("RGB", (1200, 1800), (15, 65, 110)).save(original_buffer, format="PNG")
+    original_bytes = original_buffer.getvalue()
+
+    class FakeResponse:
+        content = original_bytes
+        headers = {"content-type": "image/png"}
+        url = "https://images.example/original.png"
+
+        def raise_for_status(self):
+            return None
+
+    class FakeSession:
+        def get(self, *args, **kwargs):
+            return FakeResponse()
+
+    monkeypatch.setattr(visual_search, "_get_session", lambda: FakeSession())
+    asset = visual_search._download(
+        "https://images.example/original.png",
+        {"source": "Original test"},
+    )
+
+    assert asset["bytes"] == original_bytes
+    assert asset["width"] == 1200
+    assert asset["height"] == 1800
+    assert asset["hash"] == visual_search.hashlib.sha256(original_bytes).hexdigest()
