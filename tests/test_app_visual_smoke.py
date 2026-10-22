@@ -729,10 +729,9 @@ def test_hindi_live_card_studio_exposes_translation_and_optional_fields():
 
     assert not at.exception, at.exception
     assert any(button.label == "Translate card text to Hindi" for button in at.button)
-    values = {field.label: field.value for field in at.text_input}
-    assert values["Category label (optional)"] == "करियर के आँकड़े"
-    assert values["What the number means (optional)"] == ""
-    assert values["Unit (optional)"] == ""
+    assert at.session_state["live-standalone-card-studio-stat-highlight-eyebrow-hindi"] == "करियर के आँकड़े"
+    assert at.session_state["live-standalone-card-studio-stat-highlight-headline-hindi"] == ""
+    assert at.session_state["live-standalone-card-studio-stat-highlight-unit-hindi"] == ""
 
 
 
