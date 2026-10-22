@@ -1937,16 +1937,52 @@ if "live_upload_comment" not in st.session_state:
 if "live_pipeline_notice" not in st.session_state:
     st.session_state.live_pipeline_notice = None
 def _asset_to_image(value):
-    from PIL import Image
     try:
         if isinstance(value, Image.Image):
-            return value.convert("RGB")
+            return ImageOps.exif_transpose(value).convert("RGB")
         if isinstance(value, (bytes, bytearray)):
             with Image.open(BytesIO(bytes(value))) as image:
-                return image.convert("RGB")
-    except (OSError, ValueError):
+                return ImageOps.exif_transpose(image).convert("RGB")
+    except (OSError, ValueError, SyntaxError):
         return None
     return None
+
+
+def _local_image_assets(uploaded_files):
+    """Use original image bytes without recompressing local uploads."""
+    assets = []
+    for uploaded in uploaded_files or []:
+        try:
+            raw = bytes(uploaded.getvalue())
+            if not raw:
+                continue
+            with Image.open(BytesIO(raw)) as opened:
+                image = ImageOps.exif_transpose(opened)
+                image.load()
+                width, height = image.size
+                image_format = str(opened.format or "").upper()
+            if width < 1 or height < 1:
+                continue
+        except (OSError, ValueError, SyntaxError):
+            continue
+        filename = Path(str(getattr(uploaded, "name", "") or "local-image")).name
+        assets.append({
+            "bytes": raw,
+            "hash": hashlib.sha256(raw).hexdigest(),
+            "source": "Local upload",
+            "source_page_url": "",
+            "source_image_url": "",
+            "title": filename,
+            "article_title": filename,
+            "publisher": "Local upload",
+            "query": "Local upload",
+            "label": filename,
+            "width": width,
+            "height": height,
+            "image_format": image_format,
+            "original_bytes_preserved": True,
+        })
+    return assets
 
 
 @st.cache_data(max_entries=256, show_spinner=False)
@@ -5594,6 +5630,18 @@ def _render_two_pane_visual_workspace(
                                 slide_count,
                                 live=True,
                             )
+                elif fetcher_mode.startswith("Option 6"):
+                    st.caption("Uploaded files are kept at their original resolution and use the same crop, preview and slide-attachment pool.")
+                    uploaded_files = st.file_uploader(
+                        "Choose local images",
+                        type=["jpg", "jpeg", "png", "webp"],
+                        accept_multiple_files=True,
+                        key="live-local-image-upload",
+                    )
+                    local_assets = _local_image_assets(uploaded_files)
+                    if uploaded_files and not local_assets:
+                        st.error("None of the selected files could be opened as images.")
+                    _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=True)
             else:
                 if fetcher_mode.startswith("Option 1"):
                     render_visuals_crawler()
@@ -5603,6 +5651,18 @@ def _render_two_pane_visual_workspace(
                     _render_manual_real_images()
                 elif fetcher_mode.startswith("Option 4"):
                     _render_manual_ai_images()
+                elif fetcher_mode.startswith("Option 6"):
+                    st.caption("Uploaded files are kept at their original resolution and use the same crop, preview and slide-attachment pool.")
+                    uploaded_files = st.file_uploader(
+                        "Choose local images",
+                        type=["jpg", "jpeg", "png", "webp"],
+                        accept_multiple_files=True,
+                        key="test-local-image-upload",
+                    )
+                    local_assets = _local_image_assets(uploaded_files)
+                    if uploaded_files and not local_assets:
+                        st.error("None of the selected files could be opened as images.")
+                    _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=False)
 
     if col_studio is not None:
         with col_studio:
