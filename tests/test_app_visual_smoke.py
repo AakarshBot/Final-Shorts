@@ -17,6 +17,7 @@ VISUAL_OPTIONS = (
     "Option 3 · Real Image Search",
     "Option 4 · AI Generation",
     "Option 5 · Card Studio",
+    "Option 6 · Upload Local Image",
 )
 
 
@@ -75,6 +76,7 @@ def test_top5_standalone_visual_qc_exposes_card_studio():
             "Option 3 · Manual Fetcher",
             "Option 4 · AI Generation",
             "Option 5 · Card Studio",
+            "Option 6 · Upload Local Image",
         )
     )
 
