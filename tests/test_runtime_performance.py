@@ -349,3 +349,14 @@ def test_visual_studio_offers_local_upload_across_pipelines():
     assert 'key="test-top5-playground-local-upload"' in app_source
     assert 'key=f"test-top5-local-upload-{active_slide}"' in app_source
     assert 'key=f"live-top5-local-upload-{active_slide}"' in app_source
+
+
+
+def test_six_visual_source_cards_use_two_balanced_rows_and_show_upload_quality():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert '(":material/upload_file:", "Upload original image files")' in app_source
+    assert '<div class="section-count">6 ways to build</div>' in app_source
+    assert "for start in range(0, len(options), 3):" in app_source
+    assert "st.columns(min(3, len(options) - start), gap=\"small\")" in app_source
+    assert '<div class="section-count">5 Image Sources</div>' in app_source
+    assert 'Original source: {source_width:,} × {source_height:,} px' in app_source
