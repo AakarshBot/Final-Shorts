@@ -213,6 +213,13 @@ def test_manual_query_plan_keeps_original_and_expands_context(monkeypatch):
 
 
 def test_manual_crawl_name_only_keeps_current_search(monkeypatch):
+    import visual_search
+    monkeypatch.setattr(
+        visual_search,
+        "search_images",
+        lambda query: {"query": query, "assets": [], "providers": {}, "errors": {}},
+    )
+
     calls = []
 
     monkeypatch.setattr(
@@ -239,6 +246,13 @@ def test_manual_crawl_name_only_keeps_current_search(monkeypatch):
 
 
 def test_manual_crawl_context_enables_historical_search(monkeypatch):
+    import visual_search
+    monkeypatch.setattr(
+        visual_search,
+        "search_images",
+        lambda query: {"query": query, "assets": [], "providers": {}, "errors": {}},
+    )
+
     calls = []
 
     monkeypatch.setattr(
@@ -309,6 +323,13 @@ def test_historical_search_keeps_old_relevant_pages(monkeypatch):
 
 
 def test_manual_crawl_excludes_known_pages_older_than_five_years(monkeypatch):
+    import visual_search
+    monkeypatch.setattr(
+        visual_search,
+        "search_images",
+        lambda query: {"query": query, "assets": [], "providers": {}, "errors": {}},
+    )
+
     from datetime import timedelta
 
     cutoff = visual_fetcher._manual_cutoff_date()
@@ -393,7 +414,108 @@ def test_news_search_applies_date_filter_to_providers_but_scores_base_query(monk
     assert result[0]["query"] == "Virat Kohli century"
 
 
-def test_manual_crawl_returns_scraped_assets(monkeypatch):
+def test_manual_crawl_returns_scraped_assets(monkeypatch):def test_manual_crawl_uses_image_search_first_and_skips_page_crawl_when_full(monkeypatch):
+    import visual_search
+
+    calls = []
+    monkeypatch.setattr(visual_fetcher, "_manual_query_plan", lambda query: {
+        "historical": False,
+        "queries": [query, f"{query} action"],
+    })
+
+    def fake_search(query):
+        calls.append(query)
+        return {
+            "query": query,
+            "providers": {"DuckDuckGo": 10},
+            "errors": {},
+            "assets": [
+                {
+                    "bytes": b"valid-image",
+                    "hash": f"image-{index}",
+                    "source": "DuckDuckGo",
+                    "source_image_url": f"https://images.example/{index}.jpg",
+                    "source_page_url": f"https://publisher.example/{index}",
+                    "title": f"Virat Kohli batting action photo {index}",
+                    "published_at": "",
+                }
+                for index in range(10)
+            ],
+        }
+
+    monkeypatch.setattr(visual_search, "search_images", fake_search)
+    monkeypatch.setattr(visual_fetcher, "_image_bytes_ok", lambda data: data == b"valid-image")
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_collect_related_pages",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("Publisher-page fallback should not run")),
+    )
+
+    result = visual_fetcher.manual_crawl_visuals("Virat Kohli batting")
+
+    assert calls == ["Virat Kohli batting"]
+    assert len(result["assets"]) == 10
+    assert result["search_mode"] == "image-search"
+    assert result["pages_scraped"] == 0
+    assert result["image_search_queries"] == ["Virat Kohli batting"]
+
+
+def test_manual_crawl_falls_back_to_recent_publisher_pages_when_image_search_is_sparse(monkeypatch):
+    import visual_search
+
+    calls = []
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_manual_query_plan",
+        lambda query: {"historical": False, "queries": [query]},
+    )
+    monkeypatch.setattr(
+        visual_search,
+        "search_images",
+        lambda query: {"query": query, "assets": [], "providers": {}, "errors": {}},
+    )
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_collect_related_pages",
+        lambda queries, original_url, story_title="", entity="", historical=False: (
+            calls.append((queries, historical))
+            or [{
+                "url": "https://publisher.example/recent",
+                "title": "Recent cricket action photo gallery",
+                "source": "Example Publisher",
+                "published_at": "",
+                "query": query if (query := queries[0].split(" after:")[0]) else "",
+            }]
+        ),
+    )
+    monkeypatch.setattr(
+        visual_fetcher,
+        "_crawl_pages",
+        lambda requests: [{
+            "assets": [],
+            "url": requests[0]["url"],
+            "title": requests[0]["title"],
+            "candidate_count": 0,
+        }],
+    )
+
+    result = visual_fetcher.manual_crawl_visuals("India cricket action")
+
+    cutoff = visual_fetcher._manual_cutoff_date().isoformat()
+    assert calls == [([f"India cricket action after:{cutoff}"], True)]
+    assert result["search_mode"] == "image-search+recent-publisher-pages"
+    assert result["pages_scraped"] == 1
+    assert result["date_cutoff"] == cutoff
+
+
+
+    import visual_search
+    monkeypatch.setattr(
+        visual_search,
+        "search_images",
+        lambda query: {"query": query, "assets": [], "providers": {}, "errors": {}},
+    )
+
     monkeypatch.setattr(
         visual_fetcher,
         "_manual_query_plan",
