@@ -540,7 +540,7 @@ def test_manual_subject_cutout_migrates_four_point_polygon_to_eight_points():
 
 
 
-def test_card_studio_shows_image_pool_crop_controls_and_default_fields(monkeypatch):
+def test_card_studio_uses_dynamic_story_generated_fields(monkeypatch):
     import script_writer
 
     def fake_generate(card_type, story, target_language="english", manual_prompt=""):
@@ -548,14 +548,13 @@ def test_card_studio_shows_image_pool_crop_controls_and_default_fields(monkeypat
         assert story["title"] == "India win again"
         assert target_language == "english"
         return {
-            "eyebrow": "AUTO CAREER STAT",
-            "headline": "Generated from approved story",
-            "value": "999",
-            "unit": "RUNS",
-            "metrics": [
-                {"label": "Matches", "value": "12"},
-                {"label": "Average", "value": "46.2"},
-                {"label": "Centuries", "value": "3"},
+            "eyebrow": "CAREER RECORD",
+            "headline": "Most Test wickets by a fast bowler",
+            "value": "704",
+            "unit": "TEST WICKETS",
+            "supporting_fields": [
+                {"label": "Test appearances", "value": "188"},
+                {"label": "International career", "value": "1994–2024"},
             ],
         }
 
@@ -574,7 +573,8 @@ def test_card_studio_shows_image_pool_crop_controls_and_default_fields(monkeypat
     at.session_state["visual_result"] = {"assets": assets}
     at.session_state["script_data"] = {
         "headline": "India win again",
-        "script": [{"voiceover": "One."}] * 4,
+        "source_title": "India win again",
+        "script": [{"voiceover": "India win again"}] * 4,
     }
     at.run()
 
@@ -582,21 +582,25 @@ def test_card_studio_shows_image_pool_crop_controls_and_default_fields(monkeypat
     assert [button.label for button in at.button].count("Crop / reposition") == 3
     next(button for button in at.button if button.label == "Select image").click().run()
     assert not at.exception, at.exception
-    values = {field.label: field.value for field in at.text_input}
-    assert values["Eyebrow"] == "CAREER STAT"
-    assert values["Headline"] == "A huge scoring run"
-    assert values["Hero value"] == "1,203"
-    assert values["Unit"] == "RUNS"
-    assert any(field.label == "Metric 1 label" and field.value == "Matches" for field in at.text_input)
+
+    value_key = "test-standalone-card-studio-stat-highlight-value"
+    headline_key = "test-standalone-card-studio-stat-highlight-headline"
+    fields_key = "test-standalone-card-studio-stat-highlight-supporting-fields"
+    assert at.session_state[value_key] == ""
+    assert at.session_state[headline_key] == ""
+    assert at.session_state[fields_key] == [{"label": "", "value": ""}]
+    assert not any(field.label.startswith("Metric ") for field in at.text_input)
 
     next(button for button in at.button if button.label == "Fill fields from story").click().run()
     assert not at.exception, at.exception
-    generated_values = {field.label: field.value for field in at.text_input}
-    assert generated_values["Eyebrow"] == "AUTO CAREER STAT"
-    assert generated_values["Headline"] == "Generated from approved story"
-    assert generated_values["Hero value"] == "999"
-    assert generated_values["Unit"] == "RUNS"
-    assert any(field.label == "Metric 1 label" and field.value == "Matches" for field in at.text_input)
+    assert at.session_state[value_key] == "704"
+    assert at.session_state[headline_key] == "Most Test wickets by a fast bowler"
+    assert at.session_state["test-standalone-card-studio-stat-highlight-unit"] == "TEST WICKETS"
+    assert at.session_state[fields_key] == [
+        {"label": "Test appearances", "value": "188"},
+        {"label": "International career", "value": "1994–2024"},
+    ]
+
 
 
 def test_card_studio_direct_attach_photo_to_slide():
