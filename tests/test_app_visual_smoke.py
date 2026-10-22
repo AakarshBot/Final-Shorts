@@ -59,6 +59,34 @@ def test_card_visual_options_load():
         assert not at.exception, at.exception
 
 
+def test_local_image_upload_option_loads_in_deep_dive_and_top5_test():
+    standard = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    standard.session_state["app_mode"] = "test"
+    standard.session_state["test_production_line"] = "deep_dive"
+    standard.session_state["test_stage"] = "04 · Visuals"
+    standard.session_state["visual_test_mode"] = "Option 6 · Upload Local Image"
+    standard.run()
+
+    assert not standard.exception, standard.exception
+    assert any(
+        field.label == "Choose local images"
+        for field in standard.file_uploader
+    )
+
+    top5 = AppTest.from_file(str(APP_PATH), default_timeout=10)
+    top5.session_state["app_mode"] = "test"
+    top5.session_state["test_production_line"] = "top_5"
+    top5.session_state["test_stage"] = "04 · Visuals"
+    top5.session_state["test_top5_visual_playground_option"] = "Option 6 · Upload Local Image"
+    top5.run()
+
+    assert not top5.exception, top5.exception
+    assert any(
+        field.label == "Choose local images"
+        for field in top5.file_uploader
+    )
+
+
 def test_top5_standalone_visual_qc_exposes_card_studio():
     at = AppTest.from_file(str(APP_PATH), default_timeout=10)
     at.session_state["app_mode"] = "test"
