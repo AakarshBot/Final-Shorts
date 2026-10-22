@@ -1258,7 +1258,7 @@ def test_generate_stat_card_copy_preserves_story_and_ascii_digits(monkeypatch):
         "headline": "शानदार पारी",
         "value": "१२३",
         "unit": "रन",
-        "metrics": [
+        "supporting_fields": [
             {"label": "औसत", "value": "४६.२७"},
             {"label": "मैच", "value": "१२"},
             {"label": "शतक", "value": "३"},
@@ -1277,8 +1277,8 @@ def test_generate_stat_card_copy_preserves_story_and_ascii_digits(monkeypatch):
         manual_prompt="Focus on the record.",
     )
     assert result["value"] == "123"
-    assert result["metrics"][0]["value"] == "46.27"
-    assert result["metrics"][1]["value"] == "12"
+    assert result["supporting_fields"][0]["value"] == "46.27"
+    assert result["supporting_fields"][1]["value"] == "12"
     assert "Hindi" in captured["prompt"]
     assert "Focus on the record." in captured["prompt"]
     assert "Gill scores 123" in captured["story"]
@@ -1296,10 +1296,13 @@ def test_generate_head_to_head_card_copy_returns_renderer_shape(monkeypatch):
         ],
     })
     result = script_writer.generate_card_copy("Head-to-Head", {"title": "Comparison"})
-    assert result["metrics"] == ["Runs", "Average", "Centuries"]
+    assert result["metrics"] == [
+        {"label": "Runs", "left_value": "1,020", "right_value": "990"},
+        {"label": "Average", "left_value": "48.2", "right_value": "44.1"},
+        {"label": "Centuries", "left_value": "3", "right_value": "2"},
+    ]
     assert result["left"]["name"] == "Player One"
-    assert result["left"]["values"]["Runs"] == "1,020"
-    assert result["right"]["values"]["Centuries"] == "2"
+    assert result["right"]["name"] == "Player Two"
 
 
 def test_generate_card_copy_rejects_text_subject_cutout():
@@ -1316,7 +1319,7 @@ def test_generate_telugu_card_copy_uses_telugu_script_and_ascii_digits(monkeypat
             "eyebrow": "రికార్డు",
             "value": "౧౨౩",
             "label": "పరుగులు",
-            "context": "మ్యాచ్‌లో సాధించిన స్కోరు",
+            "supporting_fields": [{"label": "వివరాలు", "value": "మ్యాచ్‌లో సాధించిన స్కోరు"}],
         }
 
     monkeypatch.setattr(script_writer, "_request", fake_request)
@@ -1327,4 +1330,5 @@ def test_generate_telugu_card_copy_uses_telugu_script_and_ascii_digits(monkeypat
     )
     assert result["language"] == "telugu"
     assert result["value"] == "123"
+    assert result["supporting_fields"][0]["value"] == "మ్యాచ్‌లో సాధించిన స్కోరు"
     assert "Telugu" in captured["prompt"]
