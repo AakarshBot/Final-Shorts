@@ -4756,32 +4756,34 @@ def _render_visual_option_grid(
             (":material/photo_library:", "Find real photography"),
             (":material/auto_awesome:", "Create visuals from a prompt"),
             (":material/dashboard_customize:", "Design an editorial card"),
+            (":material/upload_file:", "Upload original image files"),
         )
         st.markdown(
             '<div class="section-head live-source-head"><div>'
             '<div class="eyebrow">VISUAL SOURCE</div>'
             '<div class="section-title">Choose a creative starting point</div>'
             '<div class="live-source-copy">Switch sources without losing your attached slides.</div>'
-            '</div><div class="section-count">5 ways to build</div></div>',
+            '</div><div class="section-count">6 ways to build</div></div>',
             unsafe_allow_html=True,
         )
         with st.container(key=f"{button_prefix}-source-tile-grid"):
-            cols = st.columns(len(options), gap="small")
-            for index, (col, option) in enumerate(zip(cols, options)):
-                icon, description = source_cards[index] if index < len(source_cards) else (":material/image:", "Select a visual source")
-                with col:
-                    with st.container(key=f"{button_prefix}-source-card-{index}"):
-                        if st.button(
-                            option,
-                            type="primary" if option == current else "secondary",
-                            width="stretch",
-                            key=f"{button_prefix}-{options.index(option)}",
-                            icon=icon,
-                            help=description,
-                        ):
-                            current = option
-                            st.session_state[session_key] = option
-                        st.caption(description)
+            for start in range(0, len(options), 3):
+                cols = st.columns(min(3, len(options) - start), gap="small")
+                for index, (col, option) in enumerate(zip(cols, options[start:start + 3]), start=start):
+                    icon, description = source_cards[index] if index < len(source_cards) else (":material/image:", "Select a visual source")
+                    with col:
+                        with st.container(key=f"{button_prefix}-source-card-{index}"):
+                            if st.button(
+                                option,
+                                type="primary" if option == current else "secondary",
+                                width="stretch",
+                                key=f"{button_prefix}-{options.index(option)}",
+                                icon=icon,
+                                help=description,
+                            ):
+                                current = option
+                                st.session_state[session_key] = option
+                            st.caption(description)
         return current
 
     st.markdown(
@@ -5129,6 +5131,10 @@ def _render_visual_asset_pool(
                             f'<div class="visual-source">{source}</div>',
                             unsafe_allow_html=True,
                         )
+                        source_width = int(asset.get("width") or 0)
+                        source_height = int(asset.get("height") or 0)
+                        if source_width > 0 and source_height > 0:
+                            st.caption(f"Original source: {source_width:,} × {source_height:,} px")
                         if label:
                             st.markdown(
                                 f'<div class="visual-detail">{label}</div>',
@@ -5423,7 +5429,7 @@ def _render_two_pane_visual_workspace(
                 '<div class="section-head" style="margin-bottom:0.75rem;"><div>'
                 '<div class="eyebrow">RIGHT PANE · VISUAL FETCHER</div>'
                 '<div class="section-title">Image Acquisition Desk</div></div>'
-                '<div class="section-count">4 Image Sources</div></div>',
+                '<div class="section-count">5 Image Sources</div></div>',
                 unsafe_allow_html=True,
             )
             fetcher_mode = active_mode if not active_mode.startswith("Option 5") else "Option 1 · Automatic Scraper"
