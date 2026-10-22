@@ -4758,13 +4758,14 @@ def _render_visual_option_grid(
             (":material/photo_library:", "Find real photography"),
             (":material/auto_awesome:", "Create visuals from a prompt"),
             (":material/dashboard_customize:", "Design an editorial card"),
+            (":material/upload_file:", "Upload local images"),
         )
         st.markdown(
-            '<div class="section-head live-source-head"><div>'
-            '<div class="eyebrow">VISUAL SOURCE</div>'
-            '<div class="section-title">Choose a creative starting point</div>'
-            '<div class="live-source-copy">Switch sources without losing your attached slides.</div>'
-            '</div><div class="section-count">5 ways to build</div></div>',
+            f'<div class="section-head live-source-head"><div>'
+            f'<div class="eyebrow">VISUAL SOURCE</div>'
+            f'<div class="section-title">Choose a creative starting point</div>'
+            f'<div class="live-source-copy">Switch sources without losing your attached slides.</div>'
+            f'</div><div class="section-count">{len(options)} ways to build</div></div>',
             unsafe_allow_html=True,
         )
         with st.container(key=f"{button_prefix}-source-tile-grid"):
@@ -5483,7 +5484,7 @@ def _render_two_pane_visual_workspace(
                             live=True,
                         )
                 elif fetcher_mode.startswith("Option 2"):
-                    st.caption("Manual query only. The query is expanded carefully and publisher-page search is limited to the last five years.")
+                    st.caption("Searches direct image results first, then recent publisher pages if the image pool is sparse. Known page dates older than five years are excluded.")
                     with st.form("live-manual-crawler-form"):
                         query = st.text_input(
                             "Manual query",
@@ -9432,7 +9433,7 @@ def _render_manual_crawler():
     from visual_fetcher import manual_crawl_visuals
 
     st.subheader("Manual Scraper")
-    st.caption("Manual query only. Searches current publisher pages and scrapes their images.")
+    st.caption("Image search first, like a visual search engine. If results are sparse, it searches recent publisher pages and collects their images. Known publication dates older than five years are excluded from the page fallback.")
     with st.form("manual_crawler_form"):
         query = st.text_input(
             "Search query",
@@ -9450,7 +9451,7 @@ def _render_manual_crawler():
         if not query:
             st.warning("Enter a query first.")
         else:
-            with st.spinner("Searching and scraping publisher pages…"):
+            with st.spinner("Searching image engines and, if needed, recent publisher pages…"):
                 try:
                     st.session_state.manual_visual_result = manual_crawl_visuals(query)
                     st.session_state.visual_crops = {}
@@ -9468,9 +9469,16 @@ def _render_manual_crawler():
 
     st.caption(
         f'{len(result.get("assets") or [])} images · '
-        f'{int(result.get("pages_scraped") or 0)} pages · '
-        f'{"historical search" if result.get("historical") else "current search"}'
+        f'{int(result.get("pages_scraped") or 0)} publisher pages · '
+        f'{str(result.get("search_mode") or "image search").replace("-", " ")}'
     )
+    if result.get("message") and result.get("assets"):
+        st.info(result["message"])
+    image_errors = result.get("image_search_errors") or {}
+    if image_errors:
+        with st.expander("Image-search provider diagnostics"):
+            for provider_name, provider_error in image_errors.items():
+                st.caption(f"{provider_name}: {provider_error}")
     for query in result.get("search_queries") or []:
         st.code(query)
     diagnostics = list(result.get("diagnostics") or [])
@@ -9482,7 +9490,7 @@ def _render_manual_crawler():
 
     assets = list(result.get("assets") or [])
     if not assets:
-        st.warning("The manual crawler found no usable images.")
+        st.warning(result.get("message") or "No usable images were found by image search or the recent-page fallback.")
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Scraped images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
@@ -11618,7 +11626,7 @@ elif st.session_state.app_mode == "test":
                     if not query:
                         st.warning("Enter a query first.")
                     else:
-                        with st.spinner("Searching and scraping publisher pages…"):
+                        with st.spinner("Searching image engines and, if needed, recent publisher pages…"):
                             try:
                                 result = manual_crawl_visuals(query)
                                 st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
@@ -12092,7 +12100,7 @@ elif st.session_state.app_mode == "test":
                             _top5_render_asset_pool(list(result.get("assets") or []), "auto")
 
                     if visual_option == "Option 2 · Manual Scraper":
-                        st.caption("Same Manual Scraper used by Cricket: manual query → publisher-page search → scraped image pool.")
+                        st.caption("Image-search first: direct image results, followed by recent publisher-page fallback if needed.")
                         query = st.text_input(
                             "Manual query",
                             value=specific_prompt,
@@ -12108,7 +12116,7 @@ elif st.session_state.app_mode == "test":
                             if not query:
                                 st.warning("Enter a query first.")
                             else:
-                                with st.spinner("Searching and scraping publisher pages…"):
+                                with st.spinner("Searching image engines and, if needed, recent publisher pages…"):
                                     try:
                                         from visual_fetcher import manual_crawl_visuals
                                         result = manual_crawl_visuals(query)
