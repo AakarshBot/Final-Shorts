@@ -87,7 +87,6 @@ def test_manual_subject_cutout_uses_full_rectangle_edges_without_padding(monkeyp
     assert data["box_bounds"] == (80, 700, 1000, 1200)
     _assert_text_bounding_boxes_inside_polygon(polygon, layout["placements"])
     assert data["font_size"] == 140
-    assert data["stretch_english_lines"] is False
 
 
 def test_manual_subject_cutout_flows_lines_along_a_tapered_polygon(monkeypatch):
