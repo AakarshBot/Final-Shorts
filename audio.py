@@ -924,20 +924,27 @@ def generate_chatterbox_audio(
             "sha256": _file_sha256(actual_ref),
         }
 
-    # One sampling configuration applies to the complete narration; there is no
-    # per-slide random temperature, pitch shift or style reset.
+    # Infer once for the whole approved narration and include it in the cache key.
+    delivery_profile = _infer_chatterbox_delivery_profile(full_text, selected_model)
     settings = (
-        {"temperature": 0.65, "cfg_weight": 0.35, "exaggeration": 0.50,
-         "min_p": 0.05, "top_p": 1.0, "repetition_penalty": 1.2}
+        {
+            "temperature": 0.60,
+            "cfg_weight": delivery_profile["cfg_weight"],
+            "exaggeration": delivery_profile["exaggeration"],
+            "min_p": 0.05,
+            "top_p": 1.0,
+            "repetition_penalty": 1.2,
+        }
         if selected_model == "full"
-        else {"temperature": 0.62, "top_p": 0.90, "top_k": 1000, "repetition_penalty": 1.15}
+        else {"temperature": 0.55, "top_p": 0.90, "top_k": 1000, "repetition_penalty": 1.15}
     )
     signature_payload = {
-        "cache_version": "chatterbox-continuous-v2-contextual-delivery",
+        "cache_version": "chatterbox-continuous-v3-script-tone-delivery",
         "model_version": selected_model,
         "text": full_text,
         "scene_texts": texts,
         "settings": settings,
+        "delivery_profile": delivery_profile,
         "run_number": int(run_number),
         "reference": reference_fingerprint,
         "max_duration_seconds": 30.0,
@@ -1057,6 +1064,7 @@ def generate_chatterbox_audio(
         "scene_durations": durations,
         "total_duration": round(total_duration, 6),
         "duration_corrected": corrected,
+        "delivery_profile": delivery_profile,
         "top5": is_top5,
     }
     fd, raw_manifest_path = tempfile.mkstemp(
