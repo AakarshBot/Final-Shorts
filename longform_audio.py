@@ -11,6 +11,7 @@ from typing import Any
 
 from audio import (
     _chatterbox_audio_texts,
+    _infer_chatterbox_delivery_profile,
     _file_sha256,
     _join_narration_texts,
     _generate_chatterbox_take,
@@ -188,9 +189,17 @@ class LongformAudioEngine:
             }
 
         audio_texts = _chatterbox_audio_texts(texts)
+        full_narration = _join_narration_texts(audio_texts)
+        delivery_profile = _infer_chatterbox_delivery_profile(full_narration, selected_model)
         settings = (
-            {"temperature": 0.75, "cfg_weight": 0.35, "exaggeration": 0.35,
-             "min_p": 0.05, "top_p": 1.0, "repetition_penalty": 1.2}
+            {
+                "temperature": 0.75,
+                "cfg_weight": float(delivery_profile["cfg_weight"]),
+                "exaggeration": float(delivery_profile["exaggeration"]),
+                "min_p": 0.05,
+                "top_p": 1.0,
+                "repetition_penalty": 1.2,
+            }
             if selected_model == "full"
             else {"temperature": 0.90, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.15}
         )
@@ -278,6 +287,7 @@ class LongformAudioEngine:
                 chunk_text,
                 selected_model,
                 seed=chunk_seed,
+                generation_settings=settings,
             )
             generated_chunks.append((start, end, wav))
 

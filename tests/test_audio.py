@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 
+import audio
 from audio import approve_audio, approve_top5_audio, generate_audio, generate_top5_audio
 
 
@@ -473,11 +474,12 @@ def test_audio_approval_creates_visual_handoff(tmp_path):
     assert result["approved_for_visuals"] is True
 
 
-def test_chatterbox_generates_and_caches_each_slide_separately(monkeypatch, tmp_path):
+def test_chatterbox_synthesizes_the_full_script_once_and_caches_scene_cuts(monkeypatch, tmp_path):
     import sys
     import types
     import torch
     import audio
+    from pathlib import Path
 
     class FakeChatterbox:
         sr = 16000
@@ -491,16 +493,14 @@ def test_chatterbox_generates_and_caches_each_slide_separately(monkeypatch, tmp_
 
         def generate(self, text, **kwargs):
             self.generate_calls.append((text, kwargs))
-            return torch.ones((1, self.sr), dtype=torch.float32)
+            return torch.ones((1, self.sr * 2), dtype=torch.float32)
 
     model = FakeChatterbox()
     fake_torchaudio = types.SimpleNamespace(
         save=lambda path, waveform, sample_rate: Path(path).write_bytes(b"WAVE" + b"x" * 1200)
     )
-    from pathlib import Path
-
     monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
-    monkeypatch.setattr(audio, "get_chatterbox_model", lambda: model)
+    monkeypatch.setattr(audio, "get_chatterbox_model", lambda model_version="turbo": model)
     monkeypatch.setattr(audio, "AUDIO_REFERENCE", tmp_path / "missing-reference.wav")
     monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
 
@@ -510,18 +510,18 @@ def test_chatterbox_generates_and_caches_each_slide_separately(monkeypatch, tmp_
     second = audio.generate_chatterbox_audio(script, output_dir=output_dir)
 
     assert all(not scene["from_cache"] for scene in first["scenes"])
-    assert [call[0] for call in model.generate_calls] == ["India won.", "Bowlers held."]
-    assert all(call[1] == {
-        "temperature": 0.90,
-        "top_p": 0.95,
+    assert [call[0] for call in model.generate_calls] == ["India won. Bowlers held."]
+    assert model.generate_calls[0][1] == {
+        "temperature": 0.55,
+        "top_p": 0.90,
         "top_k": 1000,
         "repetition_penalty": 1.15,
-    } for call in model.generate_calls)
-    assert first["continuous_audio"] is False
-    assert all("continuous_master_path" not in scene for scene in first["scenes"])
+    }
+    assert first["continuous_audio"] is True
+    assert first["total_duration"] == pytest.approx(2.0)
     assert sum(scene["duration"] for scene in first["scenes"]) == pytest.approx(2.0)
     assert all(scene["from_cache"] for scene in second["scenes"])
-    assert len(model.generate_calls) == 2
+    assert len(model.generate_calls) == 1
     assert len(model.conditioning_calls) == 0
     assert Path(second["full_path"]).is_file()
 
@@ -530,14 +530,15 @@ def test_chatterbox_generates_and_caches_each_slide_separately(monkeypatch, tmp_
     third = audio.generate_chatterbox_audio(changed_script, output_dir=output_dir)
 
     assert all(not scene["from_cache"] for scene in third["scenes"])
-    assert len(model.generate_calls) == 4
+    assert len(model.generate_calls) == 2
 
 
-def test_chatterbox_seed_varies_by_story_but_remains_cached_for_exact_takes(monkeypatch, tmp_path):
+def test_chatterbox_seed_varies_by_script_but_is_stable_for_cached_takes(monkeypatch, tmp_path):
     import sys
     import types
     import torch
     import audio
+    from pathlib import Path
 
     class FakeChatterbox:
         sr = 16000
@@ -549,8 +550,8 @@ def test_chatterbox_seed_varies_by_story_but_remains_cached_for_exact_takes(monk
     )
 
     def fake_take(model, text, model_version, seed):
-        seeds.append(seed)
-        return torch.ones((1, model.sr), dtype=torch.float32)
+        seeds.append((text, seed))
+        return torch.ones((1, model.sr * 2), dtype=torch.float32)
 
     monkeypatch.setitem(sys.modules, "torchaudio", fake_torchaudio)
     monkeypatch.setattr(audio, "get_chatterbox_model", lambda model_version="turbo": FakeChatterbox())
@@ -569,13 +570,13 @@ def test_chatterbox_seed_varies_by_story_but_remains_cached_for_exact_takes(monk
     changed["script"][0]["voiceover"] = "Australia won."
     audio.generate_chatterbox_audio(changed, output_dir=output_dir)
 
-    assert len(seeds) == 4
-    assert seeds[0] != seeds[1]
-    assert seeds[:2] != seeds[2:]
-    assert all(0 <= seed <= 0x7FFFFFFF for seed in seeds)
+    assert len(seeds) == 2
+    assert seeds[0][0] == "India won. Bowlers held."
+    assert seeds[0][1] != seeds[1][1]
+    assert all(0 <= seed <= 0x7FFFFFFF for _, seed in seeds)
 
 
-def test_chatterbox_full_generates_separate_slide_clips_with_stable_controls(monkeypatch, tmp_path):
+def test_chatterbox_full_generates_one_contextual_take_with_stable_controls(monkeypatch, tmp_path):
     import sys
     import types
     import torch
@@ -606,27 +607,26 @@ def test_chatterbox_full_generates_separate_slide_clips_with_stable_controls(mon
     monkeypatch.setattr(audio, "AUDIO_REFERENCE", tmp_path / "missing-reference.wav")
     monkeypatch.setattr(audio, "_CHATTERBOX_CONDITIONALS_MODEL_ID", None)
 
-    script = approved_script()
     result = audio.generate_chatterbox_audio(
-        script,
+        approved_script(),
         output_dir=tmp_path / "full-output",
         model_version="full",
     )
 
-    assert len(model.calls) == 2
-    assert [call[0] for call in model.calls] == ["India won.", "Bowlers held."]
-    assert all(call[1] == {
-        "temperature": 0.75,
+    assert len(model.calls) == 1
+    assert model.calls[0][0] == "India won. Bowlers held."
+    assert model.calls[0][1] == {
+        "temperature": 0.60,
         "cfg_weight": 0.35,
-        "exaggeration": 0.35,
+        "exaggeration": 0.50,
         "min_p": 0.05,
         "top_p": 1.0,
         "repetition_penalty": 1.2,
-    } for call in model.calls)
+    }
     assert result["model_version"] == "full"
-    assert result["continuous_audio"] is False
-    assert all("continuous_master_path" not in scene for scene in result["scenes"])
-    assert result["total_duration"] == pytest.approx(8.0)
+    assert result["continuous_audio"] is True
+    assert result["total_duration"] == pytest.approx(4.0)
+    assert len(result["scenes"]) == 2
 
 
 def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_path):
@@ -670,7 +670,7 @@ def test_chatterbox_prepares_a_matching_reference_only_once(monkeypatch, tmp_pat
     )
 
     assert model.conditioning_calls == 1
-    assert model.generate_calls == 4
+    assert model.generate_calls == 2
 
 
 def test_continuous_narration_join_preserves_sentence_boundaries():
@@ -687,21 +687,26 @@ def test_continuous_narration_join_preserves_sentence_boundaries():
     ]) == "A narrow win. followed by a record."
 
 
-def test_chatterbox_delivery_uses_flat_temperature_and_no_heuristic_acting():
+def test_chatterbox_uses_approved_text_without_heuristic_acting():
     import audio
 
-    texts = [
-        "A routine report today.",
-        "A heartbreaking injury ends the season.",
-        "The captain opened the innings.",
-        "An unbelievable last-ball finish stuns the favourites.",
-        "The final result changed everything.",
-    ]
-    assert all(
-        audio._chatterbox_delivery(text, number, len(texts))[1] == 0.90
-        for number, text in enumerate(texts, 1)
-    )
+    texts = ["Routine report.", "A heartbreaking injury ends the season.", "The final result changed everything."]
     assert audio._chatterbox_audio_texts(texts) == texts
+    assert audio._join_narration_texts(texts) == (
+        "Routine report. A heartbreaking injury ends the season. The final result changed everything."
+    )
+
+
+def test_continuous_split_prefers_a_nearby_natural_pause():
+    import torch
+    import audio
+
+    waveform = torch.ones((1, 16000), dtype=torch.float32)
+    waveform[:, 7600:8200] = 0.0
+    cuts = audio._split_waveform_by_text(waveform, ["India won.", "Bowlers held."], sample_rate=16000)
+    assert len(cuts) == 2
+    assert abs(cuts[0].shape[-1] - 7600) <= 100
+    assert torch.equal(torch.cat(cuts, dim=-1), waveform)
 
 
 def test_three_local_chatterbox_voice_choices_are_configured(monkeypatch, tmp_path):
@@ -762,7 +767,7 @@ def test_chatterbox_voice_variant_outputs_do_not_overwrite_each_other(monkeypatc
     assert first["full_path"] != second["full_path"]
     assert first["full_path"] == again["full_path"]
     assert all(s["from_cache"] for s in again["scenes"])
-    assert model.generated == 4
+    assert model.generated == 2
 
 
 
@@ -782,13 +787,16 @@ def test_dashboard_exposes_full_and_turbo_for_every_chatterbox_audio_route():
 
     assert app_source.count('["Turbo", "Full"]') == 5
     assert 'model_version=chatterbox_model_choice.casefold()' in app_source
-    assert 'model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold()' in app_source
+    assert 'model_version=st.session_state.get("live_audio_chatterbox_model", "Full").casefold()' in app_source
     assert 'model_version=t5_chatterbox_model_choice.casefold()' in app_source
     assert 'model_version=live_top5_chatterbox_model_choice.casefold()' in app_source
     assert 'model_version=longform_chatterbox_model_choice.casefold()' in app_source
     assert "def _audio_selection_mismatch(" in app_source
     assert "disabled=model_mismatch" in app_source
     assert "Chatterbox Turbo (Voice Cloning)" not in app_source
+    assert app_source.count('["Turbo", "Full"],') == 5
+    assert app_source.count('index=1,') >= 5
+    assert "Full adapts expression to the approved narration." in app_source
 
 
 def test_chatterbox_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch, tmp_path):
@@ -803,7 +811,7 @@ def test_chatterbox_corrects_a_take_that_lands_exactly_on_30_seconds(monkeypatch
         conds = None
 
         def generate(self, text, **kwargs):
-            return torch.ones((1, self.sr * 15), dtype=torch.float32)
+            return torch.ones((1, self.sr * 30), dtype=torch.float32)
 
     model = FakeChatterbox()
     fake_torchaudio = types.SimpleNamespace(
@@ -857,3 +865,53 @@ def test_indic_first_scene_duration_validation_canonicalizes_locale_tags(locale)
             [{"scene": 1, "duration": 5.21}],
             locale,
         )
+
+def test_chatterbox_delivery_profile_uses_the_full_script_meaning(monkeypatch):
+    import script_writer
+
+    audio._infer_chatterbox_delivery_profile.cache_clear()
+    monkeypatch.setenv("GROQ_API_KEY", "test")
+    monkeypatch.setattr(script_writer, "MODELS", ["tone-model"])
+    captured = {}
+
+    def fake_request(model, prompt, story, **kwargs):
+        captured.update({"model": model, "prompt": prompt, "story": story, "kwargs": kwargs})
+        return {
+            "delivery_tone": "triumphant and celebratory",
+            "exaggeration": 0.65,
+            "cfg_weight": 0.30,
+        }
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    script = "The underdogs held their nerve, then sealed the title with a record-breaking final over."
+    profile = audio._infer_chatterbox_delivery_profile(script, "full")
+
+    assert profile == {
+        "delivery_tone": "triumphant and celebratory",
+        "exaggeration": 0.65,
+        "cfg_weight": 0.30,
+    }
+    assert captured["model"] == "tone-model"
+    assert script in captured["story"]
+    assert "Infer its intended delivery from the meaning" in captured["prompt"]
+    assert "do not rewrite it" in captured["prompt"]
+    assert captured["kwargs"]["schema_name"] == "chatterbox_delivery_profile"
+    audio._infer_chatterbox_delivery_profile.cache_clear()
+
+
+def test_chatterbox_profile_does_not_inject_acting_text_or_change_narration(monkeypatch):
+    monkeypatch.delenv("GROQ_API_KEY", raising=False)
+    audio._infer_chatterbox_delivery_profile.cache_clear()
+    script = ["A pressure-filled final over.", "India wins the trophy."]
+    assert audio._chatterbox_audio_texts(script) == script
+    profile = audio._infer_chatterbox_delivery_profile(" ".join(script), "full")
+    assert "delivery_tone" in profile
+    assert "[excited]" not in " ".join(audio._chatterbox_audio_texts(script)).casefold()
+    audio._infer_chatterbox_delivery_profile.cache_clear()
+
+
+def test_chatterbox_turbo_does_not_claim_adaptive_expression():
+    profile = audio._infer_chatterbox_delivery_profile("A major upset changed the tournament.", "turbo")
+    assert profile["exaggeration"] is None
+    assert profile["cfg_weight"] is None
+    assert "unavailable" in profile["delivery_tone"].casefold()

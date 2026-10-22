@@ -12,6 +12,7 @@ import shutil
 import subprocess
 import tempfile
 from pathlib import Path
+from functools import lru_cache
 from typing import Any
 
 import edge_tts
@@ -589,9 +590,98 @@ def _join_narration_texts(texts: list[str]) -> str:
     return joined
 
 
-def _chatterbox_delivery(text: str, scene_number: int, scene_count: int) -> tuple[str, float]:
-    """Use one moderately expressive sampling temperature, never per-slide keyword rules."""
-    return text, 0.90
+@lru_cache(maxsize=128)
+def _infer_chatterbox_delivery_profile(text: str, model_version: str = "full") -> dict[str, Any]:
+    """Infer how an approved script should sound and map intent to Full's prosody controls."""
+    clean = " ".join(str(text or "").split())
+    selected_model = _normalise_chatterbox_model_version(model_version)
+    neutral = {
+        "delivery_tone": "balanced editorial",
+        "exaggeration": 0.50,
+        "cfg_weight": 0.35,
+    }
+    if selected_model != "full" or not clean or not os.getenv("GROQ_API_KEY"):
+        return neutral if selected_model == "full" else {
+            "delivery_tone": "Turbo stable sampling; adaptive expression unavailable",
+            "exaggeration": None,
+            "cfg_weight": None,
+        }
+
+    try:
+        import script_writer
+    except Exception:
+        return neutral
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "delivery_tone": {
+                "type": "string",
+                "enum": [
+                    "measured and factual",
+                    "serious and authoritative",
+                    "reflective and empathetic",
+                    "tense and suspenseful",
+                    "urgent and high-stakes",
+                    "confident and assertive",
+                    "triumphant and celebratory",
+                    "warm and conversational",
+                    "emotionally intense",
+                ],
+            },
+            "exaggeration": {
+                "type": "number",
+                "enum": [0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60, 0.65, 0.70],
+            },
+            "cfg_weight": {
+                "type": "number",
+                "enum": [0.25, 0.30, 0.35, 0.40, 0.45, 0.50, 0.55, 0.60],
+            },
+        },
+        "required": ["delivery_tone", "exaggeration", "cfg_weight"],
+        "additionalProperties": False,
+    }
+    prompt = (
+        "Read this approved sports narration as an experienced voice director. Infer its intended delivery from "
+        "the meaning, stakes, factual register and narrative arc—not by counting emotionally loaded words. "
+        "Return a restrained Chatterbox Full prosody profile that helps the voice sound like this particular "
+        "script. The settings affect vocal expression only; the narration text must remain unchanged. "
+        "Use exaggeration from 0.30 to 0.70 and CFG weight from 0.25 to 0.60. Hard-news/statistical explanation "
+        "should sound composed; reflective human stories should sound warm; a high-stakes turn may be more tense; "
+        "a genuinely decisive victory or achievement may be celebratory. Do not make every sports story sound hyped. "
+        "Avoid extreme pitch/cadence, shouting or melodrama. Higher exaggeration needs lower CFG, while restrained "
+        "delivery can use higher CFG. Prefer a modest adjustment when the intent is uncertain. "
+        "Analyze how to perform the exact narration; do not rewrite it.\n\n"
+        "Approved narration:\n" + clean[:8000]
+    )
+    for model in getattr(script_writer, "MODELS", []):
+        try:
+            candidate = script_writer._request(
+                model,
+                prompt,
+                clean[:8000],
+                schema=schema,
+                schema_name="chatterbox_delivery_profile",
+                max_completion_tokens=180,
+            )
+            tone = str(candidate.get("delivery_tone") or "").strip()
+            exaggeration = float(candidate.get("exaggeration"))
+            cfg_weight = float(candidate.get("cfg_weight"))
+            allowed_tones = set(schema["properties"]["delivery_tone"]["enum"])
+            if (
+                tone not in allowed_tones
+                or not 0.30 <= exaggeration <= 0.70
+                or not 0.25 <= cfg_weight <= 0.60
+            ):
+                raise ValueError("Prosody analysis returned values outside supported controls.")
+            return {
+                "delivery_tone": tone,
+                "exaggeration": round(exaggeration, 2),
+                "cfg_weight": round(cfg_weight, 2),
+            }
+        except Exception:
+            continue
+    return neutral
 
 
 def _scene_duration_weights(texts: list[str]) -> list[float]:
@@ -612,8 +702,8 @@ def _scene_duration_weights(texts: list[str]) -> list[float]:
     return weights
 
 
-def _split_waveform_by_text(waveform, texts: list[str]) -> list[Any]:
-    """Cut one generated take into approximate slide-preview segments without re-synthesizing."""
+def _split_waveform_by_text(waveform, texts: list[str], sample_rate: int = 24000) -> list[Any]:
+    """Split one narrative take at text-estimated boundaries, preferring nearby quiet pauses."""
     if not texts:
         return []
     if waveform.ndim == 1:
@@ -627,14 +717,45 @@ def _split_waveform_by_text(waveform, texts: list[str]) -> list[Any]:
 
     weights = _scene_duration_weights(texts)
     total_weight = sum(weights)
-    boundaries = [0]
+    proposed = []
     cumulative = 0.0
-    for index, weight in enumerate(weights[:-1], 1):
+    for weight in weights[:-1]:
         cumulative += weight
-        proposed = int(round(sample_count * cumulative / total_weight))
+        proposed.append(int(round(sample_count * cumulative / total_weight)))
+
+    # Estimate speech energy in 10 ms frames. A low-energy frame close to a
+    # sentence boundary is more likely to be a natural pause than a word interior.
+    frame_samples = max(1, int(sample_rate * 0.01))
+    frame_count = sample_count // frame_samples
+    if frame_count >= 2:
+        mono = waveform.abs().mean(dim=0)[:frame_count * frame_samples]
+        frame_rms = mono.reshape(frame_count, frame_samples).square().mean(dim=1).sqrt()
+        typical_rms = float(frame_rms.median().item())
+        quiet_threshold = max(0.001, typical_rms * 0.24)
+    else:
+        frame_rms = None
+        quiet_threshold = 0.0
+
+    boundaries = [0]
+    search_radius = max(frame_samples, int(sample_rate * 0.42))
+    for index, target in enumerate(proposed, 1):
+        lower = max(boundaries[-1] + 1, target - search_radius)
+        upper = min(sample_count - (len(texts) - index), target + search_radius)
+        selected = target
+        if frame_rms is not None and upper > lower:
+            first_frame = max(0, lower // frame_samples)
+            last_frame = min(frame_count - 1, upper // frame_samples)
+            if last_frame >= first_frame:
+                energies = frame_rms[first_frame:last_frame + 1]
+                pause_offset = int(energies.argmin().item())
+                pause_frame = first_frame + pause_offset
+                pause_sample = pause_frame * frame_samples
+                pause_energy = float(energies[pause_offset].item())
+                if pause_energy <= quiet_threshold and lower <= pause_sample <= upper:
+                    selected = pause_sample
         minimum = boundaries[-1] + 1
         maximum = sample_count - (len(texts) - index)
-        boundaries.append(max(minimum, min(maximum, proposed)))
+        boundaries.append(max(minimum, min(maximum, selected)))
     boundaries.append(sample_count)
     return [
         waveform[..., boundaries[index]:boundaries[index + 1]].contiguous()
@@ -642,32 +763,55 @@ def _split_waveform_by_text(waveform, texts: list[str]) -> list[Any]:
     ]
 
 
-def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
-    """Generate one continuous take with stable settings for the selected model family."""
+def _generate_chatterbox_take(
+    model,
+    text: str,
+    model_version: str,
+    seed: int,
+    generation_settings: dict[str, int | float] | None = None,
+):
+    """Generate a complete narration as one repeatable performance.
+
+    Standard Shorts use the script-derived Full delivery profile. Callers such
+    as Long-form can pass their established sampling settings explicitly.
+    """
     import torch
 
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
-    if model_version == "full":
+    if generation_settings is not None:
+        controls = dict(generation_settings)
+        try:
+            import inspect
+            parameters = inspect.signature(model.generate).parameters
+            accepts_kwargs = any(
+                item.kind == inspect.Parameter.VAR_KEYWORD
+                for item in parameters.values()
+            )
+            if not accepts_kwargs:
+                controls = {key: value for key, value in controls.items() if key in parameters}
+        except (TypeError, ValueError):
+            pass
+        wav = model.generate(text, **controls)
+    elif model_version == "full":
+        profile = _infer_chatterbox_delivery_profile(text, model_version)
         wav = model.generate(
             text,
-            temperature=0.75,
-            cfg_weight=0.35,
-            exaggeration=0.35,
+            temperature=0.60,
+            cfg_weight=float(profile["cfg_weight"]),
+            exaggeration=float(profile["exaggeration"]),
             min_p=0.05,
             top_p=1.0,
             repetition_penalty=1.2,
         )
     else:
-        # Turbo has no CFG/exaggeration controls; slightly warmer sampling helps
-        # reduce flat delivery without inserting fake acting cues. Filter settings
-        # by the installed model signature so older compatible package versions
-        # still receive the temperature setting instead of failing on new kwargs.
+        # Turbo ignores CFG/exaggeration. Keep sampling stable; Full is the
+        # model used when the narration needs adaptive vocal expression.
         turbo_controls = {
-            "temperature": 0.90,
-            "top_p": 0.95,
+            "temperature": 0.55,
+            "top_p": 0.90,
             "top_k": 1000,
             "repetition_penalty": 1.15,
         }
@@ -684,7 +828,7 @@ def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
                     if key in parameters
                 }
         except (TypeError, ValueError):
-            turbo_controls = {"temperature": 0.90}
+            turbo_controls = {"temperature": 0.55}
         wav = model.generate(text, **turbo_controls)
 
     wav = wav.detach().cpu()
@@ -731,7 +875,7 @@ def _chatterbox_result_from_manifest(
         "total_duration": round(total_duration, 3),
         "model": "Chatterbox Full" if model_version == "full" else "Chatterbox Turbo",
         "model_version": model_version,
-        "continuous_audio": False,
+        "continuous_audio": True,
         "reference": str(actual_ref) if actual_ref else "Built-in Chatterbox voice",
         "voice_label": voice_label or ("Voice reference" if actual_ref else "Built-in voice"),
         "scenes": scenes,
@@ -741,6 +885,11 @@ def _chatterbox_result_from_manifest(
         "pitch": PITCH,
         "duration_corrected": bool(manifest["duration_corrected"]),
         "delivery": "Script-led",
+        "delivery_profile": manifest.get("delivery_profile") or {
+            "delivery_tone": "balanced editorial",
+            "exaggeration": 0.50,
+            "cfg_weight": 0.35,
+        },
     }
     if manifest.get("top5"):
         result["schema"] = "final-shorts.top5-audio.v1"
@@ -804,20 +953,27 @@ def generate_chatterbox_audio(
             "sha256": _file_sha256(actual_ref),
         }
 
-    # Full supports CFG/exaggeration. Turbo uses its supported sampling controls;
-    # its modestly warmer temperature is intended to avoid flat, robotic cadence.
+    # Infer once for the whole approved narration and include it in the cache key.
+    delivery_profile = _infer_chatterbox_delivery_profile(full_text, selected_model)
     settings = (
-        {"temperature": 0.75, "cfg_weight": 0.35, "exaggeration": 0.35,
-         "min_p": 0.05, "top_p": 1.0, "repetition_penalty": 1.2}
+        {
+            "temperature": 0.60,
+            "cfg_weight": delivery_profile["cfg_weight"],
+            "exaggeration": delivery_profile["exaggeration"],
+            "min_p": 0.05,
+            "top_p": 1.0,
+            "repetition_penalty": 1.2,
+        }
         if selected_model == "full"
-        else {"temperature": 0.90, "top_p": 0.95, "top_k": 1000, "repetition_penalty": 1.15}
+        else {"temperature": 0.55, "top_p": 0.90, "top_k": 1000, "repetition_penalty": 1.15}
     )
     signature_payload = {
-        "cache_version": "chatterbox-per-slide-v1-expressive-turbo",
+        "cache_version": "chatterbox-continuous-v3-script-tone-delivery",
         "model_version": selected_model,
         "text": full_text,
         "scene_texts": texts,
         "settings": settings,
+        "delivery_profile": delivery_profile,
         "run_number": int(run_number),
         "reference": reference_fingerprint,
         "max_duration_seconds": 30.0,
@@ -881,54 +1037,48 @@ def generate_chatterbox_audio(
     manifest_path.unlink(missing_ok=True)
 
     audio_texts = _chatterbox_audio_texts(texts)
-    # English Shorts and Top-5 use separate TTS calls for every approved slide.
-    # The measured clip duration becomes the visual hold and subtitle offset.
-    # Stable per-slide seeds make the output repeatable without estimating where
-    # one scene ends inside a shared waveform.
-    scene_waves = []
-    for scene_number, text in enumerate(audio_texts, 1):
-        scene_seed = int(
-            hashlib.sha256(f"{signature}:{scene_number}".encode("utf-8")).hexdigest()[:8],
-            16,
-        ) & 0x7FFFFFFF
-        scene_waves.append(
-            _generate_chatterbox_take(
-                model, text, selected_model, seed=scene_seed
-            )
-        )
+    # Chatterbox hears the entire approved narration in one pass. That gives it
+    # sentence-to-sentence context for emphasis and cadence, and avoids a fresh
+    # stochastic voice/style reset at every slide.
+    take_seed = int(
+        hashlib.sha256(f"{signature}:continuous-narration".encode("utf-8")).hexdigest()[:8],
+        16,
+    ) & 0x7FFFFFFF
+    full_wave = _generate_chatterbox_take(
+        model, _join_narration_texts(audio_texts), selected_model, seed=take_seed
+    )
 
-    raw_duration = sum(wave.shape[-1] for wave in scene_waves) / model.sr
+    raw_duration = full_wave.shape[-1] / model.sr
     corrected = False
     if raw_duration >= 30.0:
         try:
             import librosa
             rate = min(1.05, raw_duration / 29.7)
-            scene_waves = [
-                torch.from_numpy(
-                    librosa.effects.time_stretch(
-                        wave.squeeze(0).numpy(), rate=rate
-                    )
-                ).to(torch.float32).unsqueeze(0)
-                for wave in scene_waves
-            ]
+            full_wave = torch.from_numpy(
+                librosa.effects.time_stretch(
+                    full_wave.squeeze(0).numpy(), rate=rate
+                )
+            ).to(torch.float32).unsqueeze(0)
         except Exception as exc:
             raise RuntimeError(
-                "Audio is over 30 seconds and per-slide time-stretch failed."
+                "Audio is over 30 seconds and pitch-preserving time-stretch failed."
             ) from exc
         corrected = True
 
-    total_duration = sum(wave.shape[-1] for wave in scene_waves) / model.sr
+    total_duration = full_wave.shape[-1] / model.sr
     if total_duration >= 30.0:
         raise RuntimeError(
             "The generated narration is too long to fit the 30-second Short, "
             "even after one slight pitch-preserving speed adjustment."
         )
 
-    peak = max(float(wave.abs().max().item()) for wave in scene_waves)
+    peak = float(full_wave.abs().max().item())
     if peak > 0:
-        scene_waves = [wave * (0.94 / peak) for wave in scene_waves]
+        full_wave = full_wave * (0.94 / peak)
 
-    full_wave = torch.cat(scene_waves, dim=-1)
+    scene_waves = _split_waveform_by_text(full_wave, texts, sample_rate=model.sr)
+    # The individual slide WAVs are exact adjacent slices of the one master take.
+    # Their concatenation therefore preserves the original continuous delivery.
     master_path = out_path / "full.wav"
     torchaudio.save(str(master_path), full_wave, model.sr)
     durations = []
@@ -943,6 +1093,7 @@ def generate_chatterbox_audio(
         "scene_durations": durations,
         "total_duration": round(total_duration, 6),
         "duration_corrected": corrected,
+        "delivery_profile": delivery_profile,
         "top5": is_top5,
     }
     fd, raw_manifest_path = tempfile.mkstemp(

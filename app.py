@@ -31,6 +31,7 @@ VISUAL_OPTIONS = (
     "Option 3 · Real Image Search",
     "Option 4 · AI Generation",
     "Option 5 · Card Studio",
+    "Option 6 · Upload Local Image",
 )
 CRICKET_TEST_VISUAL_OPTIONS = VISUAL_OPTIONS
 CRICKET_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS
@@ -45,10 +46,9 @@ if not st.get_option("global.appTest"):
   <svg viewBox="0 0 1080 1920" aria-label="Manual Subject Cutout polygon editor">
     <image id="background" x="0" y="0" width="1080" height="1920" preserveAspectRatio="none"></image>
     <polygon id="polygon" fill="#2f6255" fill-opacity=".16" stroke="#2f6255" stroke-width="5" vector-effect="non-scaling-stroke"></polygon>
-    <rect id="text-box" x="0" y="0" width="0" height="0" fill="none" stroke="#f5b942" stroke-width="5" stroke-dasharray="14 10" pointer-events="none" vector-effect="non-scaling-stroke"></rect>
     <g id="handles"></g>
   </svg>
-  <div class="help">The dashed rectangle is the actual text box. Text uses its outer left/right/top/bottom edges; the polygon's inner shape does not affect wrapping. Drag outer points to resize it, or drag the polygon to move it.</div>
+  <div class="help">The polygon itself is the text boundary. Lines wrap where its real edges leave enough width for the selected font size. Drag any corner or edge point to shape the text area.</div>
 </div>
 """,
         css="""
@@ -57,7 +57,6 @@ if not st.get_option("global.appTest"):
 .text-cutout-editor .handle{cursor:move}
 .text-cutout-editor #polygon{cursor:grab}
 .text-cutout-editor #polygon:active{cursor:grabbing}
-.text-cutout-editor #text-box{pointer-events:none;stroke:#f5b942;stroke-dasharray:14 10;vector-effect:non-scaling-stroke}
 .text-cutout-editor .help{margin:6px 0;color:#52574f;font-size:12px;line-height:1.2;opacity:.78}
 """,
         js="""
@@ -66,9 +65,8 @@ export default function(component) {
     const svg = parentElement.querySelector("svg");
     const image = parentElement.querySelector("#background");
     const polygon = parentElement.querySelector("#polygon");
-    const textBox = parentElement.querySelector("#text-box");
     const handles = parentElement.querySelector("#handles");
-    if (!svg || !image || !polygon || !textBox || !handles) return;
+    if (!svg || !image || !polygon || !handles) return;
 
     image.setAttribute("href", "data:image/jpeg;base64," + data.image);
 
@@ -100,16 +98,6 @@ export default function(component) {
             },
             render() {
                 polygon.setAttribute("points", this.points.map((point) => point.join(",")).join(" "));
-                if (this.points.length) {
-                    const xs = this.points.map((point) => point[0]);
-                    const ys = this.points.map((point) => point[1]);
-                    const left = Math.min(...xs);
-                    const top = Math.min(...ys);
-                    textBox.setAttribute("x", left);
-                    textBox.setAttribute("y", top);
-                    textBox.setAttribute("width", Math.max(...xs) - left);
-                    textBox.setAttribute("height", Math.max(...ys) - top);
-                }
                 while (this.handles.length < this.points.length) {
                     const handle = document.createElementNS("http://www.w3.org/2000/svg", "circle");
                     handle.setAttribute("class", "handle");
@@ -251,6 +239,7 @@ TOP5_VISUAL_OPTIONS = (
     "Option 3 · Manual Fetcher",
     "Option 4 · AI Generation",
     "Option 5 · Card Studio",
+    "Option 6 · Upload Local Image",
 )
 
 STAGES = [
@@ -1948,16 +1937,52 @@ if "live_upload_comment" not in st.session_state:
 if "live_pipeline_notice" not in st.session_state:
     st.session_state.live_pipeline_notice = None
 def _asset_to_image(value):
-    from PIL import Image
     try:
         if isinstance(value, Image.Image):
-            return value.convert("RGB")
+            return ImageOps.exif_transpose(value).convert("RGB")
         if isinstance(value, (bytes, bytearray)):
             with Image.open(BytesIO(bytes(value))) as image:
-                return image.convert("RGB")
-    except (OSError, ValueError):
+                return ImageOps.exif_transpose(image).convert("RGB")
+    except (OSError, ValueError, SyntaxError):
         return None
     return None
+
+
+def _local_image_assets(uploaded_files):
+    """Use original image bytes without recompressing local uploads."""
+    assets = []
+    for uploaded in uploaded_files or []:
+        try:
+            raw = bytes(uploaded.getvalue())
+            if not raw:
+                continue
+            with Image.open(BytesIO(raw)) as opened:
+                image = ImageOps.exif_transpose(opened)
+                image.load()
+                width, height = image.size
+                image_format = str(opened.format or "").upper()
+            if width < 1 or height < 1:
+                continue
+        except (OSError, ValueError, SyntaxError):
+            continue
+        filename = Path(str(getattr(uploaded, "name", "") or "local-image")).name
+        assets.append({
+            "bytes": raw,
+            "hash": hashlib.sha256(raw).hexdigest(),
+            "source": "Local upload",
+            "source_page_url": "",
+            "source_image_url": "",
+            "title": filename,
+            "article_title": filename,
+            "publisher": "Local upload",
+            "query": "Local upload",
+            "label": filename,
+            "width": width,
+            "height": height,
+            "image_format": image_format,
+            "original_bytes_preserved": True,
+        })
+    return assets
 
 
 @st.cache_data(max_entries=256, show_spinner=False)
@@ -5605,6 +5630,18 @@ def _render_two_pane_visual_workspace(
                                 slide_count,
                                 live=True,
                             )
+                elif fetcher_mode.startswith("Option 6"):
+                    st.caption("Uploaded files are kept at their original resolution and use the same crop, preview and slide-attachment pool.")
+                    uploaded_files = st.file_uploader(
+                        "Choose local images",
+                        type=["jpg", "jpeg", "png", "webp"],
+                        accept_multiple_files=True,
+                        key="live-local-image-upload",
+                    )
+                    local_assets = _local_image_assets(uploaded_files)
+                    if uploaded_files and not local_assets:
+                        st.error("None of the selected files could be opened as images.")
+                    _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=True)
             else:
                 if fetcher_mode.startswith("Option 1"):
                     render_visuals_crawler()
@@ -5614,6 +5651,18 @@ def _render_two_pane_visual_workspace(
                     _render_manual_real_images()
                 elif fetcher_mode.startswith("Option 4"):
                     _render_manual_ai_images()
+                elif fetcher_mode.startswith("Option 6"):
+                    st.caption("Uploaded files are kept at their original resolution and use the same crop, preview and slide-attachment pool.")
+                    uploaded_files = st.file_uploader(
+                        "Choose local images",
+                        type=["jpg", "jpeg", "png", "webp"],
+                        accept_multiple_files=True,
+                        key="test-local-image-upload",
+                    )
+                    local_assets = _local_image_assets(uploaded_files)
+                    if uploaded_files and not local_assets:
+                        st.error("None of the selected files could be opened as images.")
+                    _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=False)
 
     if col_studio is not None:
         with col_studio:
@@ -6695,12 +6744,12 @@ def render_live_top5():
             live_top5_chatterbox_model_choice = st.selectbox(
                 "Chatterbox model",
                 ["Turbo", "Full"],
-                index=0,
+                index=1,
                 key="live_top5_chatterbox_model",
                 disabled=not is_live_top5_chatterbox,
             )
             if is_live_top5_chatterbox:
-                st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
+                st.caption("Full adapts expression to the approved narration. Turbo is faster but ignores Chatterbox’s emotion/CFG controls. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading.")
             live_top5_reference = None
             live_top5_reference_ready = True
             if is_live_top5_chatterbox:
@@ -6883,6 +6932,18 @@ def render_live_top5():
                 st.error(result["error"])
             assets = list(result.get("assets") or [])
             result_key = "real"
+        elif option == "Option 6 · Upload Local Image":
+            st.caption("Local images are used at their original resolution with the same crop and attachment controls.")
+            uploaded_files = st.file_uploader(
+                "Choose local images",
+                type=["jpg", "jpeg", "png", "webp"],
+                accept_multiple_files=True,
+                key=f"live-top5-local-upload-{active_slide}",
+            )
+            assets = _local_image_assets(uploaded_files)
+            if uploaded_files and not assets:
+                st.error("None of the selected files could be opened as images.")
+            result_key = "local-upload"
         elif option == "Option 5 · Card Studio":
             _render_card_studio(
                 live=True,
@@ -7512,7 +7573,7 @@ def render_live_dashboard():
         st.selectbox(
             "Chatterbox model",
             ["Turbo", "Full"],
-            index=0,
+            index=1,
             key="live_audio_chatterbox_model",
             disabled=not is_live_chatterbox,
         )
@@ -7659,7 +7720,7 @@ def render_live_dashboard():
                 approved_script,
                 selected_engine,
                 reference,
-                model_version=st.session_state.get("live_audio_chatterbox_model", "Turbo").casefold(),
+                model_version=st.session_state.get("live_audio_chatterbox_model", "Full").casefold(),
             )
             st.session_state.live_audio_status = "running"
             st.session_state.live_stage = "04 · Visuals + Render"
@@ -8206,7 +8267,7 @@ def render_longform_audio(live: bool = False):
     longform_chatterbox_model_choice = st.selectbox(
         "Chatterbox model",
         ["Turbo", "Full"],
-        index=0,
+        index=1,
         key=f"{prefix}audio_chatterbox_model",
     )
     st.caption("Turbo is lighter. Full uses fixed CFG/exaggeration settings. Model weights stay in Hugging Face's disk cache between runs; the selected model stays in memory while this Python process remains open. Only uncached files need downloading. Long-form narration is grouped into paragraph-sized chunks to respect model limits, with brief gaps between chunks and the existing act pauses.")
@@ -8218,7 +8279,7 @@ def render_longform_audio(live: bool = False):
         f'<span style="font-size:0.72rem; font-weight:700; color:var(--muted);">{ref_status}</span>'
         f'</div>'
         f'<div style="font-size:0.88rem; font-weight:800; color:var(--ink);">Documentary Narration Suite (6 Acts · ~8 Min)</div>'
-        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led narration · Shared Chatterbox model · Cached master and scene audio</div>'
+        f'<div style="font-size:0.72rem; color:var(--subtle); margin-top:2px;">Script-led narration · Full adapts vocal expression to this script · Cached master and scene audio</div>'
         f'</div>',
         unsafe_allow_html=True,
     )
@@ -10258,7 +10319,7 @@ def render_audio():
         chatterbox_model_choice = st.selectbox(
             "Chatterbox model",
             ["Turbo", "Full"],
-            index=0,
+            index=1,
             key="audio_chatterbox_model_choice",
             disabled=not is_cb,
         )
@@ -11275,7 +11336,7 @@ elif st.session_state.app_mode == "test":
                 t5_chatterbox_model_choice = st.selectbox(
                     "Chatterbox model",
                     ["Turbo", "Full"],
-                    index=0,
+                    index=1,
                     key="test_top5_chatterbox_model",
                     disabled=not is_t5_chatterbox,
                 )
@@ -11638,6 +11699,18 @@ elif st.session_state.app_mode == "test":
                         st.warning(ai_result["message"])
                     for provider_name, provider_error in (ai_result.get("errors") or {}).items():
                         st.caption(f"{provider_name}: {provider_error}")
+
+            elif visual_option == "Option 6 · Upload Local Image":
+                st.caption("Local images are used at original resolution and join the same crop/review pool.")
+                uploaded_files = st.file_uploader(
+                    "Choose local images",
+                    type=["jpg", "jpeg", "png", "webp"],
+                    accept_multiple_files=True,
+                    key="test-top5-playground-local-upload",
+                )
+                assets = _local_image_assets(uploaded_files)
+                if uploaded_files and not assets:
+                    st.error("None of the selected files could be opened as images.")
 
             elif visual_option == "Option 5 · Card Studio":
                 _render_card_studio(
@@ -12149,6 +12222,19 @@ elif st.session_state.app_mode == "test":
                                     st.caption(result["message"])
                                 st.caption(f'{len(result.get("assets") or [])} AI images returned.')
                                 _top5_render_asset_pool(list(result.get("assets") or []), "ai")
+
+                    if visual_option == "Option 6 · Upload Local Image":
+                        st.caption("Upload local images, then select/crop one for this slide. Original file bytes are preserved.")
+                        uploaded_files = st.file_uploader(
+                            "Choose local images",
+                            type=["jpg", "jpeg", "png", "webp"],
+                            accept_multiple_files=True,
+                            key=f"test-top5-local-upload-{active_slide}",
+                        )
+                        local_assets = _local_image_assets(uploaded_files)
+                        if uploaded_files and not local_assets:
+                            st.error("None of the selected files could be opened as images.")
+                        _top5_render_asset_pool(local_assets, "local-upload")
 
                     if visual_option == "Option 5 · Card Studio":
                         _render_card_studio(top5=True, active_slide=active_slide)
