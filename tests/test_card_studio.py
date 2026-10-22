@@ -393,6 +393,20 @@ def test_changing_card_language_invalidates_the_old_render():
     assert state["card-result"] is None
 
 
+def test_fit_rejects_a_word_that_cannot_fit_any_readable_size():
+    draw = ImageDraw.Draw(Image.new("RGB", (100, 100), (0, 0, 0)))
+    with pytest.raises(card_studio.CardStudioError, match="does not fit inside its measured width"):
+        card_studio._fit(
+            draw,
+            "UNBREAKABLYLONGWORD",
+            48,
+            1,
+            36,
+            26,
+            font_fn=card_studio._font_headline,
+        )
+
+
 def test_adaptive_gradient_strength_responds_to_photo_brightness():
     bounds = (100, 300, 500, 900)
     dark = Image.new("RGB", (1080, 1920), (15, 15, 15))
