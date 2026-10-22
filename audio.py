@@ -772,20 +772,21 @@ def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
         torch.cuda.manual_seed_all(seed)
 
     if model_version == "full":
+        profile = _infer_chatterbox_delivery_profile(text, model_version)
         wav = model.generate(
             text,
-            temperature=0.65,
-            cfg_weight=0.35,
-            exaggeration=0.50,
+            temperature=0.60,
+            cfg_weight=float(profile["cfg_weight"]),
+            exaggeration=float(profile["exaggeration"]),
             min_p=0.05,
             top_p=1.0,
             repetition_penalty=1.2,
         )
     else:
-        # Turbo ignores CFG/exaggeration, so a cooler sampling temperature keeps
-        # pitch and cadence from changing randomly across separate scene calls.
+        # Turbo ignores CFG/exaggeration. Keep sampling stable; Full is the
+        # model used when the narration needs adaptive vocal expression.
         turbo_controls = {
-            "temperature": 0.62,
+            "temperature": 0.55,
             "top_p": 0.90,
             "top_k": 1000,
             "repetition_penalty": 1.15,
@@ -803,7 +804,7 @@ def _generate_chatterbox_take(model, text: str, model_version: str, seed: int):
                     if key in parameters
                 }
         except (TypeError, ValueError):
-            turbo_controls = {"temperature": 0.62}
+            turbo_controls = {"temperature": 0.55}
         wav = model.generate(text, **turbo_controls)
 
     wav = wav.detach().cpu()
