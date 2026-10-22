@@ -142,6 +142,20 @@ def test_balanced_text_wrap_handles_long_headlines_without_combination_search(mo
     renderer._manual_subject_cutout_layout_data_cached.cache_clear()
 
 
+
+
+def test_manual_subject_cutout_editor_shows_exact_bounding_text_box():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+
+    assert '<rect id="text-box"' in app_source
+    assert 'const textBox = parentElement.querySelector("#text-box")' in app_source
+    assert 'textBox.setAttribute("x", left)' in app_source
+    assert 'textBox.setAttribute("y", top)' in app_source
+    assert 'Math.max(...xs) - left' in app_source
+    assert 'Math.max(...ys) - top' in app_source
+    assert "The dashed rectangle is the actual text box." in app_source
+
+
 def test_manual_subject_cutout_reuses_layout_geometry(monkeypatch):
     font_path = ROOT / "fonts" / "BarlowCondensed-Black.ttf"
     font_bytes = font_path.read_bytes()
