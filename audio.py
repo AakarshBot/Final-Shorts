@@ -861,6 +861,11 @@ def _chatterbox_result_from_manifest(
         "pitch": PITCH,
         "duration_corrected": bool(manifest["duration_corrected"]),
         "delivery": "Script-led",
+        "delivery_profile": manifest.get("delivery_profile") or {
+            "delivery_tone": "balanced editorial",
+            "exaggeration": 0.50,
+            "cfg_weight": 0.35,
+        },
     }
     if manifest.get("top5"):
         result["schema"] = "final-shorts.top5-audio.v1"
