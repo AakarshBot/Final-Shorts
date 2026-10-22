@@ -215,6 +215,26 @@ def test_card_studio_exposes_manual_composition_controls_for_all_editorial_cards
     assert "Text Subject Cutout is unchanged." in studio_source
 
 
+def test_top5_test_ai_generation_preserves_provider_diagnostics():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    store_anchor = 'st.session_state.test_top5_visual_results[active_slide] = {'
+    store_start = app_source.index(store_anchor)
+    store_end = app_source.index('if result.get("source") == "ai":', store_start)
+    store_block = app_source[store_start:store_end]
+
+    assert '"message": str(result.get("message") or "")' in store_block
+    assert '"errors": dict(result.get("errors") or {})' in store_block
+
+    render_end = app_source.index(
+        '\n                    if visual_option == "Option 5 · Card Studio":',
+        store_end,
+    )
+    render_block = app_source[store_end:render_end]
+    assert 'elif not result.get("assets"):' in render_block
+    assert 'st.warning(result.get("message") or "No AI image provider returned a usable image.")' in render_block
+    assert 'for provider_name, provider_error in (result.get("errors") or {}).items()' in render_block
+
+
 def test_live_card_studio_uses_approved_card_allowlist():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     start = app_source.index("def _render_card_studio(")
