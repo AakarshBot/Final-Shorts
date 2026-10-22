@@ -349,7 +349,7 @@ def _install_windows_fribidi_via_powershell(root: Path | None = None) -> None:
 _activate_bundled_raqm_pillow()
 _register_windows_dll_paths()
 
-from PIL import Image, ImageDraw, ImageFilter, ImageFont, features
+from PIL import Image, ImageChops, ImageDraw, ImageFilter, ImageFont, features
 
 
 WIDTH = 1080

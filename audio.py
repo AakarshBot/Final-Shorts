@@ -768,7 +768,7 @@ def _generate_chatterbox_take(
     text: str,
     model_version: str,
     seed: int,
-    generation_settings: dict[str, float] | None = None,
+    generation_settings: dict[str, int | float] | None = None,
 ):
     """Generate a complete narration as one repeatable performance.
 
@@ -782,7 +782,19 @@ def _generate_chatterbox_take(
         torch.cuda.manual_seed_all(seed)
 
     if generation_settings is not None:
-        wav = model.generate(text, **dict(generation_settings))
+        controls = dict(generation_settings)
+        try:
+            import inspect
+            parameters = inspect.signature(model.generate).parameters
+            accepts_kwargs = any(
+                item.kind == inspect.Parameter.VAR_KEYWORD
+                for item in parameters.values()
+            )
+            if not accepts_kwargs:
+                controls = {key: value for key, value in controls.items() if key in parameters}
+        except (TypeError, ValueError):
+            pass
+        wav = model.generate(text, **controls)
     elif model_version == "full":
         profile = _infer_chatterbox_delivery_profile(text, model_version)
         wav = model.generate(
