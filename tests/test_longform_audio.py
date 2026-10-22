@@ -150,6 +150,17 @@ def test_longform_full_model_uses_controlled_settings_and_chunking(monkeypatch, 
     )
     script = sample_script()
     script["scenes"][1]["act_number"] = 1
+    expected_text = " ".join(scene["voiceover"] for scene in script["scenes"])
+    captured_profiles = []
+    monkeypatch.setattr(
+        longform_audio,
+        "_infer_chatterbox_delivery_profile",
+        lambda text, version: captured_profiles.append((text, version)) or {
+            "delivery_tone": "triumphant and celebratory",
+            "exaggeration": 0.65,
+            "cfg_weight": 0.30,
+        },
+    )
 
     result = LongformAudioEngine.generate(
         script,
@@ -158,11 +169,12 @@ def test_longform_full_model_uses_controlled_settings_and_chunking(monkeypatch, 
     )
 
     assert len(model.calls) == 1
-    assert model.calls[0][0] == " ".join(scene["voiceover"] for scene in script["scenes"])
+    assert model.calls[0][0] == expected_text
+    assert captured_profiles == [(expected_text, "full")]
     assert model.calls[0][1] == {
         "temperature": 0.75,
-        "cfg_weight": 0.35,
-        "exaggeration": 0.35,
+        "cfg_weight": 0.30,
+        "exaggeration": 0.65,
         "min_p": 0.05,
         "top_p": 1.0,
         "repetition_penalty": 1.2,
