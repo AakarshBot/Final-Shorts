@@ -11766,6 +11766,7 @@ elif st.session_state.app_mode == "test":
                                     font_size=int(card_data.get("font_size") or 150),
                                     font=str(card_data.get("font") or "Barlow Condensed"),
                                     style=str(card_data.get("style") or "Crisp Outline"),
+                                    manual_lines=card_data.get("manual_lines"),
                                 )
                             except Exception:
                                 preview_bytes = None
