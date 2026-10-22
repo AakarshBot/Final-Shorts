@@ -32,6 +32,7 @@ VISUAL_OPTIONS = (
     "Option 3 · Real Image Search",
     "Option 4 · AI Generation",
     "Option 5 · Card Studio",
+    "Option 6 · Upload Local Image",
 )
 CRICKET_TEST_VISUAL_OPTIONS = VISUAL_OPTIONS
 CRICKET_LIVE_VISUAL_OPTIONS = VISUAL_OPTIONS
@@ -239,6 +240,7 @@ TOP5_VISUAL_OPTIONS = (
     "Option 3 · Manual Fetcher",
     "Option 4 · AI Generation",
     "Option 5 · Card Studio",
+    "Option 6 · Upload Local Image",
 )
 
 STAGES = [
@@ -1946,6 +1948,36 @@ def _asset_to_image(value):
     except (OSError, ValueError):
         return None
     return None
+
+
+def _local_image_assets(uploaded_files):
+    """Normalize local image uploads to the same byte-backed asset contract as search results."""
+    assets = []
+    for uploaded in uploaded_files or []:
+        try:
+            raw = uploaded.getvalue()
+            with Image.open(BytesIO(raw)) as opened:
+                image = ImageOps.exif_transpose(opened).convert("RGB")
+                image.load()
+            buffer = BytesIO()
+            image.save(buffer, format="JPEG", quality=94, optimize=True)
+            image_bytes = buffer.getvalue()
+        except (OSError, ValueError, SyntaxError):
+            continue
+        filename = Path(str(getattr(uploaded, "name", "") or "local-image.jpg")).name
+        assets.append({
+            "bytes": image_bytes,
+            "hash": hashlib.sha256(image_bytes).hexdigest(),
+            "source": "Local upload",
+            "source_page_url": "",
+            "source_image_url": "",
+            "title": filename,
+            "article_title": filename,
+            "publisher": "Local upload",
+            "query": "Local upload",
+            "label": filename,
+        })
+    return assets
 
 
 @st.cache_data(max_entries=256, show_spinner=False)
