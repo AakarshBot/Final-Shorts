@@ -482,7 +482,7 @@ def _contrast_bed(
     if content_bounds:
         left, top, right, bottom = (int(value) for value in content_bounds)
     elif position == "bottom":
-        left, top, right, bottom = SAFE_LEFT, 900, SAFE_RIGHT, SAFE_BOTTOM
+        left, top, right, bottom = SAFE_LEFT, 1020, SAFE_RIGHT, SAFE_BOTTOM
     else:
         region_x, region_width = _content_region(position)
         left, top, right, bottom = region_x, SAFE_TOP, region_x + region_width, SAFE_BOTTOM
