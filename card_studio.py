@@ -751,10 +751,14 @@ def _draw_text_block(
     draw = ImageDraw.Draw(canvas)
     cursor_y = y
     for line in block["lines"]:
+        line_box = draw.textbbox((0, 0), line, font=block["font"])
+        line_width = line_box[2] - line_box[0]
         if centered and width is not None:
-            draw.text((x + width // 2, cursor_y), line, font=block["font"], fill=fill, anchor="ma")
+            text_x = x + (width - line_width) // 2 - line_box[0]
         else:
-            draw.text((x, cursor_y), line, font=block["font"], fill=fill)
+            text_x = x - line_box[0]
+        text_y = cursor_y - line_box[1]
+        draw.text((text_x, text_y), line, font=block["font"], fill=fill)
         cursor_y += block["line_height"] + block["line_gap"]
     return y + block["height"]
 
