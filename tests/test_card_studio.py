@@ -16,39 +16,86 @@ def _image_bytes(color=(52, 84, 118), size=(900, 1600)):
 
 def _renderable_card_data(card_type, language="english"):
     data = card_studio.card_data_for_type(card_type, language=language)
+    copy = {
+        "english": {
+            "stat_headline": "Career Test wicket record",
+            "unit": "WICKETS",
+            "quote": "We kept believing until the final ball.",
+            "attribution": "Player name",
+            "comparison": "Career comparison",
+            "left_name": "James Anderson",
+            "right_name": "Stuart Broad",
+            "metric": "Test wickets",
+            "metric_two": "Test matches",
+            "fact_label": "Test wickets",
+            "support_label": "Format",
+            "support_value": "Test cricket",
+        },
+        "hindi": {
+            "stat_headline": "टेस्ट विकेट का रिकॉर्ड",
+            "unit": "विकेट",
+            "quote": "हमने आखिरी गेंद तक विश्वास बनाए रखा।",
+            "attribution": "खिलाड़ी का नाम",
+            "comparison": "करियर की तुलना",
+            "left_name": "जेम्स एंडरसन",
+            "right_name": "स्टुअर्ट ब्रॉड",
+            "metric": "टेस्ट विकेट",
+            "metric_two": "टेस्ट मैच",
+            "fact_label": "टेस्ट विकेट",
+            "support_label": "प्रारूप",
+            "support_value": "टेस्ट क्रिकेट",
+        },
+        "telugu": {
+            "stat_headline": "టెస్ట్ వికెట్ల రికార్డు",
+            "unit": "వికెట్లు",
+            "quote": "చివరి బంతి వరకు మేము నమ్మకాన్ని కోల్పోలేదు.",
+            "attribution": "ఆటగాడి పేరు",
+            "comparison": "కెరీర్ పోలిక",
+            "left_name": "జేమ్స్ ఆండర్సన్",
+            "right_name": "స్టువర్ట్ బ్రాడ్",
+            "metric": "టెస్ట్ వికెట్లు",
+            "metric_two": "టెస్ట్ మ్యాచ్‌లు",
+            "fact_label": "టెస్ట్ వికెట్లు",
+            "support_label": "ఫార్మాట్",
+            "support_value": "టెస్ట్ క్రికెట్",
+        },
+    }[language]
     if card_type == "Stat Highlight":
         data.update({
-            "headline": "Career Test wicket record",
+            "headline": copy["stat_headline"],
             "value": "704",
-            "unit": "WICKETS",
+            "unit": copy["unit"],
             "supporting_fields": [
-                {"label": "International career", "value": "1994–2015"},
-                {"label": "Test appearances", "value": "166"},
+                {"label": copy["support_label"], "value": copy["support_value"]},
+                {"label": "Appearances" if language == "english" else ("मैच" if language == "hindi" else "మ్యాచ్‌లు"), "value": "188"},
             ],
         })
     elif card_type == "Quote / Reaction":
         data.update({
-            "quote": "We kept believing until the final ball.",
-            "attribution": "Player name",
+            "quote": copy["quote"],
+            "attribution": copy["attribution"],
             "supporting_fields": [],
         })
     elif card_type == "Head-to-Head":
         data.update({
-            "headline": "Career comparison",
-            "left": {"name": "James Anderson", "values": {}},
-            "right": {"name": "Stuart Broad", "values": {}},
+            "headline": copy["comparison"],
+            "left": {"name": copy["left_name"], "values": {}},
+            "right": {"name": copy["right_name"], "values": {}},
             "metrics": [
-                {"label": "Test wickets", "left_value": "704", "right_value": "604"},
-                {"label": "Test matches", "left_value": "188", "right_value": "167"},
+                {"label": copy["metric"], "left_value": "704", "right_value": "604"},
+                {"label": copy["metric_two"], "left_value": "188", "right_value": "167"},
             ],
         })
     elif card_type == "Key Fact / Milestone":
         data.update({
             "value": "704",
-            "label": "Test wickets",
-            "supporting_fields": [{"label": "Format", "value": "Test cricket"}],
+            "label": copy["fact_label"],
+            "supporting_fields": [
+                {"label": copy["support_label"], "value": copy["support_value"]}
+            ],
         })
     return data
+
 
 
 def test_bottom_gradient_starts_below_the_main_portrait_zone():
@@ -93,6 +140,7 @@ def test_card_studio_defaults_fill_every_wip_field():
         defaults = card_studio.card_data_for_type(card_type)
         assert defaults["layout_position"] == "Auto · Best negative space"
         assert defaults["contrast_treatment"] == "Adaptive gradient"
+        assert defaults["eyebrow"] == ""
 
     stat = card_studio.card_data_for_type("Stat Highlight")
     assert stat["value"] == ""
@@ -333,8 +381,9 @@ def test_localized_card_starter_copy_and_native_script_rendering():
         for card_type in card_types:
             data = _renderable_card_data(card_type, language=language)
             assert data["language"] == language
-            localized_label = card_studio.card_data_for_type(card_type, language=language)["eyebrow"]
-            assert any(start <= ord(char) <= end for char in localized_label), (language, card_type)
+            assert card_studio.card_data_for_type(card_type, language=language)["eyebrow"] == ""
+            serialized = repr(data)
+            assert any(start <= ord(char) <= end for char in serialized), (language, card_type)
             output = card_studio.render_card(card_type, _image_bytes(), data)
             with Image.open(BytesIO(output)) as image:
                 assert image.size == (1080, 1920)
