@@ -6,6 +6,7 @@ Hugging Face and Cloudflare providers are used only when their credentials exist
 from __future__ import annotations
 
 import base64
+import binascii
 import hashlib
 import io
 import os
@@ -159,7 +160,7 @@ def _ai_horde(query: str, seed: int) -> dict[str, Any] | None:
         encoded = image_value.partition(",")[2] if image_value.startswith("data:") else image_value
         try:
             data = base64.b64decode(encoded, validate=False)
-        except (ValueError, base64.binascii.Error) as exc:
+        except (ValueError, binascii.Error) as exc:
             raise RuntimeError("AI Horde returned image data that could not be decoded.") from exc
     elif isinstance(image_value, bytes):
         data = image_value
@@ -233,7 +234,7 @@ def _cloudflare(query: str, seed: int) -> dict[str, Any] | None:
         raise RuntimeError(f"Cloudflare returned no image payload: {detail or 'empty result'}")
     try:
         data = base64.b64decode(encoded)
-    except (ValueError, base64.binascii.Error) as exc:
+    except (ValueError, binascii.Error) as exc:
         raise RuntimeError("Cloudflare returned image data that could not be decoded.") from exc
     return _make_asset(data, "Cloudflare Workers AI", model)
 
