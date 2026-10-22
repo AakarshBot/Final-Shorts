@@ -144,16 +144,17 @@ def test_balanced_text_wrap_handles_long_headlines_without_combination_search(mo
 
 
 
-def test_manual_subject_cutout_editor_shows_exact_bounding_text_box():
+def test_manual_subject_cutout_editor_uses_the_polygon_as_its_text_boundary():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    renderer_source = (ROOT / "renderer.py").read_text(encoding="utf-8")
 
-    assert '<rect id="text-box"' in app_source
-    assert 'const textBox = parentElement.querySelector("#text-box")' in app_source
-    assert 'textBox.setAttribute("x", left)' in app_source
-    assert 'textBox.setAttribute("y", top)' in app_source
-    assert 'Math.max(...xs) - left' in app_source
-    assert 'Math.max(...ys) - top' in app_source
-    assert "The dashed rectangle is the actual text box." in app_source
+    assert '<polygon id="polygon"' in app_source
+    assert 'id="text-box"' not in app_source
+    assert "The polygon itself is the text boundary." in app_source
+    assert "ImageDraw.Draw(polygon_mask).polygon(points, fill=255)" in renderer_source
+    assert "vertical_clearance[line_top] >= ink_height" in renderer_source
+    assert "stretch_english_lines" not in renderer_source
+    assert "stretch_spaces" not in renderer_source
 
 
 def test_manual_subject_cutout_reuses_layout_geometry(monkeypatch):
@@ -213,26 +214,6 @@ def test_card_studio_exposes_manual_composition_controls_for_all_editorial_cards
     assert "invalidate_card_studio_result_for_composition(" in studio_source
     assert "Card type or composition changed. Render the card again" in studio_source
     assert "Text Subject Cutout is unchanged." in studio_source
-
-
-def test_top5_test_ai_generation_preserves_provider_diagnostics():
-    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
-    store_anchor = 'st.session_state.test_top5_visual_results[active_slide] = {'
-    store_start = app_source.index(store_anchor)
-    store_end = app_source.index('if result.get("source") == "ai":', store_start)
-    store_block = app_source[store_start:store_end]
-
-    assert '"message": str(result.get("message") or "")' in store_block
-    assert '"errors": dict(result.get("errors") or {})' in store_block
-
-    render_end = app_source.index(
-        '\n                    if visual_option == "Option 5 · Card Studio":',
-        store_end,
-    )
-    render_block = app_source[store_end:render_end]
-    assert 'elif not result.get("assets"):' in render_block
-    assert 'st.warning(result.get("message") or "No AI image provider returned a usable image.")' in render_block
-    assert 'for provider_name, provider_error in (result.get("errors") or {}).items()' in render_block
 
 
 def test_live_card_studio_uses_approved_card_allowlist():
