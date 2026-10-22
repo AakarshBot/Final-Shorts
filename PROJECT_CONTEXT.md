@@ -471,14 +471,13 @@ Current overall cricket-line checkpoint: **6/10**.
 This is the baseline for future Cricket pipeline changes. The established Cricket functionality remains usable. Card Studio’s four sports-editorial card types have now been promoted to Cricket and YT Trends Live at the user’s direction.
 
 Card Studio checkpoint:
-- Text Subject Cutout remains on its preserved shared Subject Cutout implementation, with polygon-flow enabled only for Deep-Dive Cricket and YT Trends. The four editorial cards are separately rendered by Card Studio and are now enabled in Cricket and YT Trends Live.
-- Stat Highlight, Quote / Reaction, Head-to-Head and Key Fact / Milestone use the shared sports-editorial Card Studio in Test and in Cricket/YT Trends Live.
-- All WIP card fields open with usable default test values.
-- WIP Card Studio shows the full image pool with real image previews and the existing crop/reposition control before image selection.
-- WIP cards use the existing subject-aware foreground mask only for simple negative-space text placement. They do not hide text behind subjects.
-- Head-to-Head supports one-image and two-image modes. Two-image mode has manual Image 1/Image 2 assignment plus manual Vertical/Horizontal split selection.
-- Quote / Reaction is an editorial redesign and remains unapproved until the user manually reviews its output.
-- No WIP card type is promoted to Live until the user approves the actual rendered frame.
+- Text Subject Cutout remains on its preserved shared Subject Cutout implementation and is explicitly out of scope for editorial card redesign.
+- Stat Highlight, Quote / Reaction, Head-to-Head and Key Fact / Milestone use the shared sports-editorial Card Studio in Test and Cricket/YT Trends Live.
+- Current audit finding (2026-10-22): the editorial card copy contract hard-codes required fields and metric counts, while each renderer sizes text blocks independently and relies on fixed vertical coordinates. This can crowd/overlap content and make secondary text too small. The three contrast treatments use largely fixed gradient geometry/opacity rather than measuring local image brightness and texture.
+- Design direction before implementation: retain the four card archetypes and their existing source selection, cropping, subject-mask, Test/Live and attachment handoffs; make supporting fields variable per story/prompt; require only each archetype's core data; lay out the complete content stack within a measured safe area before drawing; preserve readable minimum type sizes or report overflow; adapt contrast-bed strength to the actual photo; make gradients and panels content-aware.
+- Content generation must remain grounded in story material, article text and approved narration. A prompt-only request must not invent unverified scores, records, statistics or verbatim quotations; absent facts are shown as unavailable rather than silently fabricated.
+- Head-to-Head keeps one-image/two-image modes and manual split direction but metric rows are variable, not fixed at three.
+- Do not promote or auto-approve an editorial card based on tests alone; actual rendered frames remain subject to human visual review.
 
 Checkpoint rule:
 - Use **Cricket line = 6/10** as the starting quality baseline for future Cricket pipeline improvements.
