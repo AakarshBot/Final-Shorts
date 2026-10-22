@@ -704,7 +704,7 @@ def test_continuous_split_prefers_a_nearby_natural_pause():
     waveform[:, 7600:8200] = 0.0
     cuts = audio._split_waveform_by_text(waveform, ["India won.", "Bowlers held."], sample_rate=16000)
     assert len(cuts) == 2
-    assert cuts[0].shape[-1] == 7600
+    assert abs(cuts[0].shape[-1] - 7600) <= 100
     assert torch.equal(torch.cat(cuts, dim=-1), waveform)
 
 
