@@ -4769,22 +4769,24 @@ def _render_visual_option_grid(
             unsafe_allow_html=True,
         )
         with st.container(key=f"{button_prefix}-source-tile-grid"):
-            cols = st.columns(len(options), gap="small")
-            for index, (col, option) in enumerate(zip(cols, options)):
-                icon, description = source_cards[index] if index < len(source_cards) else (":material/image:", "Select a visual source")
-                with col:
-                    with st.container(key=f"{button_prefix}-source-card-{index}"):
-                        if st.button(
-                            option,
-                            type="primary" if option == current else "secondary",
-                            width="stretch",
-                            key=f"{button_prefix}-{options.index(option)}",
-                            icon=icon,
-                            help=description,
-                        ):
-                            current = option
-                            st.session_state[session_key] = option
-                        st.caption(description)
+            for start in range(0, len(options), 3):
+                cols = st.columns(min(3, len(options) - start), gap="small")
+                for offset, (col, option) in enumerate(zip(cols, options[start:start + 3])):
+                    index = start + offset
+                    icon, description = source_cards[index] if index < len(source_cards) else (":material/image:", "Select a visual source")
+                    with col:
+                        with st.container(key=f"{button_prefix}-source-card-{index}"):
+                            if st.button(
+                                option,
+                                type="primary" if option == current else "secondary",
+                                width="stretch",
+                                key=f"{button_prefix}-{options.index(option)}",
+                                icon=icon,
+                                help=description,
+                            ):
+                                current = option
+                                st.session_state[session_key] = option
+                            st.caption(description)
         return current
 
     st.markdown(
