@@ -11618,6 +11618,13 @@ elif st.session_state.app_mode == "test":
                                         st.caption(f"{provider_name}: {provider_error}")
                             except Exception as exc:
                                 st.session_state.test_top5_visual_playground_results = []
+                                st.session_state.test_top5_visual_playground_ai_result = {
+                                    "query": prompt,
+                                    "assets": [],
+                                    "error": f"{type(exc).__name__}: {exc}",
+                                    "message": f"AI image generation failed before a provider returned: {type(exc).__name__}: {exc}",
+                                    "errors": {},
+                                }
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
                 ai_result = st.session_state.get("test_top5_visual_playground_ai_result") or {}
                 if (
@@ -11625,7 +11632,9 @@ elif st.session_state.app_mode == "test":
                     and ai_result.get("query")
                     == str(st.session_state.get("test_top5_visual_playground_ai_query") or "").strip()
                 ):
-                    if ai_result.get("message"):
+                    if ai_result.get("error"):
+                        st.error(ai_result["error"])
+                    elif ai_result.get("message"):
                         st.warning(ai_result["message"])
                     for provider_name, provider_error in (ai_result.get("errors") or {}).items():
                         st.caption(f"{provider_name}: {provider_error}")
