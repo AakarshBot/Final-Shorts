@@ -589,11 +589,6 @@ def _join_narration_texts(texts: list[str]) -> str:
     return joined
 
 
-def _chatterbox_delivery(text: str, scene_number: int, scene_count: int) -> tuple[str, float]:
-    """Use one moderately expressive sampling temperature, never per-slide keyword rules."""
-    return text, 0.90
-
-
 def _scene_duration_weights(texts: list[str]) -> list[float]:
     """Estimate visual/subtitle boundaries inside a continuous narration take."""
     weights = []
@@ -760,7 +755,7 @@ def _chatterbox_result_from_manifest(
         "total_duration": round(total_duration, 3),
         "model": "Chatterbox Full" if model_version == "full" else "Chatterbox Turbo",
         "model_version": model_version,
-        "continuous_audio": False,
+        "continuous_audio": True,
         "reference": str(actual_ref) if actual_ref else "Built-in Chatterbox voice",
         "voice_label": voice_label or ("Voice reference" if actual_ref else "Built-in voice"),
         "scenes": scenes,
