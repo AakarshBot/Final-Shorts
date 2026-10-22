@@ -1493,7 +1493,6 @@ def _manual_subject_cutout_layout_data_uncached(
 
     placements = []
     lines = []
-    target_widths = []
     line_breaks = []
     next_allowed_y = box_top
     consumed_words = 0
@@ -1513,23 +1512,35 @@ def _manual_subject_cutout_layout_data_uncached(
                     selected = (line_top, span)
                     break
             if selected is None:
-                layout_error = (
-                    f"Manual line {line_index} does not fit anywhere in the remaining polygon "
-                    f"at the selected {requested_size}px font size. Change the line break or draw a larger polygon."
+                widest_span = max(
+                    (
+                        right - left
+                        for candidate_y in range(next_allowed_y, box_bottom)
+                        for left, right in available_spans(candidate_y, ink_height)
+                    ),
+                    default=0,
                 )
+                if line_width > widest_span:
+                    layout_error = (
+                        f"Manual line {line_index} is wider than the text box's widest usable polygon slice "
+                        f"at {requested_size}px. Change the line break, reshape the polygon, or choose a smaller size yourself."
+                    )
+                else:
+                    layout_error = (
+                        f"Manual line {line_index} does not fit in the remaining polygon height "
+                        f"at {requested_size}px. Change the line break or draw a taller polygon."
+                    )
                 return {
                     "headline": clean_headline, "points": points,
                     "box_bounds": (box_left, box_top, box_right, box_bottom),
                     "box_height": box_height, "available_width": box_width,
                     "font_size": requested_size, "font_name": mode, "style": clean_style,
-                    "stretch_english_lines": False, "font_data": font_data, "font": font,
                     "stroke_width": stroke_width, "manual_lines": True,
                     "layout_error": layout_error, "layouts": [],
                 }
             line_top, (cursor_x, _span_right) = selected
             placements.append((line, line_top, cursor_x, bbox))
             lines.append(line)
-            target_widths.append(line_width)
             consumed_words += len(line.split())
             line_breaks.append(consumed_words)
             next_allowed_y = line_top + max(line_height, ink_height) + line_gap
@@ -1565,7 +1576,6 @@ def _manual_subject_cutout_layout_data_uncached(
                     "box_bounds": (box_left, box_top, box_right, box_bottom),
                     "box_height": box_height, "available_width": box_width,
                     "font_size": requested_size, "font_name": mode, "style": clean_style,
-                    "stretch_english_lines": False, "font_data": font_data, "font": font,
                     "stroke_width": stroke_width, "manual_lines": False,
                     "layout_error": layout_error, "layouts": [],
                 }
@@ -1573,7 +1583,6 @@ def _manual_subject_cutout_layout_data_uncached(
             end, line, bbox, line_width, ink_height, (cursor_x, _span_right) = best
             placements.append((line, line_top, cursor_x, bbox))
             lines.append(line)
-            target_widths.append(line_width)
             word_index = end
             consumed_words += len(line.split())
             line_breaks.append(consumed_words)
@@ -1594,7 +1603,6 @@ def _manual_subject_cutout_layout_data_uncached(
         "font_size": requested_size,
         "font_name": mode,
         "style": clean_style,
-        "stretch_english_lines": False,
         "font_data": font_data,
         "font": font,
         "stroke_width": stroke_width,
@@ -1603,7 +1611,6 @@ def _manual_subject_cutout_layout_data_uncached(
             "line_breaks": tuple(line_breaks),
             "lines": tuple(lines),
             "placements": tuple(placements),
-            "target_widths": tuple(target_widths),
             "fill_ratio": fill_ratio,
             "fill_score": fill_ratio,
             "occupied_height": total_height,
@@ -1696,7 +1703,6 @@ def _draw_manual_subject_cutout_frame(
     *,
     mode: str,
     subject_mask: Image.Image | None = None,
-    target_widths: tuple[float, ...] | list[float] | None = None,
 ) -> Image.Image:
     canvas = _top5_full_frame_image(base).convert("RGBA")
     if mode == "behind-subject":
@@ -1794,6 +1800,7 @@ def _draw_manual_subject_cutout_frame(
         shifted_layer(12, 12, 255)
         shifted_layer(15, 18, 190, 5)
 
+    effects.putalpha(ImageChops.multiply(effects.getchannel("A"), polygon_mask))
     canvas.alpha_composite(effects)
 
     text_layer = Image.new("RGBA", canvas.size, (0, 0, 0, 0))
@@ -1875,7 +1882,6 @@ def _draw_manual_subject_cutout(base: Image.Image, config: dict) -> Image.Image:
         layout["placements"],
         mode=mode,
         subject_mask=subject_mask,
-        target_widths=layout.get("target_widths"),
     )
 
 
