@@ -2748,6 +2748,20 @@ def _render_card_studio(
         render_card,
     )
 
+    def _editable_rows(value):
+        if value is None:
+            return []
+        if hasattr(value, "to_dict"):
+            try:
+                value = value.to_dict("records")
+            except TypeError:
+                return []
+        if isinstance(value, dict):
+            return [dict(value)] if value else []
+        if isinstance(value, (list, tuple)):
+            return [dict(row) for row in value if isinstance(row, dict)]
+        return []
+
     card_types = LIVE_CARD_TYPES if live else TEST_CARD_TYPES
     state_id = (
         f"{'live' if live else 'test'}-"
@@ -3599,14 +3613,15 @@ def _render_card_studio(
                     "value": st.column_config.TextColumn("Verified value", width="small"),
                 },
             )
+        support_records = _editable_rows(support_rows if "support_rows" in locals() else st.session_state.get(support_key))
         data = {
             "eyebrow": eyebrow_val,
             "headline": st.session_state.get(headline_key, ""),
             "value": st.session_state.get(value_key_main, ""),
             "unit": st.session_state.get(unit_key, ""),
             "supporting_fields": [
-                row for row in (support_rows if "support_rows" in locals() else st.session_state.get(support_key) or [])
-                if isinstance(row, dict) and str(row.get("label") or "").strip() and str(row.get("value") or "").strip()
+                row for row in support_records
+                if str(row.get("label") or "").strip() and str(row.get("value") or "").strip()
             ],
         }
 
@@ -3622,7 +3637,7 @@ def _render_card_studio(
             key=quote_key,
             placeholder="The exact words from the source, or an editorial summary when no verbatim quote is available.",
         )
-        with st.expander("Optional attribution and supporting details", expanded=bool(st.session_state.get(support_key))):
+        with st.expander("Optional attribution and supporting details", expanded=False):
             st.text_input(
                 "Attribution (optional)",
                 key=attribution_key,
@@ -3640,13 +3655,15 @@ def _render_card_studio(
                     "value": st.column_config.TextColumn("Supporting text", width="large"),
                 },
             )
+        support_records = _editable_rows(support_rows if "support_rows" in locals() else st.session_state.get(support_key))
         data = {
             "eyebrow": eyebrow_val,
             "quote": quote_val,
             "attribution": st.session_state.get(attribution_key, ""),
-            "supporting_fields": support_rows if "support_rows" in locals() else (
-                st.session_state.get(support_key) or []
-            ),
+            "supporting_fields": [
+                row for row in support_records
+                if str(row.get("label") or "").strip() and str(row.get("value") or "").strip()
+            ],
         }
 
     elif card_type == "Head-to-Head":
@@ -3676,14 +3693,15 @@ def _render_card_studio(
                 "right_value": st.column_config.TextColumn(str(right_name_val or "Second side"), width="small"),
             },
         )
+        comparison_records = _editable_rows(comparison_rows)
         data = {
             "eyebrow": eyebrow_val,
             "headline": st.session_state.get(headline_key, ""),
             "left": {"name": left_name_val, "values": {}},
             "right": {"name": right_name_val, "values": {}},
             "metrics": [
-                row for row in comparison_rows
-                if isinstance(row, dict) and str(row.get("label") or "").strip()
+                row for row in comparison_records
+                if str(row.get("label") or "").strip()
             ],
             "image_mode": image_mode,
             "split_direction": split_direction,
@@ -3700,7 +3718,7 @@ def _render_card_studio(
             hero_val = st.text_input("Hero value", key=hero_value_key, placeholder="e.g. 704")
         with col_fact[1]:
             label_val = st.text_input("What it represents", key=label_key, placeholder="e.g. Test wickets")
-        with st.expander("Optional supporting detail", expanded=bool(st.session_state.get(support_key))):
+        with st.expander("Optional supporting detail", expanded=False):
             st.caption("Only add extra explanation if it helps the story.")
             support_rows = st.data_editor(
                 st.session_state.get(support_key) or [],
@@ -3713,13 +3731,15 @@ def _render_card_studio(
                     "value": st.column_config.TextColumn("Supporting text", width="large"),
                 },
             )
+        support_records = _editable_rows(support_rows if "support_rows" in locals() else st.session_state.get(support_key))
         data = {
             "eyebrow": eyebrow_val,
             "value": hero_val,
             "label": label_val,
-            "supporting_fields": support_rows if "support_rows" in locals() else (
-                st.session_state.get(support_key) or []
-            ),
+            "supporting_fields": [
+                row for row in support_records
+                if str(row.get("label") or "").strip() and str(row.get("value") or "").strip()
+            ],
         }
 
     data["layout_position"] = layout_position
