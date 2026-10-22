@@ -2744,6 +2744,15 @@ def _render_card_studio(
             except TypeError:
                 return []
         if isinstance(value, dict):
+            if value and all(isinstance(column, (list, tuple)) for column in value.values()):
+                row_count = max((len(column) for column in value.values()), default=0)
+                return [
+                    {
+                        key: column[index] if index < len(column) else ""
+                        for key, column in value.items()
+                    }
+                    for index in range(row_count)
+                ]
             return [dict(value)] if value else []
         if isinstance(value, (list, tuple)):
             return [dict(row) for row in value if isinstance(row, dict)]
@@ -3596,7 +3605,7 @@ def _render_card_studio(
             st.text_input("Unit (optional)", key=unit_key, placeholder="e.g. TEST WICKETS")
             st.caption("Add only the supporting facts this story actually needs. Use the row controls to add or remove fields.")
             support_rows = st.data_editor(
-                _editable_rows(st.session_state.get(support_key)),
+                (_editable_rows(st.session_state.get(support_key)) or {"label": [], "value": []}),
                 key=support_editor_key,
                 num_rows="dynamic",
                 hide_index=True,
@@ -3675,7 +3684,7 @@ def _render_card_studio(
             right_name_val = st.text_input("Second player / side", key=right_name_key, placeholder="e.g. Glenn McGrath")
         st.caption("Comparison fields are dynamic. Add one or more comparable, source-backed rows; rows are not limited to three.")
         comparison_rows = st.data_editor(
-            _editable_rows(st.session_state.get(comparison_key)),
+            (_editable_rows(st.session_state.get(comparison_key)) or {"label": [], "left_value": [], "right_value": []}),
             key=comparison_editor_key,
             num_rows="dynamic",
             hide_index=True,
