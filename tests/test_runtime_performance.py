@@ -123,33 +123,22 @@ def test_visual_pool_work_uses_cached_validation_and_thumbnails():
     assert "def _fit_visual_preview_bytes(" in app_source
 
 
-def test_layout_search_prunes_line_counts_that_cannot_fit(monkeypatch):
+def test_balanced_text_wrap_handles_long_headlines_without_combination_search(monkeypatch):
     font_path = ROOT / "fonts" / "BarlowCondensed-Black.ttf"
     font_bytes = font_path.read_bytes()
     monkeypatch.setattr(renderer, "_manual_subject_font_bytes", lambda _name: font_bytes)
     renderer._manual_subject_cutout_layout_data_cached.cache_clear()
-
-    original_combinations = renderer.combinations
-    generated = 0
-
-    def counted_combinations(values, count):
-        nonlocal generated
-        results = list(original_combinations(values, count))
-        generated += len(results)
-        return iter(results)
-
-    monkeypatch.setattr(renderer, "combinations", counted_combinations)
     headline = "India cricket team wins a remarkable series after another historic performance today"
     data = renderer._manual_subject_cutout_layout_data(
         headline,
-        ((60, 700), (1020, 700), (1020, 900), (60, 900)),
+        ((60, 700), (1020, 700), (1020, 1500), (60, 1500)),
         140,
         "Barlow Condensed",
         "Crisp Outline",
     )
-
-    assert generated < 100
-    assert data["layouts"] == []
+    assert data["layouts"]
+    assert " ".join(word for line in data["layouts"][0]["lines"] for word in line.split()) == headline.upper()
+    assert len({placement[2] for placement in data["layouts"][0]["placements"]}) == 1
     renderer._manual_subject_cutout_layout_data_cached.cache_clear()
 
 
