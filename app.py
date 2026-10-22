@@ -11529,11 +11529,11 @@ elif st.session_state.app_mode == "test":
                 '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
                 '<div class="section-title">Standalone Visual QC</div>'
                 '<div class="canvas-copy">Test every Top-5 visual option independently. No Scriptwriter approval or earlier stage is required.</div></div>'
-                '<div class="section-count">5 visual options</div></div>',
+                f'<div class="section-count">{len(TOP5_VISUAL_OPTIONS)} visual options</div></div>',
                 unsafe_allow_html=True,
             )
 
-            st.markdown('<div class="mini-label">5 VISUAL OPTIONS</div>', unsafe_allow_html=True)
+            st.markdown(f'<div class="mini-label">{len(TOP5_VISUAL_OPTIONS)} VISUAL OPTIONS</div>', unsafe_allow_html=True)
             visual_option = _render_visual_option_grid(
                 TOP5_VISUAL_OPTIONS,
                 session_key="test_top5_visual_playground_option",
@@ -11690,6 +11690,18 @@ elif st.session_state.app_mode == "test":
                     for provider_name, provider_error in (ai_result.get("errors") or {}).items():
                         st.caption(f"{provider_name}: {provider_error}")
 
+            elif visual_option == "Option 6 · Upload Local Image":
+                st.caption("Upload local images directly into the same crop and review pool.")
+                uploaded_files = st.file_uploader(
+                    "Choose local images",
+                    type=["jpg", "jpeg", "png", "webp"],
+                    accept_multiple_files=True,
+                    key="test-top5-playground-local-upload",
+                )
+                assets = _local_image_assets(uploaded_files)
+                if uploaded_files and not assets:
+                    st.error("None of the selected files could be opened as images.")
+
             elif visual_option == "Option 5 · Card Studio":
                 _render_card_studio(
                     top5=True,
@@ -11754,7 +11766,10 @@ elif st.session_state.app_mode == "test":
                                         else:
                                             st.warning("This image is not crop-ready.")
 
-            if visual_option in TOP5_VISUAL_OPTIONS[:4] and current_image is not None:
+            if (
+                visual_option in TOP5_VISUAL_OPTIONS[:4]
+                or visual_option == "Option 6 · Upload Local Image"
+            ) and current_image is not None:
                 if st.button("Render current image with card typography", type="primary", width="stretch", key="test-top5-playground-render-current"):
                     try:
                         st.session_state.test_top5_visual_playground_render = build_top5_card_preview(
