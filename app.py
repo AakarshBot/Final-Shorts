@@ -5573,13 +5573,13 @@ def _render_two_pane_visual_workspace(
                         )
                 elif fetcher_mode.startswith("Option 4"):
                     providers_label = ["AI Horde (free community queue)"]
-                    if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+                    if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and (os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN")):
                         providers_label.append("Pollinations.ai")
-                    if os.getenv("HF_TOKEN"):
+                    if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and os.getenv("HF_TOKEN"):
                         providers_label.append("Hugging Face")
-                    if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
+                    if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
                         providers_label.append("Cloudflare Workers AI")
-                    st.caption(f"Manual prompt only. Active AI providers: {', '.join(providers_label)}.")
+                    st.caption(f"Manual prompt only. Active AI providers: {', '.join(providers_label)}. Free mode is default; optional credit-based APIs require VISUAL_ALLOW_METERED_PROVIDERS=true.")
                     with st.form("live-ai-image-form"):
                         query = st.text_input(
                             "Manual prompt",
@@ -9553,11 +9553,11 @@ def _render_manual_ai_images():
 
     st.subheader("AI Generation")
     providers_label = ["AI Horde (free community queue)"]
-    if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+    if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and (os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN")):
         providers_label.append("Pollinations.ai")
-    if os.getenv("HF_TOKEN"):
+    if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and os.getenv("HF_TOKEN"):
         providers_label.append("Hugging Face")
-    if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
+    if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
         providers_label.append("Cloudflare Workers AI")
     st.caption(f"Manual query only. Active AI providers: {', '.join(providers_label)}.")
 
@@ -11656,13 +11656,13 @@ elif st.session_state.app_mode == "test":
 
             elif visual_option == "Option 4 · AI Generation":
                 providers_label = ["AI Horde (free community queue)"]
-                if os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN"):
+                if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and (os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN")):
                     providers_label.append("Pollinations.ai")
-                if os.getenv("HF_TOKEN"):
+                if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and os.getenv("HF_TOKEN"):
                     providers_label.append("Hugging Face")
-                if os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
+                if str(os.getenv("VISUAL_ALLOW_METERED_PROVIDERS") or "").strip().casefold() in {"1", "true", "yes", "on"} and os.getenv("CLOUDFLARE_API_TOKEN") and os.getenv("CLOUDFLARE_ACCOUNT_ID"):
                     providers_label.append("Cloudflare Workers AI")
-                st.caption(f"Manual prompt only. Active AI providers: {', '.join(providers_label)}.")
+                st.caption(f"Manual prompt only. Active AI providers: {', '.join(providers_label)}. Free mode is default; optional credit-based APIs require VISUAL_ALLOW_METERED_PROVIDERS=true.")
                 prompt = st.text_area(
                     "AI image prompt",
                     key="test_top5_visual_playground_ai_query",
@@ -12179,7 +12179,7 @@ elif st.session_state.app_mode == "test":
                                 _top5_render_asset_pool(list(result.get("assets") or []), "manual-fetch")
 
                     if visual_option == "Option 4 · AI Generation":
-                        st.caption("Same AI Generation used by Cricket: manual prompt across the configured AI image providers.")
+                        st.caption("Same shared generator as Cricket. AI Horde is free by default; optional credit-based providers are off unless VISUAL_ALLOW_METERED_PROVIDERS=true.")
                         query = st.text_input(
                             "AI prompt",
                             value=specific_prompt,
