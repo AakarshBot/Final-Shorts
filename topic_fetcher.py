@@ -949,6 +949,52 @@ def fetch_youtube_search_trends(
     return validated[:limit]
 
 
+def _feed_topics_for_query(
+    keyword: str,
+    profile: str,
+    *,
+    lookback_hours: int = 24,
+) -> list[Topic]:
+    """Match current feed headlines against a concrete cricket subject.
+
+    This is a corroboration path for YouTube trend candidates when Google News
+    has sparse results. Generic terms alone intentionally never qualify.
+    """
+    clean_keyword = _clean(keyword)
+    if not clean_keyword or profile not in {"cricket_india_asia", "cricket_global"}:
+        return []
+    generic = TITLE_STOPWORDS | YOUTUBE_TREND_NOISE_TERMS | YOUTUBE_TREND_GENERIC_TERMS | CRICKET_TERMS
+    wanted = _tokens(clean_keyword) - generic
+    if not wanted:
+        return []
+    threshold = min(2, len(wanted))
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=max(1, lookback_hours))
+    rows: list[Topic] = []
+    try:
+        items = fetch_cricket_feed_items(lookback_days=max(1, (lookback_hours + 23) // 24))
+    except (requests.RequestException, ET.ParseError, ValueError, OSError, TypeError):
+        return []
+    for item in items:
+        title = _clean(item.get("title", ""))
+        description = _clean(item.get("description", ""))
+        published = item.get("published_at")
+        if not isinstance(published, datetime) or published < cutoff:
+            continue
+        if len(wanted & _tokens(f"{title} {description}")) < threshold:
+            continue
+        url = _canonical_url(item.get("url", ""))
+        if not title or not url:
+            continue
+        rows.append(Topic(
+            title,
+            _clean(item.get("source", "")),
+            published,
+            url,
+            description,
+        ))
+    return _prepare(rows, set(), profile=profile)
+
+
 def fetch_youtube_trend_topics(
     keyword: str,
     profile: str,
@@ -990,6 +1036,8 @@ def fetch_youtube_trend_topics(
             except (requests.RequestException, ET.ParseError, ValueError):
                 continue
 
+    feed_rows = _feed_topics_for_query(clean_keyword, profile, lookback_hours=24)
+    rows.extend(feed_rows)
     prepared = _prepare(rows, seen_urls, profile=profile)
     prepared = [
         row
