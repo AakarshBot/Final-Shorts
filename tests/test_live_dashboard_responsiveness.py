@@ -90,3 +90,23 @@ def test_discarding_live_handoffs_cancels_queued_jobs_and_clears_render_state():
     assert '"live_ai_image_future": None' in reset
     assert '"live_render_future": None' in reset
     assert '"live_render_job_visual_snapshot": None' in reset
+
+
+
+def test_live_visual_layout_clicks_do_not_force_a_second_dashboard_run():
+    workspace = _section(
+        "def _render_two_pane_visual_workspace(",
+        "def _render_live_visuals(",
+    )
+    assert "st.rerun()" not in workspace
+
+    asset_pool = _section(
+        "def _render_visual_asset_pool(",
+        "def _render_visual_board(",
+    )
+    studio_select = asset_pool[
+        asset_pool.index('if st.button(\n                            "In Card Studio')
+        : asset_pool.index("choose_col, crop_col, delete_col", asset_pool.index('if st.button(\n                            "In Card Studio'))
+    ]
+    assert 'st.toast("Loaded image into Card Studio!"' in studio_select
+    assert "st.rerun()" not in studio_select
