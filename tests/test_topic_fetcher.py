@@ -6,6 +6,13 @@ from datetime import datetime, timedelta, timezone
 import topic_fetcher
 
 
+@pytest.fixture(autouse=True)
+def _disable_curated_network_feeds_in_unit_tests(monkeypatch):
+    # Feed parsing/provider behavior has dedicated tests; existing ranking tests
+    # should stay deterministic and never make live HTTP requests.
+    monkeypatch.setattr(topic_fetcher, "fetch_cricket_feed_items", lambda **kwargs: [])
+
+
 def make_topic(title, hours=1, source="Test", url=None, description=""):
     return topic_fetcher.Topic(
         title,
