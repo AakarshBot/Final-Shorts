@@ -9,6 +9,7 @@ from __future__ import annotations
 import base64
 import binascii
 import hashlib
+import inspect
 import io
 import os
 import secrets
@@ -97,6 +98,7 @@ def _ai_horde(
     *,
     width: int = 576,
     height: int = 1024,
+    timeout_seconds: int | None = None,
 ) -> dict[str, Any] | None:
     """Generate one image through the free volunteer-run AI Horde queue.
 
@@ -142,7 +144,11 @@ def _ai_horde(
         )
 
     try:
-        timeout = int(os.getenv("AI_HORDE_TIMEOUT", str(AI_HORDE_DEFAULT_TIMEOUT)))
+        timeout = int(
+            timeout_seconds
+            if timeout_seconds is not None
+            else os.getenv("AI_HORDE_TIMEOUT", str(AI_HORDE_DEFAULT_TIMEOUT))
+        )
     except (TypeError, ValueError):
         timeout = AI_HORDE_DEFAULT_TIMEOUT
     timeout = max(30, min(AI_HORDE_MAX_TIMEOUT, timeout))
@@ -258,7 +264,9 @@ def _ai_horde(
     return asset
 
 
-def _pollinations(query: str, seed: int) -> dict[str, Any] | None:
+def _pollinations(
+    query: str, seed: int, *, width: int = 576, height: int = 1024
+) -> dict[str, Any] | None:
     token = str(os.getenv("POLLINATIONS_API_KEY") or os.getenv("POLLINATIONS_API_TOKEN") or "").strip()
     if not token:
         return None
@@ -267,8 +275,8 @@ def _pollinations(query: str, seed: int) -> dict[str, Any] | None:
         f"https://gen.pollinations.ai/image/{quote(query, safe='')}",
         params={
             "model": model,
-            "width": 576,
-            "height": 1024,
+            "width": width,
+            "height": height,
             "seed": seed,
             "nologo": "true",
             "private": "true",
@@ -282,7 +290,9 @@ def _pollinations(query: str, seed: int) -> dict[str, Any] | None:
     return _make_asset(response.content, "Pollinations.ai", model)
 
 
-def _huggingface(query: str, seed: int) -> dict[str, Any] | None:
+def _huggingface(
+    query: str, seed: int, *, width: int = 576, height: int = 1024
+) -> dict[str, Any] | None:
     token = str(os.getenv("HF_TOKEN") or "").strip()
     if not token:
         return None
@@ -293,6 +303,8 @@ def _huggingface(query: str, seed: int) -> dict[str, Any] | None:
         query,
         model=model,
         seed=seed,
+        width=width,
+        height=height,
     )
     data = _image_bytes(image)
     if not data:
@@ -300,7 +312,9 @@ def _huggingface(query: str, seed: int) -> dict[str, Any] | None:
     return _make_asset(data, "Hugging Face", model)
 
 
-def _cloudflare(query: str, seed: int) -> dict[str, Any] | None:
+def _cloudflare(
+    query: str, seed: int, *, width: int = 576, height: int = 1024
+) -> dict[str, Any] | None:
     account_id = str(os.getenv("CLOUDFLARE_ACCOUNT_ID") or "").strip()
     token = str(os.getenv("CLOUDFLARE_API_TOKEN") or "").strip()
     if not account_id or not token:
@@ -311,7 +325,7 @@ def _cloudflare(query: str, seed: int) -> dict[str, Any] | None:
     )
     response = requests.post(
         f"https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/run/{model}",
-        json={"prompt": query, "seed": seed},
+        json={"prompt": query, "seed": seed, "width": width, "height": height},
         headers={"Authorization": f"Bearer {token}", "Content-Type": "application/json"},
         timeout=TIMEOUT,
     )
@@ -336,7 +350,37 @@ PROVIDERS = (
 )
 
 
-def generate_images(query: str, *, orientation: str = "portrait") -> dict[str, Any]:
+def _provider_kwargs(
+    provider,
+    *,
+    width: int,
+    height: int,
+    timeout_seconds: int | None,
+) -> dict[str, Any]:
+    """Pass only supported optional keywords, preserving simple provider adapters in tests."""
+    try:
+        parameters = inspect.signature(provider).parameters
+    except (TypeError, ValueError):
+        return {}
+    has_kwargs = any(
+        parameter.kind == inspect.Parameter.VAR_KEYWORD
+        for parameter in parameters.values()
+    )
+    values = {"width": width, "height": height}
+    if timeout_seconds is not None:
+        values["timeout_seconds"] = timeout_seconds
+    return {
+        name: value for name, value in values.items()
+        if has_kwargs or name in parameters
+    }
+
+
+def generate_images(
+    query: str,
+    *,
+    orientation: str = "portrait",
+    timeout_seconds: int | None = None,
+) -> dict[str, Any]:
     """Generate images in strict no-cost mode by default.
 
     Args:
@@ -371,10 +415,13 @@ def generate_images(query: str, *, orientation: str = "portrait") -> dict[str, A
     def run(item):
         name, provider = item
         try:
-            if name == "AI Horde":
-                asset = provider(q, generation_seed, width=width, height=height)
-            else:
-                asset = provider(q, generation_seed)
+            kwargs = _provider_kwargs(
+                provider,
+                width=width,
+                height=height,
+                timeout_seconds=timeout_seconds if name == "AI Horde" else None,
+            )
+            asset = provider(q, generation_seed, **kwargs)
             if not asset:
                 return name, None, "Provider completed without returning a valid image."
             return name, asset, ""
