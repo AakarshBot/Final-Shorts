@@ -411,7 +411,11 @@ def _cricket_same_event(a: Topic, b: Topic) -> bool:
 
     if groups and len(shared_core) >= 2 and (specific_entities or named) and similarity >= 68:
         return True
-    if similarity >= 86 and len(shared_core) >= 2 and (specific_entities or named):
+    if (
+        similarity >= 86 and len(shared_core) >= 2
+        and (specific_entities or named)
+        and (groups or similarity >= 96)
+    ):
         return True
     if similarity >= 97 and len(shared_core) >= 3:
         return True
