@@ -14,6 +14,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import xml.etree.ElementTree as ET
 
 import requests
+from cricket_source_discovery import fetch_cricket_feed_items
 
 
 GOOGLE_NEWS_URL = "https://news.google.com/rss/search"
@@ -34,6 +35,13 @@ QUERIES = (
     'cricket (women OR domestic OR associate OR emerging OR U19) when:14d',
     'cricket (coach OR captain OR strategy OR tactics OR role OR team balance) when:14d',
     'cricket (series OR tournament OR World Cup OR Ashes) (decision OR impact OR future OR controversy) when:14d',
+    'cricket (interview OR podcast OR "former cricketer" OR "former captain") when:14d',
+    'cricket (opinion OR analysis OR explained OR tactics OR "expert view") when:14d',
+    'cricket (reacts OR reaction OR responds OR remarks OR comments OR warns OR backs OR slams) when:14d',
+    'cricket (women OR domestic OR county OR U19 OR associate) (interview OR feature OR record OR selection) when:14d',
+    'cricket (BCCI OR ICC OR PCB) (governance OR finances OR rules OR rights OR dispute OR policy) when:14d',
+    'site:bcci.tv/latest-news cricket (squad OR selection OR announcement OR interview) when:14d',
+    'site:icc-cricket.com/news cricket (statement OR announcement OR reaction OR decision) when:14d',
 )
 
 MORE_QUERIES = (
@@ -47,6 +55,11 @@ MORE_QUERIES = (
     'cricket (investigation OR allegation OR disciplinary hearing OR appeal OR ban) when:14d',
     'cricket (player statement OR board statement OR reaction OR criticism OR fallout) when:14d',
     'cricket analysis (why OR how OR consequence OR future OR decision) when:14d',
+    'cricket former player reacts to current affairs when:14d',
+    'cricket interview with former international cricketer when:14d',
+    'cricket investigation board dispute financial decision when:14d',
+    'cricket tactical analysis captaincy selection coaching debate when:14d',
+    'cricket women domestic associate nation interview feature when:14d',
 )
 
 STOPWORDS = {
@@ -75,6 +88,10 @@ DEPTH_SIGNALS = {
     "business": ("franchise", "auction", "ownership", "finances", "signing", "deal", "contract"),
     "competition": ("world cup", "champions trophy", "ashes", "series", "tournament", "final"),
     "performance": ("tactics", "strategy", "team balance", "coach", "role", "form"),
+    "interview": ("interview", "podcast", "speaks", "tells", "reflects", "former player", "former cricketer", "former captain"),
+    "reaction": ("reaction", "reacts", "responds", "remarks", "comments", "warns", "backs", "slams", "questions", "criticises", "criticizes"),
+    "analysis": ("analysis", "opinion", "explained", "expert view", "tactical", "why ", "how "),
+    "community": ("women", "wpl", "wbb l", "women's cricket", "u19", "under-19", "associate", "ranji", "county", "domestic"),
 }
 
 CRICKET_TERMS = (
@@ -214,8 +231,18 @@ def _score(story: dict, now: datetime) -> float:
     description = min(3.0, len(story.get("summary", "")) / 240)
     publisher = str(story.get("publisher") or "").casefold()
     source_quality = 2.0 if any(term in publisher for term in TRUSTED_NEWS_TERMS) else 0.0
+    text = f"{story.get('title', '')} {story.get('summary', '')}".casefold()
+    editorial_signals = sum(
+        marker in text for marker in (
+            "interview", "podcast", "former player", "former cricketer",
+            "former captain", "analysis", "opinion", "explained", "reacts",
+            "reaction", "responds", "warns", "backs", "slams", "questions",
+            "comments", "reflects", "exclusive",
+        )
+    )
+    editorial_bonus = min(2.5, editorial_signals * 0.45)
     specificity = min(2.0, len(_tokens(story.get("title"))) / 6)
-    return round(freshness + depth + description + source_quality + specificity, 2)
+    return round(freshness + depth + description + source_quality + editorial_bonus + specificity, 2)
 
 
 def _parse_feed(xml_text: str, query: str, now: datetime) -> list[dict]:
@@ -287,6 +314,36 @@ def fetch_longform_topics(
     queries = _query_plan(more, keyword)
     fetched: list[dict] = []
     failures = 0
+
+    try:
+        for item in fetch_cricket_feed_items(lookback_days=LOOKBACK_DAYS):
+            title = _clean(item.get("title", ""), 500)
+            summary = _clean(item.get("description", ""), 1200)
+            # These are cricket-specific publisher feeds; preserve that provenance for
+            # pages whose headline omits the sport word (e.g. player interviews).
+            if not _is_cricket_story(title, summary):
+                summary = f"Cricket source feed. {summary}".strip()
+            published = item.get("published_at")
+            url = _canonical_url(item.get("url", ""))
+            if not title or not url or not isinstance(published, datetime):
+                continue
+            if _is_utility(title, url) or published < now - timedelta(days=LOOKBACK_DAYS):
+                continue
+            row = {
+                "title": title,
+                "url": url,
+                "publisher": _clean(item.get("source", ""), 160),
+                "published_at": published.isoformat(),
+                "summary": summary,
+                "desk": "Cricket",
+                "profile": "Long-form",
+                "query": f"publisher feed: {item.get('feed_source', item.get('source', 'cricket'))}",
+                "depth_signals": _depth_labels(title, summary),
+            }
+            row["ranking_score"] = _score(row, now)
+            fetched.append(row)
+    except (requests.RequestException, ET.ParseError, ValueError, OSError, TypeError):
+        pass
 
     with ThreadPoolExecutor(max_workers=min(MAX_WORKERS, len(queries))) as executor:
         futures = {executor.submit(_fetch_query, query, now): query for query in queries}
