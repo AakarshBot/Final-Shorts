@@ -2,6 +2,8 @@ import io
 from PIL import Image
 import pytest
 
+import longform_visuals
+
 from longform_visuals import (
     LongformVisualMatcher,
     _entity_matches,
@@ -77,3 +79,28 @@ def test_longform_visual_matcher_runs(monkeypatch):
     card_scenes = [s for s in result["scenes_visuals"] if s["visual_type"] == "card"]
     assert len(card_scenes) >= 1
     assert card_scenes[0]["image_bytes"] is not None
+
+
+
+def test_longform_ai_fallback_uses_shared_free_landscape_generator(monkeypatch):
+    captured = {}
+
+    def fake_generate(prompt, *, orientation, timeout_seconds):
+        captured.update(prompt=prompt, orientation=orientation, timeout_seconds=timeout_seconds)
+        return {
+            "assets": [{
+                "bytes": _create_dummy_image(1024, 576),
+                "hash": "generated-landscape",
+                "source": "AI Horde",
+                "model": "test",
+            }],
+            "message": "",
+        }
+
+    monkeypatch.setattr(longform_visuals, "generate_images", fake_generate)
+    generated = longform_visuals._fetch_pollinations_ai_image("India dressing room discussion")
+
+    assert generated == _create_dummy_image(1024, 576) or Image.open(io.BytesIO(generated)).size == (1024, 576)
+    assert captured["orientation"] == "landscape"
+    assert captured["timeout_seconds"] == 120
+    assert "India dressing room discussion" in captured["prompt"]
