@@ -91,7 +91,7 @@ DEPTH_SIGNALS = {
     "interview": ("interview", "podcast", "speaks", "tells", "reflects", "former player", "former cricketer", "former captain"),
     "reaction": ("reaction", "reacts", "responds", "remarks", "comments", "warns", "backs", "slams", "questions", "criticises", "criticizes"),
     "analysis": ("analysis", "opinion", "explained", "expert view", "tactical", "why ", "how "),
-    "community": ("women", "wpl", "wbb l", "women's cricket", "u19", "under-19", "associate", "ranji", "county", "domestic"),
+    "community": ("women", "wpl", "wbbl", "women's cricket", "u19", "under-19", "associate", "ranji", "county", "domestic"),
 }
 
 CRICKET_TERMS = (
