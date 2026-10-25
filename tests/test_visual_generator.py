@@ -1,6 +1,7 @@
 from io import BytesIO
 
 from PIL import Image
+import requests
 
 import visual_generator
 
@@ -224,3 +225,47 @@ def test_generate_images_passes_landscape_dimensions_and_bounded_timeout(monkeyp
     assert captured == {"width": 1024, "height": 576, "timeout_seconds": 120}
     assert result["orientation"] == "landscape"
     assert result["assets"][0]["source"] == "AI Horde"
+
+
+
+def test_ai_horde_retries_transient_status_poll_failures(monkeypatch):
+    image = Image.new("RGB", (12, 12), (20, 40, 60))
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    encoded = visual_generator.base64.b64encode(buffer.getvalue()).decode()
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+            self.status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    checks = {"count": 0}
+
+    def fake_post(_url, **kwargs):
+        return Response({"id": "retry-job"})
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/generate/check/retry-job"):
+            checks["count"] += 1
+            if checks["count"] == 1:
+                raise requests.ConnectionError("brief network interruption")
+            return Response({"done": True, "faulted": False})
+        return Response({
+            "generations": [{"img": "data:image/png;base64," + encoded, "model": "TestModel"}]
+        })
+
+    monkeypatch.delenv("AI_HORDE_API_KEY", raising=False)
+    monkeypatch.setattr(visual_generator.requests, "post", fake_post)
+    monkeypatch.setattr(visual_generator.requests, "get", fake_get)
+    monkeypatch.setattr(visual_generator.time, "sleep", lambda _seconds: None)
+
+    result = visual_generator._ai_horde("temporary network failure recovery", 17)
+
+    assert result["source"] == "AI Horde"
+    assert checks["count"] == 2
