@@ -902,6 +902,14 @@ def fetch_youtube_search_trends(
                 ]
                 stories = _select(prepared, 3, set(), profile=item["profile"])
                 if not stories:
+                    # Trend signals are only useful when tied to a current story.
+                    # Check curated news/video/podcast feeds before discarding a
+                    # candidate solely because Google News returned no match.
+                    feed_rows = _feed_topics_for_query(
+                        item["keyword"], item["profile"], lookback_hours=24
+                    )
+                    stories = _select(feed_rows, 3, set(), profile=item["profile"])
+                if not stories:
                     continue
 
                 region_multiplier = YOUTUBE_TREND_INDIA_SCORE_MULTIPLIER if item["indian_signal"] else 1.0
