@@ -103,14 +103,8 @@ def _score_asset(asset: dict, required_entity: str, intent: str) -> float:
     return score
 
 
-def _fetch_pollinations_ai_image(prompt: str) -> bytes | None:
-    """Legacy helper name; use the shared free-first generator for a landscape image.
-
-    The previous implementation called an undefined _pollinations symbol,
-    swallowed the NameError, and silently fell back to generic chapter cards.
-    The shared generator uses AI Horde by default and never calls metered services
-    unless the user explicitly enables them.
-    """
+def _fetch_free_ai_image(prompt: str) -> tuple[bytes | None, str]:
+    """Use the shared no-cost-first generator and return an actionable diagnostic."""
     try:
         result = generate_images(
             f"Cinematic 16:9 documentary broadcast photo: {prompt}, natural stadium lighting",
@@ -118,11 +112,17 @@ def _fetch_pollinations_ai_image(prompt: str) -> bytes | None:
             timeout_seconds=120,
         )
         assets = result.get("assets") or []
-        if assets:
-            return assets[0].get("bytes")
-    except Exception:
-        pass
-    return None
+        if assets and assets[0].get("bytes"):
+            return assets[0]["bytes"], ""
+        return None, str(result.get("message") or "The free image provider returned no usable image.")
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def _fetch_pollinations_ai_image(prompt: str) -> bytes | None:
+    """Compatibility wrapper for older tests/callers of the former fallback name."""
+    data, _error = _fetch_free_ai_image(prompt)
+    return data
 
 
 class LongformVisualMatcher:
@@ -181,7 +181,7 @@ class LongformVisualMatcher:
         # 3. Match and Assign Assets Scene-by-Scene
         assigned_scenes = []
         used_hashes: set[str] = set()
-        ai_fallback_cache: dict[str, bytes | None] = {}
+        ai_fallback_cache: dict[str, tuple[bytes | None, str]] = {}
 
         for sc in scenes:
             sc_num = sc["scene_number"]
@@ -276,11 +276,16 @@ class LongformVisualMatcher:
                 # this run; do not call the image service repeatedly for the same prompt.
                 ai_prompt = f"{entity} {intent} cricket"
                 if ai_prompt not in ai_fallback_cache:
-                    ai_fallback_cache[ai_prompt] = _fetch_pollinations_ai_image(ai_prompt)
-                ai_data = ai_fallback_cache[ai_prompt]
+                    ai_fallback_cache[ai_prompt] = _fetch_free_ai_image(ai_prompt)
+                ai_data, ai_error = ai_fallback_cache[ai_prompt]
                 if ai_data:
                     chosen_bytes = ai_data
                 else:
+                    if ai_error:
+                        log(
+                            f"Scene {sc_num}: free AI image generation failed; "
+                            f"using a chapter card instead. {ai_error[:220]}"
+                        )
                     # Render chapter card as clean broadcast graphic
                     c_card = render_longform_chapter_card(None, {
                         "act": f"ACT {sc.get('act_number', 1):02d}",
