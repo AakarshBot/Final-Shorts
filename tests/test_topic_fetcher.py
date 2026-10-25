@@ -623,6 +623,42 @@ def test_fetch_youtube_search_trends_returns_news_backed_story_pool(monkeypatch)
 
 
 
+def test_youtube_trend_topic_falls_back_to_current_publisher_feeds(monkeypatch):
+    now = datetime.now(timezone.utc)
+    feed = [{
+        "title": "Shubman Gill reacts to selection debate",
+        "source": "ESPNcricinfo",
+        "published_at": now - timedelta(hours=3),
+        "url": "https://example.com/gill-reaction",
+        "description": "Shubman Gill shares thoughts about India selection.",
+        "feed_source": "ESPNcricinfo",
+    }]
+    monkeypatch.setattr(topic_fetcher, "fetch_cricket_feed_items", lambda **kwargs: feed)
+    chosen = topic_fetcher._feed_topics_for_query(
+        "Shubman Gill",
+        "cricket_india_asia",
+        lookback_hours=24,
+    )
+    assert len(chosen) == 1
+    assert chosen[0].title == feed[0]["title"]
+    assert chosen[0].source == "ESPNcricinfo"
+
+
+def test_youtube_trend_feed_fallback_rejects_generic_sport_words(monkeypatch):
+    monkeypatch.setattr(topic_fetcher, "fetch_cricket_feed_items", lambda **kwargs: [{
+        "title": "Latest cricket news and updates",
+        "source": "ESPNcricinfo",
+        "published_at": datetime.now(timezone.utc),
+        "url": "https://example.com/generic",
+        "description": "Cricket news.",
+    }])
+    assert topic_fetcher._feed_topics_for_query(
+        "cricket news latest",
+        "cricket_india_asia",
+        lookback_hours=24,
+    ) == []
+
+
 def test_fetch_youtube_search_trends_checks_only_requested_number_of_candidates(monkeypatch):
     def fake_queries(seed):
         if seed == "tennis":
