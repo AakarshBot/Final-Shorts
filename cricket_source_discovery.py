@@ -34,7 +34,8 @@ CRICKET_FEEDS: tuple[tuple[str, str, str], ...] = (
     ("BBC Sport Cricket", "https://feeds.bbci.co.uk/sport/cricket/rss.xml", "publisher"),
     ("The Guardian Cricket", "https://www.theguardian.com/sport/cricket/rss", "publisher"),
     ("The Indian Express Cricket", "https://indianexpress.com/section/sports/cricket/feed/", "publisher"),
-    ("NDTV Cricket", "https://feeds.feedburner.com/ndtvsports-cricket", "publisher"),
+    ("NDTV Cricket", "http://feeds.feedburner.com/ndtvsports-cricket", "publisher"),
+    ("Times of India Cricket", "https://timesofindia.indiatimes.com/rssfeeds/54829575.cms", "publisher"),
     ("CricTracker", "https://www.crictracker.com/feed/", "publisher"),
     ("Cricket Times", "https://crickettimes.com/feed/", "publisher"),
     ("CricketWeb", "https://www.cricketweb.net/feed/", "publisher"),
@@ -42,6 +43,10 @@ CRICKET_FEEDS: tuple[tuple[str, str, str], ...] = (
     ("Cricbuzz YouTube", "https://www.youtube.com/feeds/videos.xml?channel_id=UCSRQXk5yErn4e14vN76upOw", "video"),
     ("Cricket Australia YouTube", "https://www.youtube.com/feeds/videos.xml?user=cricketaustraliatv", "video"),
     ("ECB Cricket YouTube", "https://www.youtube.com/feeds/videos.xml?user=ecbcricket", "video"),
+    ("Cricket Unfiltered Podcast", "https://rss.acast.com/cricket-unfiltered", "podcast"),
+    ("Sky Sports Cricket Podcast", "https://www.spreaker.com/show/3387348/episodes/feed", "podcast"),
+    ("BBC Stumped Podcast", "https://podcasts.files.bbci.co.uk/p02gsrmh.rss", "podcast"),
+    ("ESPN Switch Hit Podcast", "https://feeds.megaphone.fm/ESP9247246951", "podcast"),
 )
 
 _CACHE: dict[str, tuple[float, list[dict]]] = {}
