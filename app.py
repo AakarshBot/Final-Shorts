@@ -6154,6 +6154,21 @@ def _render_live_script():
             width="stretch",
             key=f"live-change-angle-{story_id}",
         ):
+            _cancel_live_background_jobs()
+            st.session_state.live_audio_future = None
+            st.session_state.live_audio_status = "idle"
+            st.session_state.live_visual_future = None
+            st.session_state.live_visual_status = "idle"
+            st.session_state.live_manual_visual_future = None
+            st.session_state.live_manual_visual_status = "idle"
+            st.session_state.live_real_image_future = None
+            st.session_state.live_real_image_status = "idle"
+            st.session_state.live_ai_image_future = None
+            st.session_state.live_ai_image_status = "idle"
+            st.session_state.live_render_future = None
+            st.session_state.live_render_status = "idle"
+            st.session_state.live_render_job_story_key = None
+            st.session_state.live_render_job_visual_snapshot = None
             st.session_state.live_script_data = None
             st.session_state.live_approved_script = None
             st.session_state.live_script_error = ""
@@ -7745,6 +7760,16 @@ def render_live_dashboard():
                             + json.dumps(previous_narration, ensure_ascii=False)
                         )
                     research_source = st.session_state.get("live_universal_angle_source")
+
+                    _cancel_live_background_jobs()
+                    st.session_state.live_ai_image_future = None
+                    st.session_state.live_ai_image_status = "idle"
+                    st.session_state.live_ai_image_error = ""
+                    st.session_state.live_ai_image_job_story_key = None
+                    st.session_state.live_render_future = None
+                    st.session_state.live_render_status = "idle"
+                    st.session_state.live_render_job_story_key = None
+                    st.session_state.live_render_job_visual_snapshot = None
 
                     st.session_state.live_script_data = None
                     st.session_state.live_approved_script = None
