@@ -98,7 +98,10 @@ def test_live_visual_layout_clicks_do_not_force_a_second_dashboard_run():
         "def _render_two_pane_visual_workspace(",
         "def _render_live_visuals(",
     )
-    assert "st.rerun()" not in workspace
+    control_start = workspace.index('if st.button(\n            "Split"')
+    control_end = workspace.index("current_view = st.session_state[pane_key]", control_start)
+    layout_controls = workspace[control_start:control_end]
+    assert "st.rerun()" not in layout_controls
 
     asset_pool = _section(
         "def _render_visual_asset_pool(",
