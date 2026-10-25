@@ -34,7 +34,11 @@ python -m playwright install chromium
 
 ### Visuals
 
-The Visuals test desk has four independent options. Option 1 is the automatic scraper/crawler and starts when a headline is selected. Option 2 is the standalone manual scraper. It uses an AI query planner: a name-only query searches normally, while a contextual query generates up to two useful variants and searches older publisher pages as well. Option 3 searches Commons, DuckDuckGo, Wikipedia, Openverse, and any configured Pixabay/Pexels/Unsplash APIs. Option 4 generates images with Hugging Face Inference Providers and Cloudflare Workers AI.
+The Visuals desk is shared across Shorts, Cricket, YouTube Trends, Top-5, Test, and Live. Option 1 is the automatic scraper/crawler; Option 2 is the manual real-image scraper; Option 3 searches open image sources plus any optional configured stock/search APIs; Option 4 uses the shared AI image generator.
+
+**AI image generation is no-cost by default.** It uses the volunteer-run AI Horde queue and supports anonymous requests, although anonymous requests have the lowest queue priority and can take longer. For better priority without paying, create a free AI Horde account at https://stablehorde.net/ and set `AI_HORDE_API_KEY` in your local environment. The default wait limit is five minutes and can be changed with `AI_HORDE_TIMEOUT`.
+
+Optional hosted image APIs (Pollinations, Hugging Face Inference Providers, Cloudflare Workers AI) are **disabled by default**, even when their tokens happen to be present, because they may use credits or incur charges. Enable them only by deliberately setting `VISUAL_ALLOW_METERED_PROVIDERS=true`. Long-form uses the same generator in landscape mode with a bounded two-minute wait and otherwise retains its evidence-safe chapter-card fallback. No new dependency is required.
 
 
 ### Renderer Test

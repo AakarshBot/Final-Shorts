@@ -1,6 +1,7 @@
 from io import BytesIO
 
 from PIL import Image
+import requests
 
 import visual_generator
 
@@ -12,6 +13,7 @@ def test_generate_images_runs_configured_providers(monkeypatch):
     def fake_two(_query, _seed):
         return {"bytes": b"two", "hash": "two", "source": "Two", "model": "m2"}
 
+    monkeypatch.setenv("VISUAL_ALLOW_METERED_PROVIDERS", "true")
     monkeypatch.setenv("HF_TOKEN", "test")
     monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "test")
     monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test")
@@ -34,6 +36,7 @@ def test_generate_images_requires_manual_prompt(monkeypatch):
 
 def test_generate_images_uses_a_fresh_seed_each_time(monkeypatch):
     seeds = []
+    monkeypatch.setenv("VISUAL_ALLOW_METERED_PROVIDERS", "true")
     monkeypatch.setenv("HF_TOKEN", "test")
 
     def fake_provider(query, seed):
@@ -68,7 +71,8 @@ def test_generate_images_uses_a_fresh_seed_each_time(monkeypatch):
     assert first["assets"][0]["hash"] != second["assets"][0]["hash"]
 
 
-def test_generate_images_includes_pollinations_when_key_is_configured(monkeypatch):
+def test_generate_images_includes_pollinations_only_after_explicit_metered_opt_in(monkeypatch):
+    monkeypatch.setenv("VISUAL_ALLOW_METERED_PROVIDERS", "true")
     monkeypatch.setenv("POLLINATIONS_API_KEY", "test")
     monkeypatch.delenv("POLLINATIONS_API_TOKEN", raising=False)
     monkeypatch.delenv("HF_TOKEN", raising=False)
@@ -170,3 +174,98 @@ def test_ai_horde_decodes_a_completed_data_uri(monkeypatch):
     assert result["model"] == "TestModel"
     assert result["bytes"] == buffer.getvalue()
     assert requests_seen == {"post": 1, "get": 2}
+
+
+def test_optional_provider_credentials_do_not_enable_metered_generation_by_default(monkeypatch):
+    called = []
+
+    def fake_horde(query, seed, **kwargs):
+        called.append(("AI Horde", kwargs))
+        return {"bytes": b"free", "hash": "free", "source": "AI Horde", "model": "test"}
+
+    def fake_metered(query, seed):
+        called.append(("metered", {}))
+        return {"bytes": b"paid", "hash": "paid", "source": "Metered", "model": "test"}
+
+    monkeypatch.delenv("VISUAL_ALLOW_METERED_PROVIDERS", raising=False)
+    monkeypatch.setenv("POLLINATIONS_API_KEY", "test")
+    monkeypatch.setenv("HF_TOKEN", "test")
+    monkeypatch.setenv("CLOUDFLARE_ACCOUNT_ID", "test")
+    monkeypatch.setenv("CLOUDFLARE_API_TOKEN", "test")
+    monkeypatch.setattr(visual_generator, "PROVIDERS", (
+        ("AI Horde", fake_horde),
+        ("Pollinations.ai", fake_metered),
+        ("Hugging Face", fake_metered),
+        ("Cloudflare Workers AI", fake_metered),
+    ))
+
+    result = visual_generator.generate_images("India cricket stadium")
+
+    assert [asset["source"] for asset in result["assets"]] == ["AI Horde"]
+    assert [name for name, _ in called] == ["AI Horde"]
+    assert result["free_mode"] is True
+
+
+def test_generate_images_passes_landscape_dimensions_and_bounded_timeout(monkeypatch):
+    captured = {}
+
+    def fake_horde(query, seed, *, width=576, height=1024, timeout_seconds=None):
+        captured.update(width=width, height=height, timeout_seconds=timeout_seconds)
+        return {"bytes": b"landscape", "hash": "landscape", "source": "AI Horde", "model": "test"}
+
+    monkeypatch.delenv("VISUAL_ALLOW_METERED_PROVIDERS", raising=False)
+    monkeypatch.setattr(visual_generator, "PROVIDERS", (("AI Horde", fake_horde),))
+
+    result = visual_generator.generate_images(
+        "cricket documentary stadium",
+        orientation="landscape",
+        timeout_seconds=120,
+    )
+
+    assert captured == {"width": 1024, "height": 576, "timeout_seconds": 120}
+    assert result["orientation"] == "landscape"
+    assert result["assets"][0]["source"] == "AI Horde"
+
+
+
+def test_ai_horde_retries_transient_status_poll_failures(monkeypatch):
+    image = Image.new("RGB", (12, 12), (20, 40, 60))
+    buffer = BytesIO()
+    image.save(buffer, format="PNG")
+    encoded = visual_generator.base64.b64encode(buffer.getvalue()).decode()
+
+    class Response:
+        def __init__(self, payload):
+            self.payload = payload
+            self.status_code = 200
+
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return self.payload
+
+    checks = {"count": 0}
+
+    def fake_post(_url, **kwargs):
+        return Response({"id": "retry-job"})
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/generate/check/retry-job"):
+            checks["count"] += 1
+            if checks["count"] == 1:
+                raise requests.ConnectionError("brief network interruption")
+            return Response({"done": True, "faulted": False})
+        return Response({
+            "generations": [{"img": "data:image/png;base64," + encoded, "model": "TestModel"}]
+        })
+
+    monkeypatch.delenv("AI_HORDE_API_KEY", raising=False)
+    monkeypatch.setattr(visual_generator.requests, "post", fake_post)
+    monkeypatch.setattr(visual_generator.requests, "get", fake_get)
+    monkeypatch.setattr(visual_generator.time, "sleep", lambda _seconds: None)
+
+    result = visual_generator._ai_horde("temporary network failure recovery", 17)
+
+    assert result["source"] == "AI Horde"
+    assert checks["count"] == 2

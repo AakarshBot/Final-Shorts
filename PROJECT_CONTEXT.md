@@ -184,7 +184,7 @@ Universal 2-Stage Visual Architecture across all desks (Deep-Dive Cricket, YT Tr
    - **Automatic Scraper:** Multi-URL crawler scraping the primary article and related publisher pages.
    - **Manual Scraper:** Real-time web/publisher query scraper.
    - **Real Image Search:** Searches parallel free, no-key image sources (Wikimedia Commons, DuckDuckGo, Wikidata, Wikipedia, Openverse, Flickr, Internet Archive) plus configured API sources (Bing & Google Images via SerpApi, Pixabay, Pexels, Unsplash).
-   - **AI Generation:** Manual prompting uses the free AI Horde volunteer queue by default (anonymous requests have lowest priority and may take longer). Pollinations is used only when a current API key is configured; Hugging Face and Cloudflare Workers AI remain optional credentialed providers. The result includes per-provider failure details, and every Test/Live/Top-5 UI must show those diagnostics when no usable image is returned.
+   - **AI Generation (free-by-default; shared across Shorts/Cricket, YT Trends, Top-5, Test and Live):** `visual_generator.py` uses the volunteer-run AI Horde only by default. Anonymous requests are supported but have the lowest queue priority; a free personal `AI_HORDE_API_KEY` improves priority without adding a paid service. The default queue wait is 300 seconds, configurable with `AI_HORDE_TIMEOUT` up to 600 seconds; polling retries transient failures and cancels timed-out jobs best-effort. Optional Pollinations, Hugging Face Inference Providers and Cloudflare Workers AI require credentials **and** explicit `VISUAL_ALLOW_METERED_PROVIDERS=true` because those routes can consume credits or incur charges. Landscape mode is supported for Long-form. Provider errors remain visible in the UI so an unsuccessful attempt does not look like a successful generation.
    - **Curated Asset Pool:** Unified pool of all collected images with thumbnail preview, source badge, crop indicator, and a direct `🗑️ Delete` button to discard unneeded assets. Extra manual queries can be run anytime to add more images to the pool.
 
 2. **Stage 2: Visual Builder (Layout & Assembly)**
@@ -545,7 +545,7 @@ When changing either Function 01 or Function 02, preserve the direct architectur
 ### Scope and verified behavior
 - Top-level content-format choice: **Shorts** or **Long-form**. After format selection, **Test** and **Live** workspace choices are active for both formats.
 - The established Shorts Test and Live paths, stage contracts, approved functions, UI and outputs remain completely unchanged and protected.
-- Long-form Live graduated from Test following user approval ("check if all tests are good for long form and turn it live"). It executes the complete 7-stage 8-minute documentary production line:
+- Long-form Live graduated from Test following user approval ("check if all tests are good for long form and turn it live"). Its visual fallback now calls the shared free-first `visual_generator.py` in landscape mode (instead of the prior broken undefined `_pollinations` call, which was silently caught); it uses a bounded 120-second generation wait before retaining the evidence-safe chapter-card fallback. It executes the complete 7-stage 8-minute documentary production line:
   01. Topic Fetcher (`longform_topic_fetcher.py`)
   02. Scriptwriter (`longform_script_writer.py`)
   03. Visuals (`longform_cards.py`, `longform_visuals.py`)

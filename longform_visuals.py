@@ -10,12 +10,10 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import io
-import os
 import re
 from typing import Any, Callable
 
 from PIL import Image, UnidentifiedImageError
-import requests
 
 from longform_cards import (
     render_longform_stat_card,
@@ -26,6 +24,7 @@ from longform_cards import (
     render_longform_timeline_card,
 )
 from visual_search import search_images
+from visual_generator import generate_images
 
 
 MIN_WIDTH = 1200
@@ -104,15 +103,26 @@ def _score_asset(asset: dict, required_entity: str, intent: str) -> float:
     return score
 
 
-def _fetch_pollinations_ai_image(prompt: str) -> bytes | None:
-    """Zero-cost fallback: generates a 16:9 cinematic photo via Pollinations Flux."""
+def _fetch_free_ai_image(prompt: str) -> tuple[bytes | None, str]:
+    """Use the shared no-cost-first generator and return an actionable diagnostic."""
     try:
-        res = _pollinations(f"Cinematic 16:9 documentary broadcast photo: {prompt}, 8k stadium lighting", seed=42)
-        if res and res.get("bytes"):
-            return res["bytes"]
-    except Exception:
-        pass
-    return None
+        result = generate_images(
+            f"Cinematic 16:9 documentary broadcast photo: {prompt}, natural stadium lighting",
+            orientation="landscape",
+            timeout_seconds=120,
+        )
+        assets = result.get("assets") or []
+        if assets and assets[0].get("bytes"):
+            return assets[0]["bytes"], ""
+        return None, str(result.get("message") or "The free image provider returned no usable image.")
+    except Exception as exc:
+        return None, f"{type(exc).__name__}: {exc}"
+
+
+def _fetch_pollinations_ai_image(prompt: str) -> bytes | None:
+    """Compatibility wrapper for older tests/callers of the former fallback name."""
+    data, _error = _fetch_free_ai_image(prompt)
+    return data
 
 
 class LongformVisualMatcher:
@@ -171,7 +181,7 @@ class LongformVisualMatcher:
         # 3. Match and Assign Assets Scene-by-Scene
         assigned_scenes = []
         used_hashes: set[str] = set()
-        ai_fallback_cache: dict[str, bytes | None] = {}
+        ai_fallback_cache: dict[str, tuple[bytes | None, str]] = {}
 
         for sc in scenes:
             sc_num = sc["scene_number"]
@@ -266,11 +276,16 @@ class LongformVisualMatcher:
                 # this run; do not call the image service repeatedly for the same prompt.
                 ai_prompt = f"{entity} {intent} cricket"
                 if ai_prompt not in ai_fallback_cache:
-                    ai_fallback_cache[ai_prompt] = _fetch_pollinations_ai_image(ai_prompt)
-                ai_data = ai_fallback_cache[ai_prompt]
+                    ai_fallback_cache[ai_prompt] = _fetch_free_ai_image(ai_prompt)
+                ai_data, ai_error = ai_fallback_cache[ai_prompt]
                 if ai_data:
                     chosen_bytes = ai_data
                 else:
+                    if ai_error:
+                        log(
+                            f"Scene {sc_num}: free AI image generation failed; "
+                            f"using a chapter card instead. {ai_error[:220]}"
+                        )
                     # Render chapter card as clean broadcast graphic
                     c_card = render_longform_chapter_card(None, {
                         "act": f"ACT {sc.get('act_number', 1):02d}",
@@ -289,7 +304,7 @@ class LongformVisualMatcher:
                 "visual_type": "card" if rendered_frame_bytes else "photo_kenburns",
                 "card_type": c_type,
                 "image_bytes": rendered_frame_bytes or chosen_bytes,
-                "image_source": "Long-form card renderer" if rendered_frame_bytes else (chosen_asset.get("source") if chosen_asset else "AI Flux"),
+                "image_source": "Long-form card renderer" if rendered_frame_bytes else (chosen_asset.get("source") if chosen_asset else "AI-generated (free-first provider)"),
                 "image_title": chosen_asset.get("title") if chosen_asset else f"Scene {sc_num} visual",
             })
 
