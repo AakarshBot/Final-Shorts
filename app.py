@@ -5451,6 +5451,22 @@ def _render_two_pane_visual_workspace(
 ):
     prefix = "live_" if live else "test_"
     pane_key = f"{prefix}visuals_pane_view"
+    running_job_labels = (
+        [
+            label
+            for label, status in (
+                ("Audio + Subtitles", st.session_state.get("live_audio_status", "idle")),
+                ("Automatic Scraper", st.session_state.get("live_visual_status", "idle")),
+                ("Manual Scraper", st.session_state.get("live_manual_visual_status", "idle")),
+                ("Real Image Search", st.session_state.get("live_real_image_status", "idle")),
+                ("AI image generation", st.session_state.get("live_ai_image_status", "idle")),
+                ("Final render", st.session_state.get("live_render_status", "idle")),
+            )
+            if status == "running"
+        ]
+        if live
+        else []
+    )
     st.session_state.setdefault(pane_key, "⊞ Side-by-Side (Split)")
 
     st.markdown(
