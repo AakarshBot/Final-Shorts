@@ -64,9 +64,9 @@ def test_longform_visual_matcher_runs(monkeypatch):
 
     def no_ai_fallback(prompt):
         fallback_prompts.append(prompt)
-        return None
+        return None, "test provider unavailable"
 
-    monkeypatch.setattr("longform_visuals._fetch_pollinations_ai_image", no_ai_fallback)
+    monkeypatch.setattr("longform_visuals._fetch_free_ai_image", no_ai_fallback)
 
     result = LongformVisualMatcher.match_and_collect(script, story)
 
