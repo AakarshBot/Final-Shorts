@@ -8,6 +8,12 @@ import requests
 import longform_topic_fetcher as fetcher
 
 
+@pytest.fixture(autouse=True)
+def _disable_curated_network_feeds_in_unit_tests(monkeypatch):
+    # Networked feed parsing is tested separately; preserve deterministic mocks.
+    monkeypatch.setattr(fetcher, "fetch_cricket_feed_items", lambda **kwargs: [])
+
+
 def _item(title, url, publisher="ESPNcricinfo", hours=2, summary="A detailed report covering the decision and its consequences."):
     published = format_datetime(datetime.now(timezone.utc) - timedelta(hours=hours))
     return (
