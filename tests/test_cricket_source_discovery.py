@@ -39,7 +39,7 @@ def test_parse_atom_and_youtube_style_entries():
     </feed>"""
     rows = discovery._parse_feed(xml, "Cricbuzz YouTube", now=now)
     assert len(rows) == 1
-    assert rows[0]["url"] == "https://www.youtube.com/watch?v=abc123"
+    assert rows[0]["url"] == "https://youtube.com/watch?v=abc123"
     assert rows[0]["source"] == "Cricbuzz YouTube"
     assert "interview" in rows[0]["description"]
 
