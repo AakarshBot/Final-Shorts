@@ -5837,19 +5837,6 @@ def _render_live_visuals(slide_count: int):
         and isinstance(st.session_state.get("live_subtitle_data"), dict)
     )
     audio_status = st.session_state.get("live_audio_status", "idle")
-    background_job_labels = (
-        ("Audio + Subtitles", st.session_state.get("live_audio_status", "idle")),
-        ("Automatic Scraper", st.session_state.get("live_visual_status", "idle")),
-        ("Manual Scraper", st.session_state.get("live_manual_visual_status", "idle")),
-        ("Real Image Search", st.session_state.get("live_real_image_status", "idle")),
-        ("AI image generation", st.session_state.get("live_ai_image_status", "idle")),
-        ("Final render", st.session_state.get("live_render_status", "idle")),
-    )
-    running_job_labels = [label for label, status in background_job_labels if status == "running"]
-    if running_job_labels:
-        st.caption("Running in background: " + " · ".join(running_job_labels))
-        if st.button("Refresh background status", key="live-refresh-background-status"):
-            st.rerun()
     if audio_status == "running":
         st.info("Audio + Subtitles are still being generated in the background. Visual QC is independent; final rendering will unlock when the handoff is ready.")
     elif audio_status == "failed":
@@ -5944,6 +5931,20 @@ def _render_live_visuals(slide_count: int):
                 st.session_state.live_render_status = "running"
 
     _render_two_pane_visual_workspace(visual_option, slide_count, live=True)
+
+    background_job_labels = (
+        ("Audio + Subtitles", st.session_state.get("live_audio_status", "idle")),
+        ("Automatic Scraper", st.session_state.get("live_visual_status", "idle")),
+        ("Manual Scraper", st.session_state.get("live_manual_visual_status", "idle")),
+        ("Real Image Search", st.session_state.get("live_real_image_status", "idle")),
+        ("AI image generation", st.session_state.get("live_ai_image_status", "idle")),
+        ("Final render", st.session_state.get("live_render_status", "idle")),
+    )
+    running_job_labels = [label for label, status in background_job_labels if status == "running"]
+    if running_job_labels:
+        st.caption("Running in background: " + " · ".join(running_job_labels))
+        if st.button("Refresh background status", key="live-refresh-background-status"):
+            st.rerun()
 
     ready = all(
         slide in st.session_state.live_visual_assignments
