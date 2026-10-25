@@ -10,12 +10,10 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import hashlib
 import io
-import os
 import re
 from typing import Any, Callable
 
 from PIL import Image, UnidentifiedImageError
-import requests
 
 from longform_cards import (
     render_longform_stat_card,
@@ -26,6 +24,7 @@ from longform_cards import (
     render_longform_timeline_card,
 )
 from visual_search import search_images
+from visual_generator import generate_images
 
 
 MIN_WIDTH = 1200
@@ -105,11 +104,22 @@ def _score_asset(asset: dict, required_entity: str, intent: str) -> float:
 
 
 def _fetch_pollinations_ai_image(prompt: str) -> bytes | None:
-    """Zero-cost fallback: generates a 16:9 cinematic photo via Pollinations Flux."""
+    """Legacy helper name; use the shared free-first generator for a landscape image.
+
+    The previous implementation called an undefined _pollinations symbol,
+    swallowed the NameError, and silently fell back to generic chapter cards.
+    The shared generator uses AI Horde by default and never calls metered services
+    unless the user explicitly enables them.
+    """
     try:
-        res = _pollinations(f"Cinematic 16:9 documentary broadcast photo: {prompt}, 8k stadium lighting", seed=42)
-        if res and res.get("bytes"):
-            return res["bytes"]
+        result = generate_images(
+            f"Cinematic 16:9 documentary broadcast photo: {prompt}, natural stadium lighting",
+            orientation="landscape",
+            timeout_seconds=120,
+        )
+        assets = result.get("assets") or []
+        if assets:
+            return assets[0].get("bytes")
     except Exception:
         pass
     return None
@@ -289,7 +299,7 @@ class LongformVisualMatcher:
                 "visual_type": "card" if rendered_frame_bytes else "photo_kenburns",
                 "card_type": c_type,
                 "image_bytes": rendered_frame_bytes or chosen_bytes,
-                "image_source": "Long-form card renderer" if rendered_frame_bytes else (chosen_asset.get("source") if chosen_asset else "AI Flux"),
+                "image_source": "Long-form card renderer" if rendered_frame_bytes else (chosen_asset.get("source") if chosen_asset else "AI-generated (free-first provider)"),
                 "image_title": chosen_asset.get("title") if chosen_asset else f"Scene {sc_num} visual",
             })
 
