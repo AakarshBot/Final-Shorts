@@ -18,12 +18,13 @@ from urllib.parse import urlparse
 
 import requests
 from rapidfuzz import fuzz
+from cricket_source_discovery import fetch_cricket_feed_items
 
 GOOGLE_NEWS_URL = "https://news.google.com/rss/search"
 GDELT_URL = "https://api.gdeltproject.org/api/v2/doc/doc"
 HEADERS = {"User-Agent": "Final-Shorts/1.0"}
 TIMEOUT = 8
-LOOKBACK_HOURS = 72
+LOOKBACK_HOURS = 168  # use a full week to avoid empty pools on quieter news days
 TARGET = 20
 MAX_QUERY_RESULTS = 100
 MAX_GOOGLE_WORKERS = 12
@@ -75,81 +76,126 @@ YOUTUBE_TREND_GENERIC_TERMS = {
 
 CRICKET_QUERIES = {
     "cricket_india_asia": [
-        '(India OR Pakistan OR "Sri Lanka" OR Bangladesh) cricket when:3d',
-        'cricket (India OR Pakistan OR "Sri Lanka" OR Bangladesh) (record OR milestone OR first OR fastest OR historic) when:3d',
-        'cricket (India OR Pakistan OR "Sri Lanka" OR Bangladesh) (injury OR comeback OR retirement OR debut OR dropped OR recalled) when:3d',
-        'cricket (India OR Pakistan OR "Sri Lanka" OR Bangladesh) (rivalry OR debate OR feud OR clash OR showdown OR revenge) when:3d',
-        'cricket (India OR Pakistan OR "Sri Lanka" OR Bangladesh) (controversy OR row OR ban OR fine OR suspension OR statement OR reaction) when:3d',
-        'cricket (women OR WPL OR domestic OR Ranji OR U19 OR emerging OR uncapped OR associate) when:3d',
-        'cricket (upset OR underdog OR breakout OR breakthrough OR teenager OR youngster) when:3d',
-        'cricket (BCCI OR PCB OR ICC OR board) (decision OR rule OR law OR appointment OR venue OR pitch OR technology) when:3d',
-        'cricket (IPL OR PSL OR WPL OR BBL OR CPL OR SA20 OR ILT20 OR MLC) (retention OR release OR auction OR transfer OR signing OR controversy) when:3d',
-        'cricket (career OR legacy OR comeback OR rise OR fall OR landmark) when:3d',
+        '(India OR Pakistan OR "Sri Lanka" OR Bangladesh) cricket when:7d',
+        'cricket (India OR Pakistan OR "Sri Lanka" OR Bangladesh) (record OR milestone OR first OR fastest OR historic) when:7d',
+        'cricket (India OR Pakistan OR "Sri Lanka" OR Bangladesh) (injury OR comeback OR retirement OR debut OR dropped OR recalled) when:7d',
+        'cricket (India OR Pakistan OR "Sri Lanka" OR Bangladesh) (rivalry OR debate OR feud OR clash OR showdown OR revenge) when:7d',
+        'cricket (India OR Pakistan OR "Sri Lanka" OR Bangladesh) (controversy OR row OR ban OR fine OR suspension OR statement OR reaction) when:7d',
+        'cricket (women OR WPL OR domestic OR Ranji OR U19 OR emerging OR uncapped OR associate) when:7d',
+        'cricket (upset OR underdog OR breakout OR breakthrough OR teenager OR youngster) when:7d',
+        'cricket (BCCI OR PCB OR ICC OR board) (decision OR rule OR law OR appointment OR venue OR pitch OR technology) when:7d',
+        'cricket (IPL OR PSL OR WPL OR BBL OR CPL OR SA20 OR ILT20 OR MLC) (retention OR release OR auction OR transfer OR signing OR controversy) when:7d',
+        'cricket (career OR legacy OR comeback OR rise OR fall OR landmark) when:7d',
     ],
     "cricket_global": [
-        'international cricket latest when:3d',
-        'cricket (Australia OR England OR "South Africa" OR "New Zealand" OR "West Indies" OR Afghanistan OR Ireland) when:3d',
-        'cricket (record OR milestone OR first OR fastest OR historic) when:3d',
-        'cricket (injury OR comeback OR retirement OR debut OR dropped OR recalled) when:3d',
-        'cricket (rivalry OR debate OR feud OR clash OR showdown OR revenge) when:3d',
-        'cricket (controversy OR row OR ban OR fine OR suspension OR statement OR reaction) when:3d',
-        'cricket (women OR domestic OR county OR U19 OR emerging OR uncapped OR associate) when:3d',
-        'cricket (upset OR underdog OR breakout OR breakthrough OR teenager OR youngster) when:3d',
-        'cricket (board OR ICC) (decision OR rule OR law OR appointment OR venue OR pitch OR technology) when:3d',
-        'cricket (IPL OR PSL OR WPL OR BBL OR CPL OR SA20 OR ILT20 OR MLC) (retention OR release OR auction OR transfer OR signing) when:3d',
+        'international cricket latest when:7d',
+        'cricket (Australia OR England OR "South Africa" OR "New Zealand" OR "West Indies" OR Afghanistan OR Ireland) when:7d',
+        'cricket (record OR milestone OR first OR fastest OR historic) when:7d',
+        'cricket (injury OR comeback OR retirement OR debut OR dropped OR recalled) when:7d',
+        'cricket (rivalry OR debate OR feud OR clash OR showdown OR revenge) when:7d',
+        'cricket (controversy OR row OR ban OR fine OR suspension OR statement OR reaction) when:7d',
+        'cricket (women OR domestic OR county OR U19 OR emerging OR uncapped OR associate) when:7d',
+        'cricket (upset OR underdog OR breakout OR breakthrough OR teenager OR youngster) when:7d',
+        'cricket (board OR ICC) (decision OR rule OR law OR appointment OR venue OR pitch OR technology) when:7d',
+        'cricket (IPL OR PSL OR WPL OR BBL OR CPL OR SA20 OR ILT20 OR MLC) (retention OR release OR auction OR transfer OR signing) when:7d',
     ],
 }
 
 MORE_QUERIES = {
     "cricket_india_asia": [
-        'cricket (women OR Ranji OR Duleep OR Irani OR U19 OR domestic OR associate) when:3d',
-        'cricket (Nepal OR Oman OR UAE OR Scotland OR Zimbabwe OR Namibia OR Uganda OR USA) when:3d',
-        'cricket (rivalry OR feud OR debate OR clash OR showdown OR revenge OR rematch) when:3d',
-        'cricket (record OR milestone OR first-ever OR fastest OR youngest OR oldest OR unbeaten) when:3d',
-        'cricket (comeback OR breakthrough OR breakout OR uncapped OR debut OR teenager OR youngster) when:3d',
-        'cricket (retirement OR legacy OR career OR farewell OR landmark) when:3d',
-        'cricket (ban OR fine OR suspension OR row OR backlash OR statement OR apology) when:3d',
-        'cricket (law OR rule OR technology OR pitch OR venue OR board decision) when:3d',
+        'cricket (women OR Ranji OR Duleep OR Irani OR U19 OR domestic OR associate) when:7d',
+        'cricket (Nepal OR Oman OR UAE OR Scotland OR Zimbabwe OR Namibia OR Uganda OR USA) when:7d',
+        'cricket (rivalry OR feud OR debate OR clash OR showdown OR revenge OR rematch) when:7d',
+        'cricket (record OR milestone OR first-ever OR fastest OR youngest OR oldest OR unbeaten) when:7d',
+        'cricket (comeback OR breakthrough OR breakout OR uncapped OR debut OR teenager OR youngster) when:7d',
+        'cricket (retirement OR legacy OR career OR farewell OR landmark) when:7d',
+        'cricket (ban OR fine OR suspension OR row OR backlash OR statement OR apology) when:7d',
+        'cricket (law OR rule OR technology OR pitch OR venue OR board decision) when:7d',
     ],
     "cricket_global": [
-        'cricket (women OR domestic OR county OR U19 OR emerging OR associate) when:3d',
-        'cricket (Nepal OR Oman OR UAE OR Scotland OR Zimbabwe OR Namibia OR Uganda OR USA OR Ireland) when:3d',
-        'cricket (rivalry OR feud OR debate OR clash OR showdown OR revenge OR rematch) when:3d',
-        'cricket (record OR milestone OR first-ever OR fastest OR youngest OR oldest OR unbeaten) when:3d',
-        'cricket (comeback OR breakthrough OR breakout OR uncapped OR debut OR teenager OR youngster) when:3d',
-        'cricket (retirement OR legacy OR career OR farewell OR landmark) when:3d',
-        'cricket (ban OR fine OR suspension OR row OR backlash OR statement OR apology) when:3d',
-        'cricket (law OR rule OR technology OR pitch OR venue OR board decision) when:3d',
+        'cricket (women OR domestic OR county OR U19 OR emerging OR associate) when:7d',
+        'cricket (Nepal OR Oman OR UAE OR Scotland OR Zimbabwe OR Namibia OR Uganda OR USA OR Ireland) when:7d',
+        'cricket (rivalry OR feud OR debate OR clash OR showdown OR revenge OR rematch) when:7d',
+        'cricket (record OR milestone OR first-ever OR fastest OR youngest OR oldest OR unbeaten) when:7d',
+        'cricket (comeback OR breakthrough OR breakout OR uncapped OR debut OR teenager OR youngster) when:7d',
+        'cricket (retirement OR legacy OR career OR farewell OR landmark) when:7d',
+        'cricket (ban OR fine OR suspension OR row OR backlash OR statement OR apology) when:7d',
+        'cricket (law OR rule OR technology OR pitch OR venue OR board decision) when:7d',
     ],
 }
 
 
+
+# Coverage expansion: analysis, interviews, reactions, governance, franchise and
+# under-covered cricket. These are discovery lanes, not a quote-only special case.
+CRICKET_QUERIES["cricket_india_asia"].extend([
+    'cricket (interview OR podcast OR "former cricketer" OR "former India captain") when:7d',
+    'cricket (opinion OR analysis OR explained OR "tactical analysis" OR "expert view") when:7d',
+    'cricket (reacts OR reaction OR responds OR remarks OR comments OR warns OR backs OR slams) when:7d',
+    'cricket (BCCI OR ICC OR PCB) (policy OR governance OR finances OR rights OR tender OR dispute) when:7d',
+    'cricket (Ranji OR Duleep OR Irani OR "Syed Mushtaq Ali" OR "Vijay Hazare") (selection OR record OR performance OR controversy) when:7d',
+    'cricket (women OR WPL OR "India A" OR U19 OR domestic OR associate nations) (story OR interview OR record OR selection) when:7d',
+    'site:bcci.tv/latest-news cricket (squad OR announcement OR interview OR selection) when:7d',
+    'site:icc-cricket.com/news cricket (statement OR announcement OR reaction OR decision) when:7d',
+    'cricket (broadcast rights OR franchise valuation OR auction OR ownership OR salary cap OR player retention) when:7d',
+]);
+CRICKET_QUERIES["cricket_global"].extend([
+    'cricket (interview OR podcast OR "former cricketer" OR "former captain") when:7d',
+    'cricket (opinion OR analysis OR explained OR tactical OR "expert view") when:7d',
+    'cricket (reacts OR reaction OR responds OR remarks OR comments OR warns OR backs OR slams) when:7d',
+    'cricket (ICC OR board OR governance OR finances OR rights OR dispute OR investigation) when:7d',
+    'cricket (county OR Sheffield Shield OR Plunket Shield OR domestic OR associate nations) (selection OR record OR interview OR analysis) when:7d',
+    'cricket (women OR WBBL OR WPL OR U19 OR associate) (story OR interview OR record OR selection) when:7d',
+    'site:icc-cricket.com/news cricket (statement OR announcement OR reaction OR decision) when:7d',
+    'cricket (broadcast rights OR franchise valuation OR auction OR ownership OR salary cap OR player retention) when:7d',
+]);
+MORE_QUERIES["cricket_india_asia"].extend([
+    'cricket former player reacts to current affairs when:7d',
+    'cricket interview with former India cricketer when:7d',
+    'cricket expert analysis selection debate coaching captaincy when:7d',
+    'cricket board announcement press release disciplinary decision when:7d',
+    'cricket (women OR domestic OR U19 OR associate) interview feature when:7d',
+]);
+MORE_QUERIES["cricket_global"].extend([
+    'cricket former player reacts to current affairs when:7d',
+    'cricket interview with former international cricketer when:7d',
+    'cricket expert analysis selection debate coaching captaincy when:7d',
+    'cricket board announcement press release disciplinary decision when:7d',
+    'cricket (women OR domestic OR U19 OR associate) interview feature when:7d',
+]);
+
 TOP5_QUERIES = [
-    '(India OR Pakistan OR "Sri Lanka" OR Bangladesh) cricket when:3d',
-    'cricket (record OR milestone OR first OR fastest OR historic OR upset OR breakout) when:3d',
-    'cricket (injury OR comeback OR retirement OR debut OR dropped OR recalled) when:3d',
-    'cricket (controversy OR ban OR suspension OR statement OR reaction OR feud OR clash) when:3d',
-    'cricket (women OR WPL OR domestic OR Ranji OR U19 OR associate) when:3d',
-    'cricket (BCCI OR PCB OR ICC OR board OR IPL OR PSL OR WPL) (decision OR rule OR signing OR retention OR appointment) when:3d',
+    '(India OR Pakistan OR "Sri Lanka" OR Bangladesh) cricket when:7d',
+    'cricket (record OR milestone OR first OR fastest OR historic OR upset OR breakout) when:7d',
+    'cricket (injury OR comeback OR retirement OR debut OR dropped OR recalled) when:7d',
+    'cricket (controversy OR ban OR suspension OR statement OR reaction OR feud OR clash) when:7d',
+    'cricket (women OR WPL OR domestic OR Ranji OR U19 OR associate) when:7d',
+    'cricket (BCCI OR PCB OR ICC OR board OR IPL OR PSL OR WPL) (decision OR rule OR signing OR retention OR appointment) when:7d',
 ]
 
+TOP5_QUERIES.extend([
+    'cricket (interview OR podcast OR "former cricketer" OR "former captain") when:7d',
+    'cricket (opinion OR analysis OR explained OR reaction OR responds OR warns OR backs) when:7d',
+    'site:bcci.tv/latest-news cricket OR site:icc-cricket.com/news cricket when:7d',
+    'cricket (women OR domestic OR U19 OR associate OR county) (record OR selection OR feature OR interview) when:7d',
+])
 TOP5_TIMEOUT = 4.0
 TOP5_QUERY_BATCH_SIZE = 2
 
 TOP5_MORE_QUERIES = [
-    'cricket (Nepal OR Oman OR UAE OR Scotland OR Zimbabwe OR Namibia OR Uganda OR USA) when:3d',
-    'cricket (youngest OR oldest OR first-ever OR unbeaten OR milestone OR record) when:3d',
-    'cricket (comeback OR breakthrough OR breakout OR uncapped OR teenager OR youngster) when:3d',
-    'cricket (retirement OR farewell OR legacy OR career OR landmark) when:3d',
-    'cricket (law OR technology OR pitch OR venue OR board decision) when:3d',
-    'cricket (transfer OR release OR auction OR signing OR retention OR franchise) when:3d',
+    'cricket (Nepal OR Oman OR UAE OR Scotland OR Zimbabwe OR Namibia OR Uganda OR USA) when:7d',
+    'cricket (youngest OR oldest OR first-ever OR unbeaten OR milestone OR record) when:7d',
+    'cricket (comeback OR breakthrough OR breakout OR uncapped OR teenager OR youngster) when:7d',
+    'cricket (retirement OR farewell OR legacy OR career OR landmark) when:7d',
+    'cricket (law OR technology OR pitch OR venue OR board decision) when:7d',
+    'cricket (transfer OR release OR auction OR signing OR retention OR franchise) when:7d',
 ]
 
 KEYWORD_QUERIES = [
-    '"{keyword}" cricket when:3d',
-    '"{keyword}" cricket (record OR milestone OR debut OR comeback OR injury OR appointment OR controversy) when:3d',
-    '"{keyword}" cricket (reaction OR interview OR statement OR confirms OR reveals) when:3d',
-    '"{keyword}" cricket (women OR franchise OR league OR board OR rules OR pitch) when:3d',
+    '"{keyword}" cricket when:7d',
+    '"{keyword}" cricket (record OR milestone OR debut OR comeback OR injury OR appointment OR controversy) when:7d',
+    '"{keyword}" cricket (reaction OR interview OR statement OR confirms OR reveals) when:7d',
+    '"{keyword}" cricket (women OR franchise OR league OR board OR rules OR pitch) when:7d',
 ]
 
 CRICKET_TERMS = {
@@ -363,7 +409,7 @@ def _cricket_same_event(a: Topic, b: Topic) -> bool:
     specific_entities = entities - TEAM_ENTITIES
     named = _named_phrases(a.title) & _named_phrases(b.title)
 
-    if groups and shared_core and (specific_entities or named):
+    if groups and len(shared_core) >= 2 and (specific_entities or named) and similarity >= 68:
         return True
     if similarity >= 86 and len(shared_core) >= 2 and (specific_entities or named):
         return True
@@ -552,7 +598,7 @@ def _fetch_google(
 def _fetch_gdelt(query: str) -> list[Topic]:
     response = requests.get(
         GDELT_URL,
-        params={"query": query, "mode": "artlist", "format": "json", "maxrecords": MAX_QUERY_RESULTS, "timespan": "3d"},
+        params={"query": query, "mode": "artlist", "format": "json", "maxrecords": MAX_QUERY_RESULTS, "timespan": "7d"},
         headers=HEADERS,
         timeout=TIMEOUT,
     )
@@ -998,12 +1044,29 @@ def _score_cricket(topic: Topic, profile: str) -> float:
     ) else 0.0
 
     generic = -1.4 if len(core) <= 2 and narrative_hits == 0 and consequence_hits == 0 else 0.0
-    source_penalty = 1.0 if _source_key(topic.source) in PUBLISHER_PENALTIES else 0.0
+    publisher = _source_key(topic.source)
+    source_penalty = 1.0 if publisher in PUBLISHER_PENALTIES else 0.0
+    trusted_sources = (
+        "espncricinfo", "bbc", "guardian", "indian express", "ndtv", "icc",
+        "bcci", "cricbuzz", "wisden", "cricket australia", "the roar",
+    )
+    source_bonus = 1.35 if any(name in publisher for name in trusted_sources) else 0.0
+    editorial_markers = (
+        "interview", "podcast", "analysis", "opinion", "explained", "former player",
+        "former cricketer", "former captain", "reaction", "reacts", "responds",
+        "statement", "warns", "backs", "questions", "slams", "criticises",
+        "criticizes", "reflects", "exclusive", "speaks", "tells",
+    )
+    editorial_hits = sum(marker in text for marker in editorial_markers)
+    editorial_depth = min(2.4, editorial_hits * 0.45)
     local = 1.0 if profile == "cricket_india_asia" and any(
         term in text for term in INDIA_ASIA_TERMS
     ) else 0.0
 
-    return freshness + specificity + narrative + consequence + undercovered + unusual + local - generic - source_penalty
+    return (
+        freshness + specificity + narrative + consequence + undercovered + unusual
+        + editorial_depth + source_bonus + local - generic - source_penalty
+    )
 
 
 def _prepare(
@@ -1136,21 +1199,28 @@ def _select(
     for row in event_representatives:
         groups.setdefault(_tile_group_key(row, profile), []).append(row)
 
-    ordered_groups = sorted(
-        groups.items(),
-        key=lambda item: max(row.score for row in item[1]),
-        reverse=True,
-    )
+    remaining = list(groups.items())
     chosen: list[Topic] = []
-    for group_key, members in ordered_groups[:limit]:
+    selected_source_counts: dict[str, int] = {}
+    while remaining and len(chosen) < limit:
+        def adjusted_group_score(item):
+            members = item[1]
+            lead = max(members, key=lambda row: row.score)
+            source = _source_key(lead.source)
+            concentration_penalty = min(2.4, 0.75 * selected_source_counts.get(source, 0))
+            # A second reputable report provides some corroboration without letting
+            # repeated syndication or many URLs overwhelm story quality.
+            corroboration = min(1.2, max(0, len(members) - 1) * 0.25)
+            return lead.score - concentration_penalty + corroboration
+
+        best_index = max(range(len(remaining)), key=lambda i: adjusted_group_score(remaining[i]))
+        group_key, members = remaining.pop(best_index)
         ordered_members = tuple(sorted(members, key=lambda row: row.score, reverse=True))
-        chosen.append(
-            replace(
-                ordered_members[0],
-                group_key=group_key,
-                group_members=ordered_members,
-            )
-        )
+        lead = ordered_members[0]
+        chosen.append(replace(lead, group_key=group_key, group_members=ordered_members))
+        source = _source_key(lead.source)
+        if source:
+            selected_source_counts[source] = selected_source_counts.get(source, 0) + 1
 
     return chosen
 
@@ -1172,6 +1242,17 @@ def fetch_top5_topics(
     }
     queries = TOP5_MORE_QUERIES if more else TOP5_QUERIES
     rows = []
+    try:
+        for item in fetch_cricket_feed_items(lookback_days=7):
+            rows.append(Topic(
+                _clean_title(item.get("title", ""), item.get("source", "")),
+                _clean(item.get("source", "")),
+                item.get("published_at") or datetime.now(timezone.utc),
+                _clean(item.get("url", "")),
+                _clean(item.get("description", "")),
+            ))
+    except (requests.RequestException, ET.ParseError, ValueError, OSError, TypeError):
+        pass
     chosen = []
     selection_existing = existing if more else []
 
@@ -1458,10 +1539,10 @@ class TopicFetcher:
             ]
         elif profile == "niche_sports":
             queries = [
-                '(tennis OR badminton OR squash OR "table tennis") when:3d',
-                '(F1 OR "Formula 1" OR MotoGP OR motorsport) when:3d',
-                '(athletics OR swimming OR cycling OR golf) when:3d',
-                '(boxing OR wrestling OR hockey OR kabaddi OR basketball OR chess) when:3d',
+                '(tennis OR badminton OR squash OR "table tennis") when:7d',
+                '(F1 OR "Formula 1" OR MotoGP OR motorsport) when:7d',
+                '(athletics OR swimming OR cycling OR golf) when:7d',
+                '(boxing OR wrestling OR hockey OR kabaddi OR basketball OR chess) when:7d',
             ]
         else:
             queries = list(MORE_QUERIES[profile] if more else CRICKET_QUERIES[profile])
@@ -1474,6 +1555,19 @@ class TopicFetcher:
                     rows.extend(future.result())
                 except (requests.RequestException, ET.ParseError, ValueError):
                     continue
+
+        if profile != "niche_sports":
+            try:
+                for item in fetch_cricket_feed_items(lookback_days=7):
+                    rows.append(Topic(
+                        _clean_title(item.get("title", ""), item.get("source", "")),
+                        _clean(item.get("source", "")),
+                        item.get("published_at") or datetime.now(timezone.utc),
+                        _clean(item.get("url", "")),
+                        _clean(item.get("description", "")),
+                    ))
+            except (requests.RequestException, ET.ParseError, ValueError, OSError, TypeError):
+                pass
 
         prepared = _prepare(rows, seen_urls, profile=profile)
         chosen = _select(prepared, limit, seen_urls, existing=selection_existing, profile=profile)
