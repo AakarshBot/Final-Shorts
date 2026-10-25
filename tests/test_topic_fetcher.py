@@ -291,7 +291,7 @@ def test_keyword_search_queries_are_cricket_scoped(monkeypatch):
 
 
 def test_stale_story_is_removed():
-    stale = make_topic("India cricket record", hours=80)
+    stale = make_topic("India cricket record", hours=180)
     fresh = make_topic("India cricket injury", hours=2)
     prepared = topic_fetcher._prepare([stale, fresh], set(), profile="cricket_india_asia")
     assert [item.title for item in prepared] == [fresh.title]
