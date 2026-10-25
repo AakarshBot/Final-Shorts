@@ -5607,6 +5607,8 @@ def _render_two_pane_visual_workspace(
                     result = st.session_state.get("live_manual_visual_result") or {}
                     if st.session_state.get("live_manual_visual_status") == "running":
                         st.info(f"Manual scraper is searching publisher pages for '{st.session_state.get('live_manual_visual_job_query')}'. You can continue editing cards while it runs.")
+                        if not running_job_labels and st.button("Refresh background status", key="live-refresh-manual-status"):
+                            st.rerun()
                     elif result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -5651,6 +5653,8 @@ def _render_two_pane_visual_workspace(
                     result = st.session_state.get("live_real_image_result") or {}
                     if st.session_state.get("live_real_image_status") == "running":
                         st.info(f"Real-image search is running for '{st.session_state.get('live_real_image_job_query')}'. Continue card design; results will appear here when ready.")
+                        if not running_job_labels and st.button("Refresh background status", key="live-refresh-real-images-status"):
+                            st.rerun()
                     elif result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -5704,6 +5708,8 @@ def _render_two_pane_visual_workspace(
                             "Continue with Card Studio or another visual source; results appear "
                             "when you next refresh or interact with the dashboard."
                         )
+                        if not running_job_labels and st.button("Refresh background status", key="live-refresh-ai-status"):
+                            st.rerun()
                     result = st.session_state.get("live_ai_image_result") or {}
                     if ai_status != "running" and result.get("error"):
                         st.error(result["error"])
@@ -5837,6 +5843,19 @@ def _render_live_visuals(slide_count: int):
         and isinstance(st.session_state.get("live_subtitle_data"), dict)
     )
     audio_status = st.session_state.get("live_audio_status", "idle")
+    background_job_labels = (
+        ("Audio + Subtitles", st.session_state.get("live_audio_status", "idle")),
+        ("Automatic Scraper", st.session_state.get("live_visual_status", "idle")),
+        ("Manual Scraper", st.session_state.get("live_manual_visual_status", "idle")),
+        ("Real Image Search", st.session_state.get("live_real_image_status", "idle")),
+        ("AI image generation", st.session_state.get("live_ai_image_status", "idle")),
+        ("Final render", st.session_state.get("live_render_status", "idle")),
+    )
+    running_job_labels = [label for label, status in background_job_labels if status == "running"]
+    if running_job_labels:
+        st.caption("Running in background: " + " · ".join(running_job_labels))
+        if st.button("Refresh background status", key="live-refresh-background-status"):
+            st.rerun()
     if audio_status == "running":
         st.info("Audio + Subtitles are still being generated in the background. Visual QC is independent; final rendering will unlock when the handoff is ready.")
     elif audio_status == "failed":
@@ -5930,21 +5949,13 @@ def _render_live_visuals(slide_count: int):
                 )
                 st.session_state.live_render_status = "running"
 
+    if st.session_state.get("live_render_status") == "running" and not running_job_labels:
+        st.info("The final Short is rendering in the background. Continue reviewing visuals while it runs.")
+        if st.button("Refresh background status", key="live-refresh-render-status"):
+            st.rerun()
+
     _render_two_pane_visual_workspace(visual_option, slide_count, live=True)
 
-    background_job_labels = (
-        ("Audio + Subtitles", st.session_state.get("live_audio_status", "idle")),
-        ("Automatic Scraper", st.session_state.get("live_visual_status", "idle")),
-        ("Manual Scraper", st.session_state.get("live_manual_visual_status", "idle")),
-        ("Real Image Search", st.session_state.get("live_real_image_status", "idle")),
-        ("AI image generation", st.session_state.get("live_ai_image_status", "idle")),
-        ("Final render", st.session_state.get("live_render_status", "idle")),
-    )
-    running_job_labels = [label for label, status in background_job_labels if status == "running"]
-    if running_job_labels:
-        st.caption("Running in background: " + " · ".join(running_job_labels))
-        if st.button("Refresh background status", key="live-refresh-background-status"):
-            st.rerun()
 
     ready = all(
         slide in st.session_state.live_visual_assignments
@@ -5954,7 +5965,7 @@ def _render_live_visuals(slide_count: int):
         if st.session_state.live_visuals_approved:
             st.success("Visuals approved and final render completed.")
         elif st.session_state.get("live_render_status") == "running":
-            st.info("The final Short is rendering in the background. Continue reviewing the dashboard; use Refresh background status to collect the result.")
+            st.caption("The final Short is rendering in the background.")
         elif not audio_ready:
             st.info("All slides are attached. Final rendering unlocks when Audio + Subtitles are ready.")
         else:
