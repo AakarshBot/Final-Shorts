@@ -1868,6 +1868,16 @@ if "live_real_image_result" not in st.session_state:
     st.session_state.live_real_image_result = None
 if "live_ai_image_result" not in st.session_state:
     st.session_state.live_ai_image_result = None
+if "live_ai_image_future" not in st.session_state:
+    st.session_state.live_ai_image_future = None
+if "live_ai_image_status" not in st.session_state:
+    st.session_state.live_ai_image_status = "idle"
+if "live_ai_image_error" not in st.session_state:
+    st.session_state.live_ai_image_error = ""
+if "live_ai_image_job_query" not in st.session_state:
+    st.session_state.live_ai_image_job_query = ""
+if "live_ai_image_job_story_key" not in st.session_state:
+    st.session_state.live_ai_image_job_story_key = None
 if "live_manual_subject_cutout" not in st.session_state:
     st.session_state.live_manual_subject_cutout = {}
 if "live_visual_option" not in st.session_state:
@@ -1916,6 +1926,14 @@ if "live_visuals_approved" not in st.session_state:
     st.session_state.live_visuals_approved = False
 if "live_rendered_video_path" not in st.session_state:
     st.session_state.live_rendered_video_path = None
+if "live_render_future" not in st.session_state:
+    st.session_state.live_render_future = None
+if "live_render_status" not in st.session_state:
+    st.session_state.live_render_status = "idle"
+if "live_render_job_story_key" not in st.session_state:
+    st.session_state.live_render_job_story_key = None
+if "live_render_job_visual_snapshot" not in st.session_state:
+    st.session_state.live_render_job_visual_snapshot = None
 if "live_render_error" not in st.session_state:
     st.session_state.live_render_error = ""
 if "live_upload_qc_approved" not in st.session_state:
@@ -4342,6 +4360,7 @@ def _live_current_story_key():
 
 
 def _live_reset_downstream():
+    _cancel_live_background_jobs()
     for key, value in {
         "live_selected_topic": None,
         "live_pipeline_notice": None,
@@ -4381,6 +4400,11 @@ def _live_reset_downstream():
         "live_real_image_job_query": "",
         "live_real_image_job_story_key": None,
         "live_ai_image_result": None,
+        "live_ai_image_future": None,
+        "live_ai_image_status": "idle",
+        "live_ai_image_error": "",
+        "live_ai_image_job_query": "",
+        "live_ai_image_job_story_key": None,
         "live_manual_subject_cutout": {},
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
@@ -4388,6 +4412,10 @@ def _live_reset_downstream():
         "live_visual_assignments": {},
         "live_visuals_approved": False,
         "live_rendered_video_path": None,
+        "live_render_future": None,
+        "live_render_status": "idle",
+        "live_render_job_story_key": None,
+        "live_render_job_visual_snapshot": None,
         "live_render_error": "",
         "live_upload_qc_approved": False,
         "live_upload_qc": None,
@@ -4898,6 +4926,40 @@ def _live_generate_audio_and_subtitles(approved_script, selected_engine, referen
     }
 
 
+def _cancel_live_background_jobs():
+    """Cancel queued downstream jobs when their story/handoff is discarded."""
+    future_keys = (
+        "live_audio_future",
+        "live_visual_future",
+        "live_manual_visual_future",
+        "live_real_image_future",
+        "live_ai_image_future",
+        "live_render_future",
+    )
+    for key in future_keys:
+        future = st.session_state.get(key)
+        if future is not None and not future.done():
+            future.cancel()
+    for future in (st.session_state.get("live_top5_visual_futures") or {}).values():
+        if future is not None and not future.done():
+            future.cancel()
+
+
+def _live_render_final_short(script, audio, subtitles, visuals, output_path):
+    """Run the existing renderer off the Streamlit thread with a click-time input snapshot."""
+    from renderer import render_production_video
+
+    output = Path(output_path)
+    render_production_video(
+        script,
+        audio,
+        subtitles,
+        visuals,
+        output_path=output,
+    )
+    return str(output.resolve())
+
+
 def _poll_live_background_jobs():
     """Collect finished Live work only during ordinary dashboard runs; never poll/rerun on a timer."""
     topics = st.session_state.get("live_topics") or []
@@ -4911,6 +4973,8 @@ def _poll_live_background_jobs():
         ("live_visual_future", "live_visual_status", "live_visual_error", "live_visual_job_story_key", "live_visual_result"),
         ("live_manual_visual_future", "live_manual_visual_status", "live_manual_visual_error", "live_manual_visual_job_story_key", "live_manual_visual_result"),
         ("live_real_image_future", "live_real_image_status", "live_real_image_error", "live_real_image_job_story_key", "live_real_image_result"),
+        ("live_ai_image_future", "live_ai_image_status", "live_ai_image_error", "live_ai_image_job_story_key", "live_ai_image_result"),
+        ("live_render_future", "live_render_status", "live_render_error", "live_render_job_story_key", "render"),
     )
     for future_key, status_key, error_key, story_key_key, destination in jobs:
         future = st.session_state.get(future_key)
@@ -4928,6 +4992,10 @@ def _poll_live_background_jobs():
             if destination == "audio":
                 st.session_state.live_handoff_error = message
                 st.session_state.live_audio_status = "failed"
+            elif destination == "render":
+                st.session_state.live_visuals_approved = False
+                st.session_state.live_render_job_visual_snapshot = None
+                st.session_state.live_render_status = "failed"
             else:
                 st.session_state[destination] = {"error": message}
                 st.session_state[status_key] = "failed"
@@ -4939,6 +5007,32 @@ def _poll_live_background_jobs():
                 st.session_state.live_subtitle_data = result["subtitles"]
                 st.session_state.live_handoff_error = ""
                 st.session_state.live_audio_status = "complete"
+            elif destination == "render":
+                snapshot = st.session_state.get("live_render_job_visual_snapshot") or []
+                current = st.session_state.get("live_visual_assignments") or {}
+                current_visuals = [
+                    current.get(slide)
+                    for slide in range(1, len(snapshot) + 1)
+                ]
+                st.session_state.live_rendered_video_path = result
+                st.session_state.live_render_status = "complete"
+                st.session_state.live_render_job_visual_snapshot = None
+                if current_visuals != snapshot:
+                    st.session_state.live_visuals_approved = False
+                    st.session_state.live_render_error = (
+                        "The render finished for the slide assignments captured when it started, "
+                        "but the assignments changed while it was rendering. Review the current "
+                        "slides and render again."
+                    )
+                else:
+                    st.session_state.live_visuals_approved = True
+                    st.session_state.live_render_error = ""
+                    if st.session_state.get("live_stage") == "04 · Visuals + Render":
+                        st.session_state.live_stage = "05 · Upload"
+                        st.session_state.live_pipeline_notice = {
+                            "confirmed": "Visuals QC and render confirmed",
+                            "next": "Moving to Upload.",
+                        }
             else:
                 st.session_state[destination] = result
                 st.session_state[status_key] = "failed" if (
@@ -5590,24 +5684,34 @@ def _render_two_pane_visual_workspace(
                             "Generate images",
                             type="primary",
                             width="stretch",
+                            disabled=st.session_state.get("live_ai_image_status") == "running",
                         )
                     if run:
                         query = query.strip()
                         if not query:
                             st.warning("Enter a prompt first.")
                         else:
-                            with st.spinner("Generating images…"):
-                                try:
-                                    from visual_generator import generate_images
-                                    st.session_state.live_ai_image_result = generate_images(query)
-                                except Exception as exc:
-                                    st.session_state.live_ai_image_result = {
-                                        "error": f"{type(exc).__name__}: {exc}"
-                                    }
+                            from visual_generator import generate_images
+                            st.session_state.live_ai_image_result = None
+                            st.session_state.live_ai_image_error = ""
+                            st.session_state.live_ai_image_job_query = query
+                            st.session_state.live_ai_image_job_story_key = _live_current_story_key()
+                            st.session_state.live_ai_image_future = _live_background_executor().submit(
+                                generate_images, query
+                            )
+                            st.session_state.live_ai_image_status = "running"
+                    ai_status = st.session_state.get("live_ai_image_status", "idle")
+                    if ai_status == "running":
+                        st.info(
+                            f"AI image generation is running for "
+                            f"'{st.session_state.get('live_ai_image_job_query')}'. "
+                            "Continue with Card Studio or another visual source; results appear "
+                            "when you next refresh or interact with the dashboard."
+                        )
                     result = st.session_state.get("live_ai_image_result") or {}
-                    if result.get("error"):
+                    if ai_status != "running" and result.get("error"):
                         st.error(result["error"])
-                    elif result:
+                    elif ai_status != "running" and result:
                         assets = list(result.get("assets") or [])
                         if not assets:
                             st.warning(result.get("message") or "No AI image provider returned a usable image.")
@@ -5737,10 +5841,21 @@ def _render_live_visuals(slide_count: int):
         and isinstance(st.session_state.get("live_subtitle_data"), dict)
     )
     audio_status = st.session_state.get("live_audio_status", "idle")
-    if audio_status == "running":
-        st.info("Audio + Subtitles are still being generated in the background. Visual QC is independent; final rendering will unlock when the handoff is ready.")
+    background_job_labels = (
+        ("Audio + Subtitles", st.session_state.get("live_audio_status", "idle")),
+        ("Automatic Scraper", st.session_state.get("live_visual_status", "idle")),
+        ("Manual Scraper", st.session_state.get("live_manual_visual_status", "idle")),
+        ("Real Image Search", st.session_state.get("live_real_image_status", "idle")),
+        ("AI image generation", st.session_state.get("live_ai_image_status", "idle")),
+        ("Final render", st.session_state.get("live_render_status", "idle")),
+    )
+    running_job_labels = [label for label, status in background_job_labels if status == "running"]
+    if running_job_labels:
+        st.caption("Running in background: " + " · ".join(running_job_labels))
         if st.button("Refresh background status", key="live-refresh-background-status"):
             st.rerun()
+    if audio_status == "running":
+        st.info("Audio + Subtitles are still being generated in the background. Visual QC is independent; final rendering will unlock when the handoff is ready.")
     elif audio_status == "failed":
         st.error("Background Audio + Subtitles failed: " + str(st.session_state.get("live_audio_error") or st.session_state.get("live_handoff_error") or "Unknown error"))
         if st.button("Return to Audio + Subs to retry", key="live-visuals-return-audio-retry"):
@@ -5754,7 +5869,13 @@ def _render_live_visuals(slide_count: int):
 
     if st.session_state.live_visuals_approved:
         st.success("Visuals approved and final render completed.")
-        st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
+        if st.session_state.get("live_stage") == "04 · Visuals + Render":
+            st.caption("The approved render is ready. Continue to Upload when you are ready.")
+            if st.button("Continue to Upload", type="primary", width="stretch", key="live-rendered-continue-upload"):
+                st.session_state.live_stage = "05 · Upload"
+                st.rerun()
+        else:
+            st.caption("Visual review is complete. The current stage selection has been preserved.")
         return
 
     visual_options = (
@@ -5794,44 +5915,37 @@ def _render_live_visuals(slide_count: int):
                 unsafe_allow_html=True,
             )
         with top_col2:
+            render_status = st.session_state.get("live_render_status", "idle")
             if st.button(
-                "Approve visuals and render",
+                "Retry render" if st.session_state.live_render_error else "Approve visuals and render",
                 type="primary",
                 width="stretch",
                 key="live-approve-visuals-top",
-                disabled=not audio_ready,
+                disabled=not audio_ready or render_status == "running",
             ):
-                assigned_items = [
+                from copy import deepcopy
+
+                assigned_items = deepcopy([
                     st.session_state.live_visual_assignments[slide]
                     for slide in range(1, slide_count + 1)
-                ]
+                ])
                 story = st.session_state.live_topics[
                     st.session_state.live_selected_topic
                 ]
                 story_id = _live_story_key(story)
                 output = Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"
-                try:
-                    with st.spinner("Rendering the final Short…"):
-                        from renderer import render_production_video
-
-                        render_production_video(
-                            st.session_state.live_approved_script,
-                            st.session_state.live_approved_audio,
-                            st.session_state.live_subtitle_data,
-                            assigned_items,
-                            output_path=output,
-                        )
-                    st.session_state.live_rendered_video_path = str(output.resolve())
-                    st.session_state.live_visuals_approved = True
-                    st.session_state.live_render_error = ""
-                    st.session_state.live_stage = "05 · Upload"
-                    st.session_state.live_pipeline_notice = {
-                        "confirmed": "Visuals QC and render confirmed",
-                        "next": "Moving to Upload.",
-                    }
-                    st.rerun()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    st.session_state.live_render_error = str(exc)
+                st.session_state.live_render_error = ""
+                st.session_state.live_render_job_story_key = story_id
+                st.session_state.live_render_job_visual_snapshot = deepcopy(assigned_items)
+                st.session_state.live_render_future = _live_background_executor().submit(
+                    _live_render_final_short,
+                    deepcopy(st.session_state.live_approved_script),
+                    deepcopy(st.session_state.live_approved_audio),
+                    deepcopy(st.session_state.live_subtitle_data),
+                    assigned_items,
+                    output,
+                )
+                st.session_state.live_render_status = "running"
 
     _render_two_pane_visual_workspace(visual_option, slide_count, live=True)
 
@@ -5840,48 +5954,14 @@ def _render_live_visuals(slide_count: int):
         for slide in range(1, slide_count + 1)
     )
     if ready:
-        if not st.session_state.live_visuals_approved:
-            if st.button(
-                "Retry render" if st.session_state.live_render_error else "Approve visuals and render",
-                type="primary",
-                width="stretch",
-                key="live-approve-visuals",
-                disabled=not audio_ready,
-            ):
-                assigned = [
-                    st.session_state.live_visual_assignments[slide]
-                    for slide in range(1, slide_count + 1)
-                ]
-                story = st.session_state.live_topics[
-                    st.session_state.live_selected_topic
-                ]
-                story_id = _live_story_key(story)
-                output = Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"
-                try:
-                    with st.spinner("Rendering the final Short…"):
-                        from renderer import render_production_video
-
-                        render_production_video(
-                            st.session_state.live_approved_script,
-                            st.session_state.live_approved_audio,
-                            st.session_state.live_subtitle_data,
-                            assigned,
-                            output_path=output,
-                            source_label=story.source or "SPORTS DESK",
-                        )
-                    st.session_state.live_rendered_video_path = str(output.resolve())
-                    st.session_state.live_visuals_approved = True
-                    st.session_state.live_render_error = ""
-                    st.session_state.live_stage = "05 · Upload"
-                    st.session_state.live_pipeline_notice = {
-                        "confirmed": "Visual QC confirmed",
-                        "next": "Moving to Upload.",
-                    }
-                    st.rerun()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    st.session_state.live_render_error = str(exc)
-        else:
+        if st.session_state.live_visuals_approved:
             st.success("Visuals approved and final render completed.")
+        elif st.session_state.get("live_render_status") == "running":
+            st.info("The final Short is rendering in the background. Continue reviewing the dashboard; use Refresh background status to collect the result.")
+        elif not audio_ready:
+            st.info("All slides are attached. Final rendering unlocks when Audio + Subtitles are ready.")
+        else:
+            st.caption("All slides are attached. Use the approval action above to start the final render.")
     else:
         st.info("Attach every slide before Visuals can be approved.")
 
