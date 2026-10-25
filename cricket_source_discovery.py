@@ -154,7 +154,7 @@ def _parse_feed(xml_text: str, fallback_source: str, now: datetime | None = None
         if published < cutoff or url in seen:
             continue
 
-        publisher = _text_from(values, "source", "author", "creator") or fallback_source
+        publisher = _text_from(values, "source") or fallback_source
         # Remove the common RSS publisher suffix without destroying legitimate titles.
         clean_title = title
         for separator in (" | ", " - ", " – ", " — "):
