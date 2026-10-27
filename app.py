@@ -5112,6 +5112,43 @@ def _poll_test_visual_jobs():
         st.session_state[future_key] = None
 
 
+def _render_visual_job_status(*, live: bool = False) -> None:
+    """Show active fetches regardless of which source or card editor is currently selected."""
+    if live:
+        jobs = (
+            ("Automatic scrape", "live_visual_status"),
+            ("Manual scraper", "live_manual_visual_status"),
+            ("Real image search", "live_real_image_status"),
+            ("AI generation", "live_ai_visual_status"),
+            ("Audio + subtitles", "live_audio_status"),
+        )
+        prefix = "live"
+    else:
+        jobs = (
+            ("Automatic scrape", "visual_status"),
+            ("Manual scraper", "manual_visual_status"),
+            ("Real image search", "real_visual_status"),
+            ("AI generation", "ai_visual_status"),
+        )
+        prefix = "test"
+
+    running = [label for label, key in jobs if st.session_state.get(key) == "running"]
+    failed = [label for label, key in jobs if st.session_state.get(key) == "failed"]
+    if running:
+        status_col, action_col = st.columns([4, 1], gap="small")
+        with status_col:
+            st.info(
+                "Background work is still running: "
+                + ", ".join(running)
+                + ". Keep editing cards or switch image sources; results are collected on the next dashboard interaction."
+            )
+        with action_col:
+            if st.button("Refresh status", key=f"{prefix}-visual-job-monitor-refresh", width="stretch"):
+                st.rerun()
+    elif failed:
+        st.warning("Background task failed: " + ", ".join(failed) + ". Open that source for its error details or retry it.")
+
+
 def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | None:
     image = _asset_to_image(value)
     if image is None:
@@ -5944,6 +5981,7 @@ def _render_live_visuals(slide_count: int):
         button_prefix="live-visual-source",
         studio_ui=True,
     )
+    _render_visual_job_status(live=True)
 
     _render_visual_board(slide_count, live=True)
 
@@ -9874,6 +9912,7 @@ def _render_manual_ai_images():
 def render_visuals():
     _poll_test_visual_jobs()
     st.header("04 · Visuals")
+    _render_visual_job_status(live=False)
     cricket_test = st.session_state.get("topic_desk_profile") in {"cricket_india_asia", "cricket_global"}
     youtube_trends_test = st.session_state.get("test_production_line") == "youtube_trends"
     visual_options = (
