@@ -2,6 +2,7 @@ from __future__ import annotations
 import indic_bootstrap
 import base64
 import hashlib
+import html
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -4686,9 +4687,9 @@ def _render_topic_tiles(
                         f'<span class="badge" style="font-size:0.65rem; font-weight:800; color:var(--accent); text-transform:uppercase;">{tile_tag}</span>'
                         f'<span style="font-size:0.65rem; color:var(--subtle); font-weight:600;">{pub_str}</span>'
                         f'</div>'
-                        f'<div class="topic-title" style="margin:6px 0 10px; font-size:0.95rem; font-weight:800; line-height:1.35; color:var(--ink); min-height:3.6em;">{primary_member.title}</div>'
+                        f'<div class="topic-title" style="margin:6px 0 10px; font-size:0.95rem; font-weight:800; line-height:1.35; color:var(--ink); min-height:3.6em;">{html.escape(str(primary_member.title), quote=True)}</div>'
                         f'<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--surface-soft); padding-top:8px;">'
-                        f'<span style="font-size:0.7rem; font-weight:700; color:var(--muted);">{source_name}</span>'
+                        f'<span style="font-size:0.7rem; font-weight:700; color:var(--muted);">{html.escape(str(source_name), quote=True)}</span>'
                         f'{extra_badge}'
                         f'</div>'
                         f'</div>',
@@ -6377,7 +6378,7 @@ def _render_live_script():
     with col_right:
         st.markdown('<div class="inspector">', unsafe_allow_html=True)
         st.markdown('<div class="mini-label">LIVE TELEPROMPTER</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{story.title}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{html.escape(str(story.title), quote=True)}</div>', unsafe_allow_html=True)
         scenes_count = len(script.get("script") or [])
         st.markdown(f'<div class="inspector-line"><span>Cues</span><span class="inspector-value">{scenes_count} scenes</span></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="inspector-line"><span>Total Speech</span><span class="inspector-value">{total_words_live} words</span></div>', unsafe_allow_html=True)
@@ -6702,7 +6703,7 @@ def render_live_top5():
                     st.markdown(f'<div class="topic-rank">#{slot + 1}</div>', unsafe_allow_html=True)
                 with row[1]:
                     st.markdown(
-                        f'<div class="topic-title">{topic.title}</div><div class="topic-meta">{topic.source or "Sports desk"}</div>',
+                        f'<div class="topic-title">{html.escape(str(topic.title), quote=True)}</div><div class="topic-meta">{html.escape(str(topic.source or "Sports desk"), quote=True)}</div>',
                         unsafe_allow_html=True,
                     )
                 with row[2]:
@@ -7736,7 +7737,7 @@ def render_live_dashboard():
 
     topic = st.session_state.live_topics[selected_index]
     st.markdown(
-        f'<div class="section-head"><div><div class="eyebrow">SELECTED STORY</div><div class="section-title">{topic.title}</div></div>'
+        f'<div class="section-head"><div><div class="eyebrow">SELECTED STORY</div><div class="section-title">{html.escape(str(topic.title), quote=True)}</div></div>'
         f'<div class="section-count">{st.session_state.live_stage.upper()}</div></div>',
         unsafe_allow_html=True,
     )
@@ -8989,8 +8990,8 @@ def render_otd_topic_fetcher():
         left, right = st.columns([2.2, .4], gap="small")
         with left:
             st.markdown(
-                f'<div class="topic-title">{topic.title}</div>'
-                f'<div class="topic-meta">{topic.source}</div>',
+                f'<div class="topic-title">{html.escape(str(topic.title), quote=True)}</div>'
+                f'<div class="topic-meta">{html.escape(str(topic.source), quote=True)}</div>',
                 unsafe_allow_html=True,
             )
             if topic.description and topic.description != topic.title:
@@ -9224,7 +9225,7 @@ def render_topic_fetcher():
                 left, right = st.columns([1.7, .45], gap="medium")
                 with left:
                     st.markdown('<div class="eyebrow">SELECTED</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="selected-story-title">{topic.title}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="selected-story-title">{html.escape(str(topic.title), quote=True)}</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b}</div>', unsafe_allow_html=True)
                     if topic.description:
                         with st.expander("Story details", expanded=False):
@@ -9251,7 +9252,7 @@ def render_scriptwriter():
         f'<div class="radar-banner">'
         f'<div>'
         f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--primary);">02 · BROADCAST PROMPTER & SCRIPT STUDIO</div>'
-        f'<div style="font-size:1.35rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:var(--ink);">{topic.title}</div>'
+        f'<div style="font-size:1.35rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:var(--ink);">{html.escape(str(topic.title), quote=True)}</div>'
         f'<div style="font-size:0.78rem; color:var(--muted);">Continuous 20–30s broadcast news article · English lead &lt; 14 words · Hindi/Telugu lead ≤ 5.2s measured audio</div>'
         f'</div>'
         f'<div class="radar-chip">PRO STUDIO ENGINE</div>'
@@ -9528,7 +9529,7 @@ def render_scriptwriter():
     with right:
         st.markdown('<div class="inspector">',unsafe_allow_html=True)
         st.markdown('<div class="mini-label">EDITORIAL TELEPROMPTER</div>',unsafe_allow_html=True)
-        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{topic.title}</div>',unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{html.escape(str(topic.title), quote=True)}</div>',unsafe_allow_html=True)
         scenes_count = len(script.get("script") or [])
         st.markdown('<div class="inspector-line"><span>Language</span><span class="inspector-value">'+str(script.get("language_used") or language).title()+'</span></div>',unsafe_allow_html=True)
         st.markdown(f'<div class="inspector-line"><span>Scenes</span><span class="inspector-value">{scenes_count} cues</span></div>',unsafe_allow_html=True)
@@ -11165,8 +11166,8 @@ elif st.session_state.app_mode == "test":
                             st.markdown(f'<div class="topic-rank">#{slot + 1}</div>', unsafe_allow_html=True)
                         with row[1]:
                             st.markdown(
-                                f'<div class="topic-title">{topic.title}</div>'
-                                f'<div class="topic-meta">{topic.source or "Sports desk"}</div>',
+                                f'<div class="topic-title">{html.escape(str(topic.title), quote=True)}</div>'
+                                f'<div class="topic-meta">{html.escape(str(topic.source or "Sports desk"), quote=True)}</div>',
                                 unsafe_allow_html=True,
                             )
                         with row[2]:
