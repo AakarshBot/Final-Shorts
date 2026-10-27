@@ -4383,6 +4383,11 @@ def _live_reset_downstream():
         "live_real_image_job_query": "",
         "live_real_image_job_story_key": None,
         "live_ai_image_result": None,
+        "live_ai_visual_future": None,
+        "live_ai_visual_status": "idle",
+        "live_ai_visual_error": "",
+        "live_ai_visual_job_story_key": None,
+        "live_ai_visual_job_query": "",
         "live_manual_subject_cutout": {},
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
@@ -5011,6 +5016,7 @@ def _poll_live_background_jobs():
         ("live_visual_future", "live_visual_status", "live_visual_error", "live_visual_job_story_key", "live_visual_result"),
         ("live_manual_visual_future", "live_manual_visual_status", "live_manual_visual_error", "live_manual_visual_job_story_key", "live_manual_visual_result"),
         ("live_real_image_future", "live_real_image_status", "live_real_image_error", "live_real_image_job_story_key", "live_real_image_result"),
+        ("live_ai_visual_future", "live_ai_visual_status", "live_ai_visual_error", "live_ai_visual_job_story_key", "live_ai_image_result"),
     )
     for future_key, status_key, error_key, story_key_key, destination in jobs:
         future = st.session_state.get(future_key)
@@ -5734,15 +5740,18 @@ def _render_two_pane_visual_workspace(
                         if not query:
                             st.warning("Enter a prompt first.")
                         else:
-                            with st.spinner("Generating images…"):
-                                try:
-                                    from visual_generator import generate_images
-                                    st.session_state.live_ai_image_result = generate_images(query)
-                                except Exception as exc:
-                                    st.session_state.live_ai_image_result = {
-                                        "error": f"{type(exc).__name__}: {exc}"
-                                    }
+                            from visual_generator import generate_images
+                            st.session_state.live_ai_image_result = None
+                            st.session_state.live_ai_visual_error = ""
+                            st.session_state.live_ai_visual_job_query = query
+                            st.session_state.live_ai_visual_job_story_key = _live_current_story_key()
+                            st.session_state.live_ai_visual_status = "running"
+                            st.session_state.live_ai_visual_future = _live_background_executor().submit(generate_images, query)
                     result = st.session_state.get("live_ai_image_result") or {}
+                    if not result and st.session_state.get("live_ai_visual_status") == "running":
+                        st.info(f"AI generation for “{st.session_state.get('live_ai_visual_job_query', '')}” is running in the background. Continue editing cards while it works.")
+                        if st.button("Refresh AI-generation status", key="live-refresh-ai-generation"):
+                            st.rerun()
                     if result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -9563,13 +9572,23 @@ def render_visuals_crawler():
     story_key = f"{selected_index}:{story['url']}:{story['title']}"
 
     if story_key != st.session_state.get("visual_loaded_story"):
-        st.session_state.visual_result = None
-        st.session_state.visual_crops = {}
-        st.session_state.visual_loaded_story = story_key
-        st.session_state.visual_job_story_key = story_key
-        st.session_state.visual_status = "running"
-        st.session_state.visual_error = ""
-        st.session_state.visual_future = _live_background_executor().submit(crawl_visuals, story)
+        existing_result = st.session_state.get("visual_result")
+        if (
+            st.session_state.get("visual_loaded_story") is None
+            and isinstance(existing_result, dict)
+            and existing_result.get("assets")
+            and not st.session_state.get("visual_future")
+        ):
+            # Preserve an explicitly supplied image pool (for Test fixtures and restored sessions).
+            st.session_state.visual_loaded_story = story_key
+        else:
+            st.session_state.visual_result = None
+            st.session_state.visual_crops = {}
+            st.session_state.visual_loaded_story = story_key
+            st.session_state.visual_job_story_key = story_key
+            st.session_state.visual_status = "running"
+            st.session_state.visual_error = ""
+            st.session_state.visual_future = _live_background_executor().submit(crawl_visuals, story)
 
     result = st.session_state.get("visual_result") or {}
     if not result and st.session_state.get("visual_status") == "running":
