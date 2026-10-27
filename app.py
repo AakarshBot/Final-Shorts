@@ -5162,10 +5162,10 @@ def _poll_live_background_jobs():
                     current.get(slide)
                     for slide in range(1, len(snapshot) + 1)
                 ]
-                st.session_state.live_rendered_video_path = result
                 st.session_state.live_render_status = "complete"
                 st.session_state.live_render_job_visual_snapshot = None
                 if current_visuals != snapshot:
+                    st.session_state.live_rendered_video_path = None
                     st.session_state.live_visuals_approved = False
                     st.session_state.live_render_error = (
                         "The render finished for the slide assignments captured when it started, "
@@ -5173,6 +5173,7 @@ def _poll_live_background_jobs():
                         "slides and render again."
                     )
                 else:
+                    st.session_state.live_rendered_video_path = result
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
                     if st.session_state.get("live_stage") == "04 · Visuals + Render":
@@ -5482,7 +5483,6 @@ def _render_visual_asset_pool(
                                 st.session_state.setdefault("manual_subject_cutout", {})["image_key"] = asset_key
                                 st.session_state["test-standalone-card-studio-image-1"] = asset_key
                             st.toast("Loaded image into Card Studio!", icon="🎨")
-                            st.rerun()
 
                         choose_col, crop_col, delete_col = st.columns(3, gap="small")
                         with choose_col:
@@ -5704,7 +5704,6 @@ def _render_two_pane_visual_workspace(
             key=f"{prefix}view-split-btn",
         ):
             st.session_state[pane_key] = "⊞ Side-by-Side (Split)"
-            st.rerun()
     with view_cols[2]:
         if st.button(
             "Studio" if live else "◀ Focus Studio",
@@ -5714,7 +5713,6 @@ def _render_two_pane_visual_workspace(
             key=f"{prefix}view-studio-btn",
         ):
             st.session_state[pane_key] = "◀ Card Studio Focus"
-            st.rerun()
     with view_cols[3]:
         if st.button(
             "Fetcher" if live else "▶ Focus Fetcher",
@@ -5724,7 +5722,6 @@ def _render_two_pane_visual_workspace(
             key=f"{prefix}view-fetcher-btn",
         ):
             st.session_state[pane_key] = "▶ Visual Fetcher Focus"
-            st.rerun()
 
     current_view = st.session_state[pane_key]
     show_fetcher = current_view in {"⊞ Side-by-Side (Split)", "▶ Visual Fetcher Focus", "◀ Visual Fetcher Focus"}
