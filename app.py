@@ -8109,17 +8109,6 @@ def render_youtube_trends_topic_fetcher(*, live=False):
                 st.session_state[error_key] = str(exc)
             st.rerun()
 
-    results = st.session_state[results_key]
-    if not results:
-        st.info("No current YouTube search trends were returned.")
-        return
-
-    st.markdown(
-        '<div class="canvas-head"><div><div class="eyebrow">01 · YT TRENDS</div>'
-        '<div class="canvas-title">Choose a story driven by current YouTube search trends</div>'
-        '<div class="canvas-copy">These are current YouTube search signals with relevant news published in the last 24 hours.</div></div></div>',
-        unsafe_allow_html=True,
-    )
     manual_topic = _render_manual_story_intake(
         f"{button_prefix}manual-story",
         submit_label="Start from this story →",
@@ -8131,6 +8120,18 @@ def render_youtube_trends_topic_fetcher(*, live=False):
             _start_test_with_manual_topic(manual_topic, "youtube_trends")
         st.session_state[search_query_key] = ""
         st.rerun()
+
+    results = st.session_state[results_key]
+    if not results:
+        st.info("No current YouTube search trends were returned. You can still use the manual story intake above.")
+        return
+
+    st.markdown(
+        '<div class="canvas-head"><div><div class="eyebrow">01 · YT TRENDS</div>'
+        '<div class="canvas-title">Choose a story driven by current YouTube search trends</div>'
+        '<div class="canvas-copy">These are current YouTube search signals with relevant news published in the last 24 hours.</div></div></div>',
+        unsafe_allow_html=True,
+    )
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">TOP 20</div>'
         '<div class="section-title">Story opportunities</div></div>'
