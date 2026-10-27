@@ -4854,6 +4854,15 @@ def _render_visual_option_grid(
         current = options[0]
         st.session_state[session_key] = current
 
+    source_state_key = {
+        "visual_test_mode": "test_visual_source_mode",
+        "live_visual_option": "live_visual_source_mode",
+    }.get(session_key)
+    if source_state_key:
+        previous_source = st.session_state.get(source_state_key)
+        if previous_source not in options or previous_source.startswith("Option 5"):
+            st.session_state[source_state_key] = current if not current.startswith("Option 5") else options[0]
+
     if studio_ui:
         source_cards = (
             (":material/travel_explore:", "Find story-relevant visuals"),
@@ -4886,6 +4895,10 @@ def _render_visual_option_grid(
                                 icon=icon,
                                 help=description,
                             ):
+                                if source_state_key and not option.startswith("Option 5"):
+                                    st.session_state[source_state_key] = option
+                                elif source_state_key and not current.startswith("Option 5"):
+                                    st.session_state[source_state_key] = current
                                 current = option
                                 st.session_state[session_key] = option
                             st.caption(description)
@@ -4908,6 +4921,10 @@ def _render_visual_option_grid(
                     width="stretch",
                     key=f"{button_prefix}-{options.index(option)}",
                 ):
+                    if source_state_key and not option.startswith("Option 5"):
+                        st.session_state[source_state_key] = option
+                    elif source_state_key and not current.startswith("Option 5"):
+                        st.session_state[source_state_key] = current
                     current = option
                     st.session_state[session_key] = option
     return current
@@ -5576,7 +5593,12 @@ def _render_two_pane_visual_workspace(
                 '<div class="section-count">5 Image Sources</div></div>',
                 unsafe_allow_html=True,
             )
-            fetcher_mode = active_mode if not active_mode.startswith("Option 5") else "Option 1 · Automatic Scraper"
+            fetcher_mode = active_mode
+            if active_mode.startswith("Option 5"):
+                saved_source_key = "live_visual_source_mode" if live else "test_visual_source_mode"
+                fetcher_mode = st.session_state.get(saved_source_key) or "Option 1 · Automatic Scraper"
+                if fetcher_mode.startswith("Option 5"):
+                    fetcher_mode = "Option 1 · Automatic Scraper"
             if live:
                 if fetcher_mode.startswith("Option 1"):
                     result = st.session_state.get("live_visual_result") or {}
