@@ -5192,7 +5192,6 @@ def _poll_live_background_jobs():
 
 
 
-@st.cache_data(max_entries=128, show_spinner=False)
 def _poll_test_visual_jobs():
     """Collect completed Test fetch jobs without blocking dashboard interactions."""
     selected = st.session_state.get("selected_topic")
@@ -5270,6 +5269,7 @@ def _render_visual_job_status(*, live: bool = False) -> None:
         st.warning("Background task failed: " + ", ".join(failed) + ". Open that source for its error details or retry it.")
 
 
+@st.cache_data(max_entries=128, show_spinner=False)
 def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | None:
     image = _asset_to_image(value)
     if image is None:
