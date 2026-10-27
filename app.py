@@ -1898,6 +1898,16 @@ if "live_real_image_result" not in st.session_state:
     st.session_state.live_real_image_result = None
 if "live_ai_image_result" not in st.session_state:
     st.session_state.live_ai_image_result = None
+if "live_ai_image_future" not in st.session_state:
+    st.session_state.live_ai_image_future = None
+if "live_ai_image_status" not in st.session_state:
+    st.session_state.live_ai_image_status = "idle"
+if "live_ai_image_error" not in st.session_state:
+    st.session_state.live_ai_image_error = ""
+if "live_ai_image_job_query" not in st.session_state:
+    st.session_state.live_ai_image_job_query = ""
+if "live_ai_image_job_story_key" not in st.session_state:
+    st.session_state.live_ai_image_job_story_key = None
 if "live_manual_subject_cutout" not in st.session_state:
     st.session_state.live_manual_subject_cutout = {}
 if "live_visual_option" not in st.session_state:
@@ -1946,6 +1956,14 @@ if "live_visuals_approved" not in st.session_state:
     st.session_state.live_visuals_approved = False
 if "live_rendered_video_path" not in st.session_state:
     st.session_state.live_rendered_video_path = None
+if "live_render_future" not in st.session_state:
+    st.session_state.live_render_future = None
+if "live_render_status" not in st.session_state:
+    st.session_state.live_render_status = "idle"
+if "live_render_job_story_key" not in st.session_state:
+    st.session_state.live_render_job_story_key = None
+if "live_render_job_visual_snapshot" not in st.session_state:
+    st.session_state.live_render_job_visual_snapshot = None
 if "live_render_error" not in st.session_state:
     st.session_state.live_render_error = ""
 if "live_upload_qc_approved" not in st.session_state:
@@ -4373,7 +4391,42 @@ def _live_current_story_key():
     return _live_story_key(topics[selected_index])
 
 
+def _cancel_live_background_jobs():
+    """Cancel queued downstream work when the active story/handoff is discarded."""
+    future_keys = (
+        "live_audio_future",
+        "live_visual_future",
+        "live_manual_visual_future",
+        "live_real_image_future",
+        "live_ai_image_future",
+        "live_render_future",
+    )
+    for key in future_keys:
+        future = st.session_state.get(key)
+        if future is not None and not future.done():
+            future.cancel()
+    for future in (st.session_state.get("live_top5_visual_futures") or {}).values():
+        if future is not None and not future.done():
+            future.cancel()
+
+
+def _live_render_final_short(script, audio, subtitles, visuals, output_path):
+    """Run the established renderer contract off the Streamlit interaction thread."""
+    from renderer import render_production_video
+
+    output = Path(output_path)
+    render_production_video(
+        script,
+        audio,
+        subtitles,
+        visuals,
+        output_path=output,
+    )
+    return str(output.resolve())
+
+
 def _live_reset_downstream():
+    _cancel_live_background_jobs()
     for key, value in {
         "live_selected_topic": None,
         "live_pipeline_notice": None,
@@ -4413,11 +4466,11 @@ def _live_reset_downstream():
         "live_real_image_job_query": "",
         "live_real_image_job_story_key": None,
         "live_ai_image_result": None,
-        "live_ai_visual_future": None,
-        "live_ai_visual_status": "idle",
-        "live_ai_visual_error": "",
-        "live_ai_visual_job_story_key": None,
-        "live_ai_visual_job_query": "",
+        "live_ai_image_future": None,
+        "live_ai_image_status": "idle",
+        "live_ai_image_error": "",
+        "live_ai_image_job_story_key": None,
+        "live_ai_image_job_query": "",
         "live_manual_subject_cutout": {},
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
@@ -4425,6 +4478,10 @@ def _live_reset_downstream():
         "live_visual_assignments": {},
         "live_visuals_approved": False,
         "live_rendered_video_path": None,
+        "live_render_future": None,
+        "live_render_status": "idle",
+        "live_render_job_story_key": None,
+        "live_render_job_visual_snapshot": None,
         "live_render_error": "",
         "live_upload_qc_approved": False,
         "live_upload_qc": None,
@@ -5064,7 +5121,8 @@ def _poll_live_background_jobs():
         ("live_visual_future", "live_visual_status", "live_visual_error", "live_visual_job_story_key", "live_visual_result"),
         ("live_manual_visual_future", "live_manual_visual_status", "live_manual_visual_error", "live_manual_visual_job_story_key", "live_manual_visual_result"),
         ("live_real_image_future", "live_real_image_status", "live_real_image_error", "live_real_image_job_story_key", "live_real_image_result"),
-        ("live_ai_visual_future", "live_ai_visual_status", "live_ai_visual_error", "live_ai_visual_job_story_key", "live_ai_image_result"),
+        ("live_ai_image_future", "live_ai_image_status", "live_ai_image_error", "live_ai_image_job_story_key", "live_ai_image_result"),
+        ("live_render_future", "live_render_status", "live_render_error", "live_render_job_story_key", "render"),
     )
     for future_key, status_key, error_key, story_key_key, destination in jobs:
         future = st.session_state.get(future_key)
@@ -5082,6 +5140,10 @@ def _poll_live_background_jobs():
             if destination == "audio":
                 st.session_state.live_handoff_error = message
                 st.session_state.live_audio_status = "failed"
+            elif destination == "render":
+                st.session_state.live_visuals_approved = False
+                st.session_state.live_render_job_visual_snapshot = None
+                st.session_state.live_render_status = "failed"
             else:
                 st.session_state[destination] = {"error": message}
                 st.session_state[status_key] = "failed"
@@ -5093,6 +5155,32 @@ def _poll_live_background_jobs():
                 st.session_state.live_subtitle_data = result["subtitles"]
                 st.session_state.live_handoff_error = ""
                 st.session_state.live_audio_status = "complete"
+            elif destination == "render":
+                snapshot = st.session_state.get("live_render_job_visual_snapshot") or []
+                current = st.session_state.get("live_visual_assignments") or {}
+                current_visuals = [
+                    current.get(slide)
+                    for slide in range(1, len(snapshot) + 1)
+                ]
+                st.session_state.live_rendered_video_path = result
+                st.session_state.live_render_status = "complete"
+                st.session_state.live_render_job_visual_snapshot = None
+                if current_visuals != snapshot:
+                    st.session_state.live_visuals_approved = False
+                    st.session_state.live_render_error = (
+                        "The render finished for the slide assignments captured when it started, "
+                        "but the assignments changed while it was rendering. Review the current "
+                        "slides and render again."
+                    )
+                else:
+                    st.session_state.live_visuals_approved = True
+                    st.session_state.live_render_error = ""
+                    if st.session_state.get("live_stage") == "04 · Visuals + Render":
+                        st.session_state.live_stage = "05 · Upload"
+                        st.session_state.live_pipeline_notice = {
+                            "confirmed": "Visuals QC and render confirmed",
+                            "next": "Moving to Upload.",
+                        }
             else:
                 st.session_state[destination] = result
                 st.session_state[status_key] = "failed" if (
@@ -5150,7 +5238,7 @@ def _render_visual_job_status(*, live: bool = False) -> None:
             ("Automatic scrape", "live_visual_status"),
             ("Manual scraper", "live_manual_visual_status"),
             ("Real image search", "live_real_image_status"),
-            ("AI generation", "live_ai_visual_status"),
+            ("AI generation", "live_ai_image_status"),
             ("Audio + subtitles", "live_audio_status"),
         )
         prefix = "live"
@@ -5833,14 +5921,14 @@ def _render_two_pane_visual_workspace(
                         else:
                             from visual_generator import generate_images
                             st.session_state.live_ai_image_result = None
-                            st.session_state.live_ai_visual_error = ""
-                            st.session_state.live_ai_visual_job_query = query
-                            st.session_state.live_ai_visual_job_story_key = _live_current_story_key()
-                            st.session_state.live_ai_visual_status = "running"
-                            st.session_state.live_ai_visual_future = _live_background_executor().submit(generate_images, query)
+                            st.session_state.live_ai_image_error = ""
+                            st.session_state.live_ai_image_job_query = query
+                            st.session_state.live_ai_image_job_story_key = _live_current_story_key()
+                            st.session_state.live_ai_image_status = "running"
+                            st.session_state.live_ai_image_future = _live_background_executor().submit(generate_images, query)
                     result = st.session_state.get("live_ai_image_result") or {}
-                    if not result and st.session_state.get("live_ai_visual_status") == "running":
-                        st.info(f"AI generation for “{st.session_state.get('live_ai_visual_job_query', '')}” is running in the background. Continue editing cards while it works.")
+                    if not result and st.session_state.get("live_ai_image_status") == "running":
+                        st.info(f"AI generation for “{st.session_state.get('live_ai_image_job_query', '')}” is running in the background. Continue editing cards while it works.")
                         if st.button("Refresh AI-generation status", key="live-refresh-ai-generation"):
                             st.rerun()
                     if result.get("error"):
