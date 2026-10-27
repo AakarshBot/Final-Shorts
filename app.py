@@ -1572,6 +1572,35 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
   padding: 14px;
   margin-top: 10px;
 }
+/* Editorial intake and background-work refinements */
+[class*="manual-story-intake"] [data-testid="stExpander"] {
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-xs);
+}
+[class*="manual-story-intake"] [data-testid="stExpander"] summary {
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+[class*="manual-story-intake"] [data-testid="stTextInput"] input,
+[class*="manual-story-intake"] [data-testid="stTextArea"] textarea {
+  border-radius: 10px !important;
+}
+[class*="manual-story-intake"] [data-testid="stFormSubmitButton"] > button {
+  min-height: 42px;
+  border-radius: 11px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+[class*="visual-job-monitor-refresh"] [data-testid="stButton"] > button {
+  min-height: 38px;
+  border-radius: 10px;
+  font-weight: 750;
+}
+[data-testid="stAlert"] {
+  border-radius: 13px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -4550,33 +4579,34 @@ def _render_manual_story_intake(
     """Return a normalized Topic only when the compact manual-intake form is submitted."""
     from manual_topic import create_manual_topic
 
-    with st.expander(heading, expanded=False):
-        st.caption(
-            "Paste an article URL, enter a headline, or provide both. "
-            "A URL is optional for headline-led stories; verify claims during Scriptwriter QC."
-        )
-        with st.form(f"{prefix}-manual-story-intake-form", clear_on_submit=False):
-            headline = st.text_input(
-                "Manual headline (optional when URL is supplied)",
-                key=f"{prefix}-manual-story-headline",
-                placeholder="e.g. India name a surprise squad change ahead of the final",
+    with st.container(key=f"{prefix}-manual-story-intake"):
+        with st.expander(heading, expanded=False):
+            st.caption(
+                "Paste an article URL, enter a headline, or provide both. "
+                "A URL is optional for headline-led stories; verify claims during Scriptwriter QC."
             )
-            url = st.text_input(
-                "News article URL (optional when headline is supplied)",
-                key=f"{prefix}-manual-story-url",
-                placeholder="https://publisher.example/news/article",
-            )
-            description = st.text_area(
-                "Context or notes (optional)",
-                key=f"{prefix}-manual-story-context",
-                height=74,
-                placeholder="Paste a short summary or context you want Scriptwriter to consider.",
-            )
-            submitted = st.form_submit_button(
-                submit_label,
-                type="primary",
-                width="stretch",
-            )
+            with st.form(f"{prefix}-manual-story-intake-form", clear_on_submit=False):
+                headline = st.text_input(
+                    "Manual headline (optional when URL is supplied)",
+                    key=f"{prefix}-manual-story-headline",
+                    placeholder="e.g. India name a surprise squad change ahead of the final",
+                )
+                url = st.text_input(
+                    "News article URL (optional when headline is supplied)",
+                    key=f"{prefix}-manual-story-url",
+                    placeholder="https://publisher.example/news/article",
+                )
+                description = st.text_area(
+                    "Context or notes (optional)",
+                    key=f"{prefix}-manual-story-context",
+                    height=74,
+                    placeholder="Paste a short summary or context you want Scriptwriter to consider.",
+                )
+                submitted = st.form_submit_button(
+                    submit_label,
+                    type="primary",
+                    width="stretch",
+                )
     if not submitted:
         return None
     try:
