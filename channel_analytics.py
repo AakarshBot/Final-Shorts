@@ -135,9 +135,25 @@ def _query_rows(
     if sort:
         params["sort"] = sort
     if dimensions and max_results:
-        params["maxResults"] = max_results
-    response = analytics.reports().query(**params).execute(num_retries=2)
-    return rows_to_dicts(response)
+        # YouTube Analytics caps each page at 200 rows; daily reports may need more.
+        page_size = min(max_results, 200)
+        params["maxResults"] = page_size
+        params["startIndex"] = 1
+    else:
+        page_size = 0
+
+    rows: list[dict[str, Any]] = []
+    start_index = 1
+    while True:
+        if dimensions:
+            params["startIndex"] = start_index
+        response = analytics.reports().query(**params).execute(num_retries=2)
+        page_rows = rows_to_dicts(response)
+        rows.extend(page_rows)
+        if not dimensions or not page_rows or len(page_rows) < page_size or len(rows) >= max_results:
+            break
+        start_index += len(page_rows)
+    return rows[:max_results] if dimensions and max_results else rows
 
 
 def _optional_report(
