@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -190,6 +192,7 @@ with tab_videos:
                 "Engaged views": int(float(video.get("engagedViews") or 0)),
                 "Watch hours": round(float(video.get("estimatedMinutesWatched") or 0) / 60, 2),
                 "Avg. duration": format_duration(video.get("averageViewDuration")),
+                "Avg. viewed": round(float(video.get("averageViewPercentage") or 0), 1),
                 "Subscribers gained": int(float(video.get("subscribersGained") or 0)),
                 "Likes": int(float(video.get("likes") or 0)),
                 "Comments": int(float(video.get("comments") or 0)),
@@ -221,6 +224,41 @@ with tab_sources:
         st.info("No traffic-source rows were returned for this period.")
 
 with tab_export:
+    # One self-contained data bundle lets the user share a single report for analysis.
+    # It contains channel/report metrics only; credentials and OAuth tokens are never included.
+    report_bundle = {
+        "schema": "final-shorts.youtube-channel-analytics.v1",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "date_range": {
+            "start_date": report["start_date"],
+            "end_date": report["end_date"],
+            "days": report["days"],
+        },
+        "channel": channel,
+        "summary": summary,
+        "daily": daily,
+        "top_videos": top_videos,
+        "traffic_sources": traffic_sources,
+        "optional_errors": report.get("optional_errors") or {},
+    }
+    safe_channel = "".join(
+        char.lower() if char.isalnum() else "-"
+        for char in str(channel.get("title") or "channel")
+    ).strip("-") or "channel"
+    st.markdown("**Single-file review package**")
+    st.caption(
+        "Download this JSON and attach it to your ChatGPT conversation. It includes the "
+        "fetched report data for analysis, not your authentication credentials."
+    )
+    st.download_button(
+        "Download analytics review package (JSON)",
+        data=json.dumps(report_bundle, ensure_ascii=False, indent=2).encode("utf-8"),
+        file_name=f"youtube-analytics-{safe_channel}-{report['start_date']}-to-{report['end_date']}.json",
+        mime="application/json",
+        type="primary",
+        use_container_width=True,
+    )
+    st.divider()
     for label, rows, filename in (
         ("Daily trends", daily, "youtube-daily"),
         ("Top videos", top_videos, "youtube-top-videos"),
