@@ -2,6 +2,7 @@ from __future__ import annotations
 import indic_bootstrap
 import base64
 import hashlib
+import html
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor
@@ -1571,6 +1572,35 @@ div[style*="overflow-y"]::-webkit-scrollbar-track {
   padding: 14px;
   margin-top: 10px;
 }
+/* Editorial intake and background-work refinements */
+[class*="manual-story-intake"] [data-testid="stExpander"] {
+  border: 1px solid var(--line) !important;
+  border-radius: 14px !important;
+  background: var(--surface) !important;
+  box-shadow: var(--shadow-xs);
+}
+[class*="manual-story-intake"] [data-testid="stExpander"] summary {
+  font-weight: 750;
+  letter-spacing: -0.01em;
+}
+[class*="manual-story-intake"] [data-testid="stTextInput"] input,
+[class*="manual-story-intake"] [data-testid="stTextArea"] textarea {
+  border-radius: 10px !important;
+}
+[class*="manual-story-intake"] [data-testid="stFormSubmitButton"] > button {
+  min-height: 42px;
+  border-radius: 11px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+[class*="visual-job-monitor-refresh"] [data-testid="stButton"] > button {
+  min-height: 38px;
+  border-radius: 10px;
+  font-weight: 750;
+}
+[data-testid="stAlert"] {
+  border-radius: 13px;
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -1868,6 +1898,16 @@ if "live_real_image_result" not in st.session_state:
     st.session_state.live_real_image_result = None
 if "live_ai_image_result" not in st.session_state:
     st.session_state.live_ai_image_result = None
+if "live_ai_image_future" not in st.session_state:
+    st.session_state.live_ai_image_future = None
+if "live_ai_image_status" not in st.session_state:
+    st.session_state.live_ai_image_status = "idle"
+if "live_ai_image_error" not in st.session_state:
+    st.session_state.live_ai_image_error = ""
+if "live_ai_image_job_query" not in st.session_state:
+    st.session_state.live_ai_image_job_query = ""
+if "live_ai_image_job_story_key" not in st.session_state:
+    st.session_state.live_ai_image_job_story_key = None
 if "live_manual_subject_cutout" not in st.session_state:
     st.session_state.live_manual_subject_cutout = {}
 if "live_visual_option" not in st.session_state:
@@ -1916,6 +1956,14 @@ if "live_visuals_approved" not in st.session_state:
     st.session_state.live_visuals_approved = False
 if "live_rendered_video_path" not in st.session_state:
     st.session_state.live_rendered_video_path = None
+if "live_render_future" not in st.session_state:
+    st.session_state.live_render_future = None
+if "live_render_status" not in st.session_state:
+    st.session_state.live_render_status = "idle"
+if "live_render_job_story_key" not in st.session_state:
+    st.session_state.live_render_job_story_key = None
+if "live_render_job_visual_snapshot" not in st.session_state:
+    st.session_state.live_render_job_visual_snapshot = None
 if "live_render_error" not in st.session_state:
     st.session_state.live_render_error = ""
 if "live_upload_qc_approved" not in st.session_state:
@@ -2723,6 +2771,7 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             ("live_manual_visual_result", "manual", "Manual Scraper"),
             ("live_real_image_result", "real", "Real Image Search"),
             ("live_ai_image_result", "ai", "AI Generation"),
+            ("live_local_visual_result", "local-upload", "Local Upload"),
         ]
         deleted = st.session_state.get("live_visual_deleted") or set()
     else:
@@ -2731,6 +2780,7 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             ("manual_visual_result", "manual-crawler", "Manual Scraper"),
             ("real_image_result", "real-search", "Real Image Search"),
             ("ai_image_result", "ai-generation", "AI Generation"),
+            ("local_visual_result", "local-upload", "Local Upload"),
         ]
         deleted = set()
 
@@ -4341,7 +4391,42 @@ def _live_current_story_key():
     return _live_story_key(topics[selected_index])
 
 
+def _cancel_live_background_jobs():
+    """Cancel queued downstream work when the active story/handoff is discarded."""
+    future_keys = (
+        "live_audio_future",
+        "live_visual_future",
+        "live_manual_visual_future",
+        "live_real_image_future",
+        "live_ai_image_future",
+        "live_render_future",
+    )
+    for key in future_keys:
+        future = st.session_state.get(key)
+        if future is not None and not future.done():
+            future.cancel()
+    for future in (st.session_state.get("live_top5_visual_futures") or {}).values():
+        if future is not None and not future.done():
+            future.cancel()
+
+
+def _live_render_final_short(script, audio, subtitles, visuals, output_path):
+    """Run the established renderer contract off the Streamlit interaction thread."""
+    from renderer import render_production_video
+
+    output = Path(output_path)
+    render_production_video(
+        script,
+        audio,
+        subtitles,
+        visuals,
+        output_path=output,
+    )
+    return str(output.resolve())
+
+
 def _live_reset_downstream():
+    _cancel_live_background_jobs()
     for key, value in {
         "live_selected_topic": None,
         "live_pipeline_notice": None,
@@ -4381,6 +4466,11 @@ def _live_reset_downstream():
         "live_real_image_job_query": "",
         "live_real_image_job_story_key": None,
         "live_ai_image_result": None,
+        "live_ai_image_future": None,
+        "live_ai_image_status": "idle",
+        "live_ai_image_error": "",
+        "live_ai_image_job_story_key": None,
+        "live_ai_image_job_query": "",
         "live_manual_subject_cutout": {},
         "live_visual_option": "Option 1 · Automatic Scraper",
         "live_visual_crops": {},
@@ -4388,6 +4478,10 @@ def _live_reset_downstream():
         "live_visual_assignments": {},
         "live_visuals_approved": False,
         "live_rendered_video_path": None,
+        "live_render_future": None,
+        "live_render_status": "idle",
+        "live_render_job_story_key": None,
+        "live_render_job_visual_snapshot": None,
         "live_render_error": "",
         "live_upload_qc_approved": False,
         "live_upload_qc": None,
@@ -4533,6 +4627,105 @@ def _visual_story_for_topic(topic, script: dict | None = None) -> dict:
     return story
 
 
+def _render_manual_story_intake(
+    prefix: str,
+    *,
+    heading: str = "Start from a news URL or manual headline",
+    submit_label: str = "Use this story",
+):
+    """Return a normalized Topic only when the compact manual-intake form is submitted."""
+    from manual_topic import create_manual_topic
+
+    with st.container(key=f"{prefix}-manual-story-intake"):
+        with st.expander(heading, expanded=False):
+            st.caption(
+                "Paste an article URL, enter a headline, or provide both. "
+                "A URL is optional for headline-led stories; verify claims during Scriptwriter QC."
+            )
+            with st.form(f"{prefix}-manual-story-intake-form", clear_on_submit=False):
+                headline = st.text_input(
+                    "Manual headline (optional when URL is supplied)",
+                    key=f"{prefix}-manual-story-headline",
+                    placeholder="e.g. India name a surprise squad change ahead of the final",
+                )
+                url = st.text_input(
+                    "News article URL (optional when headline is supplied)",
+                    key=f"{prefix}-manual-story-url",
+                    placeholder="https://publisher.example/news/article",
+                )
+                description = st.text_area(
+                    "Context or notes (optional)",
+                    key=f"{prefix}-manual-story-context",
+                    height=74,
+                    placeholder="Paste a short summary or context you want Scriptwriter to consider.",
+                )
+                submitted = st.form_submit_button(
+                    submit_label,
+                    type="primary",
+                    width="stretch",
+                )
+    if not submitted:
+        return None
+    try:
+        return create_manual_topic(headline=headline, url=url, description=description)
+    except (ValueError, RuntimeError, OSError) as exc:
+        st.error(f"Could not start from this story: {exc}")
+        return None
+
+
+def _start_test_with_manual_topic(topic, profile: str | None = None):
+    """Reset downstream Test handoffs and start Scriptwriter with the standard Topic contract."""
+    st.session_state.topics = [topic]
+    st.session_state.selected_topic = 0
+    st.session_state.topic_open_tile = None
+    if profile:
+        st.session_state.topic_desk_profile = profile
+    st.session_state.script_data = None
+    st.session_state.approved_script = None
+    st.session_state.audio_data = None
+    st.session_state.approved_audio = None
+    st.session_state.subtitle_data = None
+    st.session_state.approved_subtitles = None
+    st.session_state.visual_result = None
+    st.session_state.visual_loaded_story = None
+    st.session_state.visual_status = "idle"
+    st.session_state.manual_visual_result = None
+    st.session_state.manual_visual_status = "idle"
+    st.session_state.real_image_result = None
+    st.session_state.real_visual_status = "idle"
+    st.session_state.ai_image_result = None
+    st.session_state.ai_visual_status = "idle"
+    st.session_state.visual_crops = {}
+    st.session_state.visual_deleted = set()
+    st.session_state.visual_assignments = {}
+    st.session_state.approved_visuals = None
+    st.session_state.visuals_approved = False
+    st.session_state.renderer_previews = None
+    st.session_state.rendered_video_path = None
+    st.session_state.upload_qc_approved = False
+    st.session_state.upload_result = None
+    st.session_state.upload_qc = None
+    st.session_state.test_stage = "02 · Scriptwriter"
+    st.session_state.test_pipeline_notice = {
+        "confirmed": "Manual story confirmed",
+        "next": "Moving directly to Scriptwriter. The supplied URL/headline is the canonical story input.",
+    }
+
+
+def _start_live_with_manual_topic(topic, profile: str | None = None):
+    """Reset Live handoffs and open Script using the same normalized Topic as discovery."""
+    _live_reset_downstream()
+    st.session_state.live_topics = [topic]
+    st.session_state.live_selected_topic = 0
+    if profile:
+        st.session_state.live_topics_profile = profile
+    st.session_state.live_stage = "02 · Script"
+    st.session_state.live_pipeline_notice = {
+        "confirmed": "Manual story confirmed",
+        "next": "Moving directly to Script. Research will use the supplied source and headline.",
+    }
+
+
 def _render_topic_tiles(
     topics,
     selected_index,
@@ -4581,9 +4774,9 @@ def _render_topic_tiles(
                         f'<span class="badge" style="font-size:0.65rem; font-weight:800; color:var(--accent); text-transform:uppercase;">{tile_tag}</span>'
                         f'<span style="font-size:0.65rem; color:var(--subtle); font-weight:600;">{pub_str}</span>'
                         f'</div>'
-                        f'<div class="topic-title" style="margin:6px 0 10px; font-size:0.95rem; font-weight:800; line-height:1.35; color:var(--ink); min-height:3.6em;">{primary_member.title}</div>'
+                        f'<div class="topic-title" style="margin:6px 0 10px; font-size:0.95rem; font-weight:800; line-height:1.35; color:var(--ink); min-height:3.6em;">{html.escape(str(primary_member.title), quote=True)}</div>'
                         f'<div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--surface-soft); padding-top:8px;">'
-                        f'<span style="font-size:0.7rem; font-weight:700; color:var(--muted);">{source_name}</span>'
+                        f'<span style="font-size:0.7rem; font-weight:700; color:var(--muted);">{html.escape(str(source_name), quote=True)}</span>'
                         f'{extra_badge}'
                         f'</div>'
                         f'</div>',
@@ -4749,6 +4942,15 @@ def _render_visual_option_grid(
         current = options[0]
         st.session_state[session_key] = current
 
+    source_state_key = {
+        "visual_test_mode": "test_visual_source_mode",
+        "live_visual_option": "live_visual_source_mode",
+    }.get(session_key)
+    if source_state_key:
+        previous_source = st.session_state.get(source_state_key)
+        if previous_source not in options or previous_source.startswith("Option 5"):
+            st.session_state[source_state_key] = current if not current.startswith("Option 5") else options[0]
+
     if studio_ui:
         source_cards = (
             (":material/travel_explore:", "Find story-relevant visuals"),
@@ -4781,6 +4983,10 @@ def _render_visual_option_grid(
                                 icon=icon,
                                 help=description,
                             ):
+                                if source_state_key and not option.startswith("Option 5"):
+                                    st.session_state[source_state_key] = option
+                                elif source_state_key and not current.startswith("Option 5"):
+                                    st.session_state[source_state_key] = current
                                 current = option
                                 st.session_state[session_key] = option
                             st.caption(description)
@@ -4803,6 +5009,10 @@ def _render_visual_option_grid(
                     width="stretch",
                     key=f"{button_prefix}-{options.index(option)}",
                 ):
+                    if source_state_key and not option.startswith("Option 5"):
+                        st.session_state[source_state_key] = option
+                    elif source_state_key and not current.startswith("Option 5"):
+                        st.session_state[source_state_key] = current
                     current = option
                     st.session_state[session_key] = option
     return current
@@ -4911,6 +5121,8 @@ def _poll_live_background_jobs():
         ("live_visual_future", "live_visual_status", "live_visual_error", "live_visual_job_story_key", "live_visual_result"),
         ("live_manual_visual_future", "live_manual_visual_status", "live_manual_visual_error", "live_manual_visual_job_story_key", "live_manual_visual_result"),
         ("live_real_image_future", "live_real_image_status", "live_real_image_error", "live_real_image_job_story_key", "live_real_image_result"),
+        ("live_ai_image_future", "live_ai_image_status", "live_ai_image_error", "live_ai_image_job_story_key", "live_ai_image_result"),
+        ("live_render_future", "live_render_status", "live_render_error", "live_render_job_story_key", "render"),
     )
     for future_key, status_key, error_key, story_key_key, destination in jobs:
         future = st.session_state.get(future_key)
@@ -4928,6 +5140,10 @@ def _poll_live_background_jobs():
             if destination == "audio":
                 st.session_state.live_handoff_error = message
                 st.session_state.live_audio_status = "failed"
+            elif destination == "render":
+                st.session_state.live_visuals_approved = False
+                st.session_state.live_render_job_visual_snapshot = None
+                st.session_state.live_render_status = "failed"
             else:
                 st.session_state[destination] = {"error": message}
                 st.session_state[status_key] = "failed"
@@ -4939,6 +5155,33 @@ def _poll_live_background_jobs():
                 st.session_state.live_subtitle_data = result["subtitles"]
                 st.session_state.live_handoff_error = ""
                 st.session_state.live_audio_status = "complete"
+            elif destination == "render":
+                snapshot = st.session_state.get("live_render_job_visual_snapshot") or []
+                current = st.session_state.get("live_visual_assignments") or {}
+                current_visuals = [
+                    current.get(slide)
+                    for slide in range(1, len(snapshot) + 1)
+                ]
+                st.session_state.live_render_status = "complete"
+                st.session_state.live_render_job_visual_snapshot = None
+                if current_visuals != snapshot:
+                    st.session_state.live_rendered_video_path = None
+                    st.session_state.live_visuals_approved = False
+                    st.session_state.live_render_error = (
+                        "The render finished for the slide assignments captured when it started, "
+                        "but the assignments changed while it was rendering. Review the current "
+                        "slides and render again."
+                    )
+                else:
+                    st.session_state.live_rendered_video_path = result
+                    st.session_state.live_visuals_approved = True
+                    st.session_state.live_render_error = ""
+                    if st.session_state.get("live_stage") == "04 · Visuals + Render":
+                        st.session_state.live_stage = "05 · Upload"
+                        st.session_state.live_pipeline_notice = {
+                            "confirmed": "Visuals QC and render confirmed",
+                            "next": "Moving to Upload.",
+                        }
             else:
                 st.session_state[destination] = result
                 st.session_state[status_key] = "failed" if (
@@ -4947,6 +5190,83 @@ def _poll_live_background_jobs():
         st.session_state[future_key] = None
 
 
+
+
+def _poll_test_visual_jobs():
+    """Collect completed Test fetch jobs without blocking dashboard interactions."""
+    selected = st.session_state.get("selected_topic")
+    topics = st.session_state.get("topics") or []
+    active_story_key = None
+    if selected is not None and 0 <= selected < len(topics):
+        topic = topics[selected]
+        active_story_key = f"{selected}:{topic.url}:{topic.title}"
+
+    jobs = (
+        ("visual_future", "visual_status", "visual_error", "visual_job_story_key", "visual_result"),
+        ("manual_visual_future", "manual_visual_status", "manual_visual_error", "manual_visual_job_story_key", "manual_visual_result"),
+        ("real_visual_future", "real_visual_status", "real_visual_error", "real_visual_job_story_key", "real_image_result"),
+        ("ai_visual_future", "ai_visual_status", "ai_visual_error", "ai_visual_job_story_key", "ai_image_result"),
+    )
+    for future_key, status_key, error_key, story_key_key, destination in jobs:
+        future = st.session_state.get(future_key)
+        if future is None or not future.done():
+            continue
+        job_story_key = st.session_state.get(story_key_key)
+        if job_story_key is not None and job_story_key != active_story_key:
+            st.session_state[future_key] = None
+            st.session_state[status_key] = "idle"
+            continue
+        try:
+            result = future.result()
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+            result = {"error": message}
+            st.session_state[error_key] = message
+        else:
+            st.session_state[error_key] = str(result.get("error") or "") if isinstance(result, dict) else ""
+        st.session_state[destination] = result if isinstance(result, dict) else {"error": "The fetcher returned an invalid result."}
+        st.session_state[status_key] = "failed" if (
+            not isinstance(result, dict) or result.get("error")
+        ) else "complete"
+        st.session_state[future_key] = None
+
+
+def _render_visual_job_status(*, live: bool = False) -> None:
+    """Show active fetches regardless of which source or card editor is currently selected."""
+    if live:
+        jobs = (
+            ("Automatic scrape", "live_visual_status"),
+            ("Manual scraper", "live_manual_visual_status"),
+            ("Real image search", "live_real_image_status"),
+            ("AI generation", "live_ai_image_status"),
+            ("Audio + subtitles", "live_audio_status"),
+            ("Final render", "live_render_status"),
+        )
+        prefix = "live"
+    else:
+        jobs = (
+            ("Automatic scrape", "visual_status"),
+            ("Manual scraper", "manual_visual_status"),
+            ("Real image search", "real_visual_status"),
+            ("AI generation", "ai_visual_status"),
+        )
+        prefix = "test"
+
+    running = [label for label, key in jobs if st.session_state.get(key) == "running"]
+    failed = [label for label, key in jobs if st.session_state.get(key) == "failed"]
+    if running:
+        status_col, action_col = st.columns([4, 1], gap="small")
+        with status_col:
+            st.info(
+                "Background work is still running: "
+                + ", ".join(running)
+                + ". Keep editing cards or switch image sources; results are collected on the next dashboard interaction."
+            )
+        with action_col:
+            if st.button("Refresh status", key=f"{prefix}-visual-job-monitor-refresh", width="stretch"):
+                st.rerun()
+    elif failed:
+        st.warning("Background task failed: " + ", ".join(failed) + ". Open that source for its error details or retry it.")
 
 
 @st.cache_data(max_entries=128, show_spinner=False)
@@ -5163,7 +5483,6 @@ def _render_visual_asset_pool(
                                 st.session_state.setdefault("manual_subject_cutout", {})["image_key"] = asset_key
                                 st.session_state["test-standalone-card-studio-image-1"] = asset_key
                             st.toast("Loaded image into Card Studio!", icon="🎨")
-                            st.rerun()
 
                         choose_col, crop_col, delete_col = st.columns(3, gap="small")
                         with choose_col:
@@ -5385,7 +5704,6 @@ def _render_two_pane_visual_workspace(
             key=f"{prefix}view-split-btn",
         ):
             st.session_state[pane_key] = "⊞ Side-by-Side (Split)"
-            st.rerun()
     with view_cols[2]:
         if st.button(
             "Studio" if live else "◀ Focus Studio",
@@ -5395,7 +5713,6 @@ def _render_two_pane_visual_workspace(
             key=f"{prefix}view-studio-btn",
         ):
             st.session_state[pane_key] = "◀ Card Studio Focus"
-            st.rerun()
     with view_cols[3]:
         if st.button(
             "Fetcher" if live else "▶ Focus Fetcher",
@@ -5405,7 +5722,6 @@ def _render_two_pane_visual_workspace(
             key=f"{prefix}view-fetcher-btn",
         ):
             st.session_state[pane_key] = "▶ Visual Fetcher Focus"
-            st.rerun()
 
     current_view = st.session_state[pane_key]
     show_fetcher = current_view in {"⊞ Side-by-Side (Split)", "▶ Visual Fetcher Focus", "◀ Visual Fetcher Focus"}
@@ -5432,7 +5748,12 @@ def _render_two_pane_visual_workspace(
                 '<div class="section-count">5 Image Sources</div></div>',
                 unsafe_allow_html=True,
             )
-            fetcher_mode = active_mode if not active_mode.startswith("Option 5") else "Option 1 · Automatic Scraper"
+            fetcher_mode = active_mode
+            if active_mode.startswith("Option 5"):
+                saved_source_key = "live_visual_source_mode" if live else "test_visual_source_mode"
+                fetcher_mode = st.session_state.get(saved_source_key) or "Option 1 · Automatic Scraper"
+                if fetcher_mode.startswith("Option 5"):
+                    fetcher_mode = "Option 1 · Automatic Scraper"
             if live:
                 if fetcher_mode.startswith("Option 1"):
                     result = st.session_state.get("live_visual_result") or {}
@@ -5596,15 +5917,18 @@ def _render_two_pane_visual_workspace(
                         if not query:
                             st.warning("Enter a prompt first.")
                         else:
-                            with st.spinner("Generating images…"):
-                                try:
-                                    from visual_generator import generate_images
-                                    st.session_state.live_ai_image_result = generate_images(query)
-                                except Exception as exc:
-                                    st.session_state.live_ai_image_result = {
-                                        "error": f"{type(exc).__name__}: {exc}"
-                                    }
+                            from visual_generator import generate_images
+                            st.session_state.live_ai_image_result = None
+                            st.session_state.live_ai_image_error = ""
+                            st.session_state.live_ai_image_job_query = query
+                            st.session_state.live_ai_image_job_story_key = _live_current_story_key()
+                            st.session_state.live_ai_image_status = "running"
+                            st.session_state.live_ai_image_future = _live_background_executor().submit(generate_images, query)
                     result = st.session_state.get("live_ai_image_result") or {}
+                    if not result and st.session_state.get("live_ai_image_status") == "running":
+                        st.info(f"AI generation for “{st.session_state.get('live_ai_image_job_query', '')}” is running in the background. Continue editing cards while it works.")
+                        if st.button("Refresh AI-generation status", key="live-refresh-ai-generation"):
+                            st.rerun()
                     if result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -5645,6 +5969,7 @@ def _render_two_pane_visual_workspace(
                         key="live-local-image-upload",
                     )
                     local_assets = _local_image_assets(uploaded_files)
+                    st.session_state.live_local_visual_result = {"assets": local_assets}
                     if uploaded_files and not local_assets:
                         st.error("None of the selected files could be opened as images.")
                     _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=True)
@@ -5666,6 +5991,7 @@ def _render_two_pane_visual_workspace(
                         key="test-local-image-upload",
                     )
                     local_assets = _local_image_assets(uploaded_files)
+                    st.session_state.local_visual_result = {"assets": local_assets}
                     if uploaded_files and not local_assets:
                         st.error("None of the selected files could be opened as images.")
                     _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=False)
@@ -5754,7 +6080,13 @@ def _render_live_visuals(slide_count: int):
 
     if st.session_state.live_visuals_approved:
         st.success("Visuals approved and final render completed.")
-        st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
+        if st.session_state.get("live_stage") == "04 · Visuals + Render":
+            st.caption("The approved render is ready. Continue to Upload when you are ready.")
+            if st.button("Continue to Upload", type="primary", width="stretch", key="live-rendered-continue-upload"):
+                st.session_state.live_stage = "05 · Upload"
+                st.rerun()
+        else:
+            st.caption("Visual review is complete. The current stage selection has been preserved.")
         return
 
     visual_options = (
@@ -5772,6 +6104,7 @@ def _render_live_visuals(slide_count: int):
         button_prefix="live-visual-source",
         studio_ui=True,
     )
+    _render_visual_job_status(live=True)
 
     _render_visual_board(slide_count, live=True)
 
@@ -5794,44 +6127,40 @@ def _render_live_visuals(slide_count: int):
                 unsafe_allow_html=True,
             )
         with top_col2:
+            render_status = st.session_state.get("live_render_status", "idle")
             if st.button(
-                "Approve visuals and render",
+                "Rendering…" if render_status == "running"
+                else "Retry render" if st.session_state.live_render_error
+                else "Approve visuals and render",
                 type="primary",
                 width="stretch",
                 key="live-approve-visuals-top",
-                disabled=not audio_ready,
+                disabled=not audio_ready or render_status == "running",
             ):
-                assigned_items = [
+                from copy import deepcopy
+
+                assigned_items = deepcopy([
                     st.session_state.live_visual_assignments[slide]
                     for slide in range(1, slide_count + 1)
-                ]
+                ])
                 story = st.session_state.live_topics[
                     st.session_state.live_selected_topic
                 ]
                 story_id = _live_story_key(story)
                 output = Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"
-                try:
-                    with st.spinner("Rendering the final Short…"):
-                        from renderer import render_production_video
-
-                        render_production_video(
-                            st.session_state.live_approved_script,
-                            st.session_state.live_approved_audio,
-                            st.session_state.live_subtitle_data,
-                            assigned_items,
-                            output_path=output,
-                        )
-                    st.session_state.live_rendered_video_path = str(output.resolve())
-                    st.session_state.live_visuals_approved = True
-                    st.session_state.live_render_error = ""
-                    st.session_state.live_stage = "05 · Upload"
-                    st.session_state.live_pipeline_notice = {
-                        "confirmed": "Visuals QC and render confirmed",
-                        "next": "Moving to Upload.",
-                    }
-                    st.rerun()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    st.session_state.live_render_error = str(exc)
+                st.session_state.live_render_error = ""
+                st.session_state.live_rendered_video_path = None
+                st.session_state.live_render_job_story_key = story_id
+                st.session_state.live_render_job_visual_snapshot = deepcopy(assigned_items)
+                st.session_state.live_render_future = _live_background_executor().submit(
+                    _live_render_final_short,
+                    deepcopy(st.session_state.live_approved_script),
+                    deepcopy(st.session_state.live_approved_audio),
+                    deepcopy(st.session_state.live_subtitle_data),
+                    assigned_items,
+                    output,
+                )
+                st.session_state.live_render_status = "running"
 
     _render_two_pane_visual_workspace(visual_option, slide_count, live=True)
 
@@ -5839,49 +6168,16 @@ def _render_live_visuals(slide_count: int):
         slide in st.session_state.live_visual_assignments
         for slide in range(1, slide_count + 1)
     )
+    render_status = st.session_state.get("live_render_status", "idle")
     if ready:
-        if not st.session_state.live_visuals_approved:
-            if st.button(
-                "Retry render" if st.session_state.live_render_error else "Approve visuals and render",
-                type="primary",
-                width="stretch",
-                key="live-approve-visuals",
-                disabled=not audio_ready,
-            ):
-                assigned = [
-                    st.session_state.live_visual_assignments[slide]
-                    for slide in range(1, slide_count + 1)
-                ]
-                story = st.session_state.live_topics[
-                    st.session_state.live_selected_topic
-                ]
-                story_id = _live_story_key(story)
-                output = Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"
-                try:
-                    with st.spinner("Rendering the final Short…"):
-                        from renderer import render_production_video
-
-                        render_production_video(
-                            st.session_state.live_approved_script,
-                            st.session_state.live_approved_audio,
-                            st.session_state.live_subtitle_data,
-                            assigned,
-                            output_path=output,
-                            source_label=story.source or "SPORTS DESK",
-                        )
-                    st.session_state.live_rendered_video_path = str(output.resolve())
-                    st.session_state.live_visuals_approved = True
-                    st.session_state.live_render_error = ""
-                    st.session_state.live_stage = "05 · Upload"
-                    st.session_state.live_pipeline_notice = {
-                        "confirmed": "Visual QC confirmed",
-                        "next": "Moving to Upload.",
-                    }
-                    st.rerun()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    st.session_state.live_render_error = str(exc)
-        else:
+        if st.session_state.live_visuals_approved:
             st.success("Visuals approved and final render completed.")
+        elif render_status == "running":
+            st.info("The final Short is rendering in the background. You can continue editing cards; the result will be checked against the assignments captured when rendering started.")
+        elif not audio_ready:
+            st.info("All slides are attached. Final rendering unlocks when Audio + Subtitles are ready.")
+        else:
+            st.caption("All slides are attached. Use the approval action above to start the final render.")
     else:
         st.info("Attach every slide before Visuals can be approved.")
 
@@ -6206,7 +6502,7 @@ def _render_live_script():
     with col_right:
         st.markdown('<div class="inspector">', unsafe_allow_html=True)
         st.markdown('<div class="mini-label">LIVE TELEPROMPTER</div>', unsafe_allow_html=True)
-        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{story.title}</div>', unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{html.escape(str(story.title), quote=True)}</div>', unsafe_allow_html=True)
         scenes_count = len(script.get("script") or [])
         st.markdown(f'<div class="inspector-line"><span>Cues</span><span class="inspector-value">{scenes_count} scenes</span></div>', unsafe_allow_html=True)
         st.markdown(f'<div class="inspector-line"><span>Total Speech</span><span class="inspector-value">{total_words_live} words</span></div>', unsafe_allow_html=True)
@@ -6479,6 +6775,17 @@ def render_live_top5():
             '<div class="section-count">0–5 selected</div></div>',
             unsafe_allow_html=True,
         )
+        manual_topic = _render_manual_story_intake(
+            "live-top5-manual-story",
+            heading="Add a manual headline or news URL to Top-5 candidates",
+            submit_label="Add to Top-5 candidates",
+        )
+        if manual_topic is not None:
+            current = list(st.session_state.live_top5_topics)
+            identity = (manual_topic.title.casefold(), manual_topic.url.casefold())
+            if not any((item.title.casefold(), item.url.casefold()) == identity for item in current):
+                st.session_state.live_top5_topics = current + [manual_topic]
+                st.toast("Manual story added to Top-5 candidates.", icon="📰")
         topics = st.session_state.live_top5_topics
         left, mid, right = st.columns([1, 1, .8], gap="small")
         with left:
@@ -6520,7 +6827,7 @@ def render_live_top5():
                     st.markdown(f'<div class="topic-rank">#{slot + 1}</div>', unsafe_allow_html=True)
                 with row[1]:
                     st.markdown(
-                        f'<div class="topic-title">{topic.title}</div><div class="topic-meta">{topic.source or "Sports desk"}</div>',
+                        f'<div class="topic-title">{html.escape(str(topic.title), quote=True)}</div><div class="topic-meta">{html.escape(str(topic.source or "Sports desk"), quote=True)}</div>',
                         unsafe_allow_html=True,
                     )
                 with row[2]:
@@ -7465,6 +7772,10 @@ def render_live_dashboard():
             render_youtube_trends_topic_fetcher(live=True)
             return
         st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one headline to start production</div></div>', unsafe_allow_html=True)
+        manual_topic = _render_manual_story_intake("live-story-desk", submit_label="Start from this story →")
+        if manual_topic is not None:
+            _start_live_with_manual_topic(manual_topic, st.session_state.get("live_topics_profile") or "cricket_india_asia")
+            st.rerun()
         topics = st.session_state.live_topics
         cricket_profile = st.session_state.live_topics_profile in {"cricket_india_asia", "cricket_global"}
 
@@ -7550,7 +7861,7 @@ def render_live_dashboard():
 
     topic = st.session_state.live_topics[selected_index]
     st.markdown(
-        f'<div class="section-head"><div><div class="eyebrow">SELECTED STORY</div><div class="section-title">{topic.title}</div></div>'
+        f'<div class="section-head"><div><div class="eyebrow">SELECTED STORY</div><div class="section-title">{html.escape(str(topic.title), quote=True)}</div></div>'
         f'<div class="section-count">{st.session_state.live_stage.upper()}</div></div>',
         unsafe_allow_html=True,
     )
@@ -7798,9 +8109,21 @@ def render_youtube_trends_topic_fetcher(*, live=False):
                 st.session_state[error_key] = str(exc)
             st.rerun()
 
+    manual_topic = _render_manual_story_intake(
+        f"{button_prefix}manual-story",
+        submit_label="Start from this story →",
+    )
+    if manual_topic is not None:
+        if live:
+            _start_live_with_manual_topic(manual_topic, "youtube_trends")
+        else:
+            _start_test_with_manual_topic(manual_topic, "youtube_trends")
+        st.session_state[search_query_key] = ""
+        st.rerun()
+
     results = st.session_state[results_key]
     if not results:
-        st.info("No current YouTube search trends were returned.")
+        st.info("No current YouTube search trends were returned. You can still use the manual story intake above.")
         return
 
     st.markdown(
@@ -7975,6 +8298,21 @@ def render_longform_topic_fetcher(live: bool = False):
         '<div class="canvas-copy">Current cricket stories are ranked for narrative depth and source coverage. No article body is fetched until a story is selected.</div></div></div>',
         unsafe_allow_html=True,
     )
+    manual_topic = _render_manual_story_intake(
+        f"{k_prefix}manual-story",
+        heading="Add a manual headline or news URL to Long-form candidates",
+        submit_label="Add to Long-form candidates",
+    )
+    if manual_topic is not None:
+        from manual_topic import topic_to_longform_candidate
+        candidate = topic_to_longform_candidate(manual_topic)
+        current = list(st.session_state.get(topics_key) or [])
+        if not any(str(item.get("story_id") or "") == candidate["story_id"] for item in current):
+            st.session_state[topics_key] = current + [candidate]
+        st.session_state[error_key] = ""
+        st.session_state[selected_key] = None
+        st.session_state[approved_key] = None
+        st.toast("Manual story added to Long-form candidates.", icon="📰")
 
     st.text_input(
         "Optional player, team, competition or subject",
@@ -8708,6 +9046,10 @@ def render_otd_topic_fetcher():
         '<div class="canvas-copy">Select a verified historical sports milestone or anniversary from this calendar date.</div></div></div>',
         unsafe_allow_html=True,
     )
+    manual_topic = _render_manual_story_intake("test-otd-manual-story", submit_label="Start from this story →")
+    if manual_topic is not None:
+        _start_test_with_manual_topic(manual_topic, "otd")
+        st.rerun()
 
     with st.container(key="otd-toolbar"):
         col_date, col_sport, col_fetch, col_cnt = st.columns([1.2, 1.4, 1.2, 1.2], gap="small")
@@ -8773,8 +9115,8 @@ def render_otd_topic_fetcher():
         left, right = st.columns([2.2, .4], gap="small")
         with left:
             st.markdown(
-                f'<div class="topic-title">{topic.title}</div>'
-                f'<div class="topic-meta">{topic.source}</div>',
+                f'<div class="topic-title">{html.escape(str(topic.title), quote=True)}</div>'
+                f'<div class="topic-meta">{html.escape(str(topic.source), quote=True)}</div>',
                 unsafe_allow_html=True,
             )
             if topic.description and topic.description != topic.title:
@@ -8848,6 +9190,10 @@ def render_topic_fetcher():
     st.session_state.topic_desk_profile = profiles[desk]
 
     profile = profiles[desk]
+    manual_topic = _render_manual_story_intake("test-topic", submit_label="Start with this story →")
+    if manual_topic is not None:
+        _start_test_with_manual_topic(manual_topic, profile)
+        st.rerun()
     with st.container(key="topic-toolbar"):
         a, b, cnt = st.columns([1, .72, 1.6], gap="small")
         with a:
@@ -9004,7 +9350,7 @@ def render_topic_fetcher():
                 left, right = st.columns([1.7, .45], gap="medium")
                 with left:
                     st.markdown('<div class="eyebrow">SELECTED</div>', unsafe_allow_html=True)
-                    st.markdown(f'<div class="selected-story-title">{topic.title}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="selected-story-title">{html.escape(str(topic.title), quote=True)}</div>', unsafe_allow_html=True)
                     st.markdown(f'<div class="topic-meta">{topic.source or "Sports desk"} · {topic.published_at:%d %b}</div>', unsafe_allow_html=True)
                     if topic.description:
                         with st.expander("Story details", expanded=False):
@@ -9031,7 +9377,7 @@ def render_scriptwriter():
         f'<div class="radar-banner">'
         f'<div>'
         f'<div style="font-size:0.65rem; font-weight:800; letter-spacing:0.12em; text-transform:uppercase; color:var(--primary);">02 · BROADCAST PROMPTER & SCRIPT STUDIO</div>'
-        f'<div style="font-size:1.35rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:var(--ink);">{topic.title}</div>'
+        f'<div style="font-size:1.35rem; font-weight:850; letter-spacing:-0.03em; margin:2px 0 4px; color:var(--ink);">{html.escape(str(topic.title), quote=True)}</div>'
         f'<div style="font-size:0.78rem; color:var(--muted);">Continuous 20–30s broadcast news article · English lead &lt; 14 words · Hindi/Telugu lead ≤ 5.2s measured audio</div>'
         f'</div>'
         f'<div class="radar-chip">PRO STUDIO ENGINE</div>'
@@ -9308,7 +9654,7 @@ def render_scriptwriter():
     with right:
         st.markdown('<div class="inspector">',unsafe_allow_html=True)
         st.markdown('<div class="mini-label">EDITORIAL TELEPROMPTER</div>',unsafe_allow_html=True)
-        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{topic.title}</div>',unsafe_allow_html=True)
+        st.markdown(f'<div style="font-weight:800;line-height:1.35;margin:.25rem 0 .75rem; color:var(--ink);">{html.escape(str(topic.title), quote=True)}</div>',unsafe_allow_html=True)
         scenes_count = len(script.get("script") or [])
         st.markdown('<div class="inspector-line"><span>Language</span><span class="inspector-value">'+str(script.get("language_used") or language).title()+'</span></div>',unsafe_allow_html=True)
         st.markdown(f'<div class="inspector-line"><span>Scenes</span><span class="inspector-value">{scenes_count} cues</span></div>',unsafe_allow_html=True)
@@ -9374,18 +9720,30 @@ def render_visuals_crawler():
     story_key = f"{selected_index}:{story['url']}:{story['title']}"
 
     if story_key != st.session_state.get("visual_loaded_story"):
-        st.session_state.visual_result = None
-        st.session_state.visual_crops = {}
-        with st.spinner("Scraping the selected story and related publisher pages…"):
-            try:
-                st.session_state.visual_result = crawl_visuals(story)
-                st.session_state.visual_loaded_story = story_key
-            except Exception as exc:
-                st.session_state.visual_result = {
-                    "error": f"{type(exc).__name__}: {exc}"
-                }
+        existing_result = st.session_state.get("visual_result")
+        if (
+            st.session_state.get("visual_loaded_story") is None
+            and isinstance(existing_result, dict)
+            and existing_result.get("assets")
+            and not st.session_state.get("visual_future")
+        ):
+            # Preserve an explicitly supplied image pool (for Test fixtures and restored sessions).
+            st.session_state.visual_loaded_story = story_key
+        else:
+            st.session_state.visual_result = None
+            st.session_state.visual_crops = {}
+            st.session_state.visual_loaded_story = story_key
+            st.session_state.visual_job_story_key = story_key
+            st.session_state.visual_status = "running"
+            st.session_state.visual_error = ""
+            st.session_state.visual_future = _live_background_executor().submit(crawl_visuals, story)
 
     result = st.session_state.get("visual_result") or {}
+    if not result and st.session_state.get("visual_status") == "running":
+        st.info("Automatic scraping is running in the background. Keep editing cards or switch sources; results will appear on the next dashboard interaction.")
+        if st.button("Refresh automatic-scrape status", key="test-refresh-auto-visuals"):
+            st.rerun()
+        return
     automatic_queries = list(result.get("automatic_queries") or [])
 
     st.markdown(f"**{topic.title}**")
@@ -9454,16 +9812,25 @@ def _render_manual_crawler():
         if not query:
             st.warning("Enter a query first.")
         else:
-            with st.spinner("Searching and scraping publisher pages…"):
-                try:
-                    st.session_state.manual_visual_result = manual_crawl_visuals(query)
-                    st.session_state.visual_crops = {}
-                except Exception as exc:
-                    st.session_state.manual_visual_result = {
-                        "error": f"{type(exc).__name__}: {exc}"
-                    }
+            st.session_state.manual_visual_result = None
+            st.session_state.manual_visual_error = ""
+            st.session_state.manual_visual_job_query = query
+            st.session_state.manual_visual_job_story_key = (
+                f"{st.session_state.selected_topic}:{st.session_state.topics[st.session_state.selected_topic].url}:{st.session_state.topics[st.session_state.selected_topic].title}"
+                if isinstance(st.session_state.get("selected_topic"), int)
+                and 0 <= st.session_state.selected_topic < len(st.session_state.get("topics") or [])
+                else None
+            )
+            st.session_state.manual_visual_status = "running"
+            st.session_state.visual_crops = {}
+            st.session_state.manual_visual_future = _live_background_executor().submit(manual_crawl_visuals, query)
 
     result = st.session_state.get("manual_visual_result") or {}
+    if not result and st.session_state.get("manual_visual_status") == "running":
+        st.info(f"Manual image scraping for “{st.session_state.get('manual_visual_job_query', '')}” is running in the background. You can keep editing cards.")
+        if st.button("Refresh manual-scrape status", key="test-refresh-manual-visuals"):
+            st.rerun()
+        return
     if result.get("error"):
         st.error(result["error"])
         return
@@ -9514,16 +9881,25 @@ def _render_manual_real_images():
         if not query:
             st.warning("Enter a query first.")
         else:
-            with st.spinner("Searching real-image sources…"):
-                try:
-                    st.session_state.real_image_result = search_images(query)
-                    st.session_state.visual_crops = {}
-                except Exception as exc:
-                    st.session_state.real_image_result = {
-                        "error": f"{type(exc).__name__}: {exc}"
-                    }
+            st.session_state.real_image_result = None
+            st.session_state.real_visual_error = ""
+            st.session_state.real_visual_job_query = query
+            st.session_state.real_visual_job_story_key = (
+                f"{st.session_state.selected_topic}:{st.session_state.topics[st.session_state.selected_topic].url}:{st.session_state.topics[st.session_state.selected_topic].title}"
+                if isinstance(st.session_state.get("selected_topic"), int)
+                and 0 <= st.session_state.selected_topic < len(st.session_state.get("topics") or [])
+                else None
+            )
+            st.session_state.real_visual_status = "running"
+            st.session_state.visual_crops = {}
+            st.session_state.real_visual_future = _live_background_executor().submit(search_images, query)
 
     result = st.session_state.get("real_image_result") or {}
+    if not result and st.session_state.get("real_visual_status") == "running":
+        st.info(f"Real-image search for “{st.session_state.get('real_visual_job_query', '')}” is running in the background. You can keep editing cards.")
+        if st.button("Refresh real-search status", key="test-refresh-real-visuals"):
+            st.rerun()
+        return
     if not result:
         return
     if result.get("error"):
@@ -9578,16 +9954,25 @@ def _render_manual_ai_images():
         if not query:
             st.warning("Enter a prompt first.")
         else:
-            with st.spinner("Generating images…"):
-                try:
-                    st.session_state.ai_image_result = generate_images(query)
-                    st.session_state.visual_crops = {}
-                except Exception as exc:
-                    st.session_state.ai_image_result = {
-                        "error": f"{type(exc).__name__}: {exc}"
-                    }
+            st.session_state.ai_image_result = None
+            st.session_state.ai_visual_error = ""
+            st.session_state.ai_visual_job_query = query
+            st.session_state.ai_visual_job_story_key = (
+                f"{st.session_state.selected_topic}:{st.session_state.topics[st.session_state.selected_topic].url}:{st.session_state.topics[st.session_state.selected_topic].title}"
+                if isinstance(st.session_state.get("selected_topic"), int)
+                and 0 <= st.session_state.selected_topic < len(st.session_state.get("topics") or [])
+                else None
+            )
+            st.session_state.ai_visual_status = "running"
+            st.session_state.visual_crops = {}
+            st.session_state.ai_visual_future = _live_background_executor().submit(generate_images, query)
 
     result = st.session_state.get("ai_image_result") or {}
+    if not result and st.session_state.get("ai_visual_status") == "running":
+        st.info(f"AI image generation for “{st.session_state.get('ai_visual_job_query', '')}” is running in the background. You can keep editing cards.")
+        if st.button("Refresh AI-generation status", key="test-refresh-ai-visuals"):
+            st.rerun()
+        return
     if not result:
         return
     if result.get("error"):
@@ -9627,7 +10012,9 @@ def _render_manual_ai_images():
     _render_visual_asset_pool(assets, "ai-generation", _test_visual_slide_count())
 
 def render_visuals():
+    _poll_test_visual_jobs()
     st.header("04 · Visuals")
+    _render_visual_job_status(live=False)
     cricket_test = st.session_state.get("topic_desk_profile") in {"cricket_india_asia", "cricket_global"}
     youtube_trends_test = st.session_state.get("test_production_line") == "youtube_trends"
     visual_options = (
@@ -10854,6 +11241,17 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_upload_comment = ""
                 st.session_state.test_top5_upload_result = None
 
+            manual_topic = _render_manual_story_intake(
+                "test-top5-manual-story",
+                heading="Add a manual headline or news URL to Top-5 candidates",
+                submit_label="Add to Top-5 candidates",
+            )
+            if manual_topic is not None:
+                current = list(st.session_state.test_top5_topics)
+                identity = (manual_topic.title.casefold(), manual_topic.url.casefold())
+                if not any((item.title.casefold(), item.url.casefold()) == identity for item in current):
+                    st.session_state.test_top5_topics = current + [manual_topic]
+                    st.toast("Manual story added to Top-5 candidates.", icon="📰")
             if content_type == "General News":
                 st.info("General News is reserved for a later Top-5 expansion. Cricket is the current active Topic Fetcher.")
             else:
@@ -10909,8 +11307,8 @@ elif st.session_state.app_mode == "test":
                             st.markdown(f'<div class="topic-rank">#{slot + 1}</div>', unsafe_allow_html=True)
                         with row[1]:
                             st.markdown(
-                                f'<div class="topic-title">{topic.title}</div>'
-                                f'<div class="topic-meta">{topic.source or "Sports desk"}</div>',
+                                f'<div class="topic-title">{html.escape(str(topic.title), quote=True)}</div>'
+                                f'<div class="topic-meta">{html.escape(str(topic.source or "Sports desk"), quote=True)}</div>',
                                 unsafe_allow_html=True,
                             )
                         with row[2]:

@@ -228,18 +228,17 @@ def test_live_card_studio_uses_approved_card_allowlist():
 def test_live_rendered_video_path_survives_upload_qc_reruns():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
 
-    # Live render output paths are anchored to app.py's repository folder,
-    # and the same absolute path is kept in session state for Upload QC.
+    # Standard Live now has one canonical background render action; Top-5 keeps its separate output directory.
     assert app_source.count(
         'Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"'
-    ) == 2
+    ) == 1
     assert (
         'Path(__file__).resolve().parent / "output" / "live" / "top5" / f"{key}.mp4"'
         in app_source
     )
     assert app_source.count(
         "st.session_state.live_rendered_video_path = str(output.resolve())"
-    ) == 3
+    ) == 1
 
     upload_start = app_source.index("def _render_live_upload():")
     upload_end = app_source.index("def render_live_top5():", upload_start)
@@ -360,3 +359,69 @@ def test_six_visual_source_cards_use_two_balanced_rows_and_show_upload_quality()
     assert "st.columns(min(3, len(options) - start), gap=\"small\")" in app_source
     assert '<div class="section-count">5 Image Sources</div>' in app_source
     assert 'Original source: {source_width:,} × {source_height:,} px' in app_source
+
+
+def test_manual_uploaded_images_remain_available_to_card_studio():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    pool_start = app_source.index("def _visual_pool_entries(")
+    pool_end = app_source.index("def _render_card_studio(", pool_start)
+    pool_source = app_source[pool_start:pool_end]
+    assert '("local_visual_result", "local-upload", "Local Upload")' in pool_source
+    assert '("live_local_visual_result", "local-upload", "Local Upload")' in pool_source
+
+    workspace_start = app_source.index("def _render_two_pane_visual_workspace(")
+    workspace_end = app_source.index("def _render_live_visuals(", workspace_start)
+    workspace_source = app_source[workspace_start:workspace_end]
+    assert 'st.session_state.local_visual_result = {"assets": local_assets}' in workspace_source
+    assert 'st.session_state.live_local_visual_result = {"assets": local_assets}' in workspace_source
+
+
+def test_visual_fetchers_run_outside_the_dashboard_interaction_thread():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+
+    auto_start = app_source.index("def render_visuals_crawler(")
+    auto_end = app_source.index("def _render_manual_crawler(", auto_start)
+    assert "_live_background_executor().submit(crawl_visuals, story)" in app_source[auto_start:auto_end]
+
+    manual_start = app_source.index("def _render_manual_crawler(")
+    manual_end = app_source.index("def _render_manual_real_images(", manual_start)
+    assert "_live_background_executor().submit(manual_crawl_visuals, query)" in app_source[manual_start:manual_end]
+
+    real_start = app_source.index("def _render_manual_real_images(")
+    real_end = app_source.index("def _render_manual_ai_images(", real_start)
+    assert "_live_background_executor().submit(search_images, query)" in app_source[real_start:real_end]
+
+    ai_start = app_source.index("def _render_manual_ai_images(")
+    ai_end = app_source.index("def render_visuals(", ai_start)
+    assert "_live_background_executor().submit(generate_images, query)" in app_source[ai_start:ai_end]
+    assert "def _render_visual_job_status(" in app_source
+    assert "results are collected on the next dashboard interaction" in app_source
+
+
+def test_manual_story_intake_is_wired_to_existing_pipeline_candidates():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    assert 'manual_topic = _render_manual_story_intake("test-topic"' in app_source
+    assert 'manual_topic = _render_manual_story_intake("live-story-desk"' in app_source
+    assert 'manual_topic = _render_manual_story_intake("test-otd-manual-story"' in app_source
+    assert 'heading="Add a manual headline or news URL to Long-form candidates"' in app_source
+    assert '"live-top5-manual-story"' in app_source
+    assert '"test-top5-manual-story"' in app_source
+    assert "def _start_test_with_manual_topic(" in app_source
+    assert "def _start_live_with_manual_topic(" in app_source
+    assert "_story_payload(topic)" in app_source
+
+
+def test_card_studio_does_not_reset_the_active_visual_source():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    grid_start = app_source.index("def _render_visual_option_grid(")
+    grid_end = app_source.index("def _live_start_story(", grid_start)
+    grid_source = app_source[grid_start:grid_end]
+    assert '"visual_test_mode": "test_visual_source_mode"' in grid_source
+    assert '"live_visual_option": "live_visual_source_mode"' in grid_source
+    assert 'if source_state_key and not option.startswith("Option 5")' in grid_source
+
+    workspace_start = app_source.index("def _render_two_pane_visual_workspace(")
+    workspace_end = app_source.index("def _render_live_visuals(", workspace_start)
+    workspace_source = app_source[workspace_start:workspace_end]
+    assert 'saved_source_key = "live_visual_source_mode" if live else "test_visual_source_mode"' in workspace_source
+
