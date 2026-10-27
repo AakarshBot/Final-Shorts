@@ -47,7 +47,7 @@ Test is a modular laboratory; Live is the approved production line.
 ## Project status
 
 ### Channel Analytics — free and read-only
-- Added a dedicated Streamlit page at `pages/Channel_Analytics.py` using the official YouTube Analytics API and YouTube Data API. It shows channel totals, 7/28/90/365-day aggregate metrics, daily trends, top videos, traffic sources and CSV exports.
+- Added a dedicated Streamlit page at `pages/Channel_Analytics.py` using the official YouTube Analytics API and YouTube Data API. It shows channel totals, 7/28/90/365-day aggregate metrics, daily trends, top videos (including average percentage viewed), traffic sources and CSV exports. A single JSON analytics review package bundles the fetched channel, date range, summary, daily rows, video rows and traffic-source rows for the user to attach to ChatGPT; it excludes OAuth credentials.
 - Authentication is isolated from publishing: `authorize_youtube_analytics.py` creates local `analytics_token.json` with only `yt-analytics.readonly` and `youtube.readonly`. The existing `token.json` upload permission is not overwritten. Both files are Git-ignored; do not expose either token.
 - No paid analytics provider or new dependency is introduced. Revenue is intentionally excluded because it requires a separate monetary-analytics scope. Reports end two days before today to reduce partial-day data, and daily reports paginate within Google's API page-size limit.
 - Verification state at this checkpoint: code and focused tests are on `feat/free-channel-analytics`; GitHub Actions and real-account OAuth/analytics access have not yet been verified. Do not claim real channel data until the owner authorizes locally and successfully fetches a report.
