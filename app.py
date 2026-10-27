@@ -7565,6 +7565,10 @@ def render_live_dashboard():
             render_youtube_trends_topic_fetcher(live=True)
             return
         st.markdown('<div class="section-head"><div><div class="eyebrow">STORY DESK</div><div class="section-title">Choose your story</div></div><div class="section-count">select one headline to start production</div></div>', unsafe_allow_html=True)
+        manual_topic = _render_manual_story_intake("live-story-desk", submit_label="Start from this story →")
+        if manual_topic is not None:
+            _start_live_with_manual_topic(manual_topic, st.session_state.get("live_topics_profile") or "cricket_india_asia")
+            st.rerun()
         topics = st.session_state.live_topics
         cricket_profile = st.session_state.live_topics_profile in {"cricket_india_asia", "cricket_global"}
 
@@ -7909,6 +7913,17 @@ def render_youtube_trends_topic_fetcher(*, live=False):
         '<div class="canvas-copy">These are current YouTube search signals with relevant news published in the last 24 hours.</div></div></div>',
         unsafe_allow_html=True,
     )
+    manual_topic = _render_manual_story_intake(
+        f"{button_prefix}manual-story",
+        submit_label="Start from this story →",
+    )
+    if manual_topic is not None:
+        if live:
+            _start_live_with_manual_topic(manual_topic, "youtube_trends")
+        else:
+            _start_test_with_manual_topic(manual_topic, "youtube_trends")
+        st.session_state[search_query_key] = ""
+        st.rerun()
     st.markdown(
         '<div class="section-head"><div><div class="eyebrow">TOP 20</div>'
         '<div class="section-title">Story opportunities</div></div>'
@@ -8075,6 +8090,21 @@ def render_longform_topic_fetcher(live: bool = False):
         '<div class="canvas-copy">Current cricket stories are ranked for narrative depth and source coverage. No article body is fetched until a story is selected.</div></div></div>',
         unsafe_allow_html=True,
     )
+    manual_topic = _render_manual_story_intake(
+        f"{k_prefix}manual-story",
+        heading="Add a manual headline or news URL to Long-form candidates",
+        submit_label="Add to Long-form candidates",
+    )
+    if manual_topic is not None:
+        from manual_topic import topic_to_longform_candidate
+        candidate = topic_to_longform_candidate(manual_topic)
+        current = list(st.session_state.get(topics_key) or [])
+        if not any(str(item.get("story_id") or "") == candidate["story_id"] for item in current):
+            st.session_state[topics_key] = current + [candidate]
+        st.session_state[error_key] = ""
+        st.session_state[selected_key] = None
+        st.session_state[approved_key] = None
+        st.toast("Manual story added to Long-form candidates.", icon="📰")
 
     st.text_input(
         "Optional player, team, competition or subject",
@@ -8808,6 +8838,10 @@ def render_otd_topic_fetcher():
         '<div class="canvas-copy">Select a verified historical sports milestone or anniversary from this calendar date.</div></div></div>',
         unsafe_allow_html=True,
     )
+    manual_topic = _render_manual_story_intake("test-otd-manual-story", submit_label="Start from this story →")
+    if manual_topic is not None:
+        _start_test_with_manual_topic(manual_topic, "otd")
+        st.rerun()
 
     with st.container(key="otd-toolbar"):
         col_date, col_sport, col_fetch, col_cnt = st.columns([1.2, 1.4, 1.2, 1.2], gap="small")
@@ -8948,6 +8982,10 @@ def render_topic_fetcher():
     st.session_state.topic_desk_profile = profiles[desk]
 
     profile = profiles[desk]
+    manual_topic = _render_manual_story_intake("test-topic", submit_label="Start with this story →")
+    if manual_topic is not None:
+        _start_test_with_manual_topic(manual_topic, profile)
+        st.rerun()
     with st.container(key="topic-toolbar"):
         a, b, cnt = st.columns([1, .72, 1.6], gap="small")
         with a:
