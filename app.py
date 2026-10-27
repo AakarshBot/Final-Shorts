@@ -5240,6 +5240,7 @@ def _render_visual_job_status(*, live: bool = False) -> None:
             ("Real image search", "live_real_image_status"),
             ("AI generation", "live_ai_image_status"),
             ("Audio + subtitles", "live_audio_status"),
+            ("Final render", "live_render_status"),
         )
         prefix = "live"
     else:
@@ -6082,7 +6083,13 @@ def _render_live_visuals(slide_count: int):
 
     if st.session_state.live_visuals_approved:
         st.success("Visuals approved and final render completed.")
-        st.caption("Visual review is complete. The dashboard has moved this production to Upload.")
+        if st.session_state.get("live_stage") == "04 · Visuals + Render":
+            st.caption("The approved render is ready. Continue to Upload when you are ready.")
+            if st.button("Continue to Upload", type="primary", width="stretch", key="live-rendered-continue-upload"):
+                st.session_state.live_stage = "05 · Upload"
+                st.rerun()
+        else:
+            st.caption("Visual review is complete. The current stage selection has been preserved.")
         return
 
     visual_options = (
@@ -6123,44 +6130,40 @@ def _render_live_visuals(slide_count: int):
                 unsafe_allow_html=True,
             )
         with top_col2:
+            render_status = st.session_state.get("live_render_status", "idle")
             if st.button(
-                "Approve visuals and render",
+                "Rendering…" if render_status == "running"
+                else "Retry render" if st.session_state.live_render_error
+                else "Approve visuals and render",
                 type="primary",
                 width="stretch",
                 key="live-approve-visuals-top",
-                disabled=not audio_ready,
+                disabled=not audio_ready or render_status == "running",
             ):
-                assigned_items = [
+                from copy import deepcopy
+
+                assigned_items = deepcopy([
                     st.session_state.live_visual_assignments[slide]
                     for slide in range(1, slide_count + 1)
-                ]
+                ])
                 story = st.session_state.live_topics[
                     st.session_state.live_selected_topic
                 ]
                 story_id = _live_story_key(story)
                 output = Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"
-                try:
-                    with st.spinner("Rendering the final Short…"):
-                        from renderer import render_production_video
-
-                        render_production_video(
-                            st.session_state.live_approved_script,
-                            st.session_state.live_approved_audio,
-                            st.session_state.live_subtitle_data,
-                            assigned_items,
-                            output_path=output,
-                        )
-                    st.session_state.live_rendered_video_path = str(output.resolve())
-                    st.session_state.live_visuals_approved = True
-                    st.session_state.live_render_error = ""
-                    st.session_state.live_stage = "05 · Upload"
-                    st.session_state.live_pipeline_notice = {
-                        "confirmed": "Visuals QC and render confirmed",
-                        "next": "Moving to Upload.",
-                    }
-                    st.rerun()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    st.session_state.live_render_error = str(exc)
+                st.session_state.live_render_error = ""
+                st.session_state.live_rendered_video_path = None
+                st.session_state.live_render_job_story_key = story_id
+                st.session_state.live_render_job_visual_snapshot = deepcopy(assigned_items)
+                st.session_state.live_render_future = _live_background_executor().submit(
+                    _live_render_final_short,
+                    deepcopy(st.session_state.live_approved_script),
+                    deepcopy(st.session_state.live_approved_audio),
+                    deepcopy(st.session_state.live_subtitle_data),
+                    assigned_items,
+                    output,
+                )
+                st.session_state.live_render_status = "running"
 
     _render_two_pane_visual_workspace(visual_option, slide_count, live=True)
 
@@ -6168,49 +6171,16 @@ def _render_live_visuals(slide_count: int):
         slide in st.session_state.live_visual_assignments
         for slide in range(1, slide_count + 1)
     )
+    render_status = st.session_state.get("live_render_status", "idle")
     if ready:
-        if not st.session_state.live_visuals_approved:
-            if st.button(
-                "Retry render" if st.session_state.live_render_error else "Approve visuals and render",
-                type="primary",
-                width="stretch",
-                key="live-approve-visuals",
-                disabled=not audio_ready,
-            ):
-                assigned = [
-                    st.session_state.live_visual_assignments[slide]
-                    for slide in range(1, slide_count + 1)
-                ]
-                story = st.session_state.live_topics[
-                    st.session_state.live_selected_topic
-                ]
-                story_id = _live_story_key(story)
-                output = Path(__file__).resolve().parent / "output" / "live" / f"{story_id}.mp4"
-                try:
-                    with st.spinner("Rendering the final Short…"):
-                        from renderer import render_production_video
-
-                        render_production_video(
-                            st.session_state.live_approved_script,
-                            st.session_state.live_approved_audio,
-                            st.session_state.live_subtitle_data,
-                            assigned,
-                            output_path=output,
-                            source_label=story.source or "SPORTS DESK",
-                        )
-                    st.session_state.live_rendered_video_path = str(output.resolve())
-                    st.session_state.live_visuals_approved = True
-                    st.session_state.live_render_error = ""
-                    st.session_state.live_stage = "05 · Upload"
-                    st.session_state.live_pipeline_notice = {
-                        "confirmed": "Visual QC confirmed",
-                        "next": "Moving to Upload.",
-                    }
-                    st.rerun()
-                except (RuntimeError, ValueError, OSError) as exc:
-                    st.session_state.live_render_error = str(exc)
-        else:
+        if st.session_state.live_visuals_approved:
             st.success("Visuals approved and final render completed.")
+        elif render_status == "running":
+            st.info("The final Short is rendering in the background. You can continue editing cards; the result will be checked against the assignments captured when rendering started.")
+        elif not audio_ready:
+            st.info("All slides are attached. Final rendering unlocks when Audio + Subtitles are ready.")
+        else:
+            st.caption("All slides are attached. Use the approval action above to start the final render.")
     else:
         st.info("Attach every slide before Visuals can be approved.")
 
