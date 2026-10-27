@@ -5745,6 +5745,7 @@ def _render_two_pane_visual_workspace(
                         key="live-local-image-upload",
                     )
                     local_assets = _local_image_assets(uploaded_files)
+                    st.session_state.live_local_visual_result = {"assets": local_assets}
                     if uploaded_files and not local_assets:
                         st.error("None of the selected files could be opened as images.")
                     _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=True)
@@ -5766,6 +5767,7 @@ def _render_two_pane_visual_workspace(
                         key="test-local-image-upload",
                     )
                     local_assets = _local_image_assets(uploaded_files)
+                    st.session_state.local_visual_result = {"assets": local_assets}
                     if uploaded_files and not local_assets:
                         st.error("None of the selected files could be opened as images.")
                     _render_visual_asset_pool(local_assets, "local-upload", slide_count, live=False)
