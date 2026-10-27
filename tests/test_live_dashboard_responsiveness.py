@@ -105,7 +105,11 @@ def test_live_visual_layout_clicks_do_not_force_a_second_dashboard_run():
         "def _render_visual_asset_pool(",
         "def _render_visual_board(",
     )
-    studio_button_start = asset_pool.index('if st.button(\n                            "Select for Card Studio')
+    button_key = 'key=f"{prefix}use-card-studio-{asset_key}"'
+    button_key_index = asset_pool.index(button_key)
+    studio_button_start = asset_pool.rfind("if st.button(", 0, button_key_index)
+    studio_button_end = asset_pool.index("choose_col, crop_col, delete_col", button_key_index)
+    studio_select = asset_pool[studio_button_start:studio_button_end]
     studio_button_end = asset_pool.index("choose_col, crop_col, delete_col", studio_button_start)
     studio_select = asset_pool[studio_button_start:studio_button_end]
     assert 'st.toast("Loaded image into Card Studio!"' in studio_select
