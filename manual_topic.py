@@ -47,7 +47,7 @@ class _MetadataParser(HTMLParser):
 
 
 def _clean(value: object, limit: int = 4000) -> str:
-    return re.sub(r"\\s+", " ", str(value or "")).strip()[:limit]
+    return re.sub(r"\s+", " ", str(value or "")).strip()[:limit]
 
 
 def _validated_http_url(value: object) -> str:
@@ -67,7 +67,13 @@ def _validated_http_url(value: object) -> str:
         address = ipaddress.ip_address(host)
     except ValueError:
         address = None
-    if address is not None and (address.is_private or address.is_loopback or address.is_link_local or address.is_reserved or address.is_unspecified):
+    if address is not None and (
+        address.is_private
+        or address.is_loopback
+        or address.is_link_local
+        or address.is_reserved
+        or address.is_unspecified
+    ):
         raise ValueError("Private or local network addresses are not supported as news URLs.")
     return url
 
@@ -75,9 +81,9 @@ def _validated_http_url(value: object) -> str:
 def _title_from_url(url: str) -> str:
     parsed = urlparse(url)
     slug = unquote(parsed.path.rstrip("/").split("/")[-1])
-    slug = re.sub(r"(?i)\\.(?:html?|amp|php)$", "", slug)
+    slug = re.sub(r"(?i)\.(?:html?|amp|php)$", "", slug)
     title = re.sub(r"[-_]+", " ", slug)
-    title = re.sub(r"\\s+", " ", title).strip(" ._-/")
+    title = re.sub(r"\s+", " ", title).strip(" ._-/")
     return title[:260] or parsed.hostname or "Manually supplied news story"
 
 
@@ -106,8 +112,8 @@ def _page_metadata(url: str) -> tuple[str, str, str]:
             or metadata.get("description")
             or metadata.get("twitter:description")
         )
-        title = re.sub(r"\\s+", " ", title).strip()
-        description = re.sub(r"\\s+", " ", description).strip()
+        title = re.sub(r"\s+", " ", title).strip()
+        description = re.sub(r"\s+", " ", description).strip()
         return title[:260], description[:1500], final_url
     except (requests.RequestException, ValueError, OSError):
         # Some publishers block automated metadata requests. Keep the URL usable:
@@ -138,7 +144,10 @@ def create_manual_topic(
             title = extracted_title or _title_from_url(source_url)
             summary = summary or extracted_description
             if not extracted_title:
-                summary = summary or "Headline metadata could not be read automatically. Verify the source and facts during Scriptwriter review."
+                summary = summary or (
+                    "Headline metadata could not be read automatically. "
+                    "Verify the source and facts during Scriptwriter review."
+                )
     if not title:
         raise ValueError("Enter a manual headline, or paste a news URL so the factory can identify the story.")
     if len(title) < 4:
@@ -158,15 +167,18 @@ def create_manual_topic(
 
 def topic_to_longform_candidate(topic: Topic) -> dict:
     """Adapt the shared Topic contract to the existing Long-form topic handoff."""
-    from urllib.parse import urlparse
-
+    source_url = str(topic.url or "").strip()
+    source_host = urlparse(source_url).hostname if source_url else None
     published = topic.published_at
     if published.tzinfo is None:
         published = published.replace(tzinfo=timezone.utc)
-    source_url = str(topic.url or "").strip()
     story_id = hashlib.sha1(f"{topic.title}|{source_url}".encode("utf-8")).hexdigest()[:16]
     reports = (
-        [{"title": topic.title, "url": source_url, "publisher": topic.source or urlparse(source_url).hostname or "Manual source"}]
+        [{
+            "title": topic.title,
+            "url": source_url,
+            "publisher": topic.source or source_host or "Manual source",
+        }]
         if source_url
         else []
     )
