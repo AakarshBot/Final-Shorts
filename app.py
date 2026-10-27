@@ -5050,6 +5050,44 @@ def _poll_live_background_jobs():
 
 
 @st.cache_data(max_entries=128, show_spinner=False)
+def _poll_test_visual_jobs():
+    """Collect completed Test fetch jobs without blocking dashboard interactions."""
+    selected = st.session_state.get("selected_topic")
+    topics = st.session_state.get("topics") or []
+    active_story_key = None
+    if selected is not None and 0 <= selected < len(topics):
+        topic = topics[selected]
+        active_story_key = f"{selected}:{topic.url}:{topic.title}"
+
+    jobs = (
+        ("visual_future", "visual_status", "visual_error", "visual_job_story_key", "visual_result", True),
+        ("manual_visual_future", "manual_visual_status", "manual_visual_error", "manual_visual_job_story_key", "manual_visual_result", False),
+        ("real_visual_future", "real_visual_status", "real_visual_error", "real_visual_job_story_key", "real_image_result", False),
+        ("ai_visual_future", "ai_visual_status", "ai_visual_error", "ai_visual_job_story_key", "ai_image_result", False),
+    )
+    for future_key, status_key, error_key, story_key_key, destination, story_bound in jobs:
+        future = st.session_state.get(future_key)
+        if future is None or not future.done():
+            continue
+        if story_bound and st.session_state.get(story_key_key) != active_story_key:
+            st.session_state[future_key] = None
+            st.session_state[status_key] = "idle"
+            continue
+        try:
+            result = future.result()
+        except Exception as exc:
+            message = f"{type(exc).__name__}: {exc}"
+            result = {"error": message}
+            st.session_state[error_key] = message
+        else:
+            st.session_state[error_key] = str(result.get("error") or "") if isinstance(result, dict) else ""
+        st.session_state[destination] = result if isinstance(result, dict) else {"error": "The fetcher returned an invalid result."}
+        st.session_state[status_key] = "failed" if (
+            not isinstance(result, dict) or result.get("error")
+        ) else "complete"
+        st.session_state[future_key] = None
+
+
 def _fit_visual_preview_bytes(value: bytes, width: int, height: int) -> bytes | None:
     image = _asset_to_image(value)
     if image is None:
@@ -9527,16 +9565,18 @@ def render_visuals_crawler():
     if story_key != st.session_state.get("visual_loaded_story"):
         st.session_state.visual_result = None
         st.session_state.visual_crops = {}
-        with st.spinner("Scraping the selected story and related publisher pages…"):
-            try:
-                st.session_state.visual_result = crawl_visuals(story)
-                st.session_state.visual_loaded_story = story_key
-            except Exception as exc:
-                st.session_state.visual_result = {
-                    "error": f"{type(exc).__name__}: {exc}"
-                }
+        st.session_state.visual_loaded_story = story_key
+        st.session_state.visual_job_story_key = story_key
+        st.session_state.visual_status = "running"
+        st.session_state.visual_error = ""
+        st.session_state.visual_future = _live_background_executor().submit(crawl_visuals, story)
 
     result = st.session_state.get("visual_result") or {}
+    if not result and st.session_state.get("visual_status") == "running":
+        st.info("Automatic scraping is running in the background. Keep editing cards or switch sources; results will appear on the next dashboard interaction.")
+        if st.button("Refresh automatic-scrape status", key="test-refresh-auto-visuals"):
+            st.rerun()
+        return
     automatic_queries = list(result.get("automatic_queries") or [])
 
     st.markdown(f"**{topic.title}**")
@@ -9605,16 +9645,20 @@ def _render_manual_crawler():
         if not query:
             st.warning("Enter a query first.")
         else:
-            with st.spinner("Searching and scraping publisher pages…"):
-                try:
-                    st.session_state.manual_visual_result = manual_crawl_visuals(query)
-                    st.session_state.visual_crops = {}
-                except Exception as exc:
-                    st.session_state.manual_visual_result = {
-                        "error": f"{type(exc).__name__}: {exc}"
-                    }
+            st.session_state.manual_visual_result = None
+            st.session_state.manual_visual_error = ""
+            st.session_state.manual_visual_job_query = query
+            st.session_state.manual_visual_job_story_key = None
+            st.session_state.manual_visual_status = "running"
+            st.session_state.visual_crops = {}
+            st.session_state.manual_visual_future = _live_background_executor().submit(manual_crawl_visuals, query)
 
     result = st.session_state.get("manual_visual_result") or {}
+    if not result and st.session_state.get("manual_visual_status") == "running":
+        st.info(f"Manual image scraping for “{st.session_state.get('manual_visual_job_query', '')}” is running in the background. You can keep editing cards.")
+        if st.button("Refresh manual-scrape status", key="test-refresh-manual-visuals"):
+            st.rerun()
+        return
     if result.get("error"):
         st.error(result["error"])
         return
@@ -9665,16 +9709,20 @@ def _render_manual_real_images():
         if not query:
             st.warning("Enter a query first.")
         else:
-            with st.spinner("Searching real-image sources…"):
-                try:
-                    st.session_state.real_image_result = search_images(query)
-                    st.session_state.visual_crops = {}
-                except Exception as exc:
-                    st.session_state.real_image_result = {
-                        "error": f"{type(exc).__name__}: {exc}"
-                    }
+            st.session_state.real_image_result = None
+            st.session_state.real_visual_error = ""
+            st.session_state.real_visual_job_query = query
+            st.session_state.real_visual_job_story_key = None
+            st.session_state.real_visual_status = "running"
+            st.session_state.visual_crops = {}
+            st.session_state.real_visual_future = _live_background_executor().submit(search_images, query)
 
     result = st.session_state.get("real_image_result") or {}
+    if not result and st.session_state.get("real_visual_status") == "running":
+        st.info(f"Real-image search for “{st.session_state.get('real_visual_job_query', '')}” is running in the background. You can keep editing cards.")
+        if st.button("Refresh real-search status", key="test-refresh-real-visuals"):
+            st.rerun()
+        return
     if not result:
         return
     if result.get("error"):
@@ -9729,16 +9777,20 @@ def _render_manual_ai_images():
         if not query:
             st.warning("Enter a prompt first.")
         else:
-            with st.spinner("Generating images…"):
-                try:
-                    st.session_state.ai_image_result = generate_images(query)
-                    st.session_state.visual_crops = {}
-                except Exception as exc:
-                    st.session_state.ai_image_result = {
-                        "error": f"{type(exc).__name__}: {exc}"
-                    }
+            st.session_state.ai_image_result = None
+            st.session_state.ai_visual_error = ""
+            st.session_state.ai_visual_job_query = query
+            st.session_state.ai_visual_job_story_key = None
+            st.session_state.ai_visual_status = "running"
+            st.session_state.visual_crops = {}
+            st.session_state.ai_visual_future = _live_background_executor().submit(generate_images, query)
 
     result = st.session_state.get("ai_image_result") or {}
+    if not result and st.session_state.get("ai_visual_status") == "running":
+        st.info(f"AI image generation for “{st.session_state.get('ai_visual_job_query', '')}” is running in the background. You can keep editing cards.")
+        if st.button("Refresh AI-generation status", key="test-refresh-ai-visuals"):
+            st.rerun()
+        return
     if not result:
         return
     if result.get("error"):
@@ -9778,6 +9830,7 @@ def _render_manual_ai_images():
     _render_visual_asset_pool(assets, "ai-generation", _test_visual_slide_count())
 
 def render_visuals():
+    _poll_test_visual_jobs()
     st.header("04 · Visuals")
     cricket_test = st.session_state.get("topic_desk_profile") in {"cricket_india_asia", "cricket_global"}
     youtube_trends_test = st.session_state.get("test_production_line") == "youtube_trends"
