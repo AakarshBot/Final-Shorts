@@ -5084,16 +5084,17 @@ def _poll_test_visual_jobs():
         active_story_key = f"{selected}:{topic.url}:{topic.title}"
 
     jobs = (
-        ("visual_future", "visual_status", "visual_error", "visual_job_story_key", "visual_result", True),
-        ("manual_visual_future", "manual_visual_status", "manual_visual_error", "manual_visual_job_story_key", "manual_visual_result", False),
-        ("real_visual_future", "real_visual_status", "real_visual_error", "real_visual_job_story_key", "real_image_result", False),
-        ("ai_visual_future", "ai_visual_status", "ai_visual_error", "ai_visual_job_story_key", "ai_image_result", False),
+        ("visual_future", "visual_status", "visual_error", "visual_job_story_key", "visual_result"),
+        ("manual_visual_future", "manual_visual_status", "manual_visual_error", "manual_visual_job_story_key", "manual_visual_result"),
+        ("real_visual_future", "real_visual_status", "real_visual_error", "real_visual_job_story_key", "real_image_result"),
+        ("ai_visual_future", "ai_visual_status", "ai_visual_error", "ai_visual_job_story_key", "ai_image_result"),
     )
-    for future_key, status_key, error_key, story_key_key, destination, story_bound in jobs:
+    for future_key, status_key, error_key, story_key_key, destination in jobs:
         future = st.session_state.get(future_key)
         if future is None or not future.done():
             continue
-        if story_bound and st.session_state.get(story_key_key) != active_story_key:
+        job_story_key = st.session_state.get(story_key_key)
+        if job_story_key is not None and job_story_key != active_story_key:
             st.session_state[future_key] = None
             st.session_state[status_key] = "idle"
             continue
@@ -9728,7 +9729,12 @@ def _render_manual_crawler():
             st.session_state.manual_visual_result = None
             st.session_state.manual_visual_error = ""
             st.session_state.manual_visual_job_query = query
-            st.session_state.manual_visual_job_story_key = None
+            st.session_state.manual_visual_job_story_key = (
+                f"{st.session_state.selected_topic}:{st.session_state.topics[st.session_state.selected_topic].url}:{st.session_state.topics[st.session_state.selected_topic].title}"
+                if isinstance(st.session_state.get("selected_topic"), int)
+                and 0 <= st.session_state.selected_topic < len(st.session_state.get("topics") or [])
+                else None
+            )
             st.session_state.manual_visual_status = "running"
             st.session_state.visual_crops = {}
             st.session_state.manual_visual_future = _live_background_executor().submit(manual_crawl_visuals, query)
@@ -9792,7 +9798,12 @@ def _render_manual_real_images():
             st.session_state.real_image_result = None
             st.session_state.real_visual_error = ""
             st.session_state.real_visual_job_query = query
-            st.session_state.real_visual_job_story_key = None
+            st.session_state.real_visual_job_story_key = (
+                f"{st.session_state.selected_topic}:{st.session_state.topics[st.session_state.selected_topic].url}:{st.session_state.topics[st.session_state.selected_topic].title}"
+                if isinstance(st.session_state.get("selected_topic"), int)
+                and 0 <= st.session_state.selected_topic < len(st.session_state.get("topics") or [])
+                else None
+            )
             st.session_state.real_visual_status = "running"
             st.session_state.visual_crops = {}
             st.session_state.real_visual_future = _live_background_executor().submit(search_images, query)
@@ -9860,7 +9871,12 @@ def _render_manual_ai_images():
             st.session_state.ai_image_result = None
             st.session_state.ai_visual_error = ""
             st.session_state.ai_visual_job_query = query
-            st.session_state.ai_visual_job_story_key = None
+            st.session_state.ai_visual_job_story_key = (
+                f"{st.session_state.selected_topic}:{st.session_state.topics[st.session_state.selected_topic].url}:{st.session_state.topics[st.session_state.selected_topic].title}"
+                if isinstance(st.session_state.get("selected_topic"), int)
+                and 0 <= st.session_state.selected_topic < len(st.session_state.get("topics") or [])
+                else None
+            )
             st.session_state.ai_visual_status = "running"
             st.session_state.visual_crops = {}
             st.session_state.ai_visual_future = _live_background_executor().submit(generate_images, query)
