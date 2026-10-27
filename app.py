@@ -2723,6 +2723,7 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             ("live_manual_visual_result", "manual", "Manual Scraper"),
             ("live_real_image_result", "real", "Real Image Search"),
             ("live_ai_image_result", "ai", "AI Generation"),
+            ("live_local_visual_result", "local-upload", "Local Upload"),
         ]
         deleted = st.session_state.get("live_visual_deleted") or set()
     else:
@@ -2731,6 +2732,7 @@ def _visual_pool_entries(live: bool) -> list[tuple[str, int, dict, bytes, str]]:
             ("manual_visual_result", "manual-crawler", "Manual Scraper"),
             ("real_image_result", "real-search", "Real Image Search"),
             ("ai_image_result", "ai-generation", "AI Generation"),
+            ("local_visual_result", "local-upload", "Local Upload"),
         ]
         deleted = set()
 
@@ -4531,6 +4533,104 @@ def _visual_story_for_topic(topic, script: dict | None = None) -> dict:
             first_scene.get("visual_intent") or ""
         ).strip()
     return story
+
+
+def _render_manual_story_intake(
+    prefix: str,
+    *,
+    heading: str = "Start from a news URL or manual headline",
+    submit_label: str = "Use this story",
+):
+    """Return a normalized Topic only when the compact manual-intake form is submitted."""
+    from manual_topic import create_manual_topic
+
+    with st.expander(heading, expanded=False):
+        st.caption(
+            "Paste an article URL, enter a headline, or provide both. "
+            "A URL is optional for headline-led stories; verify claims during Scriptwriter QC."
+        )
+        with st.form(f"{prefix}-manual-story-intake-form", clear_on_submit=False):
+            headline = st.text_input(
+                "Manual headline (optional when URL is supplied)",
+                key=f"{prefix}-manual-story-headline",
+                placeholder="e.g. India name a surprise squad change ahead of the final",
+            )
+            url = st.text_input(
+                "News article URL (optional when headline is supplied)",
+                key=f"{prefix}-manual-story-url",
+                placeholder="https://publisher.example/news/article",
+            )
+            description = st.text_area(
+                "Context or notes (optional)",
+                key=f"{prefix}-manual-story-context",
+                height=74,
+                placeholder="Paste a short summary or context you want Scriptwriter to consider.",
+            )
+            submitted = st.form_submit_button(
+                submit_label,
+                type="primary",
+                width="stretch",
+            )
+    if not submitted:
+        return None
+    try:
+        return create_manual_topic(headline=headline, url=url, description=description)
+    except (ValueError, RuntimeError, OSError) as exc:
+        st.error(f"Could not start from this story: {exc}")
+        return None
+
+
+def _start_test_with_manual_topic(topic, profile: str | None = None):
+    """Reset downstream Test handoffs and start Scriptwriter with the standard Topic contract."""
+    st.session_state.topics = [topic]
+    st.session_state.selected_topic = 0
+    st.session_state.topic_open_tile = None
+    if profile:
+        st.session_state.topic_desk_profile = profile
+    st.session_state.script_data = None
+    st.session_state.approved_script = None
+    st.session_state.audio_data = None
+    st.session_state.approved_audio = None
+    st.session_state.subtitle_data = None
+    st.session_state.approved_subtitles = None
+    st.session_state.visual_result = None
+    st.session_state.visual_loaded_story = None
+    st.session_state.visual_status = "idle"
+    st.session_state.manual_visual_result = None
+    st.session_state.manual_visual_status = "idle"
+    st.session_state.real_image_result = None
+    st.session_state.real_visual_status = "idle"
+    st.session_state.ai_image_result = None
+    st.session_state.ai_visual_status = "idle"
+    st.session_state.visual_crops = {}
+    st.session_state.visual_deleted = set()
+    st.session_state.visual_assignments = {}
+    st.session_state.approved_visuals = None
+    st.session_state.visuals_approved = False
+    st.session_state.renderer_previews = None
+    st.session_state.rendered_video_path = None
+    st.session_state.upload_qc_approved = False
+    st.session_state.upload_result = None
+    st.session_state.upload_qc = None
+    st.session_state.test_stage = "02 · Scriptwriter"
+    st.session_state.test_pipeline_notice = {
+        "confirmed": "Manual story confirmed",
+        "next": "Moving directly to Scriptwriter. The supplied URL/headline is the canonical story input.",
+    }
+
+
+def _start_live_with_manual_topic(topic, profile: str | None = None):
+    """Reset Live handoffs and open Script using the same normalized Topic as discovery."""
+    _live_reset_downstream()
+    st.session_state.live_topics = [topic]
+    st.session_state.live_selected_topic = 0
+    if profile:
+        st.session_state.live_topics_profile = profile
+    st.session_state.live_stage = "02 · Script"
+    st.session_state.live_pipeline_notice = {
+        "confirmed": "Manual story confirmed",
+        "next": "Moving directly to Script. Research will use the supplied source and headline.",
+    }
 
 
 def _render_topic_tiles(
