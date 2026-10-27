@@ -6579,6 +6579,17 @@ def render_live_top5():
             '<div class="section-count">0–5 selected</div></div>',
             unsafe_allow_html=True,
         )
+        manual_topic = _render_manual_story_intake(
+            "live-top5-manual-story",
+            heading="Add a manual headline or news URL to Top-5 candidates",
+            submit_label="Add to Top-5 candidates",
+        )
+        if manual_topic is not None:
+            current = list(st.session_state.live_top5_topics)
+            identity = (manual_topic.title.casefold(), manual_topic.url.casefold())
+            if not any((item.title.casefold(), item.url.casefold()) == identity for item in current):
+                st.session_state.live_top5_topics = current + [manual_topic]
+                st.toast("Manual story added to Top-5 candidates.", icon="📰")
         topics = st.session_state.live_top5_topics
         left, mid, right = st.columns([1, 1, .8], gap="small")
         with left:
@@ -10992,6 +11003,17 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_upload_comment = ""
                 st.session_state.test_top5_upload_result = None
 
+            manual_topic = _render_manual_story_intake(
+                "test-top5-manual-story",
+                heading="Add a manual headline or news URL to Top-5 candidates",
+                submit_label="Add to Top-5 candidates",
+            )
+            if manual_topic is not None:
+                current = list(st.session_state.test_top5_topics)
+                identity = (manual_topic.title.casefold(), manual_topic.url.casefold())
+                if not any((item.title.casefold(), item.url.casefold()) == identity for item in current):
+                    st.session_state.test_top5_topics = current + [manual_topic]
+                    st.toast("Manual story added to Top-5 candidates.", icon="📰")
             if content_type == "General News":
                 st.info("General News is reserved for a later Top-5 expansion. Cricket is the current active Topic Fetcher.")
             else:
