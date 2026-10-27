@@ -4323,6 +4323,13 @@ def _render_app_sidebar():
                     st.rerun()
                 st.session_state["_live_stage_switcher_rendered_stage"] = st.session_state.live_stage
 
+        st.page_link(
+            "pages/Channel_Analytics.py",
+            label="Channel Analytics",
+            icon=":material/analytics:",
+            width="stretch",
+        )
+
 
 def _longform_live_reset_downstream():
     for key, value in {

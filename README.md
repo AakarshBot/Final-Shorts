@@ -85,3 +85,13 @@ Use this JSON contract internally. SRT/VTT/ASS can be derived later only when an
 Function 07 uses a local `token.json` for YouTube OAuth. The QC desk shows the rendered video plus the three Scriptwriter title candidates, editable description, hashtags and comment. One QC approval unlocks the Public and Private upload buttons. A Public upload automatically posts the approved comment; a Private upload does not.
 
 Place your authorized `token.json` beside `app.py`. The token must include YouTube upload permission and YouTube comment permission (or the full YouTube scope). The token file is ignored by Git.
+
+### Free Channel Analytics
+
+Open **Channel Analytics** in the Streamlit page navigation to view channel totals, 7/28/90/365-day performance, daily trends, top videos, traffic sources, and CSV exports. This feature uses Google's official YouTube Analytics API and YouTube Data API; it adds no analytics subscription or paid service.
+
+One-time setup, from the project folder:
+
+    python authorize_youtube_analytics.py
+
+Sign in to the target channel's owner account and approve the read-only permissions. The script creates a separate `analytics_token.json`; it does not replace the upload token. Both token files must remain private and are ignored by Git. The report intentionally ends two days before today to reduce incomplete latest-day metrics. More details: [Free YouTube Channel Analytics](CHANNEL_ANALYTICS_SETUP.md).
