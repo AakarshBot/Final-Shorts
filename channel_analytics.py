@@ -25,7 +25,7 @@ DAILY_METRICS = (
     "subscribersGained,subscribersLost"
 )
 VIDEO_METRICS = (
-    "views,engagedViews,estimatedMinutesWatched,averageViewDuration,"
+    "views,engagedViews,estimatedMinutesWatched,averageViewDuration,averageViewPercentage,"
     "subscribersGained,likes,comments,shares"
 )
 
@@ -219,7 +219,7 @@ def fetch_channel_analytics(
     )
     videos, videos_error = _optional_report(
         analytics, start_date, end_date, VIDEO_METRICS,
-        dimensions="video", sort="-views", max_results=10,
+        dimensions="video", sort="-views", max_results=25,
     )
     sources, sources_error = _optional_report(
         analytics, start_date, end_date, "views,estimatedMinutesWatched",
