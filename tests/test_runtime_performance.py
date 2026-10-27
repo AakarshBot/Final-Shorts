@@ -411,3 +411,18 @@ def test_manual_story_intake_is_wired_to_existing_pipeline_candidates():
     assert "def _start_live_with_manual_topic(" in app_source
     assert "_story_payload(topic)" in app_source
 
+
+def test_card_studio_does_not_reset_the_active_visual_source():
+    app_source = (ROOT / "app.py").read_text(encoding="utf-8")
+    grid_start = app_source.index("def _render_visual_option_grid(")
+    grid_end = app_source.index("def _live_start_story(", grid_start)
+    grid_source = app_source[grid_start:grid_end]
+    assert '"visual_test_mode": "test_visual_source_mode"' in grid_source
+    assert '"live_visual_option": "live_visual_source_mode"' in grid_source
+    assert 'if source_state_key and not option.startswith("Option 5")' in grid_source
+
+    workspace_start = app_source.index("def _render_two_pane_visual_workspace(")
+    workspace_end = app_source.index("def _render_live_visuals(", workspace_start)
+    workspace_source = app_source[workspace_start:workspace_end]
+    assert 'saved_source_key = "live_visual_source_mode" if live else "test_visual_source_mode"' in workspace_source
+
