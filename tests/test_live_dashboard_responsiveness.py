@@ -99,6 +99,7 @@ def test_live_render_pauses_visual_editing_and_advances_to_upload_qc():
         "@st.cache_data(max_entries=128, show_spinner=False)",
     )
     assert 'st.session_state.live_stage = "05 · Upload"' in poller
+    assert 'if st.session_state.get("live_stage") == "04 · Visuals + Render":' not in poller
     assert '"next": "Moving to Upload."' in poller
 
 
