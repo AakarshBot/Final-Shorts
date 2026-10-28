@@ -395,7 +395,9 @@ def test_visual_fetchers_run_outside_the_dashboard_interaction_thread():
     ai_end = app_source.index("def render_visuals(", ai_start)
     assert "_live_background_executor().submit(generate_images, query)" in app_source[ai_start:ai_end]
     assert "def _render_visual_job_status(" in app_source
-    assert "results are collected on the next dashboard interaction" in app_source
+    assert "results are collected on the next dashboard interaction" not in app_source
+    assert "def _watch_live_background_completion()" in app_source
+    assert "def _watch_test_visual_fetch_completion()" in app_source
 
 
 def test_manual_story_intake_is_wired_to_existing_pipeline_candidates():
