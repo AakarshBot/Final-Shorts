@@ -7,11 +7,10 @@ import renderer
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_dashboard_has_no_timed_refresh_or_polling():
+def test_dashboard_uses_only_scoped_visual_job_monitors_not_global_polling():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     refresh_patterns = (
         r"\bst_autorefresh\b",
-        r"\brun_every\s*=",
         r"\bsetInterval\s*\(",
         r"\bsetTimeout\s*\(",
         r"\bthreading\.Timer\s*\(",
@@ -20,6 +19,10 @@ def test_dashboard_has_no_timed_refresh_or_polling():
     )
     for pattern in refresh_patterns:
         assert re.search(pattern, app_source) is None, f"Unexpected dashboard timer/polling: {pattern}"
+
+    # Timed reruns are allowed only in narrow watchers for active background jobs.
+    # They do not rerun the entire dashboard while idle.
+    assert app_source.count("@st.fragment(run_every=1.0)") == 2
 
     config = (ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8")
     assert 'fileWatcherType = "none"' in config
