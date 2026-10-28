@@ -16,6 +16,7 @@ from urllib.parse import quote_plus, urljoin, urlparse
 from xml.etree import ElementTree as ET
 
 import requests
+import pillow_avif  # noqa: F401 - register AVIF decoding for scraped image bytes.
 from PIL import Image, UnidentifiedImageError
 
 

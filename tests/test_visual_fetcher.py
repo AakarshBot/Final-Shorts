@@ -879,3 +879,12 @@ def test_image_quality_policy_rejects_thumbnails_but_allows_full_resolution():
     assert visual_fetcher._image_bytes_ok(large_buffer.getvalue()) is True
     assert visual_fetcher.MAX_IMAGE_BYTES >= 40_000_000
     assert visual_fetcher.MIN_SIDE >= 720
+
+
+def test_image_quality_policy_accepts_avif_images():
+    from io import BytesIO
+    from PIL import Image
+
+    buffer = BytesIO()
+    Image.new("RGB", (900, 1000), "navy").save(buffer, format="AVIF")
+    assert visual_fetcher._image_bytes_ok(buffer.getvalue()) is True

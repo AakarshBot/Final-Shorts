@@ -57,6 +57,13 @@ def test_valid_image_accepts_decodable_bytes():
     assert visual_search._valid_image(_jpeg_bytes("blue")) is True
 
 
+def test_valid_image_accepts_avif_bytes():
+    image = Image.new("RGB", (900, 1000), "blue")
+    buffer = io.BytesIO()
+    image.save(buffer, format="AVIF")
+    assert visual_search._valid_image(buffer.getvalue()) is True
+
+
 def test_search_images_configures_serpapi_when_key_present(monkeypatch):
     monkeypatch.setenv("SERPAPI_API_KEY", "test_key")
     called_providers = []

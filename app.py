@@ -8,6 +8,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from dataclasses import replace
+
+import pillow_avif  # noqa: F401 - register AVIF decoding before Pillow opens images.
 from PIL import Image, ImageOps
 from pathlib import Path
 
