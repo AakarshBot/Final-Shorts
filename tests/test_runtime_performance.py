@@ -7,11 +7,10 @@ import renderer
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_dashboard_has_no_timed_refresh_or_polling():
+def test_dashboard_uses_only_scoped_visual_job_monitors_not_global_polling():
     app_source = (ROOT / "app.py").read_text(encoding="utf-8")
     refresh_patterns = (
         r"\bst_autorefresh\b",
-        r"\brun_every\s*=",
         r"\bsetInterval\s*\(",
         r"\bsetTimeout\s*\(",
         r"\bthreading\.Timer\s*\(",
@@ -20,6 +19,10 @@ def test_dashboard_has_no_timed_refresh_or_polling():
     )
     for pattern in refresh_patterns:
         assert re.search(pattern, app_source) is None, f"Unexpected dashboard timer/polling: {pattern}"
+
+    # Timed reruns are allowed only in narrow watchers for active background jobs.
+    # They do not rerun the entire dashboard while idle.
+    assert app_source.count("@st.fragment(run_every=1.0)") == 2
 
     config = (ROOT / ".streamlit" / "config.toml").read_text(encoding="utf-8")
     assert 'fileWatcherType = "none"' in config
@@ -395,7 +398,9 @@ def test_visual_fetchers_run_outside_the_dashboard_interaction_thread():
     ai_end = app_source.index("def render_visuals(", ai_start)
     assert "_live_background_executor().submit(generate_images, query)" in app_source[ai_start:ai_end]
     assert "def _render_visual_job_status(" in app_source
-    assert "results are collected on the next dashboard interaction" in app_source
+    assert "results are collected on the next dashboard interaction" not in app_source
+    assert "def _watch_live_background_completion()" in app_source
+    assert "def _watch_test_visual_fetch_completion()" in app_source
 
 
 def test_manual_story_intake_is_wired_to_existing_pipeline_candidates():
