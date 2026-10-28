@@ -8,6 +8,8 @@ import os
 from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from dataclasses import replace
+
+import pillow_avif  # noqa: F401 - register AVIF decoding before Pillow opens images.
 from PIL import Image, ImageOps
 from pathlib import Path
 
@@ -5091,7 +5093,8 @@ def _live_scrape_automatic_visuals():
     st.session_state.live_visual_status = "running"
     st.session_state.live_visual_job_story_key = _live_story_key(topics[selected_index])
     st.session_state.live_visual_future = _live_background_executor().submit(crawl_visuals, story)
-    return None
+    # Return to the app shell once so its lightweight completion monitor is armed.
+    st.rerun(scope="app")
 
 
 def _live_generate_audio_and_subtitles(approved_script, selected_engine, reference, model_version):
@@ -5183,12 +5186,13 @@ def _poll_live_background_jobs():
                     st.session_state.live_rendered_video_path = result
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
-                    if st.session_state.get("live_stage") == "04 · Visuals + Render":
-                        st.session_state.live_stage = "05 · Upload"
-                        st.session_state.live_pipeline_notice = {
-                            "confirmed": "Visuals QC and render confirmed",
-                            "next": "Moving to Upload.",
-                        }
+                    # A successful render is the final handoff for this active story.
+                    # Always land on Upload QC instead of leaving the user on an earlier stage.
+                    st.session_state.live_stage = "05 · Upload"
+                    st.session_state.live_pipeline_notice = {
+                        "confirmed": "Visuals QC and render confirmed",
+                        "next": "Moving to Upload.",
+                    }
             else:
                 st.session_state[destination] = result
                 st.session_state[status_key] = "failed" if (
@@ -5196,6 +5200,38 @@ def _poll_live_background_jobs():
                 ) else "complete"
         st.session_state[future_key] = None
 
+
+
+@st.fragment(run_every=1.0)
+def _watch_live_background_completion():
+    """Collect Live background work promptly without polling the whole dashboard."""
+    keys = (
+        "live_audio_future",
+        "live_visual_future",
+        "live_manual_visual_future",
+        "live_real_image_future",
+        "live_ai_image_future",
+        "live_render_future",
+    )
+    futures = [st.session_state.get(key) for key in keys]
+    if any(future is not None and future.done() for future in futures):
+        _poll_live_background_jobs()
+        st.rerun(scope="app")
+
+
+@st.fragment(run_every=1.0)
+def _watch_test_visual_fetch_completion():
+    """Collect Test-mode visual fetch results as soon as a background job finishes."""
+    keys = (
+        "visual_future",
+        "manual_visual_future",
+        "real_visual_future",
+        "ai_visual_future",
+    )
+    futures = [st.session_state.get(key) for key in keys]
+    if any(future is not None and future.done() for future in futures):
+        _poll_test_visual_jobs()
+        st.rerun(scope="app")
 
 
 
@@ -5267,11 +5303,11 @@ def _render_visual_job_status(*, live: bool = False) -> None:
             st.info(
                 "Background work is still running: "
                 + ", ".join(running)
-                + ". Keep editing cards or switch image sources; results are collected on the next dashboard interaction."
+                + ". Switch image sources freely while work runs; results appear automatically."
             )
         with action_col:
             if st.button("Refresh status", key=f"{prefix}-visual-job-monitor-refresh", width="stretch"):
-                st.rerun()
+                st.rerun(scope="fragment")
     elif failed:
         st.warning("Background task failed: " + ", ".join(failed) + ". Open that source for its error details or retry it.")
 
@@ -5767,7 +5803,7 @@ def _render_two_pane_visual_workspace(
                     status = st.session_state.get("live_visual_status", "idle")
                     if not result:
                         if status == "running":
-                            st.info("Automatic scrape is running in the background. Continue with Real Image Search, Manual Scraper or Card Studio; its pool will appear here when you return.")
+                            st.info("Automatic scrape is running in the background. Switch sources freely; its image pool will appear automatically when ready.")
                         elif status == "failed":
                             st.error(st.session_state.get("live_visual_error") or "Automatic scraping failed.")
                             if st.button("Retry automatic scrape", type="primary", width="stretch", key="live-retry-auto-visuals"):
@@ -5775,7 +5811,7 @@ def _render_two_pane_visual_workspace(
                                 st.session_state.live_visual_future = None
                                 st.session_state.live_visual_status = "idle"
                                 st.session_state.live_visual_error = ""
-                                st.rerun()
+                                st.rerun(scope="fragment")
                         else:
                             st.info("Automatic scraper is ready to start. It will run in the background.")
                     elif result.get("error"):
@@ -5785,7 +5821,7 @@ def _render_two_pane_visual_workspace(
                             st.session_state.live_visual_future = None
                             st.session_state.live_visual_status = "idle"
                             st.session_state.live_visual_error = ""
-                            st.rerun()
+                            st.rerun(scope="fragment")
                     else:
                         asset_count = len(result.get("assets") or [])
                         threshold = int(result.get("success_threshold") or 10)
@@ -5803,7 +5839,7 @@ def _render_two_pane_visual_workspace(
                                 st.session_state.live_visual_future = None
                                 st.session_state.live_visual_status = "idle"
                                 st.session_state.live_visual_error = ""
-                                st.rerun()
+                                st.rerun(scope="fragment")
                         st.caption(
                             f'{len(result.get("assets") or [])} images · '
                             f'{int(result.get("pages_scraped") or 0)} pages'
@@ -5842,9 +5878,10 @@ def _render_two_pane_visual_workspace(
                                 manual_crawl_visuals, query
                             )
                             st.session_state.live_manual_visual_status = "running"
+                            st.rerun(scope="app")
                     result = st.session_state.get("live_manual_visual_result") or {}
                     if st.session_state.get("live_manual_visual_status") == "running":
-                        st.info(f"Manual scraper is searching publisher pages for '{st.session_state.get('live_manual_visual_job_query')}'. You can continue editing cards while it runs.")
+                        st.info(f"Manual scraper is searching publisher pages for '{st.session_state.get('live_manual_visual_job_query')}'. Switch sources while it runs; results appear automatically.")
                     elif result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -5886,9 +5923,10 @@ def _render_two_pane_visual_workspace(
                                 search_images, query
                             )
                             st.session_state.live_real_image_status = "running"
+                            st.rerun(scope="app")
                     result = st.session_state.get("live_real_image_result") or {}
                     if st.session_state.get("live_real_image_status") == "running":
-                        st.info(f"Real-image search is running for '{st.session_state.get('live_real_image_job_query')}'. Continue card design; results will appear here when ready.")
+                        st.info(f"Real-image search is running for '{st.session_state.get('live_real_image_job_query')}'. Switch sources while it runs; results appear automatically.")
                     elif result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -5931,11 +5969,12 @@ def _render_two_pane_visual_workspace(
                             st.session_state.live_ai_image_job_story_key = _live_current_story_key()
                             st.session_state.live_ai_image_status = "running"
                             st.session_state.live_ai_image_future = _live_background_executor().submit(generate_images, query)
+                            st.rerun(scope="app")
                     result = st.session_state.get("live_ai_image_result") or {}
                     if not result and st.session_state.get("live_ai_image_status") == "running":
-                        st.info(f"AI generation for “{st.session_state.get('live_ai_image_job_query', '')}” is running in the background. Continue editing cards while it works.")
+                        st.info(f"AI generation for “{st.session_state.get('live_ai_image_job_query', '')}” is running in the background. Switch sources while generation runs; results appear automatically.")
                         if st.button("Refresh AI-generation status", key="live-refresh-ai-generation"):
-                            st.rerun()
+                            st.rerun(scope="fragment")
                     if result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -5957,8 +5996,9 @@ def _render_two_pane_visual_workspace(
                                     )
                                     st.session_state.live_real_image_status = "running"
                                     st.session_state.live_visual_option = "Option 3 · Real Image Search"
+                                    st.session_state.live_visual_source_mode = "Option 3 · Real Image Search"
                                     st.session_state.live_ai_image_result = None
-                                    st.rerun()
+                                    st.rerun(scope="app")
                         else:
                             st.caption(f'{len(assets)} images')
                             _render_visual_asset_pool(
@@ -6020,6 +6060,7 @@ def _render_two_pane_visual_workspace(
             )
 
 
+@st.fragment
 def _render_live_visuals(slide_count: int):
     st.markdown(
         """<style>
@@ -6073,17 +6114,17 @@ def _render_live_visuals(slide_count: int):
     if audio_status == "running":
         st.info("Audio + Subtitles are still being generated in the background. Visual QC is independent; final rendering will unlock when the handoff is ready.")
         if st.button("Refresh background status", key="live-refresh-background-status"):
-            st.rerun()
+            st.rerun(scope="fragment")
     elif audio_status == "failed":
         st.error("Background Audio + Subtitles failed: " + str(st.session_state.get("live_audio_error") or st.session_state.get("live_handoff_error") or "Unknown error"))
         if st.button("Return to Audio + Subs to retry", key="live-visuals-return-audio-retry"):
             st.session_state.live_stage = "03 · Audio + Subs"
-            st.rerun()
+            st.rerun(scope="fragment")
     elif not audio_ready:
         st.info("Visual QC is available now. Start Audio + Subtitles from the Audio stage before final rendering.")
         if st.button("Open Audio + Subs", key="live-visuals-open-audio"):
             st.session_state.live_stage = "03 · Audio + Subs"
-            st.rerun()
+            st.rerun(scope="fragment")
 
     if st.session_state.live_visuals_approved:
         st.success("Visuals approved and final render completed.")
@@ -6091,9 +6132,18 @@ def _render_live_visuals(slide_count: int):
             st.caption("The approved render is ready. Continue to Upload when you are ready.")
             if st.button("Continue to Upload", type="primary", width="stretch", key="live-rendered-continue-upload"):
                 st.session_state.live_stage = "05 · Upload"
-                st.rerun()
+                st.rerun(scope="fragment")
         else:
             st.caption("Visual review is complete. The current stage selection has been preserved.")
+        return
+
+    # Once rendering starts, the approved visual snapshot is immutable in the UI.
+    # The fragment checks completion without asking the user to keep editing cards.
+    if st.session_state.get("live_render_status") == "running":
+        st.info(
+            "Your approved visuals are rendering. The visual editor is paused; "
+            "the factory will switch to Upload QC when rendering finishes."
+        )
         return
 
     visual_options = (
@@ -6168,6 +6218,7 @@ def _render_live_visuals(slide_count: int):
                     output,
                 )
                 st.session_state.live_render_status = "running"
+                st.rerun(scope="app")
 
     _render_two_pane_visual_workspace(visual_option, slide_count, live=True)
 
@@ -6180,7 +6231,10 @@ def _render_live_visuals(slide_count: int):
         if st.session_state.live_visuals_approved:
             st.success("Visuals approved and final render completed.")
         elif render_status == "running":
-            st.info("The final Short is rendering in the background. You can continue editing cards; the result will be checked against the assignments captured when rendering started.")
+            st.info(
+                "Your approved visuals are rendering. Editing is paused for this render; "
+                "the factory will move to Upload QC automatically when it finishes."
+            )
         elif not audio_ready:
             st.info("All slides are attached. Final rendering unlocks when Audio + Subtitles are ready.")
         else:
@@ -7513,6 +7567,19 @@ def render_live_top5():
 
 def render_live_dashboard():
     _poll_live_background_jobs()
+    live_future_keys = (
+        "live_audio_future",
+        "live_visual_future",
+        "live_manual_visual_future",
+        "live_real_image_future",
+        "live_ai_image_future",
+        "live_render_future",
+    )
+    if any(
+        (future := st.session_state.get(key)) is not None and not future.done()
+        for key in live_future_keys
+    ):
+        _watch_live_background_completion()
     left, right = st.columns([1.4, .45], gap="large")
     with left:
         st.markdown(
@@ -9744,12 +9811,11 @@ def render_visuals_crawler():
             st.session_state.visual_status = "running"
             st.session_state.visual_error = ""
             st.session_state.visual_future = _live_background_executor().submit(crawl_visuals, story)
+            st.rerun(scope="app")
 
     result = st.session_state.get("visual_result") or {}
     if not result and st.session_state.get("visual_status") == "running":
-        st.info("Automatic scraping is running in the background. Keep editing cards or switch sources; results will appear on the next dashboard interaction.")
-        if st.button("Refresh automatic-scrape status", key="test-refresh-auto-visuals"):
-            st.rerun()
+        st.info("Automatic scraping is running in the background. Switch sources freely; results appear automatically.")
         return
     automatic_queries = list(result.get("automatic_queries") or [])
 
@@ -9831,12 +9897,11 @@ def _render_manual_crawler():
             st.session_state.manual_visual_status = "running"
             st.session_state.visual_crops = {}
             st.session_state.manual_visual_future = _live_background_executor().submit(manual_crawl_visuals, query)
+            st.rerun(scope="app")
 
     result = st.session_state.get("manual_visual_result") or {}
     if not result and st.session_state.get("manual_visual_status") == "running":
-        st.info(f"Manual image scraping for “{st.session_state.get('manual_visual_job_query', '')}” is running in the background. You can keep editing cards.")
-        if st.button("Refresh manual-scrape status", key="test-refresh-manual-visuals"):
-            st.rerun()
+        st.info(f"Manual image scraping for “{st.session_state.get('manual_visual_job_query', '')}” is running in the background. You can switch sources; results appear automatically.")
         return
     if result.get("error"):
         st.error(result["error"])
@@ -9900,12 +9965,11 @@ def _render_manual_real_images():
             st.session_state.real_visual_status = "running"
             st.session_state.visual_crops = {}
             st.session_state.real_visual_future = _live_background_executor().submit(search_images, query)
+            st.rerun(scope="app")
 
     result = st.session_state.get("real_image_result") or {}
     if not result and st.session_state.get("real_visual_status") == "running":
-        st.info(f"Real-image search for “{st.session_state.get('real_visual_job_query', '')}” is running in the background. You can keep editing cards.")
-        if st.button("Refresh real-search status", key="test-refresh-real-visuals"):
-            st.rerun()
+        st.info(f"Real-image search for “{st.session_state.get('real_visual_job_query', '')}” is running in the background. You can switch sources; results appear automatically.")
         return
     if not result:
         return
@@ -9973,12 +10037,11 @@ def _render_manual_ai_images():
             st.session_state.ai_visual_status = "running"
             st.session_state.visual_crops = {}
             st.session_state.ai_visual_future = _live_background_executor().submit(generate_images, query)
+            st.rerun(scope="app")
 
     result = st.session_state.get("ai_image_result") or {}
     if not result and st.session_state.get("ai_visual_status") == "running":
-        st.info(f"AI image generation for “{st.session_state.get('ai_visual_job_query', '')}” is running in the background. You can keep editing cards.")
-        if st.button("Refresh AI-generation status", key="test-refresh-ai-visuals"):
-            st.rerun()
+        st.info(f"AI image generation for “{st.session_state.get('ai_visual_job_query', '')}” is running in the background. You can switch sources; results appear automatically.")
         return
     if not result:
         return
@@ -10005,19 +10068,27 @@ def _render_manual_ai_images():
         if last_query:
             if st.button("Search Real Images for this query instead →", type="primary", key="ai-fallback-to-real-search"):
                 from visual_search import search_images
-                with st.spinner(f"Searching real photography for '{last_query}'…"):
-                    try:
-                        st.session_state.real_image_result = search_images(last_query)
-                        st.session_state.visual_test_mode = "Option 3 · Real Image Search"
-                        st.session_state.ai_image_result = None
-                        st.rerun()
-                    except Exception as exc:
-                        st.error(f"Search failed: {exc}")
+                st.session_state.real_image_result = None
+                st.session_state.real_visual_error = ""
+                st.session_state.real_visual_job_query = last_query
+                st.session_state.real_visual_job_story_key = (
+                    f"{st.session_state.selected_topic}:{st.session_state.topics[st.session_state.selected_topic].url}:{st.session_state.topics[st.session_state.selected_topic].title}"
+                    if isinstance(st.session_state.get("selected_topic"), int)
+                    and 0 <= st.session_state.selected_topic < len(st.session_state.get("topics") or [])
+                    else None
+                )
+                st.session_state.real_visual_status = "running"
+                st.session_state.real_visual_future = _live_background_executor().submit(search_images, last_query)
+                st.session_state.visual_test_mode = "Option 3 · Real Image Search"
+                st.session_state.test_visual_source_mode = "Option 3 · Real Image Search"
+                st.session_state.ai_image_result = None
+                st.rerun(scope="app")
         return
 
     st.markdown('<div class="section-head"><div><div class="eyebrow">MEDIA BOARD</div><div class="section-title">Generated images</div></div><div class="section-count">review / crop</div></div>', unsafe_allow_html=True)
     _render_visual_asset_pool(assets, "ai-generation", _test_visual_slide_count())
 
+@st.fragment
 def render_visuals():
     _poll_test_visual_jobs()
     st.header("04 · Visuals")
@@ -11200,6 +11271,17 @@ elif st.session_state.app_mode == "test":
             elif stage == "03 · Audio":
                 render_audio()
             elif stage == "04 · Visuals":
+                test_future_keys = (
+                    "visual_future",
+                    "manual_visual_future",
+                    "real_visual_future",
+                    "ai_visual_future",
+                )
+                if any(
+                    (future := st.session_state.get(key)) is not None and not future.done()
+                    for key in test_future_keys
+                ):
+                    _watch_test_visual_fetch_completion()
                 render_visuals()
             elif stage == "05 · Subtitles":
                 render_subtitles()

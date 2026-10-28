@@ -14,6 +14,7 @@ from typing import Any
 from urllib.parse import quote_plus
 import re
 import requests
+import pillow_avif  # noqa: F401 - register AVIF decoding for search-result image bytes.
 from PIL import Image, UnidentifiedImageError
 
 TIMEOUT = 6
