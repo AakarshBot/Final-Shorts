@@ -60,7 +60,7 @@ def test_live_render_does_not_approve_stale_visual_assignments():
     assert "st.session_state.live_rendered_video_path = None" in poller
 
 
-def test_live_background_jobs_are_collected_without_timer_polling():
+def test_live_background_jobs_avoid_global_timer_and_watch_render_locally():
     poller = _section(
         "def _poll_live_background_jobs(",
         "@st.cache_data(max_entries=128, show_spinner=False)",
@@ -73,6 +73,33 @@ def test_live_background_jobs_are_collected_without_timer_polling():
     assert "setInterval(" not in APP_SOURCE
     assert "time.sleep(" not in APP_SOURCE
     assert "Refresh background status" in APP_SOURCE
+
+    # Only the active Live render gets a scoped timer; other work stays event-driven.
+    watcher = _section(
+        "@st.fragment(run_every=1.0)\ndef _watch_live_render_completion():",
+        "def _poll_test_visual_jobs(",
+    )
+    assert "future.done()" in watcher
+    assert "_poll_live_background_jobs()" in watcher
+    assert "st.rerun()" in watcher
+    assert "Upload QC automatically" in watcher
+
+
+def test_live_render_pauses_visual_editing_and_advances_to_upload_qc():
+    visual_stage = _section(
+        "def _render_live_visuals(",
+        "def _render_packaging_deck_and_phone(",
+    )
+    assert 'if st.session_state.get("live_render_status") == "running":' in visual_stage
+    assert "_watch_live_render_completion()" in visual_stage
+    assert "You can continue editing cards; the result will be checked" not in visual_stage
+
+    poller = _section(
+        "def _poll_live_background_jobs(",
+        "@st.cache_data(max_entries=128, show_spinner=False)",
+    )
+    assert 'st.session_state.live_stage = "05 · Upload"' in poller
+    assert '"next": "Moving to Upload."' in poller
 
 
 def test_discarding_live_handoffs_cancels_queued_jobs_and_clears_render_state():
