@@ -72,7 +72,7 @@ def test_live_background_jobs_avoid_global_timer_and_watch_render_locally():
     assert "st_autorefresh" not in APP_SOURCE
     assert "setInterval(" not in APP_SOURCE
     assert "time.sleep(" not in APP_SOURCE
-    assert "Refresh background status" not in APP_SOURCE
+    assert 'st.rerun(scope="fragment")' in APP_SOURCE
 
     live_watcher = _section(
         "@st.fragment(run_every=1.0)\ndef _watch_live_background_completion():",
@@ -134,7 +134,7 @@ def test_visual_source_switches_are_fragment_scoped_in_live_and_test():
 
     selector = _section(
         "def _render_visual_option_grid(",
-        "def _test_visual_slide_count(",
+        "def _live_start_story(",
     )
     assert "st.session_state[session_key] = option" in selector
     assert "st.rerun()" not in selector
