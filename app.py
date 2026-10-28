@@ -5183,12 +5183,13 @@ def _poll_live_background_jobs():
                     st.session_state.live_rendered_video_path = result
                     st.session_state.live_visuals_approved = True
                     st.session_state.live_render_error = ""
-                    if st.session_state.get("live_stage") == "04 · Visuals + Render":
-                        st.session_state.live_stage = "05 · Upload"
-                        st.session_state.live_pipeline_notice = {
-                            "confirmed": "Visuals QC and render confirmed",
-                            "next": "Moving to Upload.",
-                        }
+                    # A successful render is the final handoff for this active story.
+                    # Always land on Upload QC instead of leaving the user on an earlier stage.
+                    st.session_state.live_stage = "05 · Upload"
+                    st.session_state.live_pipeline_notice = {
+                        "confirmed": "Visuals QC and render confirmed",
+                        "next": "Moving to Upload.",
+                    }
             else:
                 st.session_state[destination] = result
                 st.session_state[status_key] = "failed" if (
