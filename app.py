@@ -5198,6 +5198,21 @@ def _poll_live_background_jobs():
 
 
 
+@st.fragment(run_every=1.0)
+def _watch_live_render_completion():
+    """Watch an active Live render and rerun the app as soon as it finishes."""
+    future = st.session_state.get("live_render_future")
+    if future is not None and future.done():
+        _poll_live_background_jobs()
+        # The poller either advances to Upload QC, reports a stale snapshot,
+        # or marks the render failed. A full rerun must show that resulting state.
+        st.rerun()
+    st.info(
+        "Your approved visuals are rendering. Card editing is paused for this render. "
+        "Leave this page open; when rendering finishes, the factory will move to Upload QC automatically."
+    )
+
+
 
 def _poll_test_visual_jobs():
     """Collect completed Test fetch jobs without blocking dashboard interactions."""
@@ -6096,6 +6111,12 @@ def _render_live_visuals(slide_count: int):
             st.caption("Visual review is complete. The current stage selection has been preserved.")
         return
 
+    # Once rendering starts, the approved visual snapshot is immutable in the UI.
+    # The fragment checks completion without asking the user to keep editing cards.
+    if st.session_state.get("live_render_status") == "running":
+        _watch_live_render_completion()
+        return
+
     visual_options = (
         YT_TRENDS_VISUAL_OPTIONS
         if st.session_state.get("live_production_line") == "youtube_trends"
@@ -6168,6 +6189,7 @@ def _render_live_visuals(slide_count: int):
                     output,
                 )
                 st.session_state.live_render_status = "running"
+                st.rerun()
 
     _render_two_pane_visual_workspace(visual_option, slide_count, live=True)
 
@@ -6180,7 +6202,10 @@ def _render_live_visuals(slide_count: int):
         if st.session_state.live_visuals_approved:
             st.success("Visuals approved and final render completed.")
         elif render_status == "running":
-            st.info("The final Short is rendering in the background. You can continue editing cards; the result will be checked against the assignments captured when rendering started.")
+            st.info(
+                "Your approved visuals are rendering. Editing is paused for this render; "
+                "the factory will move to Upload QC automatically when it finishes."
+            )
         elif not audio_ready:
             st.info("All slides are attached. Final rendering unlocks when Audio + Subtitles are ready.")
         else:
