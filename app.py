@@ -5801,7 +5801,7 @@ def _render_two_pane_visual_workspace(
                     status = st.session_state.get("live_visual_status", "idle")
                     if not result:
                         if status == "running":
-                            st.info("Automatic scrape is running in the background. Continue with Real Image Search, Manual Scraper or Card Studio; its pool will appear here when you return.")
+                            st.info("Automatic scrape is running in the background. Switch sources freely; its image pool will appear automatically when ready.")
                         elif status == "failed":
                             st.error(st.session_state.get("live_visual_error") or "Automatic scraping failed.")
                             if st.button("Retry automatic scrape", type="primary", width="stretch", key="live-retry-auto-visuals"):
@@ -5879,7 +5879,7 @@ def _render_two_pane_visual_workspace(
                             st.rerun(scope="app")
                     result = st.session_state.get("live_manual_visual_result") or {}
                     if st.session_state.get("live_manual_visual_status") == "running":
-                        st.info(f"Manual scraper is searching publisher pages for '{st.session_state.get('live_manual_visual_job_query')}'. You can continue editing cards while it runs.")
+                        st.info(f"Manual scraper is searching publisher pages for '{st.session_state.get('live_manual_visual_job_query')}'. Switch sources while it runs; results appear automatically.")
                     elif result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -5924,7 +5924,7 @@ def _render_two_pane_visual_workspace(
                             st.rerun(scope="app")
                     result = st.session_state.get("live_real_image_result") or {}
                     if st.session_state.get("live_real_image_status") == "running":
-                        st.info(f"Real-image search is running for '{st.session_state.get('live_real_image_job_query')}'. Continue card design; results will appear here when ready.")
+                        st.info(f"Real-image search is running for '{st.session_state.get('live_real_image_job_query')}'. Switch sources while it runs; results appear automatically.")
                     elif result.get("error"):
                         st.error(result["error"])
                     elif result:
@@ -5970,7 +5970,7 @@ def _render_two_pane_visual_workspace(
                             st.rerun(scope="app")
                     result = st.session_state.get("live_ai_image_result") or {}
                     if not result and st.session_state.get("live_ai_image_status") == "running":
-                        st.info(f"AI generation for “{st.session_state.get('live_ai_image_job_query', '')}” is running in the background. Continue editing cards while it works.")
+                        st.info(f"AI generation for “{st.session_state.get('live_ai_image_job_query', '')}” is running in the background. Switch sources while generation runs; results appear automatically.")
                         if st.button("Refresh AI-generation status", key="live-refresh-ai-generation"):
                             st.rerun(scope="fragment")
                     if result.get("error"):
