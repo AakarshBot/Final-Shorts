@@ -312,3 +312,108 @@ def test_download_keeps_original_image_bytes_without_reencoding(monkeypatch):
     assert asset["width"] == 1200
     assert asset["height"] == 1800
     assert asset["hash"] == visual_search.hashlib.sha256(original_bytes).hexdigest()
+
+
+
+def test_search_images_limits_the_session_result_payload(monkeypatch):
+    assets = [
+        {
+            "bytes": b"image",
+            "hash": f"hash-{index}",
+            "source": "Test provider",
+            "source_page_url": f"https://example.com/{index}",
+            "source_image_url": f"https://images.example/{index}.jpg",
+            "title": f"Cricket player action {index}",
+            "width": 1600,
+            "height": 1200,
+        }
+        for index in range(50)
+    ]
+    monkeypatch.setattr(
+        visual_search,
+        "PROVIDERS",
+        (("Test provider", lambda _query: assets, True),),
+    )
+
+    result = visual_search.search_images("cricket player")
+
+    assert result["candidate_count"] == 50
+    assert result["result_limit"] == visual_search.MAX_RETURNED_IMAGES
+    assert len(result["assets"]) == visual_search.MAX_RETURNED_IMAGES
+    assert result["providers"]["Test provider"] == 50
+
+
+def test_download_stops_streaming_when_image_exceeds_byte_limit(monkeypatch):
+    monkeypatch.setattr(visual_search, "MAX_IMAGE_BYTES", 10)
+
+    class OversizedResponse:
+        headers = {"content-type": "image/jpeg"}
+        url = "https://images.example/large.jpg"
+
+        def __init__(self):
+            self.chunks_requested = 0
+            self.closed = False
+
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size):
+            self.chunks_requested += 1
+            yield b"x" * 8
+            self.chunks_requested += 1
+            yield b"y" * 8
+
+        def close(self):
+            self.closed = True
+
+    response = OversizedResponse()
+
+    class FakeSession:
+        def get(self, *args, **kwargs):
+            assert kwargs.get("stream") is True
+            return response
+
+    monkeypatch.setattr(visual_search, "_get_session", lambda: FakeSession())
+
+    asset = visual_search._download("https://images.example/large.jpg", {})
+
+    assert asset is None
+    assert response.chunks_requested == 2
+    assert response.closed is True
+
+
+def test_download_rejects_declared_oversize_before_reading_body(monkeypatch):
+    monkeypatch.setattr(visual_search, "MAX_IMAGE_BYTES", 10)
+
+    class OversizedResponse:
+        headers = {
+            "content-type": "image/jpeg",
+            "content-length": "11",
+        }
+        url = "https://images.example/large.jpg"
+
+        def __init__(self):
+            self.read = False
+            self.closed = False
+
+        def raise_for_status(self):
+            return None
+
+        def iter_content(self, chunk_size):
+            self.read = True
+            yield b"x"
+
+        def close(self):
+            self.closed = True
+
+    response = OversizedResponse()
+
+    class FakeSession:
+        def get(self, *args, **kwargs):
+            return response
+
+    monkeypatch.setattr(visual_search, "_get_session", lambda: FakeSession())
+
+    assert visual_search._download("https://images.example/large.jpg", {}) is None
+    assert response.read is False
+    assert response.closed is True
