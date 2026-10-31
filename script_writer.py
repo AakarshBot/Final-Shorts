@@ -2245,6 +2245,37 @@ def _finish_result(
     return result
 
 
+def _supplement_research_for_angle(story, angle_text: str, source: str) -> str:
+    """Add angle-specific context for the Universal writer; Cricket reuses its approved packet."""
+    if not angle_text:
+        return source
+    story_title = _clean(_story_value(story, "title"))
+    title_words = set(re.findall(r"\b[\w]+\b", story_title.casefold()))
+    angle_words = set(re.findall(r"\b[\w]+\b", angle_text.casefold()))
+    stop_words = {"focus", "on", "the", "a", "an", "is", "than", "and", "in", "to", "of", "what", "how", "why", "who", "with"}
+    diff_words = angle_words - title_words - stop_words
+    if len(diff_words) >= 1:
+        queries = [
+            f"{angle_text} cricket".strip()[:90],
+            f"{story_title} {angle_text}".strip()[:90],
+        ]
+        snippets = []
+        for q in queries:
+            try:
+                results = DDGS(timeout=4).text(q, max_results=2) or []
+                for r in results:
+                    body = _clean(r.get("body") or r.get("snippet"))
+                    if body and len(body) > 20 and body not in snippets:
+                        snippets.append(f"- {body}")
+                if len(snippets) >= 3:
+                    break
+            except Exception:
+                pass
+        if snippets:
+            source += f"\n\n[SUPPLEMENTARY ANGLE CONTEXT & FACTS — '{angle_text}']:\n" + "\n".join(snippets[:4])
+    return source[:MAX_SOURCE_CHARS]
+
+
 def write_script(
     story,
     language: str = "english",
