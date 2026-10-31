@@ -1943,6 +1943,24 @@ if "live_top5_handoff" not in st.session_state:
     st.session_state.live_top5_handoff = None
 if "live_top5_script_data" not in st.session_state:
     st.session_state.live_top5_script_data = None
+if "live_top5_script_future" not in st.session_state:
+    st.session_state.live_top5_script_future = None
+if "live_top5_script_status" not in st.session_state:
+    st.session_state.live_top5_script_status = "idle"
+if "live_top5_script_error" not in st.session_state:
+    st.session_state.live_top5_script_error = ""
+if "live_top5_audio_future" not in st.session_state:
+    st.session_state.live_top5_audio_future = None
+if "live_top5_audio_status" not in st.session_state:
+    st.session_state.live_top5_audio_status = "idle"
+if "live_top5_audio_error" not in st.session_state:
+    st.session_state.live_top5_audio_error = ""
+if "live_top5_render_future" not in st.session_state:
+    st.session_state.live_top5_render_future = None
+if "live_top5_render_status" not in st.session_state:
+    st.session_state.live_top5_render_status = "idle"
+if "live_top5_render_error" not in st.session_state:
+    st.session_state.live_top5_render_error = ""
 if "live_top5_script_handoff" not in st.session_state:
     st.session_state.live_top5_script_handoff = None
 if "live_top5_audio_data" not in st.session_state:
@@ -4433,6 +4451,9 @@ def _cancel_live_background_jobs():
         "live_real_image_future",
         "live_ai_image_future",
         "live_render_future",
+        "live_top5_script_future",
+        "live_top5_audio_future",
+        "live_top5_render_future",
     )
     for key in future_keys:
         future = st.session_state.get(key)
@@ -4538,9 +4559,18 @@ def _live_reset_downstream():
         "live_top5_topic_open_tile": None,
         "live_top5_handoff": None,
         "live_top5_script_data": None,
+        "live_top5_script_future": None,
+        "live_top5_script_status": "idle",
+        "live_top5_script_error": "",
         "live_top5_script_handoff": None,
         "live_top5_audio_data": None,
+        "live_top5_audio_future": None,
+        "live_top5_audio_status": "idle",
+        "live_top5_audio_error": "",
         "live_top5_audio_handoff": None,
+        "live_top5_render_future": None,
+        "live_top5_render_status": "idle",
+        "live_top5_render_error": "",
         "live_top5_visual_results": {},
         "live_top5_manual_visual_results": {},
         "live_top5_real_image_results": {},
@@ -5213,6 +5243,9 @@ def _poll_live_background_jobs():
         ("live_real_image_future", "live_real_image_status", "live_real_image_error", "live_real_image_job_story_key", "live_real_image_result"),
         ("live_ai_image_future", "live_ai_image_status", "live_ai_image_error", "live_ai_image_job_story_key", "live_ai_image_result"),
         ("live_render_future", "live_render_status", "live_render_error", "live_render_job_story_key", "render"),
+        ("live_top5_script_future", "live_top5_script_status", "live_top5_script_error", None, "top5_script"),
+        ("live_top5_audio_future", "live_top5_audio_status", "live_top5_audio_error", None, "top5_audio"),
+        ("live_top5_render_future", "live_top5_render_status", "live_top5_render_error", None, "top5_render"),
     )
     for future_key, status_key, error_key, story_key_key, destination in jobs:
         future = st.session_state.get(future_key)
@@ -5236,6 +5269,9 @@ def _poll_live_background_jobs():
                 st.session_state.live_visuals_approved = False
                 st.session_state.live_render_job_visual_snapshot = None
                 st.session_state.live_render_status = "failed"
+            elif destination in {"top5_script", "top5_audio", "top5_render"}:
+                st.session_state[error_key] = message
+                st.session_state[status_key] = "failed"
             else:
                 st.session_state[destination] = {"error": message}
                 st.session_state[status_key] = "failed"
@@ -5257,6 +5293,20 @@ def _poll_live_background_jobs():
                 st.session_state.live_subtitle_data = result["subtitles"]
                 st.session_state.live_handoff_error = ""
                 st.session_state.live_audio_status = "complete"
+            elif destination == "top5_script":
+                st.session_state.live_top5_script_data = result
+                st.session_state.live_top5_script_error = ""
+                for slide in result.get("slides") or []:
+                    number = int(slide.get("slide_number") or 0)
+                    st.session_state[f"live-top5-script-headline-{number}"] = str(slide.get("headline") or "")
+                    st.session_state[f"live-top5-script-body-{number}"] = str(slide.get("body") or "")
+            elif destination == "top5_audio":
+                st.session_state.live_top5_audio_data = result
+                st.session_state.live_top5_audio_error = ""
+            elif destination == "top5_render":
+                st.session_state.live_rendered_video_path = result
+                st.session_state.live_top5_render_error = ""
+                st.session_state.live_top5_render_status = "complete"
             elif destination == "render":
                 snapshot = st.session_state.get("live_render_job_visual_snapshot") or []
                 current = st.session_state.get("live_visual_assignments") or {}
@@ -5305,6 +5355,9 @@ def _watch_live_background_completion():
         "live_real_image_future",
         "live_ai_image_future",
         "live_render_future",
+        "live_top5_script_future",
+        "live_top5_audio_future",
+        "live_top5_render_future",
     )
     futures = [st.session_state.get(key) for key in keys]
     top5_future_maps = (
@@ -7225,9 +7278,18 @@ def render_live_top5():
             ]
             st.session_state.live_top5_handoff = stories
             st.session_state.live_top5_script_data = None
+            st.session_state.live_top5_script_future = None
+            st.session_state.live_top5_script_status = "idle"
+            st.session_state.live_top5_script_error = ""
             st.session_state.live_top5_script_handoff = None
             st.session_state.live_top5_audio_data = None
+            st.session_state.live_top5_audio_future = None
+            st.session_state.live_top5_audio_status = "idle"
+            st.session_state.live_top5_audio_error = ""
             st.session_state.live_top5_audio_handoff = None
+            st.session_state.live_top5_render_future = None
+            st.session_state.live_top5_render_status = "idle"
+            st.session_state.live_top5_render_error = ""
             st.session_state.live_top5_visual_results = {
                 number: {"source": "automatic", "assets": [], "success_threshold": 10}
                 for number in range(1, 6)
@@ -7859,6 +7921,9 @@ def render_live_dashboard():
         "live_real_image_future",
         "live_ai_image_future",
         "live_render_future",
+        "live_top5_script_future",
+        "live_top5_audio_future",
+        "live_top5_render_future",
     )
     pending_live_futures = [
         st.session_state.get(key)
