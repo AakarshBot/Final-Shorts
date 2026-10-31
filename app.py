@@ -7587,6 +7587,7 @@ def render_live_top5():
                     "Search real images",
                     type="primary",
                     width="stretch",
+                    disabled=active_slide in (st.session_state.get("live_top5_real_visual_futures") or {}),
                 )
             if run:
                 query = query.strip()
@@ -7676,6 +7677,7 @@ def render_live_top5():
                         "Run manual scrape",
                         type="primary",
                         width="stretch",
+                        disabled=active_slide in (st.session_state.get("live_top5_manual_visual_futures") or {}),
                     )
                 if run:
                     query = query.strip()
@@ -7706,6 +7708,7 @@ def render_live_top5():
                         "Generate images",
                         type="primary",
                         width="stretch",
+                        disabled=active_slide in (st.session_state.get("live_top5_ai_visual_futures") or {}),
                     )
                 if run:
                     query = query.strip()
