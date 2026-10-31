@@ -1,5 +1,8 @@
-from PIL import Image
+import importlib.util
 import io
+
+import pytest
+from PIL import Image
 
 import visual_search
 
@@ -57,6 +60,7 @@ def test_valid_image_accepts_decodable_bytes():
     assert visual_search._valid_image(_jpeg_bytes("blue")) is True
 
 
+@pytest.mark.skipif(importlib.util.find_spec("pillow_avif") is None, reason="optional AVIF plugin is not installed")
 def test_valid_image_accepts_avif_bytes():
     image = Image.new("RGB", (900, 1000), "blue")
     buffer = io.BytesIO()
