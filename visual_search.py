@@ -26,7 +26,7 @@ MAX_RESULTS_PER_SOURCE = max(4, min(20, int(os.getenv("VISUAL_SEARCH_RESULTS_PER
 MIN_IMAGE_SIDE = 720
 MIN_IMAGE_PIXELS = 800_000
 MAX_IMAGE_BYTES = 12_000_000
-MAX_RETURNED_IMAGES = 36
+MAX_RETURNED_IMAGES = 24
 HEADERS = {"User-Agent": "FinalShorts/1.0 (https://github.com/aakarsh/final-shorts; visual-qc@finalshorts.local)"}
 
 _SESSION_LOCAL = local()
