@@ -22,9 +22,9 @@ def sample_script(scenes_text=None):
         "seo_description": "Rohit Sharma has been ruled out of the Mumbai Test due to a knee injury.",
         "hashtags": ["#RohitSharma", "#Cricket", "#India"],
         "comment": "Can India win in Mumbai without Rohit Sharma?",
-        "quote": "He will need complete rest.",
-        "quote_attribution": "BCCI Medical Team",
-        "quote_slide": 2,
+        "quote": "",
+        "quote_attribution": "",
+        "quote_slide": 0,
         "script": [
             {
                 "voiceover": text,
