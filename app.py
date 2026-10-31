@@ -12505,16 +12505,43 @@ elif st.session_state.app_mode == "test":
                 st.success(f"Visual search complete · {len(assets)} images available.")
 
             if assets:
+                page_size = 12
+                page_key = f"test-top5-playground-page-{visual_option}"
+                fingerprint = tuple(
+                    _visual_asset_key(f"playground-{visual_option}", index, asset)
+                    for index, asset in enumerate(assets)
+                )
+                if st.session_state.get(f"{page_key}-fingerprint") != fingerprint:
+                    st.session_state[f"{page_key}-fingerprint"] = fingerprint
+                    st.session_state[page_key] = 0
+                page_count = max(1, (len(assets) + page_size - 1) // page_size)
+                page_number = min(max(0, int(st.session_state.get(page_key, 0))), page_count - 1)
+                if page_count > 1:
+                    previous_col, label_col, next_col = st.columns([1, 3, 1], gap="small")
+                    with previous_col:
+                        if st.button("← Previous", key=f"{page_key}-previous", disabled=page_number == 0):
+                            st.session_state[page_key] = page_number - 1
+                            st.rerun()
+                    with label_col:
+                        st.caption(
+                            f"Showing {page_number * page_size + 1}–{min((page_number + 1) * page_size, len(assets))} "
+                            f"of {len(assets)} images · page {page_number + 1}/{page_count}"
+                        )
+                    with next_col:
+                        if st.button("Next →", key=f"{page_key}-next", disabled=page_number >= page_count - 1):
+                            st.session_state[page_key] = page_number + 1
+                            st.rerun()
+                visible_assets = assets[page_number * page_size:(page_number + 1) * page_size]
                 st.markdown(
                     '<div class="section-head"><div><div class="eyebrow">IMAGE POOL</div>'
                     '<div class="section-title">Choose the source image</div></div>'
-                    f'<div class="section-count">{len(assets)} images</div></div>',
+                    f'<div class="section-count">{len(assets)} images · showing {len(visible_assets)}</div></div>',
                     unsafe_allow_html=True,
                 )
                 with st.container(height=520):
-                    for start in range(0, len(assets), 4):
-                        cols = st.columns(min(4, len(assets) - start), gap="small")
-                        for offset, asset in enumerate(assets[start:start + 4]):
+                    for start in range(0, len(visible_assets), 4):
+                        cols = st.columns(min(4, len(visible_assets) - start), gap="small")
+                        for offset, asset in enumerate(visible_assets[start:start + 4]):
                             with cols[offset]:
                                 index = start + offset
                                 raw = asset.get("bytes")
@@ -12754,17 +12781,44 @@ elif st.session_state.app_mode == "test":
                         if not assets:
                             st.info("No images are currently available from this option.")
                             return
+                        page_size = 12
+                        page_key = f"test-top5-visual-page-{active_slide}-{result_key}"
+                        fingerprint = tuple(
+                            _visual_asset_key(result_key, index, asset)
+                            for index, asset in enumerate(assets)
+                        )
+                        if st.session_state.get(f"{page_key}-fingerprint") != fingerprint:
+                            st.session_state[f"{page_key}-fingerprint"] = fingerprint
+                            st.session_state[page_key] = 0
+                        page_count = max(1, (len(assets) + page_size - 1) // page_size)
+                        page_number = min(max(0, int(st.session_state.get(page_key, 0))), page_count - 1)
+                        if page_count > 1:
+                            previous_col, label_col, next_col = st.columns([1, 3, 1], gap="small")
+                            with previous_col:
+                                if st.button("← Previous", key=f"{page_key}-previous", disabled=page_number == 0):
+                                    st.session_state[page_key] = page_number - 1
+                                    st.rerun()
+                            with label_col:
+                                st.caption(
+                                    f"Showing {page_number * page_size + 1}–{min((page_number + 1) * page_size, len(assets))} "
+                                    f"of {len(assets)} images · page {page_number + 1}/{page_count}"
+                                )
+                            with next_col:
+                                if st.button("Next →", key=f"{page_key}-next", disabled=page_number >= page_count - 1):
+                                    st.session_state[page_key] = page_number + 1
+                                    st.rerun()
+                        visible_assets = assets[page_number * page_size:(page_number + 1) * page_size]
                         st.markdown(
                             f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
-                            f'<span><strong>{len(assets)} images in pool</strong> · scroll inside tray to browse</span>'
+                            f'<span><strong>{len(assets)} images in pool</strong> · showing {len(visible_assets)}</span>'
                             f'<span>Choose for slide {active_slide}</span>'
                             f'</div>',
                             unsafe_allow_html=True,
                         )
                         with st.container(height=520):
-                            for start_index in range(0, len(assets), 4):
+                            for start_index in range(0, len(visible_assets), 4):
                                 cols = st.columns(4, gap="small")
-                                for offset, asset in enumerate(assets[start_index:start_index + 4]):
+                                for offset, asset in enumerate(visible_assets[start_index:start_index + 4]):
                                     index = start_index + offset
                                     with cols[offset]:
                                         raw = asset.get("bytes")
