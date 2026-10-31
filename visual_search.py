@@ -10,6 +10,7 @@ import hashlib
 import io
 import os
 from concurrent.futures import ThreadPoolExecutor
+from threading import local
 from typing import Any
 from urllib.parse import quote_plus
 import re
@@ -21,21 +22,27 @@ TIMEOUT = 6
 MAX_RESULTS_PER_SOURCE = max(4, min(20, int(os.getenv("VISUAL_SEARCH_RESULTS_PER_SOURCE", "12"))))
 MIN_IMAGE_SIDE = 720
 MIN_IMAGE_PIXELS = 800_000
-MAX_IMAGE_BYTES = 40_000_000
+MAX_IMAGE_BYTES = 12_000_000
+MAX_RETURNED_IMAGES = 36
 HEADERS = {"User-Agent": "FinalShorts/1.0 (https://github.com/aakarsh/final-shorts; visual-qc@finalshorts.local)"}
 
-_SESSION: requests.Session | None = None
+_SESSION_LOCAL = local()
 
 
 def _get_session() -> requests.Session:
-    global _SESSION
-    if _SESSION is None:
-        s = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20, max_retries=1)
-        s.mount("http://", adapter)
-        s.mount("https://", adapter)
-        _SESSION = s
-    return _SESSION
+    """Use one pooled Session per worker thread; requests.Session is not shared cross-thread."""
+    session = getattr(_SESSION_LOCAL, "session", None)
+    if session is None:
+        session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(
+            pool_connections=4,
+            pool_maxsize=4,
+            max_retries=1,
+        )
+        session.mount("http://", adapter)
+        session.mount("https://", adapter)
+        _SESSION_LOCAL.session = session
+    return session
 
 
 def _clean_query(query: Any) -> str:
@@ -70,15 +77,42 @@ def _download(url: str, meta: dict[str, Any]) -> dict[str, Any] | None:
         try:
             response = _get_session().get(
                 str(candidate_url),
-                timeout=15,
-                headers={**HEADERS, "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"},
+                timeout=(4, 9),
+                headers={**HEADERS, "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8"},
                 allow_redirects=True,
+                stream=True,
             )
             response.raise_for_status()
-            data = response.content
             content_type = str(response.headers.get("content-type", "")).lower()
             if content_type and "image" not in content_type and not content_type.startswith("application/octet-stream"):
                 continue
+            declared_size = int(response.headers.get("content-length") or 0)
+            if declared_size > MAX_IMAGE_BYTES:
+                continue
+
+            # Enforce the byte ceiling while streaming, rather than reading an
+            # arbitrarily large response into memory and checking only afterwards.
+            if callable(getattr(response, "iter_content", None)):
+                chunks = []
+                total_size = 0
+                oversized = False
+                for chunk in response.iter_content(chunk_size=64 * 1024):
+                    if not chunk:
+                        continue
+                    total_size += len(chunk)
+                    if total_size > MAX_IMAGE_BYTES:
+                        oversized = True
+                        break
+                    chunks.append(chunk)
+                if oversized:
+                    continue
+                data = b"".join(chunks)
+            else:
+                # Compatibility for simple response adapters and test doubles.
+                data = response.content
+                if len(data) > MAX_IMAGE_BYTES:
+                    continue
+
             dimensions = _image_info(data)
             if dimensions is None:
                 continue
@@ -101,7 +135,7 @@ def _download(url: str, meta: dict[str, Any]) -> dict[str, Any] | None:
 def _download_many(items: list[tuple[str, dict[str, Any]]]) -> list[dict[str, Any]]:
     if not items:
         return []
-    with ThreadPoolExecutor(max_workers=min(6, len(items)), thread_name_prefix="visual-search-download") as executor:
+    with ThreadPoolExecutor(max_workers=min(3, len(items)), thread_name_prefix="visual-search-download") as executor:
         results = executor.map(lambda item: _download(item[0], item[1]), items)
         return [item for item in results if item]
 
@@ -556,7 +590,7 @@ def search_images(query: str) -> dict[str, Any]:
         except Exception as exc:
             return name, [], f"{type(exc).__name__}: {exc}"
 
-    with ThreadPoolExecutor(max_workers=min(10, len(configured)), thread_name_prefix="visual-search-provider") as executor:
+    with ThreadPoolExecutor(max_workers=min(4, len(configured)), thread_name_prefix="visual-search-provider") as executor:
         for name, items, error in executor.map(run, configured):
             results[name] = items
             if error:
@@ -599,9 +633,15 @@ def search_images(query: str) -> dict[str, Any]:
         return (relevance * 80.0 + resolution + original_penalty, pixels)
 
     assets.sort(key=quality_rank, reverse=True)
+    candidate_count = len(assets)
+    # Preserve provider breadth and quality ranking while keeping the session
+    # payload bounded; users can still browse every returned image in pages.
+    assets = assets[:MAX_RETURNED_IMAGES]
     return {
         "query": q,
         "assets": assets,
+        "candidate_count": candidate_count,
+        "result_limit": MAX_RETURNED_IMAGES,
         "providers": {name: len(results.get(name, [])) for name, _ in configured},
         "errors": errors,
     }
