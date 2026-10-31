@@ -116,7 +116,7 @@ CRICKET_SCHEMA = {
         "headline": {"type": "string"},
         "titles": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 3},
         "seo_description": {"type": "string"},
-        "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "hashtags": {"type": "array", "items": {"type": "string"}, "minItems": 3, "maxItems": 5},
         "comment": {"type": "string"},
         "quote": {"type": "string"},
         "quote_attribution": {"type": "string"},
@@ -303,11 +303,15 @@ SOURCE USE & FACTUAL GROUNDING VS EDITORIAL LIBERTY
 - HARD GROUNDING (STRICT TRUTH): Real names, scores, match state, venue, dates, and confirmed events must be 100% accurate and grounded in the research packet. Never invent match scores, fake statistics, dates, records, injuries, or fake quotes.
 - EDITORIAL LIBERTY (VIRAL COMMENTARY): You are a sharp, energetic broadcast commentator—NOT a robotic scorecard reader. You are explicitly encouraged to use rhetorical questions, tactical comparisons (e.g. comparing a 33-ball duck to a golden duck), psychological drama, and high-stakes debate framing. Let the facts anchor the story, but let your narrative voice drive the intrigue and debate.
 - Treat the selected article as the primary source and use related reports to fill factual gaps. Preserve reported claims as reported claims.
+- CRICKET RULES & FORMAT: Apply the correct laws and playing conditions for the match format (Test, ODI, T20, domestic or franchise). Distinguish an official rule or umpire ruling from tactical opinion and reported claims. Never invent a law, ruling, score, playing condition or consequence. When the evidence does not establish a ruling, describe only what is confirmed.
+- CRICKET LANGUAGE: Use terms such as innings, overs, strike, crease, run-out, no-ball, wide, powerplay and DRS only when they are accurate for this event. Never use a technical term merely for dramatic effect.
 
 EDITORIAL ANGLE & PROMPT (AUTHORITATIVE)
 - If a user-selected or custom editorial angle is supplied, BUILD THE ENTIRE SHORT AROUND THIS SPECIFIC LENS.
 - Frame the hook, causality, and concluding kicker through this angle. Do not ignore it or default to a generic match summary.
-- The underlying match event provides the factual context, but the selected angle determines what the Short is actually about.
+- The underlying match event provides factual context, but the selected angle determines what the Short is actually about.
+- Every slide must advance the selected thesis: Slide 1 states its sharpest supported point; later slides add the evidence, cricket context or consequence that proves it. Do not spend the first draft on a generic event recap and apply the angle only in the final slide.
+- Before returning JSON, check each spoken line against the selected angle and remove any slide that does not move that specific argument forward.
 
 INFORMATION & RETENTION
 Compress all material factual information into 3–5 slides, letting the story determine the natural number of cuts.
@@ -369,6 +373,9 @@ GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSO
 - Keep subject_name non-empty, in the same script/spelling used by the voiceover, and present verbatim in at least one spoken voiceover.
 - Include a non-empty, crisp dashboard-only headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
 - Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the generated slides.
+- Return 3–5 relevant single-token hashtags beginning with #.
+- Do not use generic AI/editorial filler anywhere in the narration. Every slide must contribute a new fact, reason or consequence.
+- If quote is empty, quote_attribution must be empty and quote_slide must be 0. If quote is present, copy it verbatim from the supplied research packet, include its exact attribution, and attach it to an existing spoken slide.
 - quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–5, never greater than the generated slide count, when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
 - Make every field complete in the first JSON returned. Before output, check the actual field values, not only the JSON shape.
 
@@ -943,12 +950,21 @@ def _append_previous_validation_feedback(instruction: str, feedback: str | None,
     )
 
 
-def _validate_generated_cricket_draft(result: dict, language: str) -> tuple[bool, str]:
+def _validate_generated_cricket_draft(
+    result: dict,
+    language: str,
+    source: str | None = None,
+) -> tuple[bool, str]:
     valid, reason = validate_cricket_script(result, language=language)
-    if valid:
-        reason = _indic_generation_delivery_issue(result, language)
-        valid = not reason
-    return valid, reason
+    if not valid:
+        return False, reason
+    quote = _clean(result.get("quote"))
+    if quote and source:
+        normalised_source = " ".join(_clean(source).split())
+        if " ".join(quote.split()) not in normalised_source:
+            return False, "The direct quote is not copied verbatim from the supplied research packet."
+    reason = _indic_generation_delivery_issue(result, language)
+    return not reason, reason
 
 
 def _validate_generated_universal_draft(result: dict, language: str) -> tuple[bool, str]:
@@ -2132,8 +2148,26 @@ def validate_cricket_script(
         return False, "The Scriptwriter must produce a description."
 
     hashtags = result.get("hashtags")
-    if not isinstance(hashtags, list) or not hashtags or not all(_clean(item) for item in hashtags):
-        return False, "The Scriptwriter must produce hashtags."
+    if not isinstance(hashtags, list) or not 3 <= len(hashtags) <= 5:
+        return False, "The Cricket Scriptwriter must produce 3–5 relevant hashtags."
+    if any(
+        not isinstance(item, str)
+        or not item.strip().startswith("#")
+        or any(character.isspace() for character in item.strip())
+        for item in hashtags
+    ):
+        return False, "Every hashtag must be one non-empty token beginning with #."
+
+    quote = _clean(result.get("quote"))
+    quote_attribution = _clean(result.get("quote_attribution"))
+    quote_slide = result.get("quote_slide")
+    if quote:
+        if not quote_attribution:
+            return False, "A direct quote must include its exact speaker or source attribution."
+        if isinstance(quote_slide, bool) or not isinstance(quote_slide, int) or not 1 <= quote_slide <= len(scenes):
+            return False, "A direct quote must point to an existing spoken slide."
+    elif quote_attribution or quote_slide != 0:
+        return False, "When no quote is supplied, quote_attribution must be empty and quote_slide must be 0."
 
     if not _clean(result.get("comment")):
         return False, "The Scriptwriter must produce the upload comment."
@@ -2145,7 +2179,16 @@ def validate_cricket_script(
         for key in ("primary_entity", "visual_intent", "specific_search_prompt", "sport_or_topic_category"):
             if not _clean(scene.get(key)):
                 return False, f"Slide {number} is missing {key}."
-        narration_text.append(_clean(scene.get("voiceover")))
+        voiceover = _clean(scene.get("voiceover"))
+        for pattern in AI_EDITORIAL_PATTERNS:
+            if re.search(pattern, voiceover, flags=re.IGNORECASE):
+                return False, f"Slide {number} contains prohibited generic editorial filler."
+        if number == 1 and any(
+            re.search(pattern, voiceover, flags=re.IGNORECASE)
+            for pattern in SLIDE_1_FILLER_PATTERNS
+        ):
+            return False, "Slide 1 contains prohibited viewer-directed retention filler."
+        narration_text.append(voiceover)
 
     total_words = _spoken_word_count(" ".join(narration_text), language_key)
     if total_words < MIN_WORDS:
@@ -2203,36 +2246,6 @@ def _finish_result(
     return result
 
 
-def _supplement_research_for_angle(story, angle_text: str, source: str) -> str:
-    if not angle_text:
-        return source
-    story_title = _clean(_story_value(story, "title"))
-    title_words = set(re.findall(r"\b[\w]+\b", story_title.casefold()))
-    angle_words = set(re.findall(r"\b[\w]+\b", angle_text.casefold()))
-    stop_words = {"focus", "on", "the", "a", "an", "is", "than", "and", "in", "to", "of", "what", "how", "why", "who", "with"}
-    diff_words = angle_words - title_words - stop_words
-    if len(diff_words) >= 1:
-        queries = [
-            f"{angle_text} cricket".strip()[:90],
-            f"{story_title} {angle_text}".strip()[:90],
-        ]
-        snippets = []
-        for q in queries:
-            try:
-                results = DDGS(timeout=4).text(q, max_results=2) or []
-                for r in results:
-                    body = _clean(r.get("body") or r.get("snippet"))
-                    if body and len(body) > 20 and body not in snippets:
-                        snippets.append(f"- {body}")
-                if len(snippets) >= 3:
-                    break
-            except Exception:
-                pass
-        if snippets:
-            source += f"\n\n[SUPPLEMENTARY ANGLE CONTEXT & FACTS — '{angle_text}']:\n" + "\n".join(snippets[:4])
-    return source[:MAX_SOURCE_CHARS]
-
-
 def write_script(
     story,
     language: str = "english",
@@ -2248,8 +2261,6 @@ def write_script(
     norm_profile = _normalize_profile(profile)
     language_key = _language_key(language)
     angle_text = _angle_text(angle)
-    if angle_text:
-        source = _supplement_research_for_angle(story, angle_text, source)
     instruction = (
         SYSTEM_PROMPT
         + "\n\n"
@@ -2283,17 +2294,17 @@ def write_script(
 
     def fresh_backup(first_error: Exception) -> dict:
         try:
-            backup = _prepare_generated_script(_request(MODELS[1], instruction, source), language_key)
+            backup = _prepare_generated_script(_request(MODELS[0], instruction, source), language_key)
         except Exception as second_error:
             raise RuntimeError(
                 "Script generation failed before a valid draft was available. "
                 f"Primary request: {first_error} | Fresh backup request: {second_error}. "
                 "No hidden rewrite was attempted because the primary request did not produce a draft."
             ) from second_error
-        backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
+        backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key, source)
         if not backup_valid and _is_indic_language(language_key) and _is_indic_timing_issue(backup_reason, language_key):
             repair_errors = []
-            previous_model = MODELS[1]
+            previous_model = MODELS[0]
             for attempt in range(1, 3):
                 repair_model = MODELS[0] if previous_model != MODELS[0] else MODELS[1]
                 timing_instruction = (
@@ -2315,7 +2326,7 @@ def write_script(
                     repair_errors.append(f"{repair_model}: {type(repair_error).__name__}: {repair_error}")
                     continue
                 backup = repaired
-                backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
+                backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key, source)
                 if backup_valid:
                     return finish(backup, repair_model)
             if repair_errors:
@@ -2325,10 +2336,10 @@ def write_script(
                 "The backup model returned an invalid script after error-aware Indic recovery: "
                 + backup_reason
             )
-        return finish(backup, MODELS[1])
+        return finish(backup, MODELS[0])
 
     try:
-        result = _prepare_generated_script(_request(MODELS[0], instruction, source), language_key)
+        result = _prepare_generated_script(_request(MODELS[1], instruction, source), language_key)
     except GroqAPIError as first_error:
         if 400 <= first_error.status_code < 500 and first_error.status_code != 429:
             raise RuntimeError(
@@ -2340,9 +2351,9 @@ def write_script(
     except Exception as first_error:
         return fresh_backup(first_error)
     else:
-        valid, reason = _validate_generated_cricket_draft(result, language_key)
+        valid, reason = _validate_generated_cricket_draft(result, language_key, source)
         if valid:
-            return finish(result, MODELS[0])
+            return finish(result, MODELS[1])
         first_reason = reason
 
     rewrite_instruction = (
@@ -2359,14 +2370,14 @@ def write_script(
     )
 
     try:
-        rewritten = _prepare_generated_script(_request(MODELS[1], rewrite_instruction, source), language_key)
+        rewritten = _prepare_generated_script(_request(MODELS[0], rewrite_instruction, source), language_key)
     except Exception as second_error:
         raise RuntimeError(
             "Script generation failed after one hidden rewrite: "
             + f"{first_reason} | {type(second_error).__name__}: {second_error}"
         ) from second_error
 
-    valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+    valid, reason = _validate_generated_cricket_draft(rewritten, language_key, source)
     if (
         not valid
         and reason == "Slide 1 must contain fewer than 14 words."
@@ -2374,7 +2385,7 @@ def write_script(
         and language_key not in {"hindi", "telugu", "hi", "te"}
     ):
         repair_errors = []
-        for repair_attempt, repair_model in enumerate((MODELS[0], MODELS[1]), start=1):
+        for repair_attempt, repair_model in enumerate((MODELS[1], MODELS[0]), start=1):
             current_scenes = rewritten.get("script") if isinstance(rewritten, dict) else None
             if (
                 not isinstance(current_scenes, list)
@@ -2428,7 +2439,7 @@ def write_script(
             # Apply only the repaired opening. Preserve every other field from the
             # last validly structured draft instead of trusting model-side changes.
             rewritten["script"][0]["voiceover"] = _clean(repaired_scenes[0]["voiceover"])
-            valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+            valid, reason = _validate_generated_cricket_draft(rewritten, language_key, source)
             if valid:
                 return finish(rewritten, repair_model)
             if reason != "Slide 1 must contain fewer than 14 words.":
@@ -2456,7 +2467,7 @@ def write_script(
 
     if not valid and _is_indic_timing_issue(reason, language_key):
         recovery_errors = []
-        previous_model = MODELS[1]
+        previous_model = MODELS[0]
         for attempt in range(1, 3):
             repair_model = MODELS[0] if previous_model != MODELS[0] else MODELS[1]
             timing_instruction = (
@@ -2482,7 +2493,7 @@ def write_script(
                 )
                 continue
             rewritten = repaired
-            valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+            valid, reason = _validate_generated_cricket_draft(rewritten, language_key, source)
             if valid:
                 return finish(rewritten, repair_model)
 
@@ -2497,7 +2508,7 @@ def write_script(
     if not valid:
         raise RuntimeError("Script generation failed after hidden rewrite and any applicable timing correction: " + reason)
 
-    return finish(rewritten, MODELS[1])
+    return finish(rewritten, MODELS[0])
 
 
 def generate_cricket_script(*args, **kwargs) -> dict:
