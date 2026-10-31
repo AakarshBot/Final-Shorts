@@ -395,3 +395,16 @@ def test_live_top5_visual_sources_prevent_duplicate_per_slide_jobs():
     assert 'disabled=active_slide in (st.session_state.get("live_top5_real_visual_futures") or {})' in top5
     assert 'disabled=active_slide in (st.session_state.get("live_top5_manual_visual_futures") or {})' in top5
     assert 'disabled=active_slide in (st.session_state.get("live_top5_ai_visual_futures") or {})' in top5
+
+def test_test_top5_single_result_visual_playground_is_single_flight():
+    playground = _section(
+        'elif line_name == "Top-5" and stage == "04 · Visuals":',
+        'elif line_name == "Top-5" and stage == "06 · Renderer":',
+    )
+    for key in (
+        "test-top5-playground-auto",
+        "test-top5-playground-manual",
+        "test-top5-playground-manual-fetch",
+        "test-top5-playground-ai",
+    ):
+        assert f'key="{key}", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"' in playground
