@@ -11669,17 +11669,6 @@ elif st.session_state.app_mode == "test":
             elif stage == "03 · Audio":
                 render_audio()
             elif stage == "04 · Visuals":
-                test_future_keys = (
-                    "visual_future",
-                    "manual_visual_future",
-                    "real_visual_future",
-                    "ai_visual_future",
-                )
-                if any(
-                    (future := st.session_state.get(key)) is not None and not future.done()
-                    for key in test_future_keys
-                ):
-                    _watch_test_visual_fetch_completion()
                 render_visuals()
             elif stage == "05 · Subtitles":
                 render_subtitles()
@@ -12402,21 +12391,6 @@ elif st.session_state.app_mode == "test":
                 if st.session_state.get("test_top5_audio_handoff"):
                     st.success("Top-5 Audio approved. All six spoken lines are ready for the next stage.")
         elif line_name == "Top-5" and stage == "04 · Visuals":
-            _poll_test_top5_visual_jobs()
-            _test_top5_jobs = st.session_state.get("test_top5_visual_jobs") or {}
-            _test_top5_playground_job = st.session_state.get("test_top5_visual_playground_job")
-            _test_top5_pending = any(
-                isinstance(job, dict)
-                and job.get("future") is not None
-                and not job["future"].done()
-                for job in _test_top5_jobs.values()
-            ) or (
-                isinstance(_test_top5_playground_job, dict)
-                and _test_top5_playground_job.get("future") is not None
-                and not _test_top5_playground_job["future"].done()
-            )
-            if _test_top5_pending:
-                _watch_test_visual_fetch_completion()
             from renderer import (
                 build_top5_card_preview,
                 build_manual_subject_cutout_preview,
