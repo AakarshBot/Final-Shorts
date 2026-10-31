@@ -1884,6 +1884,12 @@ if "live_approved_script" not in st.session_state:
     st.session_state.live_approved_script = None
 if "live_script_error" not in st.session_state:
     st.session_state.live_script_error = ""
+if "live_script_future" not in st.session_state:
+    st.session_state.live_script_future = None
+if "live_script_status" not in st.session_state:
+    st.session_state.live_script_status = "idle"
+if "live_script_job_story_key" not in st.session_state:
+    st.session_state.live_script_job_story_key = None
 if "live_audio_data" not in st.session_state:
     st.session_state.live_audio_data = None
 if "live_approved_audio" not in st.session_state:
@@ -4403,6 +4409,7 @@ def _live_current_story_key():
 def _cancel_live_background_jobs():
     """Cancel queued downstream work when the active story/handoff is discarded."""
     future_keys = (
+        "live_script_future",
         "live_audio_future",
         "live_visual_future",
         "live_manual_visual_future",
@@ -4444,6 +4451,9 @@ def _live_reset_downstream():
         "live_script_data": None,
         "live_approved_script": None,
         "live_script_error": "",
+        "live_script_future": None,
+        "live_script_status": "idle",
+        "live_script_job_story_key": None,
         "live_universal_angles": None,
         "live_universal_angle_source": None,
         "live_universal_angle_selected": 0,
@@ -5063,6 +5073,9 @@ def _live_generate_script(
     )
     st.session_state.live_script_data = script
     st.session_state.live_script_error = ""
+    st.session_state.live_script_status = "complete"
+    st.session_state.live_script_future = None
+    st.session_state.live_script_job_story_key = None
     metadata = _upload_metadata(script)
     st.session_state.live_upload_titles = metadata["titles"]
     st.session_state.live_upload_description = metadata["description"]
@@ -5127,6 +5140,7 @@ def _poll_live_background_jobs():
         active_story_key = _live_story_key(topics[selected_index])
 
     jobs = (
+        ("live_script_future", "live_script_status", "live_script_error", "live_script_job_story_key", "script"),
         ("live_audio_future", "live_audio_status", "live_audio_error", "live_audio_job_story_key", "audio"),
         ("live_visual_future", "live_visual_status", "live_visual_error", "live_visual_job_story_key", "live_visual_result"),
         ("live_manual_visual_future", "live_manual_visual_status", "live_manual_visual_error", "live_manual_visual_job_story_key", "live_manual_visual_result"),
@@ -5147,7 +5161,9 @@ def _poll_live_background_jobs():
         except Exception as exc:
             message = f"{type(exc).__name__}: {exc}"
             st.session_state[error_key] = message
-            if destination == "audio":
+            if destination == "script":
+                st.session_state.live_script_status = "failed"
+            elif destination == "audio":
                 st.session_state.live_handoff_error = message
                 st.session_state.live_audio_status = "failed"
             elif destination == "render":
@@ -5159,7 +5175,16 @@ def _poll_live_background_jobs():
                 st.session_state[status_key] = "failed"
         else:
             st.session_state[error_key] = ""
-            if destination == "audio":
+            if destination == "script":
+                st.session_state.live_script_data = result
+                metadata = _upload_metadata(result)
+                st.session_state.live_upload_titles = metadata["titles"]
+                st.session_state.live_upload_description = metadata["description"]
+                st.session_state.live_upload_hashtags = metadata["hashtags"]
+                st.session_state.live_upload_comment = metadata["comment"]
+                st.session_state.live_manual_subject_cutout = {}
+                st.session_state.live_script_status = "complete"
+            elif destination == "audio":
                 st.session_state.live_audio_data = result["audio"]
                 st.session_state.live_approved_audio = result["approved_audio"]
                 st.session_state.live_subtitle_data = result["subtitles"]
@@ -5206,6 +5231,7 @@ def _poll_live_background_jobs():
 def _watch_live_background_completion():
     """Collect Live background work promptly without polling the whole dashboard."""
     keys = (
+        "live_script_future",
         "live_audio_future",
         "live_visual_future",
         "live_manual_visual_future",
@@ -6321,6 +6347,10 @@ def _render_live_script():
         st.session_state.get("live_production_line") == "youtube_trends"
         or st.session_state.get("live_topics_profile") == "niche_sports"
     )
+    standard_cricket_live = (
+        not universal_story
+        and st.session_state.get("live_topics_profile") in {"cricket_india_asia", "cricket_global"}
+    )
 
     if not isinstance(script, dict):
         if st.session_state.get("live_production_line") != "top_5":
@@ -6380,6 +6410,14 @@ def _render_live_script():
                 st.info("Press Generate Script to identify three evidence-backed story angles.")
             return
 
+        script_job_running = (
+            st.session_state.get("live_script_status") == "running"
+            and st.session_state.get("live_script_job_story_key") == story_id
+        )
+        if script_job_running:
+            st.info("Writing the Short from the approved angle in the background. You can continue using the dashboard.")
+            return
+
         selected_angle = _render_universal_angle_picker(
             angles,
             selected_key="live_universal_angle_selected",
@@ -6388,18 +6426,41 @@ def _render_live_script():
         )
         if selected_angle:
             previous_failure = str(st.session_state.get("live_script_error") or "").strip()
+            if standard_cricket_live and not str(st.session_state.get("live_universal_angle_custom") or "").strip():
+                angle_index = st.session_state.get("live_universal_angle_selected", 0)
+                if isinstance(angle_index, int) and 0 <= angle_index < len(angles):
+                    angle_data = angles[angle_index]
+                    evidence_basis = str(angle_data.get("evidence_basis") or "").strip()
+                    if evidence_basis and "Evidence basis:" not in selected_angle:
+                        selected_angle += "\\nEvidence basis: " + evidence_basis
             st.session_state.live_script_error = ""
-            try:
-                with st.spinner("Writing the Short from the selected angle…"):
-                    _live_generate_script(
-                        angle=selected_angle,
-                        research_source=st.session_state.live_universal_angle_source,
-                        validation_feedback=previous_failure,
-                    )
-            except Exception as exc:
-                st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+            if standard_cricket_live:
+                st.session_state.live_script_data = None
+                st.session_state.live_script_status = "running"
+                st.session_state.live_script_job_story_key = story_id
+                st.session_state.live_script_future = _live_background_executor().submit(
+                    _script_for_topic,
+                    story,
+                    st.session_state.get("live_topics_profile") or "cricket_india_asia",
+                    st.session_state.get("live_script_language", "english"),
+                    universal=False,
+                    angle=selected_angle,
+                    research_source=st.session_state.get("live_universal_angle_source"),
+                    validation_feedback=previous_failure,
+                )
+                st.rerun(scope="app")
             else:
-                st.rerun()
+                try:
+                    with st.spinner("Writing the Short from the selected angle…"):
+                        _live_generate_script(
+                            angle=selected_angle,
+                            research_source=st.session_state.live_universal_angle_source,
+                            validation_feedback=previous_failure,
+                        )
+                except Exception as exc:
+                    st.session_state.live_script_error = f"{type(exc).__name__}: {exc}"
+                else:
+                    st.rerun()
         if not isinstance(st.session_state.get("live_script_data"), dict):
             if st.session_state.get("live_script_error"):
                 st.error("Scriptwriter failed: " + st.session_state.live_script_error)
@@ -7568,6 +7629,7 @@ def render_live_top5():
 def render_live_dashboard():
     _poll_live_background_jobs()
     live_future_keys = (
+        "live_script_future",
         "live_audio_future",
         "live_visual_future",
         "live_manual_visual_future",
