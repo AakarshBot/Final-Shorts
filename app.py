@@ -11417,6 +11417,29 @@ if st.session_state.app_mode == "home":
     _render_home()
 elif st.session_state.app_mode == "test":
     _render_app_sidebar()
+    # Keep Test fetches alive across stage navigation; mount the one-second
+    # fragment only while at least one explicitly requested job is pending.
+    _poll_test_visual_jobs()
+    _test_background_futures = [
+        st.session_state.get(key)
+        for key in (
+            "visual_future",
+            "manual_visual_future",
+            "real_visual_future",
+            "ai_visual_future",
+        )
+    ]
+    _test_background_futures.extend(
+        job.get("future")
+        for job in (st.session_state.get("test_top5_visual_jobs") or {}).values()
+        if isinstance(job, dict)
+    )
+    _test_playground_job = st.session_state.get("test_top5_visual_playground_job")
+    if isinstance(_test_playground_job, dict):
+        _test_background_futures.append(_test_playground_job.get("future"))
+    if any(future is not None and not future.done() for future in _test_background_futures):
+        _watch_test_visual_fetch_completion()
+
     if st.session_state.get("factory_format") == "long_form":
         render_longform_test()
     elif st.session_state.test_production_line is None:
