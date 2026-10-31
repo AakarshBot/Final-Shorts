@@ -7459,17 +7459,17 @@ def render_live_top5():
             if run:
                 query = query.strip()
                 if query:
-                    try:
-                        from visual_search import search_images
-                        st.session_state.live_top5_real_image_results[active_slide] = search_images(query)
-                    except Exception as exc:
-                        st.session_state.live_top5_real_image_results[active_slide] = {
-                            "error": f"{type(exc).__name__}: {exc}"
-                        }
-                    st.rerun()
+                    from visual_search import search_images
+                    st.session_state.live_top5_real_image_results[active_slide] = {
+                        "source": "real", "query": query, "status": "running"
+                    }
+                    st.session_state.live_top5_real_visual_futures[active_slide] = _live_background_executor().submit(search_images, query)
+                    st.rerun(scope="app")
                 else:
                     st.warning("Enter a query first.")
             result = st.session_state.live_top5_real_image_results.get(active_slide) or {}
+            if result.get("status") == "running":
+                st.info("Real-image search is running in the background. You can switch slides while it finishes.")
             if result.get("error"):
                 st.error(result["error"])
             assets = list(result.get("assets") or [])
@@ -7526,17 +7526,17 @@ def render_live_top5():
                 if run:
                     query = query.strip()
                     if query:
-                        try:
-                            from visual_fetcher import manual_crawl_visuals
-                            st.session_state.live_top5_manual_visual_results[active_slide] = manual_crawl_visuals(query)
-                        except Exception as exc:
-                            st.session_state.live_top5_manual_visual_results[active_slide] = {
-                                "error": f"{type(exc).__name__}: {exc}"
-                            }
-                        st.rerun()
+                        from visual_fetcher import manual_crawl_visuals
+                        st.session_state.live_top5_manual_visual_results[active_slide] = {
+                            "source": "manual", "query": query, "status": "running"
+                        }
+                        st.session_state.live_top5_manual_visual_futures[active_slide] = _live_background_executor().submit(manual_crawl_visuals, query)
+                        st.rerun(scope="app")
                     else:
                         st.warning("Enter a query first.")
                 result = st.session_state.live_top5_manual_visual_results.get(active_slide) or {}
+                if result.get("status") == "running":
+                    st.info("Manual publisher scraping is running in the background. You can switch slides while it finishes.")
                 if result.get("error"):
                     st.error(result["error"])
                 assets = list(result.get("assets") or [])
@@ -7556,17 +7556,17 @@ def render_live_top5():
                 if run:
                     query = query.strip()
                     if query:
-                        try:
-                            from visual_generator import generate_images
-                            st.session_state.live_top5_ai_image_results[active_slide] = generate_images(query)
-                        except Exception as exc:
-                            st.session_state.live_top5_ai_image_results[active_slide] = {
-                                "error": f"{type(exc).__name__}: {exc}"
-                            }
-                        st.rerun()
+                        from visual_generator import generate_images
+                        st.session_state.live_top5_ai_image_results[active_slide] = {
+                            "source": "ai", "query": query, "status": "running"
+                        }
+                        st.session_state.live_top5_ai_visual_futures[active_slide] = _live_background_executor().submit(generate_images, query)
+                        st.rerun(scope="app")
                     else:
                         st.warning("Enter a prompt first.")
                 result = st.session_state.live_top5_ai_image_results.get(active_slide) or {}
+                if result.get("status") == "running":
+                    st.info("AI image generation is running in the background. You can switch slides while it finishes.")
                 assets = list(result.get("assets") or [])
                 if result.get("error"):
                     st.error(result["error"])
@@ -7579,17 +7579,44 @@ def render_live_top5():
                 result_key = "ai"
 
             if assets:
+                page_size = 12
+                page_key = f"live-top5-visual-page-{active_slide}-{result_key}"
+                fingerprint = tuple(
+                    _visual_asset_key(f"live-{result_key}", index, dict(asset))
+                    for index, asset in enumerate(assets)
+                )
+                if st.session_state.get(f"{page_key}-fingerprint") != fingerprint:
+                    st.session_state[f"{page_key}-fingerprint"] = fingerprint
+                    st.session_state[page_key] = 0
+                page_count = max(1, (len(assets) + page_size - 1) // page_size)
+                page_number = min(max(0, int(st.session_state.get(page_key, 0))), page_count - 1)
+                if page_count > 1:
+                    previous_col, label_col, next_col = st.columns([1, 3, 1], gap="small")
+                    with previous_col:
+                        if st.button("← Previous", key=f"{page_key}-previous", disabled=page_number == 0):
+                            st.session_state[page_key] = page_number - 1
+                            st.rerun(scope="app")
+                    with label_col:
+                        st.caption(
+                            f"Showing {page_number * page_size + 1}–{min((page_number + 1) * page_size, len(assets))} "
+                            f"of {len(assets)} images · page {page_number + 1}/{page_count}"
+                        )
+                    with next_col:
+                        if st.button("Next →", key=f"{page_key}-next", disabled=page_number >= page_count - 1):
+                            st.session_state[page_key] = page_number + 1
+                            st.rerun(scope="app")
+                visible_assets = assets[page_number * page_size:(page_number + 1) * page_size]
                 st.markdown(
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
-                    f'<span><strong>{len(assets)} images in pool</strong> · scroll inside tray to browse</span>'
+                    f'<span><strong>{len(assets)} images in pool</strong> · showing {len(visible_assets)}</span>'
                     f'<span>Choose for slide {active_slide}</span>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
                 with st.container(height=520):
-                    for start in range(0, len(assets), 4):
+                    for start in range(0, len(visible_assets), 4):
                         cols = st.columns(4, gap="small")
-                        for offset, raw_asset in enumerate(assets[start:start + 4]):
+                        for offset, raw_asset in enumerate(visible_assets[start:start + 4]):
                             index = start + offset
                             asset = dict(raw_asset)
                             asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
