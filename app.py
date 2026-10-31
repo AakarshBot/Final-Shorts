@@ -7867,7 +7867,6 @@ def render_live_top5():
         return
 
     if stage == "06 · Renderer":
-        from renderer import render_production_video
         script = st.session_state.live_top5_script_handoff
         audio = st.session_state.live_top5_audio_handoff
         visuals = st.session_state.live_top5_visual_handoff
