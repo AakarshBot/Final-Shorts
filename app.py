@@ -5295,6 +5295,7 @@ def _poll_live_background_jobs():
                 st.session_state.live_audio_status = "complete"
             elif destination == "top5_script":
                 st.session_state.live_top5_script_data = result
+                st.session_state.live_top5_script_status = "complete"
                 st.session_state.live_top5_script_error = ""
                 for slide in result.get("slides") or []:
                     number = int(slide.get("slide_number") or 0)
@@ -5302,6 +5303,7 @@ def _poll_live_background_jobs():
                     st.session_state[f"live-top5-script-body-{number}"] = str(slide.get("body") or "")
             elif destination == "top5_audio":
                 st.session_state.live_top5_audio_data = result
+                st.session_state.live_top5_audio_status = "complete"
                 st.session_state.live_top5_audio_error = ""
             elif destination == "top5_render":
                 st.session_state.live_rendered_video_path = result
