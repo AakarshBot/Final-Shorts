@@ -304,10 +304,17 @@ SOURCE USE & FACTUAL GROUNDING VS EDITORIAL LIBERTY
 - EDITORIAL LIBERTY (VIRAL COMMENTARY): You are a sharp, energetic broadcast commentator—NOT a robotic scorecard reader. You are explicitly encouraged to use rhetorical questions, tactical comparisons (e.g. comparing a 33-ball duck to a golden duck), psychological drama, and high-stakes debate framing. Let the facts anchor the story, but let your narrative voice drive the intrigue and debate.
 - Treat the selected article as the primary source and use related reports to fill factual gaps. Preserve reported claims as reported claims.
 
+CRICKET LAW & MATCH-CONTEXT ACCURACY
+- When a story depends on a cricket law, playing condition, umpiring decision, dismissal, review, powerplay or format-specific restriction, apply the rule that actually governs that format and competition.
+- Explain the ruling and its consequence accurately; distinguish the Laws of Cricket from competition-specific playing conditions.
+- Never infer a rule, penalty, dismissal or match state from an incomplete headline. If the research packet does not establish it, state only what is confirmed.
+
 EDITORIAL ANGLE & PROMPT (AUTHORITATIVE)
 - If a user-selected or custom editorial angle is supplied, BUILD THE ENTIRE SHORT AROUND THIS SPECIFIC LENS.
 - Frame the hook, causality, and concluding kicker through this angle. Do not ignore it or default to a generic match summary.
+- State the angle's actual thesis in the narration, not only in its title or metadata. Each slide must support or advance that thesis with a fact, explanation or consequence.
 - The underlying match event provides the factual context, but the selected angle determines what the Short is actually about.
+- Do not fall back to a chronological match recap unless the selected angle itself is about the match sequence.
 
 INFORMATION & RETENTION
 Compress all material factual information into 3–5 slides, letting the story determine the natural number of cuts.
@@ -943,8 +950,12 @@ def _append_previous_validation_feedback(instruction: str, feedback: str | None,
     )
 
 
-def _validate_generated_cricket_draft(result: dict, language: str) -> tuple[bool, str]:
-    valid, reason = validate_cricket_script(result, language=language)
+def _validate_generated_cricket_draft(
+    result: dict,
+    language: str,
+    source: str | None = None,
+) -> tuple[bool, str]:
+    valid, reason = validate_cricket_script(result, language=language, source=source)
     if valid:
         reason = _indic_generation_delivery_issue(result, language)
         valid = not reason
@@ -2083,6 +2094,7 @@ def validate_cricket_script(
     *,
     headline_required: bool = True,
     language: str | None = None,
+    source: str | None = None,
 ) -> tuple[bool, str]:
     if not isinstance(result, dict):
         return False, "The provider returned no script object."
@@ -2158,6 +2170,25 @@ def validate_cricket_script(
             f"Cricket narration has {total_words} spoken words; it must stay at or below "
             f"{MAX_CRICKET_WORDS} so Audio has headroom to remain strictly under 30 seconds."
         )
+
+    for number, voiceover in enumerate(narration_text, 1):
+        if any(re.search(pattern, voiceover, flags=re.IGNORECASE) for pattern in AI_EDITORIAL_PATTERNS):
+            return False, f"Slide {number} contains a prohibited generic AI editorial phrase."
+    if any(re.search(pattern, narration_text[0], flags=re.IGNORECASE) for pattern in SLIDE_1_FILLER_PATTERNS):
+        return False, "Slide 1 contains prohibited viewer-directed filler or retention bait."
+
+    quote = _clean(result.get("quote"))
+    attribution = _clean(result.get("quote_attribution"))
+    quote_slide = result.get("quote_slide", 0)
+    if quote:
+        if not attribution:
+            return False, "A direct quote requires its exact speaker/source attribution."
+        if not isinstance(quote_slide, int) or not 1 <= quote_slide <= len(scenes):
+            return False, "A direct quote must point to an existing spoken slide."
+        if source and _normalise(quote) not in _normalise(source):
+            return False, "The direct quote is not present verbatim in the supplied research packet."
+    elif attribution or quote_slide not in (0, None, ""):
+        return False, "Quote attribution and quote_slide must be empty/zero when no quote is supplied."
 
     return True, ""
 
@@ -2241,6 +2272,8 @@ def write_script(
     profile: str = "cricket_india_asia",
     validation_feedback: str | None = None,
 ) -> dict:
+    # Live angle approval already supplies the researched packet. Reuse it as-is:
+    # no second search pass is needed to write the selected story.
     source = research_source or _research_story(story) or _source_text(story)
     if not source:
         raise ValueError("The selected story contains no usable evidence.")
@@ -2248,8 +2281,6 @@ def write_script(
     norm_profile = _normalize_profile(profile)
     language_key = _language_key(language)
     angle_text = _angle_text(angle)
-    if angle_text:
-        source = _supplement_research_for_angle(story, angle_text, source)
     instruction = (
         SYSTEM_PROMPT
         + "\n\n"
@@ -2262,7 +2293,8 @@ def write_script(
         instruction += (
             "\n\nSELECTED EDITORIAL ANGLE (AUTHORITATIVE):\n"
             + angle_text
-            + "\nBuild the whole narration around this lens. Explore the debate, comparison, or insight posed by this angle using the context and cricket knowledge. Do not replace it with the obvious event/result summary."
+            + "\nBuild the complete Short around this thesis. Use its evidence basis and the supplied research packet; "
+            "do not replace it with a generic match recap or introduce a new angle."
         )
 
     instruction = _append_previous_validation_feedback(
@@ -2281,54 +2313,15 @@ def write_script(
             desk_profile=norm_profile,
         )
 
-    def fresh_backup(first_error: Exception) -> dict:
-        try:
-            backup = _prepare_generated_script(_request(MODELS[1], instruction, source), language_key)
-        except Exception as second_error:
-            raise RuntimeError(
-                "Script generation failed before a valid draft was available. "
-                f"Primary request: {first_error} | Fresh backup request: {second_error}. "
-                "No hidden rewrite was attempted because the primary request did not produce a draft."
-            ) from second_error
-        backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
-        if not backup_valid and _is_indic_language(language_key) and _is_indic_timing_issue(backup_reason, language_key):
-            repair_errors = []
-            previous_model = MODELS[1]
-            for attempt in range(1, 3):
-                repair_model = MODELS[0] if previous_model != MODELS[0] else MODELS[1]
-                timing_instruction = (
-                    instruction
-                    + "\n\nMANDATORY INDIC TIMING RECOVERY "
-                    + f"(ATTEMPT {attempt}/2)\n"
-                    + "The backup draft was rejected by local validation. Rewrite the package to fix the exact failure, "
-                    "keep the subject name verbatim in the spoken narration, move background to later slides, preserve essential facts, "
-                    "and return the complete JSON package only.\n"
-                    + _script_recovery_context(backup, backup_reason, language_key)
-                )
-                previous_model = repair_model
-                try:
-                    repaired = _prepare_generated_script(
-                        _request(repair_model, timing_instruction, source),
-                        language_key,
-                    )
-                except Exception as repair_error:
-                    repair_errors.append(f"{repair_model}: {type(repair_error).__name__}: {repair_error}")
-                    continue
-                backup = repaired
-                backup_valid, backup_reason = _validate_generated_cricket_draft(backup, language_key)
-                if backup_valid:
-                    return finish(backup, repair_model)
-            if repair_errors:
-                backup_reason += " | Recovery request errors: " + " | ".join(repair_errors)
-        if not backup_valid:
-            raise RuntimeError(
-                "The backup model returned an invalid script after error-aware Indic recovery: "
-                + backup_reason
-            )
-        return finish(backup, MODELS[1])
-
+    # Normal path: one complete generation request. A second model is used only
+    # when the provider request itself fails, not as an unnecessary parallel draft.
+    generation_model = MODELS[0]
+    provider_failed = False
     try:
-        result = _prepare_generated_script(_request(MODELS[0], instruction, source), language_key)
+        result = _prepare_generated_script(
+            _request(generation_model, instruction, source),
+            language_key,
+        )
     except GroqAPIError as first_error:
         if 400 <= first_error.status_code < 500 and first_error.status_code != 429:
             raise RuntimeError(
@@ -2336,139 +2329,82 @@ def write_script(
                 "This is a provider/request error, not a script-validation failure: "
                 + str(first_error)
             ) from first_error
-        return fresh_backup(first_error)
-    except Exception as first_error:
-        return fresh_backup(first_error)
-    else:
-        valid, reason = _validate_generated_cricket_draft(result, language_key)
-        if valid:
-            return finish(result, MODELS[0])
-        first_reason = reason
-
-    rewrite_instruction = (
-        instruction
-        + "\n\nHIDDEN REWRITE (ATTEMPT 1 OF 3)\n"
-        "The first draft is NOT being shown to the human reviewer. Rewrite the complete 3–5-slide script now, using the story's natural structure. "
-        "Keep every important factual detail from the research packet, but fix the exact failure below. "
-        "Treat subject-name mismatches precisely: subject_name must use the same script and spelling "
-        "as the name in a spoken voiceover, and that value must appear in the voiceover itself. "
-        "For Hindi/Telugu, use the native script consistently; do not fix this only in titles or metadata. "
-        "Do not explain the rewrite. Return only the complete JSON package.\n"
-        f"Failure to fix: {first_reason}\n"
-        + _script_recovery_context(result, first_reason, language_key)
-    )
-
-    try:
-        rewritten = _prepare_generated_script(_request(MODELS[1], rewrite_instruction, source), language_key)
-    except Exception as second_error:
-        raise RuntimeError(
-            "Script generation failed after one hidden rewrite: "
-            + f"{first_reason} | {type(second_error).__name__}: {second_error}"
-        ) from second_error
-
-    valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
-    if (
-        not valid
-        and reason == "Slide 1 must contain fewer than 14 words."
-        and norm_profile != "top_5"
-        and language_key not in {"hindi", "telugu", "hi", "te"}
-    ):
-        repair_errors = []
-        for repair_attempt, repair_model in enumerate((MODELS[0], MODELS[1]), start=1):
-            current_scenes = rewritten.get("script") if isinstance(rewritten, dict) else None
-            if (
-                not isinstance(current_scenes, list)
-                or not current_scenes
-                or not isinstance(current_scenes[0], dict)
-            ):
-                break
-
-            current_word_count = _words(current_scenes[0].get("voiceover"))
-            targeted_instruction = (
-                instruction
-                + "\n\nTARGETED SLIDE 1 WORD-COUNT RECOVERY "
-                + f"(ATTEMPT {repair_attempt}/2)\n"
-                + "The primary draft and full-script rewrite both failed this exact validation rule. "
-                + f"Slide 1 currently contains {current_word_count} words according to the same counter used by the validator; the absolute maximum is {MAX_SLIDE_ONE_WORDS}. "
-                + "Rewrite only script[0].voiceover as one complete, natural sentence in the requested language. "
-                + "Keep the exact subject_name text verbatim in that opening sentence. "
-                + "Preserve the main confirmed point and add no facts. "
-                + "Do not alter any other field, slide, slide count, metadata, or JSON key. "
-                + "Aim for 8–11 counted words to leave a safety margin; never exceed 13. "
-                + "Return the complete JSON package only, without Markdown or explanation.\n"
+        provider_failed = True
+        generation_model = MODELS[1]
+        try:
+            result = _prepare_generated_script(
+                _request(generation_model, instruction, source),
+                language_key,
             )
-            targeted_source = (
-                source
-                + "\n\nCURRENT SCRIPT PACKAGE TO REPAIR (JSON; edit only script[0].voiceover):\n"
-                + json.dumps(rewritten, ensure_ascii=False)
-            )
-            try:
-                repaired = _prepare_generated_script(
-                    _request(repair_model, targeted_instruction, targeted_source),
-                    language_key,
-                )
-            except Exception as repair_error:
-                repair_errors.append(
-                    f"{repair_model}: {type(repair_error).__name__}: {repair_error}"
-                )
-                continue
-
-            repaired_scenes = repaired.get("script") if isinstance(repaired, dict) else None
-            if (
-                not isinstance(repaired_scenes, list)
-                or not repaired_scenes
-                or not isinstance(repaired_scenes[0], dict)
-                or not _clean(repaired_scenes[0].get("voiceover"))
-            ):
-                repair_errors.append(
-                    f"{repair_model}: response did not contain a usable Slide 1 voiceover"
-                )
-                continue
-
-            # Apply only the repaired opening. Preserve every other field from the
-            # last validly structured draft instead of trusting model-side changes.
-            rewritten["script"][0]["voiceover"] = _clean(repaired_scenes[0]["voiceover"])
-            valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
-            if valid:
-                return finish(rewritten, repair_model)
-            if reason != "Slide 1 must contain fewer than 14 words.":
-                break
-
-        if not valid and reason == "Slide 1 must contain fewer than 14 words.":
-            final_scenes = rewritten.get("script") if isinstance(rewritten, dict) else None
-            final_count = (
-                _words(final_scenes[0].get("voiceover"))
-                if isinstance(final_scenes, list)
-                and final_scenes
-                and isinstance(final_scenes[0], dict)
-                else 0
-            )
-            detail = (
-                f"Slide 1 still contains {final_count} counted words after two targeted repairs; "
-                f"it must contain {MAX_SLIDE_ONE_WORDS} or fewer."
-            )
-            if repair_errors:
-                detail += " Targeted repair request errors: " + " | ".join(repair_errors)
+        except Exception as second_error:
             raise RuntimeError(
-                "Script generation failed after hidden rewrite and targeted Slide 1 recovery: "
-                + detail
+                "Script generation failed after the primary provider request failed. "
+                f"Primary request: {first_error} | Backup request: {type(second_error).__name__}: {second_error}"
+            ) from second_error
+    except Exception as first_error:
+        provider_failed = True
+        generation_model = MODELS[1]
+        try:
+            result = _prepare_generated_script(
+                _request(generation_model, instruction, source),
+                language_key,
             )
+        except Exception as second_error:
+            raise RuntimeError(
+                "Script generation failed before a valid draft was available. "
+                f"Primary request: {type(first_error).__name__}: {first_error} | "
+                f"Backup request: {type(second_error).__name__}: {second_error}"
+            ) from second_error
 
+    valid, reason = _validate_generated_cricket_draft(result, language_key, source)
+    if valid:
+        return finish(result, generation_model)
+
+    # An invalid returned draft gets one complete, error-aware rewrite. Provider
+    # failure fallback is deliberately not mistaken for a failed draft.
+    if not provider_failed:
+        rewrite_model = MODELS[1] if generation_model != MODELS[1] else MODELS[0]
+        rewrite_instruction = (
+            instruction
+            + "\n\nHIDDEN REWRITE (ONE TARGETED RETRY)\n"
+            "The first draft is not being shown to the human reviewer. Rewrite the complete 3–5-slide script. "
+            "Fix every validation failure below while preserving the selected angle and every important supported fact. "
+            "Apply the generation checklist before returning the first complete JSON package. "
+            "Do not explain the rewrite. Return only the complete JSON package.\n"
+            f"Failure to fix: {reason}\n"
+            + _script_recovery_context(result, reason, language_key)
+        )
+        try:
+            result = _prepare_generated_script(
+                _request(rewrite_model, rewrite_instruction, source),
+                language_key,
+            )
+        except Exception as rewrite_error:
+            raise RuntimeError(
+                "Script generation failed after one hidden rewrite: "
+                f"{reason} | {type(rewrite_error).__name__}: {rewrite_error}"
+            ) from rewrite_error
+        generation_model = rewrite_model
+        valid, reason = _validate_generated_cricket_draft(result, language_key, source)
+        if valid:
+            return finish(result, generation_model)
+
+    # Hindi/Telugu retain the measured-delivery recovery that protects their
+    # language-specific audio limits. English stops after the single rewrite.
     if not valid and _is_indic_timing_issue(reason, language_key):
+        previous_model = generation_model
         recovery_errors = []
-        previous_model = MODELS[1]
         for attempt in range(1, 3):
             repair_model = MODELS[0] if previous_model != MODELS[0] else MODELS[1]
             timing_instruction = (
                 instruction
                 + "\n\nMANDATORY INDIC TIMING RECOVERY "
                 + f"(ATTEMPT {attempt}/2)\n"
-                + "The prior draft failed local validation. Rewrite the complete 3–5-slide package and fix the exact error below. "
-                + "Keep Slide 1 to seven or fewer compact whitespace-separated tokens, ideally five to seven, and move context to later slides. "
-                + "Target 50–55 total tokens where the story permits. Keep the exact subject name, preserve essential facts, and do not add filler. "
-                + "The actual Audio stage still requires Slide 1 <=5.2 seconds and total narration strictly under 30 seconds. "
-                + "Return full JSON only.\n"
-                + _script_recovery_context(rewritten, reason, language_key)
+                + "Rewrite the complete 3–5-slide package to fix the exact validation error. "
+                + "Keep Slide 1 to seven or fewer compact whitespace-separated tokens where natural, move background to later slides, "
+                + "preserve essential facts and the selected angle, and do not pad. Actual audio must still measure Slide 1 at "
+                "5.2 seconds or less and the complete Short strictly under 30 seconds. Return full JSON only.\n"
+                + _script_recovery_context(result, reason, language_key)
             )
             previous_model = repair_model
             try:
@@ -2481,23 +2417,24 @@ def write_script(
                     f"{repair_model}: {type(repair_error).__name__}: {repair_error}"
                 )
                 continue
-            rewritten = repaired
-            valid, reason = _validate_generated_cricket_draft(rewritten, language_key)
+
+            result = repaired
+            valid, reason = _validate_generated_cricket_draft(result, language_key, source)
             if valid:
-                return finish(rewritten, repair_model)
+                return finish(result, repair_model)
 
         detail = (
-            "Script generation failed after hidden rewrite and two error-aware Indic recovery attempts. "
+            "Script generation failed after the bounded Hindi/Telugu timing recovery. "
             + str(reason)
         )
         if recovery_errors:
             detail += " Recovery request errors: " + " | ".join(recovery_errors)
         raise RuntimeError(detail)
 
-    if not valid:
-        raise RuntimeError("Script generation failed after hidden rewrite and any applicable timing correction: " + reason)
-
-    return finish(rewritten, MODELS[1])
+    raise RuntimeError(
+        "Script generation failed after the initial draft and its single hidden rewrite: "
+        + reason
+    )
 
 
 def generate_cricket_script(*args, **kwargs) -> dict:
