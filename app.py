@@ -7331,24 +7331,24 @@ def render_live_top5():
             return
         result = st.session_state.live_top5_script_data
         if not isinstance(result, dict):
+            if st.session_state.live_top5_script_status == "running":
+                st.info("Top-5 Scriptwriter is running in the background. You can navigate to other stages.")
+                return
+            if st.session_state.live_top5_script_error:
+                st.error(st.session_state.live_top5_script_error)
             if st.button(
                 "Generate Top-5 Script",
                 type="primary",
                 width="stretch",
                 key="live-top5-generate-script",
             ):
-                try:
-                    with st.spinner("Researching the five stories and writing the six-slide package…"):
-                        result = generate_top5_script(stories)
-                    st.session_state.live_top5_script_data = result
-                    for slide in result.get("slides") or []:
-                        number = int(slide.get("slide_number") or 0)
-                        st.session_state[f"live-top5-script-headline-{number}"] = str(slide.get("headline") or "")
-                        st.session_state[f"live-top5-script-body-{number}"] = str(slide.get("body") or "")
-                except (RuntimeError, ValueError) as exc:
-                    st.error(str(exc))
-                    return
-                st.rerun()
+                st.session_state.live_top5_script_error = ""
+                st.session_state.live_top5_script_status = "running"
+                st.session_state.live_top5_script_future = _live_background_executor().submit(
+                    generate_top5_script,
+                    stories,
+                )
+                st.rerun(scope="app")
             st.info("Press Generate Top-5 Script to start the Scriptwriter.")
             return
         slides = list(result.get("slides") or [])
@@ -7456,20 +7456,31 @@ def render_live_top5():
                 key="live-top5-generate-audio",
                 disabled=is_live_top5_chatterbox and not live_top5_reference_ready,
             ):
-                try:
-                    with st.spinner("Generating the six spoken Top-5 lines…"):
-                        audio = generate_top5_audio(
-                            handoff,
-                            output_dir="output/live/top5_audio",
-                            engine="chatterbox" if is_live_top5_chatterbox else "edge",
-                            reference=live_top5_reference if is_live_top5_chatterbox else None,
-                            model_version=live_top5_chatterbox_model_choice.casefold(),
-                        )
-                    st.session_state.live_top5_audio_data = audio
-                except (RuntimeError, ValueError) as exc:
-                    st.error(str(exc))
+                if st.session_state.live_top5_audio_status == "running":
+                    st.info("Top-5 audio is being generated in the background. You can navigate to other stages.")
                     return
-                st.rerun()
+                if st.session_state.live_top5_audio_error:
+                    st.error(st.session_state.live_top5_audio_error)
+                st.session_state.live_top5_audio_error = ""
+                st.session_state.live_top5_audio_status = "idle"
+            if st.button(
+                "Generate Top-5 Audio",
+                type="primary",
+                width="stretch",
+                key="live-top5-generate-audio",
+                disabled=(is_live_top5_chatterbox and not live_top5_reference_ready),
+            ):
+                st.session_state.live_top5_audio_error = ""
+                st.session_state.live_top5_audio_status = "running"
+                st.session_state.live_top5_audio_future = _live_background_executor().submit(
+                    generate_top5_audio,
+                    handoff,
+                    output_dir="output/live/top5_audio",
+                    engine="chatterbox" if is_live_top5_chatterbox else "edge",
+                    reference=live_top5_reference if is_live_top5_chatterbox else None,
+                    model_version=live_top5_chatterbox_model_choice.casefold(),
+                )
+                st.rerun(scope="app")
             st.info("Press Generate Top-5 Audio to start voice generation.")
             return
         full_path = audio.get("full_path")
