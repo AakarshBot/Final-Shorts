@@ -1,4 +1,7 @@
 from datetime import datetime, timezone
+import importlib.util
+
+import pytest
 
 import visual_fetcher
 
@@ -881,6 +884,7 @@ def test_image_quality_policy_rejects_thumbnails_but_allows_full_resolution():
     assert visual_fetcher.MIN_SIDE >= 720
 
 
+@pytest.mark.skipif(importlib.util.find_spec("pillow_avif") is None, reason="optional AVIF plugin is not installed")
 def test_image_quality_policy_accepts_avif_images():
     from io import BytesIO
     from PIL import Image
