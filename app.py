@@ -12477,7 +12477,7 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_url",
                     placeholder="https://publisher.com/article",
                 )
-                if st.button("Run automatic scrape", type="primary", width="stretch", key="test-top5-playground-auto"):
+                if st.button("Run automatic scrape", type="primary", width="stretch", key="test-top5-playground-auto", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"):
                     url = url.strip()
                     if not url:
                         st.warning("Enter a story URL first.")
@@ -12505,7 +12505,7 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_crawler_query",
                     placeholder="Virat Kohli latest cricket news",
                 )
-                if st.button("Run manual scrape", type="primary", width="stretch", key="test-top5-playground-manual"):
+                if st.button("Run manual scrape", type="primary", width="stretch", key="test-top5-playground-manual", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"):
                     query = query.strip()
                     if not query:
                         st.warning("Enter a query first.")
@@ -12527,7 +12527,7 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_search_query",
                     placeholder="Virat Kohli batting India cricket",
                 )
-                if st.button("Fetch images", type="primary", width="stretch", key="test-top5-playground-manual-fetch"):
+                if st.button("Fetch images", type="primary", width="stretch", key="test-top5-playground-manual-fetch", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"):
                     query = query.strip()
                     if not query:
                         st.warning("Enter an image query first.")
@@ -12558,7 +12558,7 @@ elif st.session_state.app_mode == "test":
                     height=100,
                     placeholder="Virat Kohli in a packed cricket stadium, editorial sports photography",
                 )
-                if st.button("Generate images", type="primary", width="stretch", key="test-top5-playground-ai"):
+                if st.button("Generate images", type="primary", width="stretch", key="test-top5-playground-ai", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"):
                     prompt = prompt.strip()
                     if not prompt:
                         st.warning("Enter an image prompt first.")
