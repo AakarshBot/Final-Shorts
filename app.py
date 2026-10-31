@@ -7875,23 +7875,36 @@ def render_live_top5():
             st.info("Renderer is waiting for the approved Top-5 Script, Audio and Visual handoffs.")
             return
         video_path = st.session_state.live_rendered_video_path
+        if not video_path and st.session_state.live_top5_render_status == "running":
+            st.info("The final Top-5 Short is rendering in the background. You can continue using the dashboard.")
+            return
         if not video_path:
+            if st.session_state.live_top5_render_error:
+                st.error(st.session_state.live_top5_render_error)
             key = hashlib.sha1(
                 "|".join(str(item.get("url") or item.get("title") or "") for item in script.get("stories") or []).encode("utf-8")
             ).hexdigest()[:12]
             output = Path(__file__).resolve().parent / "output" / "live" / "top5" / f"{key}.mp4"
-            try:
+            if st.button(
+                "Render final Top-5 Short",
+                type="primary",
+                width="stretch",
+                key="live-top5-render-start",
+            ):
                 output.parent.mkdir(parents=True, exist_ok=True)
-                with st.spinner("Rendering the final Top-5 Short…"):
-                    render_production_video(
-                        script, audio, None, visuals,
-                        output_path=output,
-                    )
-                st.session_state.live_rendered_video_path = str(output.resolve())
-                st.rerun()
-            except (RuntimeError, ValueError, OSError) as exc:
-                st.error(str(exc))
-                return
+                st.session_state.live_top5_render_error = ""
+                st.session_state.live_top5_render_status = "running"
+                st.session_state.live_top5_render_future = _live_background_executor().submit(
+                    _live_render_final_short,
+                    script,
+                    audio,
+                    None,
+                    visuals,
+                    output,
+                )
+                st.rerun(scope="app")
+            st.info("Press Render final Top-5 Short to start rendering.")
+            return
         st.markdown(
             '<div class="section-head"><div><div class="eyebrow">TOP-5 · 06 · RENDERER</div>'
             '<div class="section-title">Review the finished six-slide Short</div></div>'
