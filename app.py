@@ -9,7 +9,10 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from dataclasses import replace
 
-import pillow_avif  # noqa: F401 - register AVIF decoding before Pillow opens images.
+try:
+    import pillow_avif  # noqa: F401 - register AVIF decoding before Pillow opens images.
+except ImportError:
+    pillow_avif = None  # Standard JPEG/PNG/WebP formats remain supported without the optional plugin.
 from PIL import Image, ImageOps
 from pathlib import Path
 
@@ -25,7 +28,7 @@ st.set_page_config(page_title="Final Shorts", page_icon="▣", layout="wide")
 @st.cache_resource(show_spinner=False)
 def _live_background_executor():
     """Reuse the Live worker pool across Streamlit reruns."""
-    return ThreadPoolExecutor(max_workers=6, thread_name_prefix="final-shorts-live")
+    return ThreadPoolExecutor(max_workers=8, thread_name_prefix="final-shorts-jobs")
 
 
 VISUAL_OPTIONS = (
@@ -1730,6 +1733,14 @@ if "test_top5_visual_crops" not in st.session_state:
     st.session_state.test_top5_visual_crops = {}
 if "test_top5_visual_results" not in st.session_state:
     st.session_state.test_top5_visual_results = {}
+if "test_top5_visual_jobs" not in st.session_state:
+    st.session_state.test_top5_visual_jobs = {}
+if "test_top5_visual_playground_job" not in st.session_state:
+    st.session_state.test_top5_visual_playground_job = None
+if "test_top5_visual_playground_status" not in st.session_state:
+    st.session_state.test_top5_visual_playground_status = "idle"
+if "test_top5_visual_playground_error" not in st.session_state:
+    st.session_state.test_top5_visual_playground_error = ""
 if "test_top5_visual_selected" not in st.session_state:
     st.session_state.test_top5_visual_selected = {}
 if "test_top5_visual_previews" not in st.session_state:
@@ -1932,6 +1943,24 @@ if "live_top5_handoff" not in st.session_state:
     st.session_state.live_top5_handoff = None
 if "live_top5_script_data" not in st.session_state:
     st.session_state.live_top5_script_data = None
+if "live_top5_script_future" not in st.session_state:
+    st.session_state.live_top5_script_future = None
+if "live_top5_script_status" not in st.session_state:
+    st.session_state.live_top5_script_status = "idle"
+if "live_top5_script_error" not in st.session_state:
+    st.session_state.live_top5_script_error = ""
+if "live_top5_audio_future" not in st.session_state:
+    st.session_state.live_top5_audio_future = None
+if "live_top5_audio_status" not in st.session_state:
+    st.session_state.live_top5_audio_status = "idle"
+if "live_top5_audio_error" not in st.session_state:
+    st.session_state.live_top5_audio_error = ""
+if "live_top5_render_future" not in st.session_state:
+    st.session_state.live_top5_render_future = None
+if "live_top5_render_status" not in st.session_state:
+    st.session_state.live_top5_render_status = "idle"
+if "live_top5_render_error" not in st.session_state:
+    st.session_state.live_top5_render_error = ""
 if "live_top5_script_handoff" not in st.session_state:
     st.session_state.live_top5_script_handoff = None
 if "live_top5_audio_data" not in st.session_state:
@@ -1952,6 +1981,12 @@ if "live_top5_visual_done" not in st.session_state:
     st.session_state.live_top5_visual_done = {}
 if "live_top5_visual_futures" not in st.session_state:
     st.session_state.live_top5_visual_futures = {}
+if "live_top5_manual_visual_futures" not in st.session_state:
+    st.session_state.live_top5_manual_visual_futures = {}
+if "live_top5_real_visual_futures" not in st.session_state:
+    st.session_state.live_top5_real_visual_futures = {}
+if "live_top5_ai_visual_futures" not in st.session_state:
+    st.session_state.live_top5_ai_visual_futures = {}
 if "live_top5_visual_active_slide" not in st.session_state:
     st.session_state.live_top5_visual_active_slide = 1
 if "live_visual_crops" not in st.session_state:
@@ -4416,14 +4451,23 @@ def _cancel_live_background_jobs():
         "live_real_image_future",
         "live_ai_image_future",
         "live_render_future",
+        "live_top5_script_future",
+        "live_top5_audio_future",
+        "live_top5_render_future",
     )
     for key in future_keys:
         future = st.session_state.get(key)
         if future is not None and not future.done():
             future.cancel()
-    for future in (st.session_state.get("live_top5_visual_futures") or {}).values():
-        if future is not None and not future.done():
-            future.cancel()
+    for future_map_key in (
+        "live_top5_visual_futures",
+        "live_top5_manual_visual_futures",
+        "live_top5_real_visual_futures",
+        "live_top5_ai_visual_futures",
+    ):
+        for future in (st.session_state.get(future_map_key) or {}).values():
+            if future is not None and not future.done():
+                future.cancel()
 
 
 def _live_render_final_short(script, audio, subtitles, visuals, output_path):
@@ -4515,9 +4559,18 @@ def _live_reset_downstream():
         "live_top5_topic_open_tile": None,
         "live_top5_handoff": None,
         "live_top5_script_data": None,
+        "live_top5_script_future": None,
+        "live_top5_script_status": "idle",
+        "live_top5_script_error": "",
         "live_top5_script_handoff": None,
         "live_top5_audio_data": None,
+        "live_top5_audio_future": None,
+        "live_top5_audio_status": "idle",
+        "live_top5_audio_error": "",
         "live_top5_audio_handoff": None,
+        "live_top5_render_future": None,
+        "live_top5_render_status": "idle",
+        "live_top5_render_error": "",
         "live_top5_visual_results": {},
         "live_top5_manual_visual_results": {},
         "live_top5_real_image_results": {},
@@ -4525,6 +4578,9 @@ def _live_reset_downstream():
         "live_top5_visual_handoff": None,
         "live_top5_visual_done": {},
         "live_top5_visual_futures": {},
+        "live_top5_manual_visual_futures": {},
+        "live_top5_real_visual_futures": {},
+        "live_top5_ai_visual_futures": {},
         "live_top5_visual_active_slide": 1,
     }.items():
         st.session_state[key] = value
@@ -5128,6 +5184,49 @@ def _live_generate_audio_and_subtitles(approved_script, selected_engine, referen
     }
 
 
+
+def _poll_live_top5_visual_jobs():
+    """Collect only completed Top-5 image jobs; never wait for an unfinished Future."""
+    auto_futures = st.session_state.get("live_top5_visual_futures") or {}
+    done_by_story = st.session_state.setdefault("live_top5_visual_done", {})
+    auto_results = st.session_state.setdefault("live_top5_visual_results", {})
+    for story_number, future in list(auto_futures.items()):
+        if future is None or not future.done():
+            continue
+        try:
+            result = future.result()
+            if not isinstance(result, dict):
+                result = {"assets": [], "error": "The automatic scraper returned an invalid result."}
+        except Exception as exc:
+            result = {"assets": [], "error": f"{type(exc).__name__}: {exc}"}
+        auto_results[story_number] = {"source": "automatic", **result}
+        done_by_story[story_number] = True
+        auto_futures.pop(story_number, None)
+
+    for future_key, result_key, source_name in (
+        ("live_top5_manual_visual_futures", "live_top5_manual_visual_results", "manual"),
+        ("live_top5_real_visual_futures", "live_top5_real_image_results", "real"),
+        ("live_top5_ai_visual_futures", "live_top5_ai_image_results", "ai"),
+    ):
+        futures = st.session_state.setdefault(future_key, {})
+        results = st.session_state.setdefault(result_key, {})
+        for slide_number, future in list(futures.items()):
+            if future is None or not future.done():
+                continue
+            try:
+                result = future.result()
+                if not isinstance(result, dict):
+                    result = {"error": "The image provider returned an invalid result."}
+            except Exception as exc:
+                result = {"error": f"{type(exc).__name__}: {exc}"}
+            pending = dict(results.get(slide_number) or {})
+            pending.update(result)
+            pending["source"] = source_name
+            pending.pop("status", None)
+            results[slide_number] = pending
+            futures.pop(slide_number, None)
+
+
 def _poll_live_background_jobs():
     """Collect finished Live work only during ordinary dashboard runs; never poll/rerun on a timer."""
     topics = st.session_state.get("live_topics") or []
@@ -5144,6 +5243,9 @@ def _poll_live_background_jobs():
         ("live_real_image_future", "live_real_image_status", "live_real_image_error", "live_real_image_job_story_key", "live_real_image_result"),
         ("live_ai_image_future", "live_ai_image_status", "live_ai_image_error", "live_ai_image_job_story_key", "live_ai_image_result"),
         ("live_render_future", "live_render_status", "live_render_error", "live_render_job_story_key", "render"),
+        ("live_top5_script_future", "live_top5_script_status", "live_top5_script_error", None, "top5_script"),
+        ("live_top5_audio_future", "live_top5_audio_status", "live_top5_audio_error", None, "top5_audio"),
+        ("live_top5_render_future", "live_top5_render_status", "live_top5_render_error", None, "top5_render"),
     )
     for future_key, status_key, error_key, story_key_key, destination in jobs:
         future = st.session_state.get(future_key)
@@ -5167,6 +5269,9 @@ def _poll_live_background_jobs():
                 st.session_state.live_visuals_approved = False
                 st.session_state.live_render_job_visual_snapshot = None
                 st.session_state.live_render_status = "failed"
+            elif destination in {"top5_script", "top5_audio", "top5_render"}:
+                st.session_state[error_key] = message
+                st.session_state[status_key] = "failed"
             else:
                 st.session_state[destination] = {"error": message}
                 st.session_state[status_key] = "failed"
@@ -5188,6 +5293,22 @@ def _poll_live_background_jobs():
                 st.session_state.live_subtitle_data = result["subtitles"]
                 st.session_state.live_handoff_error = ""
                 st.session_state.live_audio_status = "complete"
+            elif destination == "top5_script":
+                st.session_state.live_top5_script_data = result
+                st.session_state.live_top5_script_status = "complete"
+                st.session_state.live_top5_script_error = ""
+                for slide in result.get("slides") or []:
+                    number = int(slide.get("slide_number") or 0)
+                    st.session_state[f"live-top5-script-headline-{number}"] = str(slide.get("headline") or "")
+                    st.session_state[f"live-top5-script-body-{number}"] = str(slide.get("body") or "")
+            elif destination == "top5_audio":
+                st.session_state.live_top5_audio_data = result
+                st.session_state.live_top5_audio_status = "complete"
+                st.session_state.live_top5_audio_error = ""
+            elif destination == "top5_render":
+                st.session_state.live_rendered_video_path = result
+                st.session_state.live_top5_render_error = ""
+                st.session_state.live_top5_render_status = "complete"
             elif destination == "render":
                 snapshot = st.session_state.get("live_render_job_visual_snapshot") or []
                 current = st.session_state.get("live_visual_assignments") or {}
@@ -5236,11 +5357,75 @@ def _watch_live_background_completion():
         "live_real_image_future",
         "live_ai_image_future",
         "live_render_future",
+        "live_top5_script_future",
+        "live_top5_audio_future",
+        "live_top5_render_future",
     )
     futures = [st.session_state.get(key) for key in keys]
-    if any(future is not None and future.done() for future in futures):
+    top5_future_maps = (
+        "live_top5_visual_futures",
+        "live_top5_manual_visual_futures",
+        "live_top5_real_visual_futures",
+        "live_top5_ai_visual_futures",
+    )
+    top5_futures = [
+        future
+        for key in top5_future_maps
+        for future in (st.session_state.get(key) or {}).values()
+    ]
+    if any(future is not None and future.done() for future in (*futures, *top5_futures)):
         _poll_live_background_jobs()
+        _poll_live_top5_visual_jobs()
         st.rerun(scope="app")
+
+
+def _poll_test_top5_visual_jobs():
+    """Collect completed per-slide and standalone Test Top-5 image jobs."""
+    jobs = st.session_state.setdefault("test_top5_visual_jobs", {})
+    results = st.session_state.setdefault("test_top5_visual_results", {})
+    for slide_number, job in list(jobs.items()):
+        future = job.get("future") if isinstance(job, dict) else None
+        if future is None or not future.done():
+            continue
+        try:
+            result = future.result()
+            if not isinstance(result, dict):
+                result = {"error": "The image provider returned an invalid result."}
+        except Exception as exc:
+            result = {"error": f"{type(exc).__name__}: {exc}"}
+        merged = {
+            "source": job.get("source"),
+            "query": job.get("query", ""),
+            **result,
+        }
+        merged.pop("status", None)
+        results[int(slide_number)] = merged
+        jobs.pop(slide_number, None)
+
+    playground = st.session_state.get("test_top5_visual_playground_job")
+    if isinstance(playground, dict):
+        future = playground.get("future")
+        if future is not None and future.done():
+            try:
+                result = future.result()
+                if not isinstance(result, dict):
+                    result = {"error": "The visual provider returned an invalid result."}
+            except Exception as exc:
+                result = {"error": f"{type(exc).__name__}: {exc}"}
+            source = str(playground.get("source") or "")
+            st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
+            st.session_state.test_top5_visual_playground_error = str(result.get("error") or "")
+            if source == "ai":
+                st.session_state.test_top5_visual_playground_ai_result = {
+                    **result,
+                    "query": playground.get("query", ""),
+                }
+                if not result.get("assets") and result.get("message"):
+                    st.session_state.test_top5_visual_playground_error = str(result.get("message"))
+            st.session_state.test_top5_visual_playground_status = (
+                "failed" if result.get("error") and not result.get("assets") else "complete"
+            )
+            st.session_state.test_top5_visual_playground_job = None
 
 
 @st.fragment(run_every=1.0)
@@ -5253,14 +5438,21 @@ def _watch_test_visual_fetch_completion():
         "ai_visual_future",
     )
     futures = [st.session_state.get(key) for key in keys]
-    if any(future is not None and future.done() for future in futures):
+    top5_jobs = list((st.session_state.get("test_top5_visual_jobs") or {}).values())
+    top5_futures = [job.get("future") for job in top5_jobs if isinstance(job, dict)]
+    playground_job = st.session_state.get("test_top5_visual_playground_job")
+    if isinstance(playground_job, dict) and playground_job.get("future") is not None:
+        top5_futures.append(playground_job["future"])
+    if any(future is not None and future.done() for future in (*futures, *top5_futures)):
         _poll_test_visual_jobs()
+        _poll_test_top5_visual_jobs()
         st.rerun(scope="app")
 
 
 
 def _poll_test_visual_jobs():
     """Collect completed Test fetch jobs without blocking dashboard interactions."""
+    _poll_test_top5_visual_jobs()
     selected = st.session_state.get("selected_topic")
     topics = st.session_state.get("topics") or []
     active_story_key = None
@@ -5299,41 +5491,62 @@ def _poll_test_visual_jobs():
 
 
 def _render_visual_job_status(*, live: bool = False) -> None:
-    """Show active fetches regardless of which source or card editor is currently selected."""
+    """Show running, completed and failed work, including results from a source no longer selected."""
     if live:
         jobs = (
-            ("Automatic scrape", "live_visual_status"),
-            ("Manual scraper", "live_manual_visual_status"),
-            ("Real image search", "live_real_image_status"),
-            ("AI generation", "live_ai_image_status"),
-            ("Audio + subtitles", "live_audio_status"),
-            ("Final render", "live_render_status"),
+            ("Automatic scraper", "live_visual_status", "live_visual_result", "Option 1 · Automatic Scraper"),
+            ("Manual scraper", "live_manual_visual_status", "live_manual_visual_result", "Option 2 · Manual Scraper"),
+            ("Real image search", "live_real_image_status", "live_real_image_result", "Option 3 · Real Image Search"),
+            ("AI generation", "live_ai_image_status", "live_ai_image_result", "Option 4 · AI Generation"),
         )
         prefix = "live"
+        option_key = "live_visual_option"
+        source_key = "live_visual_source_mode"
     else:
         jobs = (
-            ("Automatic scrape", "visual_status"),
-            ("Manual scraper", "manual_visual_status"),
-            ("Real image search", "real_visual_status"),
-            ("AI generation", "ai_visual_status"),
+            ("Automatic scraper", "visual_status", "visual_result", "Option 1 · Automatic Scraper"),
+            ("Manual scraper", "manual_visual_status", "manual_visual_result", "Option 2 · Manual Scraper"),
+            ("Real image search", "real_visual_status", "real_image_result", "Option 3 · Real Image Search"),
+            ("AI generation", "ai_visual_status", "ai_image_result", "Option 4 · AI Generation"),
         )
         prefix = "test"
+        option_key = "visual_test_mode"
+        source_key = "test_visual_source_mode"
 
-    running = [label for label, key in jobs if st.session_state.get(key) == "running"]
-    failed = [label for label, key in jobs if st.session_state.get(key) == "failed"]
+    running = [label for label, status_key, _result_key, _option in jobs if st.session_state.get(status_key) == "running"]
+    failed = [label for label, status_key, _result_key, _option in jobs if st.session_state.get(status_key) == "failed"]
+    completed = [
+        (label, status_key, result_key, option)
+        for label, status_key, result_key, option in jobs
+        if st.session_state.get(status_key) == "complete"
+        and isinstance(st.session_state.get(result_key), dict)
+    ]
     if running:
-        status_col, action_col = st.columns([4, 1], gap="small")
-        with status_col:
-            st.info(
-                "Background work is still running: "
-                + ", ".join(running)
-                + ". Switch image sources freely while work runs; results appear automatically."
-            )
-        with action_col:
-            if st.button("Refresh status", key=f"{prefix}-visual-job-monitor-refresh", width="stretch"):
-                st.rerun(scope="fragment")
-    elif failed:
+        st.info(
+            "Background work is still running: "
+            + ", ".join(running)
+            + ". You can continue editing and switch sources; completed pools remain available."
+        )
+    if completed:
+        st.caption("Completed background results — choose a pool to display it:")
+        cols = st.columns(min(4, len(completed)), gap="small")
+        for index, (label, _status_key, result_key, option) in enumerate(completed):
+            result = st.session_state.get(result_key) or {}
+            count = len(result.get("assets") or [])
+            with cols[index % len(cols)]:
+                if st.button(
+                    f"View {label} · {count}",
+                    key=f"{prefix}-view-completed-{result_key}",
+                    width="stretch",
+                ):
+                    st.session_state[option_key] = option
+                    st.session_state[source_key] = option
+                    st.rerun(scope="fragment")
+    if failed:
         st.warning("Background task failed: " + ", ".join(failed) + ". Open that source for its error details or retry it.")
+    if running and not completed:
+        if st.button("Refresh status", key=f"{prefix}-visual-job-monitor-refresh", width="stretch"):
+            st.rerun(scope="fragment")
 
 
 @st.cache_data(max_entries=128, show_spinner=False)
@@ -5480,9 +5693,39 @@ def _render_visual_asset_pool(
         st.caption("No images are currently available from this option.")
         return
 
+    page_size = 12
+    page_key = f"{prefix}visual-pool-page-{result_key}"
+    fingerprint = tuple(
+        _visual_asset_key(asset_result_key, index, asset)
+        for index, asset in visible_assets
+    )
+    if st.session_state.get(f"{page_key}-fingerprint") != fingerprint:
+        st.session_state[f"{page_key}-fingerprint"] = fingerprint
+        st.session_state[page_key] = 0
+    page_count = max(1, (len(visible_assets) + page_size - 1) // page_size)
+    page_number = min(max(0, int(st.session_state.get(page_key, 0))), page_count - 1)
+    if page_count > 1:
+        previous_col, label_col, next_col = st.columns([1, 3, 1], gap="small")
+        with previous_col:
+            if st.button("← Previous", key=f"{page_key}-previous", disabled=page_number == 0, width="stretch"):
+                st.session_state[page_key] = page_number - 1
+                st.rerun(scope="fragment")
+        with label_col:
+            st.caption(
+                f"Showing {page_number * page_size + 1}–{min((page_number + 1) * page_size, len(visible_assets))} "
+                f"of {len(visible_assets)} images · page {page_number + 1}/{page_count}"
+            )
+        with next_col:
+            if st.button("Next →", key=f"{page_key}-next", disabled=page_number >= page_count - 1, width="stretch"):
+                st.session_state[page_key] = page_number + 1
+                st.rerun(scope="fragment")
+    else:
+        st.caption(f"Showing all {len(visible_assets)} images.")
+
+    visible_assets = visible_assets[page_number * page_size:(page_number + 1) * page_size]
     st.markdown(
         f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
-        f'<span><strong>{len(visible_assets)} images in pool</strong> · scroll inside tray to browse</span>'
+        f'<span><strong>{len(visible_assets)} images on this page</strong> · {len(fingerprint)} in full pool</span>'
         f'<span>Attach to slide or delete unneeded assets</span>'
         f'</div>',
         unsafe_allow_html=True,
@@ -5828,6 +6071,16 @@ def _render_two_pane_visual_workspace(
                     if not result:
                         if status == "running":
                             st.info("Automatic scrape is running in the background. Switch sources freely; its image pool will appear automatically when ready.")
+                        elif status == "idle":
+                            st.info("Automatic scraper is idle. Start it only when you need this source.")
+                            if st.button("Start automatic scraper", type="primary", width="stretch", key="live-start-auto-visuals"):
+                                try:
+                                    _live_scrape_automatic_visuals()
+                                except Exception as exc:
+                                    st.session_state.live_visual_error = f"{type(exc).__name__}: {exc}"
+                                    st.session_state.live_visual_result = {"error": st.session_state.live_visual_error}
+                                    st.session_state.live_visual_status = "failed"
+                                    st.rerun(scope="fragment")
                         elif status == "failed":
                             st.error(st.session_state.get("live_visual_error") or "Automatic scraping failed.")
                             if st.button("Retry automatic scrape", type="primary", width="stretch", key="live-retry-auto-visuals"):
@@ -6856,7 +7109,7 @@ def _render_live_upload():
 
 
 def render_live_top5():
-    from concurrent.futures import ThreadPoolExecutor
+    _poll_live_top5_visual_jobs()
 
     from renderer import build_top5_card_preview
     from script_writer import estimate_speech_seconds, generate_top5_script
@@ -7027,9 +7280,18 @@ def render_live_top5():
             ]
             st.session_state.live_top5_handoff = stories
             st.session_state.live_top5_script_data = None
+            st.session_state.live_top5_script_future = None
+            st.session_state.live_top5_script_status = "idle"
+            st.session_state.live_top5_script_error = ""
             st.session_state.live_top5_script_handoff = None
             st.session_state.live_top5_audio_data = None
+            st.session_state.live_top5_audio_future = None
+            st.session_state.live_top5_audio_status = "idle"
+            st.session_state.live_top5_audio_error = ""
             st.session_state.live_top5_audio_handoff = None
+            st.session_state.live_top5_render_future = None
+            st.session_state.live_top5_render_status = "idle"
+            st.session_state.live_top5_render_error = ""
             st.session_state.live_top5_visual_results = {
                 number: {"source": "automatic", "assets": [], "success_threshold": 10}
                 for number in range(1, 6)
@@ -7052,18 +7314,14 @@ def render_live_top5():
             st.session_state.live_upload_hashtags = ""
             st.session_state.live_upload_comment = ""
 
-            from visual_fetcher import crawl_visuals
-            executor = ThreadPoolExecutor(max_workers=5)
-            for number, story in enumerate(stories, 1):
-                st.session_state.live_top5_visual_futures[number] = executor.submit(
-                    crawl_visuals,
-                    dict(story),
-                )
-            st.session_state.live_top5_visual_executor = executor
+            st.session_state.live_top5_visual_futures = {}
+            st.session_state.live_top5_manual_visual_futures = {}
+            st.session_state.live_top5_real_visual_futures = {}
+            st.session_state.live_top5_ai_visual_futures = {}
             st.session_state.live_stage = "02 · Scriptwriter"
             st.session_state.live_pipeline_notice = {
                 "confirmed": "Top-5 selection confirmed",
-                "next": "Scriptwriter started. Automatic image scraping is running in parallel for all five stories.",
+                "next": "Scriptwriter started. Visual sources remain idle until you choose and run one.",
             }
             st.rerun()
         return
@@ -7075,24 +7333,24 @@ def render_live_top5():
             return
         result = st.session_state.live_top5_script_data
         if not isinstance(result, dict):
+            if st.session_state.live_top5_script_status == "running":
+                st.info("Top-5 Scriptwriter is running in the background. You can navigate to other stages.")
+                return
+            if st.session_state.live_top5_script_error:
+                st.error(st.session_state.live_top5_script_error)
             if st.button(
                 "Generate Top-5 Script",
                 type="primary",
                 width="stretch",
                 key="live-top5-generate-script",
             ):
-                try:
-                    with st.spinner("Researching the five stories and writing the six-slide package…"):
-                        result = generate_top5_script(stories)
-                    st.session_state.live_top5_script_data = result
-                    for slide in result.get("slides") or []:
-                        number = int(slide.get("slide_number") or 0)
-                        st.session_state[f"live-top5-script-headline-{number}"] = str(slide.get("headline") or "")
-                        st.session_state[f"live-top5-script-body-{number}"] = str(slide.get("body") or "")
-                except (RuntimeError, ValueError) as exc:
-                    st.error(str(exc))
-                    return
-                st.rerun()
+                st.session_state.live_top5_script_error = ""
+                st.session_state.live_top5_script_status = "running"
+                st.session_state.live_top5_script_future = _live_background_executor().submit(
+                    generate_top5_script,
+                    stories,
+                )
+                st.rerun(scope="app")
             st.info("Press Generate Top-5 Script to start the Scriptwriter.")
             return
         slides = list(result.get("slides") or [])
@@ -7193,6 +7451,11 @@ def render_live_top5():
                     + (f"reference ready ({live_top5_reference.name})" if live_top5_reference_ready
                        else f"missing {live_top5_reference.name} — place it in the factory root")
                 )
+            if st.session_state.live_top5_audio_status == "running":
+                st.info("Top-5 audio is being generated in the background. You can navigate to other stages.")
+                return
+            if st.session_state.live_top5_audio_error:
+                st.error(st.session_state.live_top5_audio_error)
             if st.button(
                 "Generate Top-5 Audio",
                 type="primary",
@@ -7200,20 +7463,17 @@ def render_live_top5():
                 key="live-top5-generate-audio",
                 disabled=is_live_top5_chatterbox and not live_top5_reference_ready,
             ):
-                try:
-                    with st.spinner("Generating the six spoken Top-5 lines…"):
-                        audio = generate_top5_audio(
-                            handoff,
-                            output_dir="output/live/top5_audio",
-                            engine="chatterbox" if is_live_top5_chatterbox else "edge",
-                            reference=live_top5_reference if is_live_top5_chatterbox else None,
-                            model_version=live_top5_chatterbox_model_choice.casefold(),
-                        )
-                    st.session_state.live_top5_audio_data = audio
-                except (RuntimeError, ValueError) as exc:
-                    st.error(str(exc))
-                    return
-                st.rerun()
+                st.session_state.live_top5_audio_error = ""
+                st.session_state.live_top5_audio_status = "running"
+                st.session_state.live_top5_audio_future = _live_background_executor().submit(
+                    generate_top5_audio,
+                    handoff,
+                    output_dir="output/live/top5_audio",
+                    engine="chatterbox" if is_live_top5_chatterbox else "edge",
+                    reference=live_top5_reference if is_live_top5_chatterbox else None,
+                    model_version=live_top5_chatterbox_model_choice.casefold(),
+                )
+                st.rerun(scope="app")
             st.info("Press Generate Top-5 Audio to start voice generation.")
             return
         full_path = audio.get("full_path")
@@ -7261,27 +7521,14 @@ def render_live_top5():
         stories = list(script.get("stories") or [])
 
         scraper_waiting = [
-            future for number, future in st.session_state.live_top5_visual_futures.items()
-            if future is not None and not st.session_state.live_top5_visual_done.get(number)
+            future for future in st.session_state.live_top5_visual_futures.values()
+            if future is not None and not future.done()
         ]
         if scraper_waiting:
-            with st.spinner("Finishing automatic image scraping…"):
-                for number, future in st.session_state.live_top5_visual_futures.items():
-                    if future is None or st.session_state.live_top5_visual_done.get(number):
-                        continue
-                    try:
-                        st.session_state.live_top5_visual_results[number] = future.result()
-                    except Exception as exc:
-                        st.session_state.live_top5_visual_results[number] = {
-                            "source": "automatic",
-                            "assets": [],
-                            "error": f"{type(exc).__name__}: {exc}",
-                        }
-                    st.session_state.live_top5_visual_done[number] = True
-                executor = st.session_state.get("live_top5_visual_executor")
-                if executor is not None:
-                    executor.shutdown(wait=True)
-                    st.session_state.live_top5_visual_executor = None
+            st.info(
+                f"{len(scraper_waiting)} of 5 automatic story scrapes are still running. "
+                "You can review completed story pools and work on other slides while the rest finish."
+            )
 
         st.markdown(
             '<div class="section-head"><div><div class="eyebrow">TOP-5 · 04 · VISUALS</div>'
@@ -7340,21 +7587,22 @@ def render_live_top5():
                     "Search real images",
                     type="primary",
                     width="stretch",
+                    disabled=active_slide in (st.session_state.get("live_top5_real_visual_futures") or {}),
                 )
             if run:
                 query = query.strip()
                 if query:
-                    try:
-                        from visual_search import search_images
-                        st.session_state.live_top5_real_image_results[active_slide] = search_images(query)
-                    except Exception as exc:
-                        st.session_state.live_top5_real_image_results[active_slide] = {
-                            "error": f"{type(exc).__name__}: {exc}"
-                        }
-                    st.rerun()
+                    from visual_search import search_images
+                    st.session_state.live_top5_real_image_results[active_slide] = {
+                        "source": "real", "query": query, "status": "running"
+                    }
+                    st.session_state.live_top5_real_visual_futures[active_slide] = _live_background_executor().submit(search_images, query)
+                    st.rerun(scope="app")
                 else:
                     st.warning("Enter a query first.")
             result = st.session_state.live_top5_real_image_results.get(active_slide) or {}
+            if result.get("status") == "running":
+                st.info("Real-image search is running in the background. You can switch slides while it finishes.")
             if result.get("error"):
                 st.error(result["error"])
             assets = list(result.get("assets") or [])
@@ -7388,13 +7636,35 @@ def render_live_top5():
             if option == "Option 1 · Automatic Scraper":
                 source_story = 1 if active_slide <= 2 else active_slide - 1
                 result = st.session_state.live_top5_visual_results.get(source_story) or {}
+                auto_future = st.session_state.live_top5_visual_futures.get(source_story)
+                if auto_future is not None and not auto_future.done():
+                    st.info("Automatic scrape is running in the background. You can switch slides and keep editing.")
+                elif not st.session_state.live_top5_visual_done.get(source_story):
+                    if st.button(
+                        f"Run automatic scrape for Story {source_story}",
+                        type="primary",
+                        width="stretch",
+                        key=f"live-top5-auto-run-{source_story}",
+                    ):
+                        from visual_fetcher import crawl_visuals
+                        st.session_state.live_top5_visual_results[source_story] = {
+                            "source": "automatic",
+                            "assets": [],
+                            "status": "running",
+                        }
+                        st.session_state.live_top5_visual_done[source_story] = False
+                        st.session_state.live_top5_visual_futures[source_story] = (
+                            _live_background_executor().submit(
+                                crawl_visuals,
+                                dict(stories[source_story - 1]),
+                            )
+                        )
+                        st.rerun(scope="app")
                 assets = list(result.get("assets") or [])
                 if result.get("error"):
                     st.error(result["error"])
-                st.caption(
-                    f'{len(assets)} images available · '
-                    f'{"Finished" if st.session_state.live_top5_visual_done.get(source_story) else "Scraping in background"}'
-                )
+                elif st.session_state.live_top5_visual_done.get(source_story):
+                    st.caption(f"{len(assets)} images available · automatic scrape complete")
                 result_key = "auto"
             elif option == "Option 2 · Manual Scraper":
                 with st.form(f"live-top5-manual-{active_slide}"):
@@ -7407,21 +7677,22 @@ def render_live_top5():
                         "Run manual scrape",
                         type="primary",
                         width="stretch",
+                        disabled=active_slide in (st.session_state.get("live_top5_manual_visual_futures") or {}),
                     )
                 if run:
                     query = query.strip()
                     if query:
-                        try:
-                            from visual_fetcher import manual_crawl_visuals
-                            st.session_state.live_top5_manual_visual_results[active_slide] = manual_crawl_visuals(query)
-                        except Exception as exc:
-                            st.session_state.live_top5_manual_visual_results[active_slide] = {
-                                "error": f"{type(exc).__name__}: {exc}"
-                            }
-                        st.rerun()
+                        from visual_fetcher import manual_crawl_visuals
+                        st.session_state.live_top5_manual_visual_results[active_slide] = {
+                            "source": "manual", "query": query, "status": "running"
+                        }
+                        st.session_state.live_top5_manual_visual_futures[active_slide] = _live_background_executor().submit(manual_crawl_visuals, query)
+                        st.rerun(scope="app")
                     else:
                         st.warning("Enter a query first.")
                 result = st.session_state.live_top5_manual_visual_results.get(active_slide) or {}
+                if result.get("status") == "running":
+                    st.info("Manual publisher scraping is running in the background. You can switch slides while it finishes.")
                 if result.get("error"):
                     st.error(result["error"])
                 assets = list(result.get("assets") or [])
@@ -7437,21 +7708,22 @@ def render_live_top5():
                         "Generate images",
                         type="primary",
                         width="stretch",
+                        disabled=active_slide in (st.session_state.get("live_top5_ai_visual_futures") or {}),
                     )
                 if run:
                     query = query.strip()
                     if query:
-                        try:
-                            from visual_generator import generate_images
-                            st.session_state.live_top5_ai_image_results[active_slide] = generate_images(query)
-                        except Exception as exc:
-                            st.session_state.live_top5_ai_image_results[active_slide] = {
-                                "error": f"{type(exc).__name__}: {exc}"
-                            }
-                        st.rerun()
+                        from visual_generator import generate_images
+                        st.session_state.live_top5_ai_image_results[active_slide] = {
+                            "source": "ai", "query": query, "status": "running"
+                        }
+                        st.session_state.live_top5_ai_visual_futures[active_slide] = _live_background_executor().submit(generate_images, query)
+                        st.rerun(scope="app")
                     else:
                         st.warning("Enter a prompt first.")
                 result = st.session_state.live_top5_ai_image_results.get(active_slide) or {}
+                if result.get("status") == "running":
+                    st.info("AI image generation is running in the background. You can switch slides while it finishes.")
                 assets = list(result.get("assets") or [])
                 if result.get("error"):
                     st.error(result["error"])
@@ -7464,17 +7736,44 @@ def render_live_top5():
                 result_key = "ai"
 
             if assets:
+                page_size = 12
+                page_key = f"live-top5-visual-page-{active_slide}-{result_key}"
+                fingerprint = tuple(
+                    _visual_asset_key(f"live-{result_key}", index, dict(asset))
+                    for index, asset in enumerate(assets)
+                )
+                if st.session_state.get(f"{page_key}-fingerprint") != fingerprint:
+                    st.session_state[f"{page_key}-fingerprint"] = fingerprint
+                    st.session_state[page_key] = 0
+                page_count = max(1, (len(assets) + page_size - 1) // page_size)
+                page_number = min(max(0, int(st.session_state.get(page_key, 0))), page_count - 1)
+                if page_count > 1:
+                    previous_col, label_col, next_col = st.columns([1, 3, 1], gap="small")
+                    with previous_col:
+                        if st.button("← Previous", key=f"{page_key}-previous", disabled=page_number == 0):
+                            st.session_state[page_key] = page_number - 1
+                            st.rerun(scope="app")
+                    with label_col:
+                        st.caption(
+                            f"Showing {page_number * page_size + 1}–{min((page_number + 1) * page_size, len(assets))} "
+                            f"of {len(assets)} images · page {page_number + 1}/{page_count}"
+                        )
+                    with next_col:
+                        if st.button("Next →", key=f"{page_key}-next", disabled=page_number >= page_count - 1):
+                            st.session_state[page_key] = page_number + 1
+                            st.rerun(scope="app")
+                visible_assets = assets[page_number * page_size:(page_number + 1) * page_size]
                 st.markdown(
                     f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
-                    f'<span><strong>{len(assets)} images in pool</strong> · scroll inside tray to browse</span>'
+                    f'<span><strong>{len(assets)} images in pool</strong> · showing {len(visible_assets)}</span>'
                     f'<span>Choose for slide {active_slide}</span>'
                     f'</div>',
                     unsafe_allow_html=True,
                 )
                 with st.container(height=520):
-                    for start in range(0, len(assets), 4):
+                    for start in range(0, len(visible_assets), 4):
                         cols = st.columns(4, gap="small")
-                        for offset, raw_asset in enumerate(assets[start:start + 4]):
+                        for offset, raw_asset in enumerate(visible_assets[start:start + 4]):
                             index = start + offset
                             asset = dict(raw_asset)
                             asset_key = _visual_asset_key(f"live-{result_key}", index, asset)
@@ -7573,7 +7872,6 @@ def render_live_top5():
         return
 
     if stage == "06 · Renderer":
-        from renderer import render_production_video
         script = st.session_state.live_top5_script_handoff
         audio = st.session_state.live_top5_audio_handoff
         visuals = st.session_state.live_top5_visual_handoff
@@ -7581,23 +7879,36 @@ def render_live_top5():
             st.info("Renderer is waiting for the approved Top-5 Script, Audio and Visual handoffs.")
             return
         video_path = st.session_state.live_rendered_video_path
+        if not video_path and st.session_state.live_top5_render_status == "running":
+            st.info("The final Top-5 Short is rendering in the background. You can continue using the dashboard.")
+            return
         if not video_path:
+            if st.session_state.live_top5_render_error:
+                st.error(st.session_state.live_top5_render_error)
             key = hashlib.sha1(
                 "|".join(str(item.get("url") or item.get("title") or "") for item in script.get("stories") or []).encode("utf-8")
             ).hexdigest()[:12]
             output = Path(__file__).resolve().parent / "output" / "live" / "top5" / f"{key}.mp4"
-            try:
+            if st.button(
+                "Render final Top-5 Short",
+                type="primary",
+                width="stretch",
+                key="live-top5-render-start",
+            ):
                 output.parent.mkdir(parents=True, exist_ok=True)
-                with st.spinner("Rendering the final Top-5 Short…"):
-                    render_production_video(
-                        script, audio, None, visuals,
-                        output_path=output,
-                    )
-                st.session_state.live_rendered_video_path = str(output.resolve())
-                st.rerun()
-            except (RuntimeError, ValueError, OSError) as exc:
-                st.error(str(exc))
-                return
+                st.session_state.live_top5_render_error = ""
+                st.session_state.live_top5_render_status = "running"
+                st.session_state.live_top5_render_future = _live_background_executor().submit(
+                    _live_render_final_short,
+                    script,
+                    audio,
+                    None,
+                    visuals,
+                    output,
+                )
+                st.rerun(scope="app")
+            st.info("Press Render final Top-5 Short to start rendering.")
+            return
         st.markdown(
             '<div class="section-head"><div><div class="eyebrow">TOP-5 · 06 · RENDERER</div>'
             '<div class="section-title">Review the finished six-slide Short</div></div>'
@@ -7620,18 +7931,34 @@ def render_live_top5():
 
 def render_live_dashboard():
     _poll_live_background_jobs()
+    _poll_live_top5_visual_jobs()
     live_future_keys = (
+        "live_script_future",
         "live_audio_future",
         "live_visual_future",
         "live_manual_visual_future",
         "live_real_image_future",
         "live_ai_image_future",
         "live_render_future",
+        "live_top5_script_future",
+        "live_top5_audio_future",
+        "live_top5_render_future",
     )
-    if any(
-        (future := st.session_state.get(key)) is not None and not future.done()
+    pending_live_futures = [
+        st.session_state.get(key)
         for key in live_future_keys
-    ):
+    ]
+    pending_live_futures.extend(
+        future
+        for key in (
+            "live_top5_visual_futures",
+            "live_top5_manual_visual_futures",
+            "live_top5_real_visual_futures",
+            "live_top5_ai_visual_futures",
+        )
+        for future in (st.session_state.get(key) or {}).values()
+    )
+    if any(future is not None and not future.done() for future in pending_live_futures):
         _watch_live_background_completion()
     left, right = st.columns([1.4, .45], gap="large")
     with left:
@@ -8180,16 +8507,6 @@ def render_live_dashboard():
         if not isinstance(script, dict) or not isinstance(script.get("script"), list) or not script["script"]:
             st.warning("Generate a Scriptwriter result first. The Live Visuals function is available independently once a story script exists.")
             return
-        if (
-            st.session_state.get("live_visual_result") is None
-            and st.session_state.get("live_visual_status", "idle") == "idle"
-        ):
-            try:
-                _live_scrape_automatic_visuals()
-            except Exception as exc:
-                st.session_state.live_visual_error = f"{type(exc).__name__}: {exc}"
-                st.session_state.live_visual_result = {"error": st.session_state.live_visual_error}
-                st.session_state.live_visual_status = "failed"
         _render_live_visuals(len(script.get("script") or []) if isinstance(script, dict) else 0)
         return
 
@@ -9861,14 +10178,23 @@ def render_visuals_crawler():
             st.session_state.visual_crops = {}
             st.session_state.visual_loaded_story = story_key
             st.session_state.visual_job_story_key = story_key
+            st.session_state.visual_status = "idle"
+            st.session_state.visual_error = ""
+
+    result = st.session_state.get("visual_result") or {}
+    visual_status = st.session_state.get("visual_status", "idle")
+    if not result and visual_status == "running":
+        st.info("Automatic scraping is running in the background. Switch sources freely; results appear automatically.")
+        return
+    if not result and visual_status == "idle":
+        st.info("Automatic scraper is idle. It will not run until you start it.")
+        if st.button("Start automatic scraper", type="primary", width="stretch", key="test-start-auto-visuals"):
+            st.session_state.visual_result = None
+            st.session_state.visual_job_story_key = story_key
             st.session_state.visual_status = "running"
             st.session_state.visual_error = ""
             st.session_state.visual_future = _live_background_executor().submit(crawl_visuals, story)
             st.rerun(scope="app")
-
-    result = st.session_state.get("visual_result") or {}
-    if not result and st.session_state.get("visual_status") == "running":
-        st.info("Automatic scraping is running in the background. Switch sources freely; results appear automatically.")
         return
     automatic_queries = list(result.get("automatic_queries") or [])
 
@@ -9931,6 +10257,7 @@ def _render_manual_crawler():
             "Run manual scrape",
             type="primary",
             width="stretch",
+            disabled=st.session_state.get("manual_visual_status") == "running",
         )
 
     if scrape:
@@ -9999,6 +10326,7 @@ def _render_manual_real_images():
             "Search real images",
             type="primary",
             width="stretch",
+            disabled=st.session_state.get("real_visual_status") == "running",
         )
 
     if search:
@@ -10071,6 +10399,7 @@ def _render_manual_ai_images():
             "Generate images",
             type="primary",
             width="stretch",
+            disabled=st.session_state.get("ai_visual_status") == "running",
         )
 
     if generate:
@@ -11199,6 +11528,29 @@ if st.session_state.app_mode == "home":
     _render_home()
 elif st.session_state.app_mode == "test":
     _render_app_sidebar()
+    # Keep Test fetches alive across stage navigation; mount the one-second
+    # fragment only while at least one explicitly requested job is pending.
+    _poll_test_visual_jobs()
+    _test_background_futures = [
+        st.session_state.get(key)
+        for key in (
+            "visual_future",
+            "manual_visual_future",
+            "real_visual_future",
+            "ai_visual_future",
+        )
+    ]
+    _test_background_futures.extend(
+        job.get("future")
+        for job in (st.session_state.get("test_top5_visual_jobs") or {}).values()
+        if isinstance(job, dict)
+    )
+    _test_playground_job = st.session_state.get("test_top5_visual_playground_job")
+    if isinstance(_test_playground_job, dict):
+        _test_background_futures.append(_test_playground_job.get("future"))
+    if any(future is not None and not future.done() for future in _test_background_futures):
+        _watch_test_visual_fetch_completion()
+
     if st.session_state.get("factory_format") == "long_form":
         render_longform_test()
     elif st.session_state.test_production_line is None:
@@ -11324,17 +11676,6 @@ elif st.session_state.app_mode == "test":
             elif stage == "03 · Audio":
                 render_audio()
             elif stage == "04 · Visuals":
-                test_future_keys = (
-                    "visual_future",
-                    "manual_visual_future",
-                    "real_visual_future",
-                    "ai_visual_future",
-                )
-                if any(
-                    (future := st.session_state.get(key)) is not None and not future.done()
-                    for key in test_future_keys
-                ):
-                    _watch_test_visual_fetch_completion()
                 render_visuals()
             elif stage == "05 · Subtitles":
                 render_subtitles()
@@ -11369,6 +11710,13 @@ elif st.session_state.app_mode == "test":
                 st.session_state.test_top5_script_handoff = None
                 st.session_state.test_top5_audio_data = None
                 st.session_state.test_top5_audio_handoff = None
+                for _job in (st.session_state.get("test_top5_visual_jobs") or {}).values():
+                    _future = _job.get("future") if isinstance(_job, dict) else None
+                    if _future is not None and not _future.done():
+                        _future.cancel()
+                st.session_state.test_top5_visual_jobs = {}
+                st.session_state.test_top5_visual_playground_job = None
+                st.session_state.test_top5_visual_playground_status = "idle"
                 st.session_state.test_top5_visual_results = {}
                 st.session_state.test_top5_visual_selected = {}
                 st.session_state.test_top5_visual_previews = {}
@@ -12129,26 +12477,26 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_url",
                     placeholder="https://publisher.com/article",
                 )
-                if st.button("Run automatic scrape", type="primary", width="stretch", key="test-top5-playground-auto"):
+                if st.button("Run automatic scrape", type="primary", width="stretch", key="test-top5-playground-auto", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"):
                     url = url.strip()
                     if not url:
                         st.warning("Enter a story URL first.")
                     else:
-                        with st.spinner("Scraping the supplied story URL…"):
-                            try:
-                                result = crawl_visuals({
-                                    "url": url,
-                                    "title": st.session_state.test_top5_visual_playground_headline,
-                                    "description": st.session_state.test_top5_visual_playground_body,
-                                    "specific_search_prompt": st.session_state.test_top5_visual_playground_headline,
-                                })
-                                st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
-                                error = str(result.get("error") or "").strip()
-                                if error:
-                                    st.error(error)
-                            except Exception as exc:
-                                st.session_state.test_top5_visual_playground_results = []
-                                st.error(f"{type(exc).__name__}: {exc}")
+                        payload = {
+                            "url": url,
+                            "title": st.session_state.test_top5_visual_playground_headline,
+                            "description": st.session_state.test_top5_visual_playground_body,
+                            "specific_search_prompt": st.session_state.test_top5_visual_playground_headline,
+                        }
+                        st.session_state.test_top5_visual_playground_results = []
+                        st.session_state.test_top5_visual_playground_status = "running"
+                        st.session_state.test_top5_visual_playground_error = ""
+                        st.session_state.test_top5_visual_playground_job = {
+                            "source": "automatic",
+                            "query": url,
+                            "future": _live_background_executor().submit(crawl_visuals, payload),
+                        }
+                        st.rerun()
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
             elif visual_option == "Option 2 · Manual Scraper":
@@ -12157,18 +12505,20 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_crawler_query",
                     placeholder="Virat Kohli latest cricket news",
                 )
-                if st.button("Run manual scrape", type="primary", width="stretch", key="test-top5-playground-manual"):
+                if st.button("Run manual scrape", type="primary", width="stretch", key="test-top5-playground-manual", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"):
                     query = query.strip()
                     if not query:
                         st.warning("Enter a query first.")
                     else:
-                        with st.spinner("Searching and scraping publisher pages…"):
-                            try:
-                                result = manual_crawl_visuals(query)
-                                st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
-                            except Exception as exc:
-                                st.session_state.test_top5_visual_playground_results = []
-                                st.error(f"{type(exc).__name__}: {exc}")
+                        st.session_state.test_top5_visual_playground_results = []
+                        st.session_state.test_top5_visual_playground_status = "running"
+                        st.session_state.test_top5_visual_playground_error = ""
+                        st.session_state.test_top5_visual_playground_job = {
+                            "source": "manual",
+                            "query": query,
+                            "future": _live_background_executor().submit(manual_crawl_visuals, query),
+                        }
+                        st.rerun()
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
             elif visual_option == "Option 3 · Manual Fetcher":
@@ -12177,21 +12527,20 @@ elif st.session_state.app_mode == "test":
                     key="test_top5_visual_playground_search_query",
                     placeholder="Virat Kohli batting India cricket",
                 )
-                if st.button("Fetch images", type="primary", width="stretch", key="test-top5-playground-manual-fetch"):
+                if st.button("Fetch images", type="primary", width="stretch", key="test-top5-playground-manual-fetch", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"):
                     query = query.strip()
                     if not query:
                         st.warning("Enter an image query first.")
                     else:
-                        with st.spinner("Fetching manual image options…"):
-                            try:
-                                result = search_images(query)
-                                st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
-                                errors = result.get("errors") or {}
-                                if errors:
-                                    st.caption("Some configured image sources failed; successful results are still shown.")
-                            except Exception as exc:
-                                st.session_state.test_top5_visual_playground_results = []
-                                st.error(f"{type(exc).__name__}: {exc}")
+                        st.session_state.test_top5_visual_playground_results = []
+                        st.session_state.test_top5_visual_playground_status = "running"
+                        st.session_state.test_top5_visual_playground_error = ""
+                        st.session_state.test_top5_visual_playground_job = {
+                            "source": "real",
+                            "query": query,
+                            "future": _live_background_executor().submit(search_images, query),
+                        }
+                        st.rerun()
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
 
             elif visual_option == "Option 4 · AI Generation":
@@ -12209,29 +12558,20 @@ elif st.session_state.app_mode == "test":
                     height=100,
                     placeholder="Virat Kohli in a packed cricket stadium, editorial sports photography",
                 )
-                if st.button("Generate images", type="primary", width="stretch", key="test-top5-playground-ai"):
+                if st.button("Generate images", type="primary", width="stretch", key="test-top5-playground-ai", disabled=st.session_state.get("test_top5_visual_playground_status") == "running"):
                     prompt = prompt.strip()
                     if not prompt:
                         st.warning("Enter an image prompt first.")
                     else:
-                        with st.spinner("Generating images…"):
-                            try:
-                                result = generate_images(prompt)
-                                st.session_state.test_top5_visual_playground_results = list(result.get("assets") or [])
-                                st.session_state.test_top5_visual_playground_ai_result = result
-                                if not st.session_state.test_top5_visual_playground_results:
-                                    st.warning(result.get("message") or "No AI image provider returned a usable image.")
-                                    for provider_name, provider_error in (result.get("errors") or {}).items():
-                                        st.caption(f"{provider_name}: {provider_error}")
-                            except Exception as exc:
-                                st.session_state.test_top5_visual_playground_results = []
-                                st.session_state.test_top5_visual_playground_ai_result = {
-                                    "query": prompt,
-                                    "assets": [],
-                                    "error": f"{type(exc).__name__}: {exc}",
-                                    "message": f"AI image generation failed before a provider returned: {type(exc).__name__}: {exc}",
-                                    "errors": {},
-                                }
+                        st.session_state.test_top5_visual_playground_results = []
+                        st.session_state.test_top5_visual_playground_status = "running"
+                        st.session_state.test_top5_visual_playground_error = ""
+                        st.session_state.test_top5_visual_playground_job = {
+                            "source": "ai",
+                            "query": prompt,
+                            "future": _live_background_executor().submit(generate_images, prompt),
+                        }
+                        st.rerun()
                 assets = list(st.session_state.get("test_top5_visual_playground_results") or [])
                 ai_result = st.session_state.get("test_top5_visual_playground_ai_result") or {}
                 if (
@@ -12265,17 +12605,51 @@ elif st.session_state.app_mode == "test":
                     current_source=current_source,
                 )
 
+            if st.session_state.get("test_top5_visual_playground_status") == "running":
+                st.info("The selected visual source is working in the background. You can continue editing or switch options.")
+            elif st.session_state.get("test_top5_visual_playground_status") == "failed":
+                st.warning(st.session_state.get("test_top5_visual_playground_error") or "The visual search failed.")
+            elif st.session_state.get("test_top5_visual_playground_status") == "complete":
+                st.success(f"Visual search complete · {len(assets)} images available.")
+
             if assets:
+                page_size = 12
+                page_key = f"test-top5-playground-page-{visual_option}"
+                fingerprint = tuple(
+                    _visual_asset_key(f"playground-{visual_option}", index, asset)
+                    for index, asset in enumerate(assets)
+                )
+                if st.session_state.get(f"{page_key}-fingerprint") != fingerprint:
+                    st.session_state[f"{page_key}-fingerprint"] = fingerprint
+                    st.session_state[page_key] = 0
+                page_count = max(1, (len(assets) + page_size - 1) // page_size)
+                page_number = min(max(0, int(st.session_state.get(page_key, 0))), page_count - 1)
+                if page_count > 1:
+                    previous_col, label_col, next_col = st.columns([1, 3, 1], gap="small")
+                    with previous_col:
+                        if st.button("← Previous", key=f"{page_key}-previous", disabled=page_number == 0):
+                            st.session_state[page_key] = page_number - 1
+                            st.rerun()
+                    with label_col:
+                        st.caption(
+                            f"Showing {page_number * page_size + 1}–{min((page_number + 1) * page_size, len(assets))} "
+                            f"of {len(assets)} images · page {page_number + 1}/{page_count}"
+                        )
+                    with next_col:
+                        if st.button("Next →", key=f"{page_key}-next", disabled=page_number >= page_count - 1):
+                            st.session_state[page_key] = page_number + 1
+                            st.rerun()
+                visible_assets = assets[page_number * page_size:(page_number + 1) * page_size]
                 st.markdown(
                     '<div class="section-head"><div><div class="eyebrow">IMAGE POOL</div>'
                     '<div class="section-title">Choose the source image</div></div>'
-                    f'<div class="section-count">{len(assets)} images</div></div>',
+                    f'<div class="section-count">{len(assets)} images · showing {len(visible_assets)}</div></div>',
                     unsafe_allow_html=True,
                 )
                 with st.container(height=520):
-                    for start in range(0, len(assets), 4):
-                        cols = st.columns(min(4, len(assets) - start), gap="small")
-                        for offset, asset in enumerate(assets[start:start + 4]):
+                    for start in range(0, len(visible_assets), 4):
+                        cols = st.columns(min(4, len(visible_assets) - start), gap="small")
+                        for offset, asset in enumerate(visible_assets[start:start + 4]):
                             with cols[offset]:
                                 index = start + offset
                                 raw = asset.get("bytes")
@@ -12515,17 +12889,44 @@ elif st.session_state.app_mode == "test":
                         if not assets:
                             st.info("No images are currently available from this option.")
                             return
+                        page_size = 12
+                        page_key = f"test-top5-visual-page-{active_slide}-{result_key}"
+                        fingerprint = tuple(
+                            _visual_asset_key(result_key, index, asset)
+                            for index, asset in enumerate(assets)
+                        )
+                        if st.session_state.get(f"{page_key}-fingerprint") != fingerprint:
+                            st.session_state[f"{page_key}-fingerprint"] = fingerprint
+                            st.session_state[page_key] = 0
+                        page_count = max(1, (len(assets) + page_size - 1) // page_size)
+                        page_number = min(max(0, int(st.session_state.get(page_key, 0))), page_count - 1)
+                        if page_count > 1:
+                            previous_col, label_col, next_col = st.columns([1, 3, 1], gap="small")
+                            with previous_col:
+                                if st.button("← Previous", key=f"{page_key}-previous", disabled=page_number == 0):
+                                    st.session_state[page_key] = page_number - 1
+                                    st.rerun()
+                            with label_col:
+                                st.caption(
+                                    f"Showing {page_number * page_size + 1}–{min((page_number + 1) * page_size, len(assets))} "
+                                    f"of {len(assets)} images · page {page_number + 1}/{page_count}"
+                                )
+                            with next_col:
+                                if st.button("Next →", key=f"{page_key}-next", disabled=page_number >= page_count - 1):
+                                    st.session_state[page_key] = page_number + 1
+                                    st.rerun()
+                        visible_assets = assets[page_number * page_size:(page_number + 1) * page_size]
                         st.markdown(
                             f'<div style="display:flex;align-items:center;justify-content:space-between;margin:0.35rem 0 0.55rem 0;font-size:0.75rem;color:var(--muted);">'
-                            f'<span><strong>{len(assets)} images in pool</strong> · scroll inside tray to browse</span>'
+                            f'<span><strong>{len(assets)} images in pool</strong> · showing {len(visible_assets)}</span>'
                             f'<span>Choose for slide {active_slide}</span>'
                             f'</div>',
                             unsafe_allow_html=True,
                         )
                         with st.container(height=520):
-                            for start_index in range(0, len(assets), 4):
+                            for start_index in range(0, len(visible_assets), 4):
                                 cols = st.columns(4, gap="small")
-                                for offset, asset in enumerate(assets[start_index:start_index + 4]):
+                                for offset, asset in enumerate(visible_assets[start_index:start_index + 4]):
                                     index = start_index + offset
                                     with cols[offset]:
                                         raw = asset.get("bytes")
@@ -12603,30 +13004,27 @@ elif st.session_state.app_mode == "test":
                                 type="primary",
                                 width="stretch",
                                 key=f"test-top5-auto-run-{active_slide}",
+                                disabled=active_slide in (st.session_state.get("test_top5_visual_jobs") or {}),
                             ):
                                 story_payload = _top5_active_story_payload()
                                 if not story_payload.get("url"):
                                     st.warning("The selected story has no usable source URL for automatic scraping.")
                                 else:
-                                    with st.spinner("Scraping the approved story and related publisher pages…"):
-                                        try:
-                                            from visual_fetcher import crawl_visuals
-                                            auto = crawl_visuals(story_payload)
-                                            st.session_state.test_top5_visual_results[active_slide] = {
-                                                "source": "automatic",
-                                                "query": specific_prompt,
-                                                "assets": list(auto.get("assets") or []),
-                                                "error": str(auto.get("error") or ""),
-                                            }
-                                        except Exception as exc:
-                                            st.session_state.test_top5_visual_results[active_slide] = {
-                                                "source": "automatic",
-                                                "query": specific_prompt,
-                                                "assets": [],
-                                                "error": f"{type(exc).__name__}: {exc}",
-                                            }
-                                    st.rerun()
-                        if result.get("error"):
+                                    st.session_state.test_top5_visual_results[active_slide] = {
+                                        "source": "automatic",
+                                        "query": specific_prompt,
+                                        "assets": [],
+                                        "status": "running",
+                                    }
+                                    st.session_state.test_top5_visual_jobs[active_slide] = {
+                                        "source": "automatic",
+                                        "query": specific_prompt,
+                                        "future": _live_background_executor().submit(crawl_visuals, story_payload),
+                                    }
+                                    st.rerun(scope="app")
+                        if result.get("status") == "running":
+                            st.info("Automatic scraping is running in the background. You can work on another slide.")
+                        elif result.get("error"):
                             st.error(result["error"])
                         elif result:
                             st.caption(f'{len(result.get("assets") or [])} images returned by the automatic scraper.')
@@ -12644,33 +13042,29 @@ elif st.session_state.app_mode == "test":
                             type="primary",
                             width="stretch",
                             key=f"test-top5-manual-run-{active_slide}",
+                            disabled=active_slide in (st.session_state.get("test_top5_visual_jobs") or {}),
                         ):
                             query = query.strip()
                             if not query:
                                 st.warning("Enter a query first.")
                             else:
-                                with st.spinner("Searching and scraping publisher pages…"):
-                                    try:
-                                        from visual_fetcher import manual_crawl_visuals
-                                        result = manual_crawl_visuals(query)
-                                        st.session_state.test_top5_visual_results[active_slide] = {
-                                            "source": "manual",
-                                            "query": query,
-                                            "assets": list(result.get("assets") or []),
-                                            "error": str(result.get("error") or (result.get("message") if not result.get("assets") else "")),
-                                            "message": str(result.get("message") or ""),
-                                        }
-                                    except Exception as exc:
-                                        st.session_state.test_top5_visual_results[active_slide] = {
-                                            "source": "manual",
-                                            "query": query,
-                                            "assets": [],
-                                            "error": f"{type(exc).__name__}: {exc}",
-                                        }
-                                    st.rerun()
+                                st.session_state.test_top5_visual_results[active_slide] = {
+                                    "source": "manual",
+                                    "query": query,
+                                    "assets": [],
+                                    "status": "running",
+                                }
+                                st.session_state.test_top5_visual_jobs[active_slide] = {
+                                    "source": "manual",
+                                    "query": query,
+                                    "future": _live_background_executor().submit(manual_crawl_visuals, query),
+                                }
+                                st.rerun(scope="app")
                         result = st.session_state.test_top5_visual_results.get(active_slide) or {}
                         if result.get("source") == "manual":
-                            if result.get("error"):
+                            if result.get("status") == "running":
+                                st.info("Manual publisher scraping is running in the background. You can switch slides.")
+                            elif result.get("error"):
                                 st.error(result["error"])
                             else:
                                 st.caption(f'{len(result.get("assets") or [])} images returned by the Manual Scraper.')
@@ -12688,31 +13082,29 @@ elif st.session_state.app_mode == "test":
                             type="primary",
                             width="stretch",
                             key=f"test-top5-manual-fetch-run-{active_slide}",
+                            disabled=active_slide in (st.session_state.get("test_top5_visual_jobs") or {}),
                         ):
                             query = query.strip()
                             if not query:
                                 st.warning("Enter an image query first.")
                             else:
-                                with st.spinner("Fetching manual image options…"):
-                                    try:
-                                        result = search_images(query)
-                                        st.session_state.test_top5_visual_results[active_slide] = {
-                                            "source": "manual-fetch",
-                                            "query": query,
-                                            "assets": list(result.get("assets") or []),
-                                            "error": "",
-                                        }
-                                    except Exception as exc:
-                                        st.session_state.test_top5_visual_results[active_slide] = {
-                                            "source": "manual-fetch",
-                                            "query": query,
-                                            "assets": [],
-                                            "error": f"{type(exc).__name__}: {exc}",
-                                        }
-                                st.rerun()
+                                st.session_state.test_top5_visual_results[active_slide] = {
+                                    "source": "manual-fetch",
+                                    "query": query,
+                                    "assets": [],
+                                    "status": "running",
+                                }
+                                st.session_state.test_top5_visual_jobs[active_slide] = {
+                                    "source": "manual-fetch",
+                                    "query": query,
+                                    "future": _live_background_executor().submit(search_images, query),
+                                }
+                                st.rerun(scope="app")
                         result = st.session_state.test_top5_visual_results.get(active_slide) or {}
                         if result.get("source") == "manual-fetch":
-                            if result.get("error"):
+                            if result.get("status") == "running":
+                                st.info("Real-image search is running in the background. You can switch slides.")
+                            elif result.get("error"):
                                 st.error(result["error"])
                             else:
                                 st.caption(f'{len(result.get("assets") or [])} images returned by the Manual Fetcher.')
@@ -12730,34 +13122,29 @@ elif st.session_state.app_mode == "test":
                             type="primary",
                             width="stretch",
                             key=f"test-top5-ai-run-{active_slide}",
+                            disabled=active_slide in (st.session_state.get("test_top5_visual_jobs") or {}),
                         ):
                             query = query.strip()
                             if not query:
                                 st.warning("Enter an AI prompt first.")
                             else:
-                                with st.spinner("Generating AI image options…"):
-                                    try:
-                                        from visual_generator import generate_images
-                                        result = generate_images(query)
-                                        st.session_state.test_top5_visual_results[active_slide] = {
-                                            "source": "ai",
-                                            "query": query,
-                                            "assets": list(result.get("assets") or []),
-                                            "error": str(result.get("error") or ""),
-                                            "message": str(result.get("message") or ""),
-                                            "errors": dict(result.get("errors") or {}),
-                                        }
-                                    except Exception as exc:
-                                        st.session_state.test_top5_visual_results[active_slide] = {
-                                            "source": "ai",
-                                            "query": query,
-                                            "assets": [],
-                                            "error": f"{type(exc).__name__}: {exc}",
-                                        }
-                                    st.rerun()
+                                st.session_state.test_top5_visual_results[active_slide] = {
+                                    "source": "ai",
+                                    "query": query,
+                                    "assets": [],
+                                    "status": "running",
+                                }
+                                st.session_state.test_top5_visual_jobs[active_slide] = {
+                                    "source": "ai",
+                                    "query": query,
+                                    "future": _live_background_executor().submit(generate_images, query),
+                                }
+                                st.rerun(scope="app")
                         result = st.session_state.test_top5_visual_results.get(active_slide) or {}
                         if result.get("source") == "ai":
-                            if result.get("error"):
+                            if result.get("status") == "running":
+                                st.info("AI generation is running in the background. You can switch slides.")
+                            elif result.get("error"):
                                 st.error(result["error"])
                             elif not result.get("assets"):
                                 st.warning(result.get("message") or "No AI image provider returned a usable image.")

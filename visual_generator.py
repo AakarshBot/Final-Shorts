@@ -19,7 +19,10 @@ from typing import Any
 from urllib.parse import quote
 
 import requests
-import pillow_avif  # noqa: F401 - AI providers may return AVIF image bytes.
+try:
+    import pillow_avif  # noqa: F401 - AI providers may return AVIF image bytes.
+except ImportError:
+    pillow_avif = None
 from PIL import Image, UnidentifiedImageError
 
 
