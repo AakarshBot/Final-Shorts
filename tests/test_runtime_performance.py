@@ -239,9 +239,17 @@ def test_live_rendered_video_path_survives_upload_qc_reruns():
         'Path(__file__).resolve().parent / "output" / "live" / "top5" / f"{key}.mp4"'
         in app_source
     )
-    assert app_source.count(
-        "st.session_state.live_rendered_video_path = str(output.resolve())"
-    ) == 1
+    worker_start = app_source.index("def _live_render_final_short(")
+    poller_start = app_source.index("def _poll_live_background_jobs(", worker_start)
+    poller_end = app_source.index("@st.fragment", poller_start)
+    render_worker = app_source[worker_start:poller_start]
+    completion_poller = app_source[poller_start:poller_end]
+
+    # The worker returns the rendered path; the dashboard stores that result
+    # in Session State only after the Future completes.
+    assert "return str(output.resolve())" in render_worker
+    assert "st.session_state.live_rendered_video_path = result" in completion_poller
+    assert "st.session_state[future_key] = None" in completion_poller
 
     upload_start = app_source.index("def _render_live_upload():")
     upload_end = app_source.index("def render_live_top5():", upload_start)
