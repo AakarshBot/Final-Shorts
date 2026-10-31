@@ -831,7 +831,7 @@ def test_live_scriptwriter_headline_is_dashboard_only_and_unlimited():
 
 
 
-def test_live_automatic_scraper_runs_once_without_blocking_visual_qc(monkeypatch):
+def test_live_automatic_scraper_requires_a_click_and_runs_without_blocking_visual_qc(monkeypatch):
     import visual_fetcher
 
     started = Event()
@@ -879,14 +879,19 @@ def test_live_automatic_scraper_runs_once_without_blocking_visual_qc(monkeypatch
     at.session_state["live_subtitle_data"] = {}
     at.session_state["live_visual_result"] = None
     at.session_state["live_visual_status"] = "idle"
-    at.session_state["live_visual_option"] = "Option 3 · Real Image Search"
+    at.session_state["live_visual_option"] = "Option 1 · Automatic Scraper"
 
     try:
         at.run()
         assert not at.exception, at.exception
-        assert started.wait(timeout=3), "The automatic scraper was not dispatched."
+        # Entering the stage must not start work without an explicit request.
+        assert not started.is_set()
+        assert at.session_state["live_visual_status"] == "idle"
+        start_button = next(button for button in at.button if button.label == "Start automatic scraper")
+        start_button.click().run()
+        assert not at.exception, at.exception
+        assert started.wait(timeout=3), "The explicitly requested automatic scraper was not dispatched."
         assert at.session_state["live_visual_status"] == "running"
-        assert any(button.label == "Search real images" for button in at.button)
 
         # An ordinary Streamlit rerun while scraping is in flight must not submit a duplicate.
         at.run()
@@ -1077,7 +1082,8 @@ def test_live_audio_runs_in_background_while_visual_qc_opens(monkeypatch):
         assert at.session_state["live_stage"] == "04 · Visuals + Render"
         assert at.session_state["live_audio_status"] == "running"
         assert any(button.label == "Search real images" for button in at.button)
-        assert at.session_state["live_visual_status"] in {"running", "complete"}
+        # Audio completion must not silently trigger an automatic image scrape.
+        assert at.session_state["live_visual_status"] == "idle"
     finally:
         release.set()
         future = at.session_state.get("live_audio_future")
