@@ -389,3 +389,9 @@ def test_test_standard_visual_forms_prevent_duplicate_background_jobs():
     )
     assert 'disabled=st.session_state.get("live_manual_visual_status") == "running"' in live_workspace
     assert 'disabled=st.session_state.get("live_real_image_status") == "running"' in live_workspace
+
+def test_live_top5_visual_sources_prevent_duplicate_per_slide_jobs():
+    top5 = _section("def render_live_top5():", "def render_live_dashboard():")
+    assert 'disabled=active_slide in (st.session_state.get("live_top5_real_visual_futures") or {})' in top5
+    assert 'disabled=active_slide in (st.session_state.get("live_top5_manual_visual_futures") or {})' in top5
+    assert 'disabled=active_slide in (st.session_state.get("live_top5_ai_visual_futures") or {})' in top5
