@@ -371,9 +371,8 @@ GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSO
 - Return 3–5 non-empty spoken slides. Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
 - For English, keep Slide 1 to 13 words or fewer; for Hindi/Telugu, keep the lead concise and let the measured 5.2-second audio check enforce the limit.
 - Keep subject_name non-empty, in the same script/spelling used by the voiceover, and present verbatim in at least one spoken voiceover.
-- Include a non-empty, crisp dashboard-only headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
+- Include a non-empty, crisp dashboard-only headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, 3–5 relevant single-token hashtags beginning with #, and a non-empty public comment.
 - Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the generated slides.
-- Return 3–5 relevant single-token hashtags beginning with #.
 - Do not use generic AI/editorial filler anywhere in the narration. Every slide must contribute a new fact, reason or consequence.
 - If quote is empty, quote_attribution must be empty and quote_slide must be 0. If quote is present, copy it verbatim from the supplied research packet, include its exact attribution, and attach it to an existing spoken slide.
 - quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–5, never greater than the generated slide count, when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
