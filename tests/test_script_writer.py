@@ -24,9 +24,9 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
         "seo_description": "Shubman Gill's injury status ahead of India's next ODI.",
         "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
         "comment": "Should India risk Gill in the next ODI?",
-        "quote": "Gill could be back soon.",
-        "quote_attribution": "Aakash Chopra",
-        "quote_slide": 1,
+        "quote": "",
+        "quote_attribution": "",
+        "quote_slide": 0,
         "script": [
             {
                 "voiceover": scene1,
@@ -176,6 +176,9 @@ def test_prompt_contains_generation_rules():
     assert "Return 3–5 spoken slides" in script_writer.SYSTEM_PROMPT
     assert "direct quote" in script_writer.SYSTEM_PROMPT
     assert "Do not create an extra slide for a quote" in script_writer.SYSTEM_PROMPT
+    assert "CRICKET RULES & FORMAT" in script_writer.SYSTEM_PROMPT
+    assert "Every slide must advance the selected thesis" in script_writer.SYSTEM_PROMPT
+    assert "3–5 relevant single-token hashtags beginning with #" in script_writer.SYSTEM_PROMPT
 
 
 def test_schema_allows_three_to_five_slides_and_subject():
@@ -184,6 +187,8 @@ def test_schema_allows_three_to_five_slides_and_subject():
     assert "subject_name" in script_writer.CRICKET_SCHEMA["required"]
     assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["minItems"] == 3
     assert script_writer.CRICKET_SCHEMA["properties"]["titles"]["maxItems"] == 3
+    assert script_writer.CRICKET_SCHEMA["properties"]["hashtags"]["minItems"] == 3
+    assert script_writer.CRICKET_SCHEMA["properties"]["hashtags"]["maxItems"] == 5
     assert script_writer.CRICKET_SCHEMA["properties"]["quote"]["type"] == "string"
     assert script_writer.CRICKET_SCHEMA["properties"]["quote_attribution"]["type"] == "string"
     assert script_writer.CRICKET_SCHEMA["properties"]["quote_slide"]["minimum"] == 0
@@ -333,12 +338,14 @@ def test_cricket_indic_retry_receives_error_and_rejected_script_until_fixed(monk
     result = script_writer.write_script(Story(), language=language)
 
     assert len(calls) == 4
-    assert calls[0][0] == "openai/gpt-oss-120b"
-    assert calls[1][0] == "openai/gpt-oss-20b"
+    assert calls[0][0] == "openai/gpt-oss-20b"
+    assert calls[1][0] == "openai/gpt-oss-120b"
     assert "CURRENT REJECTED SCRIPT PACKAGE (JSON)" in calls[1][1]
+    assert calls[2][0] == "openai/gpt-oss-20b"
     assert "MANDATORY INDIC TIMING RECOVERY (ATTEMPT 1/2)" in calls[2][1]
     assert "Validator message:" in calls[2][1]
     assert "CURRENT REJECTED SCRIPT PACKAGE (JSON)" in calls[2][1]
+    assert calls[3][0] == "openai/gpt-oss-120b"
     assert "MANDATORY INDIC TIMING RECOVERY (ATTEMPT 2/2)" in calls[3][1]
     assert script_writer._language_key(result["language_used"]) == language
 
@@ -404,7 +411,7 @@ def test_generation_prompts_cover_validator_requirements():
 
     assert "Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category" in cricket
     assert "a non-empty, crisp dashboard-only headline" in cricket
-    assert "at least one relevant hashtag" in cricket
+    assert "3–5 relevant single-token hashtags beginning with #" in cricket
     assert "quote_attribution and quote_slide from 1–5" in cricket
     assert "never greater than the generated slide count" in cricket
     assert "3–5 hashtags each beginning with # and containing no spaces" in universal
@@ -606,6 +613,95 @@ def test_valid_script_passes():
     valid, reason = script_writer.validate_cricket_script(valid_result())
     assert valid, reason
 
+def test_cricket_angle_generation_reuses_approved_research_and_uses_fast_model(monkeypatch):
+    evidence = "Confirmed research: Gill's assessment remains pending. The medical report is not final."
+    calls = []
+    searches = []
+
+    class NoSupplementarySearch:
+        def __init__(self, *args, **kwargs):
+            searches.append((args, kwargs))
+
+    monkeypatch.setattr(
+        script_writer,
+        "_research_story",
+        lambda *args, **kwargs: pytest.fail("The approved angle already carries the research packet."),
+    )
+    monkeypatch.setattr(script_writer, "DDGS", NoSupplementarySearch)
+
+    def fake_request(model, prompt, story, schema=None, **kwargs):
+        calls.append((model, prompt, story))
+        return valid_result()
+
+    monkeypatch.setattr(script_writer, "_request", fake_request)
+    angle = "Selection uncertainty: Will India wait for Gill's medical assessment?"
+    result = script_writer.write_script(
+        Story(),
+        angle=angle,
+        research_source=evidence,
+    )
+
+    assert len(calls) == 1
+    assert calls[0][0] == "openai/gpt-oss-20b"
+    assert calls[0][2] == evidence
+    assert angle in calls[0][1]
+    assert searches == []
+    assert result["story_angle"] == angle
+
+
+def test_cricket_validator_rejects_bad_hashtag_shape_and_quote_handoff():
+    result = valid_result()
+    result["hashtags"] = ["#Cricket", "Shubman Gill", "#India"]
+    valid, reason = script_writer.validate_cricket_script(result)
+    assert not valid
+    assert "one non-empty token" in reason
+
+    result = valid_result()
+    result["quote"] = "A reported quote"
+    result["quote_attribution"] = ""
+    result["quote_slide"] = 1
+    valid, reason = script_writer.validate_cricket_script(result)
+    assert not valid
+    assert "attribution" in reason
+
+    result["quote_attribution"] = "The source"
+    result["quote_slide"] = 5
+    valid, reason = script_writer.validate_cricket_script(result)
+    assert not valid
+    assert "existing spoken slide" in reason
+
+
+def test_cricket_generated_quote_must_be_verbatim_in_approved_research():
+    result = valid_result()
+    result["quote"] = "Gill could return soon."
+    result["quote_attribution"] = "Aakash Chopra"
+    result["quote_slide"] = 1
+
+    valid, reason = script_writer._validate_generated_cricket_draft(
+        result, "english", "The report says Gill is being assessed."
+    )
+    assert not valid
+    assert "verbatim" in reason
+
+    valid, reason = script_writer._validate_generated_cricket_draft(
+        result,
+        "english",
+        "Aakash Chopra said: Gill could return soon.",
+    )
+    assert valid, reason
+
+
+def test_cricket_validator_rejects_generic_ai_filler_in_any_slide():
+    result = valid_result()
+    result["script"][2]["voiceover"] = (
+        "The cricket world is buzzing as India reviews Gill's availability before selection."
+    )
+
+    valid, reason = script_writer.validate_cricket_script(result)
+    assert not valid
+    assert "generic editorial filler" in reason
+
+
 
 def test_writer_returns_valid_result_in_one_model_call(monkeypatch):
     calls = []
@@ -619,7 +715,7 @@ def test_writer_returns_valid_result_in_one_model_call(monkeypatch):
     result = script_writer.write_script(Story(), language="english")
 
     assert len(calls) == 1
-    assert result["provider_used"] == "openai/gpt-oss-120b"
+    assert result["provider_used"] == "openai/gpt-oss-20b"
 
 
 def test_writer_hides_invalid_first_draft_and_rewrites_once(monkeypatch):
@@ -640,8 +736,8 @@ def test_writer_hides_invalid_first_draft_and_rewrites_once(monkeypatch):
     result = script_writer.write_script(Story())
 
     assert len(calls) == 2
-    assert calls[0][0] == "openai/gpt-oss-120b"
-    assert calls[1][0] == "openai/gpt-oss-20b"
+    assert calls[0][0] == "openai/gpt-oss-20b"
+    assert calls[1][0] == "openai/gpt-oss-120b"
     assert "HIDDEN REWRITE" in calls[1][1]
     assert "Slide 1" in calls[1][1]
     assert script_writer._words(result["script"][0]["voiceover"]) < 14
@@ -666,10 +762,10 @@ def test_writer_recovers_slide_one_word_count_after_full_rewrite_misses(monkeypa
     result = script_writer.write_script(Story(), language="english")
 
     assert len(calls) == 4
-    assert calls[0][0] == "openai/gpt-oss-120b"
-    assert calls[1][0] == "openai/gpt-oss-20b"
-    assert calls[2][0] == "openai/gpt-oss-120b"
-    assert calls[3][0] == "openai/gpt-oss-20b"
+    assert calls[0][0] == "openai/gpt-oss-20b"
+    assert calls[1][0] == "openai/gpt-oss-120b"
+    assert calls[2][0] == "openai/gpt-oss-20b"
+    assert calls[3][0] == "openai/gpt-oss-120b"
     assert "TARGETED SLIDE 1 WORD-COUNT RECOVERY (ATTEMPT 1/2)" in calls[2][1]
     assert "TARGETED SLIDE 1 WORD-COUNT RECOVERY (ATTEMPT 2/2)" in calls[3][1]
     assert "14 words" in calls[2][1]
@@ -705,8 +801,8 @@ def test_writer_uses_second_model_when_primary_call_fails(monkeypatch):
     monkeypatch.setattr(script_writer, "_request", fake_request)
     result = script_writer.write_script(Story())
 
-    assert calls == ["openai/gpt-oss-120b", "openai/gpt-oss-20b"]
-    assert result["provider_used"] == "openai/gpt-oss-20b"
+    assert calls == ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
+    assert result["provider_used"] == "openai/gpt-oss-120b"
 
 
 def test_research_uses_primary_and_related_reports(monkeypatch):
@@ -983,7 +1079,7 @@ def test_writer_rewrite_prompt_carries_subject_name_rule(monkeypatch):
     result = script_writer.write_script(Story(), language="english")
 
     assert len(calls) == 2
-    assert result["provider_used"] == "openai/gpt-oss-20b"
+    assert result["provider_used"] == "openai/gpt-oss-120b"
 
 
 def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatch):
@@ -1004,14 +1100,14 @@ def test_writer_uses_fresh_backup_after_rate_limit_not_hidden_rewrite(monkeypatc
     result = script_writer.write_script(Story(), language="hindi")
 
     assert [call[0] for call in calls] == [
-        "openai/gpt-oss-120b",
         "openai/gpt-oss-20b",
         "openai/gpt-oss-120b",
+        "openai/gpt-oss-20b",
     ]
     assert "HIDDEN REWRITE" not in calls[1][1]
     assert "RECOVERY" not in calls[1][1]
     assert "MANDATORY INDIC TIMING RECOVERY (ATTEMPT 1/2)" in calls[2][1]
-    assert result["provider_used"] == "openai/gpt-oss-120b"
+    assert result["provider_used"] == "openai/gpt-oss-20b"
     assert result["script"][0]["voiceover"] == "Shubman Gill faces an injury scare."
 
 
@@ -1028,7 +1124,7 @@ def test_writer_stops_on_groq_400_without_spending_another_request(monkeypatch):
     with pytest.raises(RuntimeError, match="Groq rejected the Scriptwriter request.*json_schema_validation_error"):
         script_writer.write_script(Story(), language="hindi")
 
-    assert calls == ["openai/gpt-oss-120b"]
+    assert calls == ["openai/gpt-oss-20b"]
 
 
 def test_groq_strict_schema_omits_undocumented_array_length_keywords(monkeypatch):
