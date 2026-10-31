@@ -9,7 +9,10 @@ from concurrent.futures import ThreadPoolExecutor
 from io import BytesIO
 from dataclasses import replace
 
-import pillow_avif  # noqa: F401 - register AVIF decoding before Pillow opens images.
+try:
+    import pillow_avif  # noqa: F401 - register AVIF decoding before Pillow opens images.
+except ImportError:
+    pillow_avif = None  # Standard JPEG/PNG/WebP formats remain supported without the optional plugin.
 from PIL import Image, ImageOps
 from pathlib import Path
 
