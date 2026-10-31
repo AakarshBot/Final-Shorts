@@ -7250,15 +7250,14 @@ def render_live_top5():
             st.session_state.live_upload_hashtags = ""
             st.session_state.live_upload_comment = ""
 
-            from visual_fetcher import crawl_visuals
-            st.session_state.live_top5_visual_futures = {
-                number: _live_background_executor().submit(crawl_visuals, dict(story))
-                for number, story in enumerate(stories, 1)
-            }
+            st.session_state.live_top5_visual_futures = {}
+            st.session_state.live_top5_manual_visual_futures = {}
+            st.session_state.live_top5_real_visual_futures = {}
+            st.session_state.live_top5_ai_visual_futures = {}
             st.session_state.live_stage = "02 · Scriptwriter"
             st.session_state.live_pipeline_notice = {
                 "confirmed": "Top-5 selection confirmed",
-                "next": "Scriptwriter started. Automatic image scraping is running in parallel for all five stories.",
+                "next": "Scriptwriter started. Visual sources remain idle until you choose and run one.",
             }
             st.rerun()
         return
@@ -7570,13 +7569,35 @@ def render_live_top5():
             if option == "Option 1 · Automatic Scraper":
                 source_story = 1 if active_slide <= 2 else active_slide - 1
                 result = st.session_state.live_top5_visual_results.get(source_story) or {}
+                auto_future = st.session_state.live_top5_visual_futures.get(source_story)
+                if auto_future is not None and not auto_future.done():
+                    st.info("Automatic scrape is running in the background. You can switch slides and keep editing.")
+                elif not st.session_state.live_top5_visual_done.get(source_story):
+                    if st.button(
+                        f"Run automatic scrape for Story {source_story}",
+                        type="primary",
+                        width="stretch",
+                        key=f"live-top5-auto-run-{source_story}",
+                    ):
+                        from visual_fetcher import crawl_visuals
+                        st.session_state.live_top5_visual_results[source_story] = {
+                            "source": "automatic",
+                            "assets": [],
+                            "status": "running",
+                        }
+                        st.session_state.live_top5_visual_done[source_story] = False
+                        st.session_state.live_top5_visual_futures[source_story] = (
+                            _live_background_executor().submit(
+                                crawl_visuals,
+                                dict(stories[source_story - 1]),
+                            )
+                        )
+                        st.rerun(scope="app")
                 assets = list(result.get("assets") or [])
                 if result.get("error"):
                     st.error(result["error"])
-                st.caption(
-                    f'{len(assets)} images available · '
-                    f'{"Finished" if st.session_state.live_top5_visual_done.get(source_story) else "Scraping in background"}'
-                )
+                elif st.session_state.live_top5_visual_done.get(source_story):
+                    st.caption(f"{len(assets)} images available · automatic scrape complete")
                 result_key = "auto"
             elif option == "Option 2 · Manual Scraper":
                 with st.form(f"live-top5-manual-{active_slide}"):
