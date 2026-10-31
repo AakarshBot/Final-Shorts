@@ -213,3 +213,87 @@ def test_cricket_live_script_generation_reuses_approved_angle_research_off_threa
     )
     assert '"live_script_future": None' in reset
     assert '"live_script_status": "idle"' in reset
+
+
+
+def test_live_script_and_top5_visual_jobs_arm_the_completion_watcher():
+    dashboard = _section("def render_live_dashboard():", "def render_youtube_trends_topic_fetcher(")
+    assert '"live_script_future"' in dashboard
+    assert '"live_top5_visual_futures"' in dashboard
+    assert '"live_top5_manual_visual_futures"' in dashboard
+    assert '"live_top5_real_visual_futures"' in dashboard
+    assert '"live_top5_ai_visual_futures"' in dashboard
+
+    watcher = _section(
+        "@st.fragment(run_every=1.0)\ndef _watch_live_background_completion():",
+        "@st.fragment(run_every=1.0)\ndef _watch_test_visual_fetch_completion():",
+    )
+    assert '"live_script_future"' in watcher
+    assert "top5_futures" in watcher
+    assert "_poll_live_top5_visual_jobs()" in watcher
+
+
+def test_automatic_visual_scrapers_require_an_explicit_user_action():
+    test_auto = _section(
+        "def render_visuals_crawler():",
+        "def _render_manual_crawler():",
+    )
+    assert 'st.session_state.visual_status = "idle"' in test_auto
+    assert 'st.button("Start automatic scraper"' in test_auto
+    assert "_live_background_executor().submit(crawl_visuals, story)" in test_auto
+    assert "if story_key != st.session_state.get(\"visual_loaded_story\"):\n        existing_result" in test_auto
+
+    live_visual_stage = _section(
+        'if st.session_state.live_stage == "04 · Visuals + Render":',
+        'if st.session_state.live_stage == "05 · Upload":',
+    )
+    assert "_live_scrape_automatic_visuals()" not in live_visual_stage
+    live_fetcher = _section(
+        "def _render_two_pane_visual_workspace(",
+        "def _render_live_visuals(",
+    )
+    assert 'key="live-start-auto-visuals"' in live_fetcher
+
+
+def test_visual_pool_renders_a_bounded_page_and_exposes_every_page():
+    pool = _section(
+        "def _render_visual_asset_pool(",
+        "def _render_visual_board(",
+    )
+    assert "page_size = 12" in pool
+    assert "visible_assets = visible_assets[page_number * page_size:(page_number + 1) * page_size]" in pool
+    assert "Previous" in pool
+    assert "Next" in pool
+
+
+def test_completed_background_results_remain_discoverable_after_source_switch():
+    status = _section(
+        "def _render_visual_job_status(",
+        "@st.cache_data(max_entries=128",
+    )
+    assert '== "complete"' in status
+    assert "View {label} · {count}" in status
+    assert "st.session_state[option_key] = option" in status
+    assert "st.session_state[source_key] = option" in status
+
+
+def test_live_top5_visual_fetches_are_collected_without_blocking_the_visual_stage():
+    poller = _section(
+        "def _poll_live_top5_visual_jobs():",
+        "def _poll_live_background_jobs():",
+    )
+    assert "if future is None or not future.done():" in poller
+    assert "future.result()" in poller
+
+    stage = _section(
+        '    if stage == "04 · Visuals":',
+        '    if stage == "06 · Renderer":',
+    )
+    assert "future.result()" not in stage
+    assert "st.spinner(\"Finishing automatic image scraping…\")" not in stage
+
+    top5 = _section("def render_live_top5():", "def render_live_dashboard():")
+    assert '_live_background_executor().submit(search_images, query)' in top5
+    assert '_live_background_executor().submit(manual_crawl_visuals, query)' in top5
+    assert '_live_background_executor().submit(generate_images, query)' in top5
+    assert "for start in range(0, len(visible_assets), 4)" in top5
