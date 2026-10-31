@@ -404,7 +404,7 @@ def test_generation_prompts_cover_validator_requirements():
 
     assert "Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category" in cricket
     assert "a non-empty, crisp dashboard-only headline" in cricket
-    assert "at least one relevant hashtag" in cricket
+    assert "3–5 relevant single-token hashtags beginning with #" in cricket
     assert "quote_attribution and quote_slide from 1–5" in cricket
     assert "never greater than the generated slide count" in cricket
     assert "3–5 hashtags each beginning with # and containing no spaces" in universal
