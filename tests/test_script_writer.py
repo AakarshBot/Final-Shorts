@@ -848,6 +848,27 @@ def test_cricket_validator_rejects_editorial_filler_and_unverified_quotes():
     assert "not present verbatim" in reason
 
 
+
+def test_cricket_validator_enforces_distinct_titles_and_usable_hashtags():
+    duplicate_titles = valid_result()
+    duplicate_titles["titles"][2] = duplicate_titles["titles"][0]
+    valid, reason = script_writer.validate_cricket_script(duplicate_titles)
+    assert not valid
+    assert "3 distinct title candidates" in reason
+
+    incomplete_hashtags = valid_result()
+    incomplete_hashtags["hashtags"] = ["#Cricket", "#IndiaCricket"]
+    valid, reason = script_writer.validate_cricket_script(incomplete_hashtags)
+    assert not valid
+    assert "3–5 hashtags" in reason
+
+    malformed_hashtags = valid_result()
+    malformed_hashtags["hashtags"] = ["#Cricket", "#India Cricket", "#ShubmanGill"]
+    valid, reason = script_writer.validate_cricket_script(malformed_hashtags)
+    assert not valid
+    assert "single token beginning with #" in reason
+
+
 def test_cricket_validator_accepts_a_faithful_quote_from_research():
     result = valid_result()
     result["quote"] = "Virat Kohli is an outstanding player."
