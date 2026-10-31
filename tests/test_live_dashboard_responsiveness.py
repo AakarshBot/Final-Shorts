@@ -48,6 +48,39 @@ def test_live_final_render_uses_the_existing_renderer_contract_off_thread():
     assert 'key="live-approve-visuals",' not in visual_stage
 
 
+
+
+def test_standard_cricket_live_scriptwriter_runs_off_the_dashboard_thread():
+    scriptwriter = _section(
+        "def _render_live_script():",
+        "def _render_live_upload():",
+    )
+    assert "standard_cricket_live" in scriptwriter
+    assert "_live_background_executor().submit(" in scriptwriter
+    assert "_script_for_topic," in scriptwriter
+    assert 'st.session_state.get("live_script_status") == "running"' in scriptwriter
+    assert "Writing the Short from the approved angle in the background" in scriptwriter
+
+    poller = _section(
+        "def _poll_live_background_jobs(",
+        "@st.cache_data(max_entries=128, show_spinner=False)",
+    )
+    assert '("live_script_future", "live_script_status", "live_script_error"' in poller
+    assert 'if destination == "script":' in poller
+    assert "st.session_state.live_script_data = result" in poller
+
+    watcher = _section(
+        "@st.fragment(run_every=1.0)\ndef _watch_live_background_completion():",
+        "@st.fragment(run_every=1.0)\ndef _watch_test_visual_fetch_completion():",
+    )
+    assert '"live_script_future"' in watcher
+
+    cancel = _section(
+        "def _cancel_live_background_jobs(",
+        "def _live_render_final_short(",
+    )
+    assert '"live_script_future"' in cancel
+
 def test_live_render_does_not_approve_stale_visual_assignments():
     poller = _section(
         "def _poll_live_background_jobs(",
@@ -65,6 +98,7 @@ def test_live_background_jobs_avoid_global_timer_and_watch_render_locally():
         "def _poll_live_background_jobs(",
         "@st.cache_data(max_entries=128, show_spinner=False)",
     )
+    assert '"live_script_future"' in poller
     assert '"live_ai_image_future"' in poller
     assert '"live_render_future"' in poller
     assert "future.done()" in poller
@@ -121,6 +155,7 @@ def test_discarding_live_handoffs_cancels_queued_jobs_and_clears_render_state():
     )
     assert "future.cancel()" in cancel_helper
     assert "_cancel_live_background_jobs()" in reset
+    assert '"live_script_future": None' in reset
     assert '"live_ai_image_future": None' in reset
     assert '"live_render_future": None' in reset
     assert '"live_render_job_visual_snapshot": None' in reset

@@ -24,9 +24,9 @@ def valid_result(scene1="Shubman Gill faces an injury scare before India's ODI."
         "seo_description": "Shubman Gill's injury status ahead of India's next ODI.",
         "hashtags": ["#Cricket", "#ShubmanGill", "#IndiaCricket"],
         "comment": "Should India risk Gill in the next ODI?",
-        "quote": "Gill could be back soon.",
-        "quote_attribution": "Aakash Chopra",
-        "quote_slide": 1,
+        "quote": "",
+        "quote_attribution": "",
+        "quote_slide": 0,
         "script": [
             {
                 "voiceover": scene1,
@@ -404,7 +404,7 @@ def test_generation_prompts_cover_validator_requirements():
 
     assert "Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category" in cricket
     assert "a non-empty, crisp dashboard-only headline" in cricket
-    assert "at least one relevant hashtag" in cricket
+    assert "3–5 relevant single-token hashtags beginning with #" in cricket
     assert "quote_attribution and quote_slide from 1–5" in cricket
     assert "never greater than the generated slide count" in cricket
     assert "3–5 hashtags each beginning with # and containing no spaces" in universal
@@ -647,39 +647,24 @@ def test_writer_hides_invalid_first_draft_and_rewrites_once(monkeypatch):
     assert script_writer._words(result["script"][0]["voiceover"]) < 14
 
 
-def test_writer_recovers_slide_one_word_count_after_full_rewrite_misses(monkeypatch):
+def test_writer_stops_after_one_english_hidden_rewrite(monkeypatch):
     bad = valid_result(
         "Shubman Gill faces a fresh injury scare before India's crucial next ODI against England"
     )
-    good = valid_result("Shubman Gill's fitness remains uncertain before India's next ODI.")
-    good["headline"] = "This model-side metadata change must be ignored"
-    good["script"][1]["voiceover"] = "This unrelated slide change must be ignored."
-    drafts = [bad, bad, bad, good]
     calls = []
     monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
+    monkeypatch.setattr(script_writer, "_request", lambda model, prompt, story, schema=None: (
+        calls.append((model, prompt)) or json.loads(json.dumps(bad))
+    ))
 
-    def fake_request(model, prompt, story, schema=None):
-        calls.append((model, prompt, story))
-        return json.loads(json.dumps(drafts.pop(0)))
+    with pytest.raises(RuntimeError, match="single hidden rewrite"):
+        script_writer.write_script(Story(), language="english")
 
-    monkeypatch.setattr(script_writer, "_request", fake_request)
-    result = script_writer.write_script(Story(), language="english")
-
-    assert len(calls) == 4
+    assert len(calls) == 2
     assert calls[0][0] == "openai/gpt-oss-120b"
     assert calls[1][0] == "openai/gpt-oss-20b"
-    assert calls[2][0] == "openai/gpt-oss-120b"
-    assert calls[3][0] == "openai/gpt-oss-20b"
-    assert "TARGETED SLIDE 1 WORD-COUNT RECOVERY (ATTEMPT 1/2)" in calls[2][1]
-    assert "TARGETED SLIDE 1 WORD-COUNT RECOVERY (ATTEMPT 2/2)" in calls[3][1]
-    assert "14 words" in calls[2][1]
-    assert "CURRENT SCRIPT PACKAGE TO REPAIR" in calls[3][2]
-    assert result["headline"] == "Gill Injury Update"
-    assert result["script"][1]["voiceover"] == (
-        "Gill was struck during training and returned after treatment, while doctors review his recovery before selection."
-    )
-    assert script_writer._words(result["script"][0]["voiceover"]) <= 13
-
+    assert "HIDDEN REWRITE (ONE TARGETED RETRY)" in calls[1][1]
+    assert "TARGETED SLIDE 1 WORD-COUNT RECOVERY" not in calls[1][1]
 
 def test_writer_never_returns_second_invalid_draft(monkeypatch):
     monkeypatch.setattr(script_writer, "_research_story", lambda *args, **kwargs: "FULL STORY")
@@ -807,27 +792,94 @@ def test_suggest_cricket_story_angles(monkeypatch):
     assert result["source_evidence"] == "CRICKET RESEARCH EVIDENCE"
 
 
-def test_write_script_with_angle(monkeypatch):
+def test_write_script_with_angle_reuses_approved_research_without_extra_search(monkeypatch):
     calls = []
-    monkeypatch.setattr(script_writer, "_research_story", lambda story: "CRICKET STORY")
+    monkeypatch.setattr(
+        script_writer,
+        "_research_story",
+        lambda story: (_ for _ in ()).throw(AssertionError("approved research should be reused")),
+    )
+    monkeypatch.setattr(
+        script_writer,
+        "_supplement_research_for_angle",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("no post-angle search is allowed")),
+    )
 
     def fake_request(model, prompt, story, schema=None, **kwargs):
-        calls.append(prompt)
+        calls.append((model, prompt, story))
         return valid_result()
 
     monkeypatch.setattr(script_writer, "_request", fake_request)
+    evidence = "RESEARCH PACKET: the selected story and verified supporting reports."
+    angle = (
+        "Selection uncertainty: Will India wait for Gill's medical assessment? "
+        "Evidence basis: the selectors have deferred their decision pending the report."
+    )
     result = script_writer.write_script(
         Story(),
         language="english",
-        angle={"title": "Injury Scare", "description": "Focus on the injury."},
+        angle=angle,
+        research_source=evidence,
     )
 
-    assert "SELECTED EDITORIAL ANGLE (AUTHORITATIVE)" in calls[0]
-    assert "Injury Scare: Focus on the injury." in calls[0]
-    assert result["story_angle"] == "Injury Scare: Focus on the injury."
+    assert len(calls) == 1
+    assert calls[0][2] == evidence
+    assert "SELECTED EDITORIAL ANGLE (AUTHORITATIVE)" in calls[0][1]
+    assert "Evidence basis:" in calls[0][1]
+    assert result["story_angle"] == angle
+
+
+def test_cricket_validator_rejects_editorial_filler_and_unverified_quotes():
+    filler = valid_result("Here's what happened to Shubman Gill.")
+    valid, reason = script_writer.validate_cricket_script(filler, language="english")
+    assert not valid
+    assert "generic AI editorial phrase" in reason
+
+    unverified_quote = valid_result()
+    unverified_quote["quote"] = "I think Virat Kohli will finish on 98 centuries."
+    unverified_quote["quote_attribution"] = "Aakash Chopra"
+    unverified_quote["quote_slide"] = 1
+    valid, reason = script_writer.validate_cricket_script(
+        unverified_quote,
+        language="english",
+        source="The research packet contains no such quotation.",
+    )
+    assert not valid
+    assert "not present verbatim" in reason
 
 
 
+def test_cricket_validator_enforces_distinct_titles_and_usable_hashtags():
+    duplicate_titles = valid_result()
+    duplicate_titles["titles"][2] = duplicate_titles["titles"][0]
+    valid, reason = script_writer.validate_cricket_script(duplicate_titles)
+    assert not valid
+    assert "3 distinct title candidates" in reason
+
+    incomplete_hashtags = valid_result()
+    incomplete_hashtags["hashtags"] = ["#Cricket", "#IndiaCricket"]
+    valid, reason = script_writer.validate_cricket_script(incomplete_hashtags)
+    assert not valid
+    assert "3–5 hashtags" in reason
+
+    malformed_hashtags = valid_result()
+    malformed_hashtags["hashtags"] = ["#Cricket", "#India Cricket", "#ShubmanGill"]
+    valid, reason = script_writer.validate_cricket_script(malformed_hashtags)
+    assert not valid
+    assert "single token beginning with #" in reason
+
+
+def test_cricket_validator_accepts_a_faithful_quote_from_research():
+    result = valid_result()
+    result["quote"] = "Virat Kohli is an outstanding player."
+    result["quote_attribution"] = "Aakash Chopra"
+    result["quote_slide"] = 1
+    valid, reason = script_writer.validate_cricket_script(
+        result,
+        language="english",
+        source="Aakash Chopra said: Virat Kohli is an outstanding player.",
+    )
+    assert valid, reason
 
 def test_groq_http_errors_include_provider_detail_and_retry_after(monkeypatch):
     monkeypatch.setenv("GROQ_API_KEY", "test-key")
