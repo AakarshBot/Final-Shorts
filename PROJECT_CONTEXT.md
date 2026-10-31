@@ -506,13 +506,13 @@ Scope & Stream Dispatch:
 - **Top-5 Stories:** Generates a 6-slide package (Slide 1: hook headline ≤8 words with visual body copy; Slides 2–6: spoken headline + visual card body). Total spoken headline duration strictly under 30 seconds.
 
 Unified Generation & Validation Architecture:
-1. Gathers the primary source article and searches for up to two related current reports for factual grounding.
+1. Gathers the primary source article and up to two related current reports during angle discovery for factual grounding.
 2. For Deep-Dive and YT Trends, generates 3 distinct editorial angles first. The chosen angle guides script generation.
-3. Generates complete script draft with `openai/gpt-oss-120b`.
-4. Performs strict local validation (scene count, word limits, duration bounds, filler/bait prohibition).
-5. If validation fails, performs one hidden complete rewrite with `openai/gpt-oss-20b` targeting the exact validation error.
-6. If a non-Top-5 English Slide 1 still exceeds 13 counted words, performs up to two additional, bounded, count-aware repairs of Slide 1 only; all other script fields stay intact, and the same local validator must pass before the draft is returned.
-7. Never exposes an invalid draft to Manual QC.
+3. **Cricket only:** after angle approval, reuses that exact research packet; it does not launch another pair of angle-specific web searches. The normal script-generation request starts with `openai/gpt-oss-20b`; `openai/gpt-oss-120b` is reserved for provider fallback or a validation correction.
+4. **Universal and Top-5:** retain their existing model routing and research behaviour.
+5. Performs local validation before exposing a draft. Cricket additionally enforces 3–5 single-token hashtags, consistent quote/attribution/slide metadata, verbatim quote presence in the approved research packet, and the existing anti-filler patterns.
+6. On a Cricket validation failure, the 120B model performs one hidden complete rewrite targeting the exact failure. Existing English lead-length and Hindi/Telugu measured-timing recovery remains bounded and unchanged in its limits.
+7. Never exposes an invalid draft to Manual QC. Cricket Live runs the approved-angle script-generation request in the existing background worker pool; its normal completion watcher collects the handoff without blocking the dashboard.
 
 Publish Metadata Handoff:
 - Standard non-Top-5 `headline`: crisp dashboard-only metadata with no word-count limit; never attached to the Short. Top-5's six-slide package headlines and cards remain unchanged.
