@@ -509,7 +509,7 @@ Unified Generation & Validation Architecture:
 1. Researches the selected article and up to two related current reports during angle discovery. The approved packet is reused for Cricket Live script generation; no second angle-specific search pass runs after approval.
 2. For Deep-Dive and YT Trends, generates 3 distinct evidence-backed editorial angles first. The chosen angle and its evidence basis guide script generation.
 3. The Cricket writer makes one complete generation request with `openai/gpt-oss-120b` on the normal path. A second model is used only if the provider request fails.
-4. Cricket's local gate checks scene count, subject naming, word limits, prohibited editorial filler, required visual metadata, and quote attribution/slide/source fidelity.
+4. Cricket's local gate checks scene count, subject naming, word limits, prohibited editorial filler, three distinct titles, 3–5 single-token hashtags, required visual metadata, and quote attribution/slide/source fidelity.
 5. A returned Cricket draft that fails validation receives one complete hidden rewrite targeting the exact failure. English generation stops if that rewrite still fails; it does not run extra Slide 1 micro-repairs.
 6. Hindi/Telugu retain their separate bounded timing recovery because their measured audio limits must still be met.
 7. Cricket Live submits the approved-angle write to the existing Live background executor. The dashboard collects the finished result through its existing job monitor; Test, YT Trends, Niche Sports and Top-5 keep their existing execution flow.
