@@ -74,6 +74,7 @@ def _download(url: str, meta: dict[str, Any]) -> dict[str, Any] | None:
         urls_to_try.append(fallback)
 
     for candidate_url in urls_to_try:
+        response = None
         try:
             response = _get_session().get(
                 str(candidate_url),
@@ -127,8 +128,12 @@ def _download(url: str, meta: dict[str, Any]) -> dict[str, Any] | None:
                 "height": height,
                 "title": str(meta.get("title") or ""),
             }
-        except requests.RequestException:
+        except (requests.RequestException, TypeError, ValueError):
             continue
+        finally:
+            close = getattr(response, "close", None)
+            if callable(close):
+                close()
     return None
 
 
