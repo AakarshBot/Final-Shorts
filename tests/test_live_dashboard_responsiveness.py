@@ -363,3 +363,29 @@ def test_all_test_top5_visual_sources_submit_background_jobs():
     assert "manual_crawl_visuals(query)" not in stage
     assert "search_images(query)" not in stage
     assert "generate_images(query)" not in stage
+
+def test_test_standard_visual_forms_prevent_duplicate_background_jobs():
+    manual = _section(
+        "def _render_manual_crawler():",
+        "def _render_manual_real_images():",
+    )
+    real = _section(
+        "def _render_manual_real_images():",
+        "def _render_manual_ai_images():",
+    )
+    ai = _section(
+        "def _render_manual_ai_images():",
+        "@st.fragment\\ndef render_visuals():",
+    )
+
+    assert 'disabled=st.session_state.get("manual_visual_status") == "running"' in manual
+    assert 'disabled=st.session_state.get("real_visual_status") == "running"' in real
+    assert 'disabled=st.session_state.get("ai_visual_status") == "running"' in ai
+
+    # Live's standard lanes already enforce the same single-flight behavior.
+    live_workspace = _section(
+        "def _render_two_pane_visual_workspace(",
+        "def _render_live_visuals(",
+    )
+    assert 'disabled=st.session_state.get("live_manual_visual_status") == "running"' in live_workspace
+    assert 'disabled=st.session_state.get("live_real_image_status") == "running"' in live_workspace
