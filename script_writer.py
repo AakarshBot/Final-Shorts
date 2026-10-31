@@ -356,7 +356,7 @@ VIRAL PACKAGING SUITE
 - Every title must be accurate, concise, punchy, and clearly different in angle.
 - Put the most important words first; avoid generic filler such as "latest update", "breaking news", "big update" or "sports update".
 - `seo_description`: concise and story-specific summary optimized for YouTube Shorts algorithm.
-- `hashtags`: 3–5 relevant story-specific hashtags including player, team, and tournament.
+- `hashtags`: 3–5 relevant, single-token story-specific hashtags, each beginning with # and covering the player, team, or tournament where supported.
 - `comment`: one provocative, high-engagement pinned question designed to ignite debate in the comments. Tailor it specifically to the real tactical or ethical dilemma in the story without using canned bot phrases.
 - `quote`: the strongest meaningful direct quote from the research, copied faithfully, when one materially adds to the story. Return an empty string when there is no worthwhile quote.
 - `quote_attribution`: the exact speaker/source of `quote`, or an empty string when there is no quote.
@@ -374,7 +374,7 @@ GENERATION CHECKLIST — SATISFY THE EXISTING SCRIPT CHECKS BEFORE RETURNING JSO
 - Return 3–5 non-empty spoken slides. Each slide must include non-empty primary_entity, visual_intent, specific_search_prompt, and sport_or_topic_category.
 - For English, keep Slide 1 to 13 words or fewer; for Hindi/Telugu, keep the lead concise and let the measured 5.2-second audio check enforce the limit.
 - Keep subject_name non-empty, in the same script/spelling used by the voiceover, and present verbatim in at least one spoken voiceover.
-- Include a non-empty, crisp dashboard-only headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, at least one relevant hashtag, and a non-empty public comment.
+- Include a non-empty, crisp dashboard-only headline, exactly three non-empty and distinct title candidates, a non-empty story-specific SEO description, 3–5 relevant single-token hashtags beginning with #, and a non-empty public comment.
 - Keep the full narration concise enough to fit under 30 seconds without padding; include all important supported facts across the generated slides.
 - quote must be copied exactly from source evidence or be empty. Provide an exact quote_attribution and quote_slide from 1–5, never greater than the generated slide count, when quote is present; when quote is empty, return an empty quote_attribution and quote_slide 0.
 - Make every field complete in the first JSON returned. Before output, check the actual field values, not only the JSON shape.
@@ -2139,13 +2139,21 @@ def validate_cricket_script(
     titles = result.get("titles")
     if not isinstance(titles, list) or len(titles) != 3 or not all(_clean(item) for item in titles):
         return False, "The Cricket Scriptwriter must produce exactly 3 titles."
+    title_keys = [_normalise_name(item) for item in titles]
+    if len(set(title_keys)) != 3:
+        return False, "The Cricket Scriptwriter must produce 3 distinct title candidates."
 
     if not _clean(result.get("seo_description")):
         return False, "The Scriptwriter must produce a description."
 
     hashtags = result.get("hashtags")
-    if not isinstance(hashtags, list) or not hashtags or not all(_clean(item) for item in hashtags):
-        return False, "The Scriptwriter must produce hashtags."
+    if not isinstance(hashtags, list) or not MIN_HASHTAGS <= len(hashtags) <= MAX_HASHTAGS:
+        return False, f"The Scriptwriter must produce {MIN_HASHTAGS}–{MAX_HASHTAGS} hashtags."
+    if any(
+        not _clean(item).startswith("#") or any(char.isspace() for char in _clean(item))
+        for item in hashtags
+    ):
+        return False, "Every hashtag must be a single token beginning with #."
 
     if not _clean(result.get("comment")):
         return False, "The Scriptwriter must produce the upload comment."
