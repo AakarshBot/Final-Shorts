@@ -7449,26 +7449,17 @@ def render_live_top5():
                     + (f"reference ready ({live_top5_reference.name})" if live_top5_reference_ready
                        else f"missing {live_top5_reference.name} — place it in the factory root")
                 )
+            if st.session_state.live_top5_audio_status == "running":
+                st.info("Top-5 audio is being generated in the background. You can navigate to other stages.")
+                return
+            if st.session_state.live_top5_audio_error:
+                st.error(st.session_state.live_top5_audio_error)
             if st.button(
                 "Generate Top-5 Audio",
                 type="primary",
                 width="stretch",
                 key="live-top5-generate-audio",
                 disabled=is_live_top5_chatterbox and not live_top5_reference_ready,
-            ):
-                if st.session_state.live_top5_audio_status == "running":
-                    st.info("Top-5 audio is being generated in the background. You can navigate to other stages.")
-                    return
-                if st.session_state.live_top5_audio_error:
-                    st.error(st.session_state.live_top5_audio_error)
-                st.session_state.live_top5_audio_error = ""
-                st.session_state.live_top5_audio_status = "idle"
-            if st.button(
-                "Generate Top-5 Audio",
-                type="primary",
-                width="stretch",
-                key="live-top5-generate-audio",
-                disabled=(is_live_top5_chatterbox and not live_top5_reference_ready),
             ):
                 st.session_state.live_top5_audio_error = ""
                 st.session_state.live_top5_audio_status = "running"
