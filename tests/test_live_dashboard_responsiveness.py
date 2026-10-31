@@ -297,3 +297,69 @@ def test_live_top5_visual_fetches_are_collected_without_blocking_the_visual_stag
     assert '_live_background_executor().submit(manual_crawl_visuals, query)' in top5
     assert '_live_background_executor().submit(generate_images, query)' in top5
     assert "for start in range(0, len(visible_assets), 4)" in top5
+
+
+
+def test_live_top5_script_audio_and_renderer_use_the_dashboard_job_watcher():
+    poller = _section(
+        "def _poll_live_background_jobs():",
+        "@st.fragment(run_every=1.0)\ndef _watch_live_background_completion():",
+    )
+    for future_key in (
+        "live_top5_script_future",
+        "live_top5_audio_future",
+        "live_top5_render_future",
+    ):
+        assert future_key in poller
+    for destination in ("top5_script", "top5_audio", "top5_render"):
+        assert f'destination == "{destination}"' in poller
+
+    watcher = _section(
+        "@st.fragment(run_every=1.0)\ndef _watch_live_background_completion():",
+        "@st.fragment(run_every=1.0)\ndef _watch_test_visual_fetch_completion():",
+    )
+    for future_key in (
+        "live_top5_script_future",
+        "live_top5_audio_future",
+        "live_top5_render_future",
+    ):
+        assert future_key in watcher
+
+    top5 = _section("def render_live_top5():", "def render_live_dashboard():")
+    assert "generate_top5_script," in top5
+    assert "generate_top5_audio," in top5
+    assert "_live_render_final_short," in top5
+    assert "with st.spinner(\"Generating the six spoken Top-5 lines…\")" not in top5
+    assert "with st.spinner(\"Rendering the final Top-5 Short…\")" not in top5
+
+
+def test_test_top5_visual_jobs_are_collected_from_the_test_dashboard_root():
+    root = _section(
+        'elif st.session_state.app_mode == "test":',
+        'elif st.session_state.app_mode == "live":',
+    )
+    assert "_poll_test_visual_jobs()" in root
+    assert '"test_top5_visual_jobs"' in root
+    assert '"test_top5_visual_playground_job"' in root
+    assert "_watch_test_visual_fetch_completion()" in root
+
+    poller = _section(
+        "def _poll_test_top5_visual_jobs():",
+        "@st.fragment(run_every=1.0)\ndef _watch_test_visual_fetch_completion():",
+    )
+    assert "if future is None or not future.done():" in poller
+    assert "results[int(slide_number)] = merged" in poller
+    assert "test_top5_visual_playground_status" in poller
+
+
+def test_all_test_top5_visual_sources_submit_background_jobs():
+    stage = _section(
+        'elif line_name == "Top-5" and stage == "04 · Visuals":',
+        'elif line_name == "Top-5" and stage == "06 · Renderer":',
+    )
+    for function in ("crawl_visuals", "manual_crawl_visuals", "search_images", "generate_images"):
+        assert f"_live_background_executor().submit({function}" in stage
+    assert "crawl_visuals(story_payload)" not in stage
+    assert "manual_crawl_visuals(query)" not in stage
+    assert "search_images(query)" not in stage
+    assert "generate_images(query)" not in stage
