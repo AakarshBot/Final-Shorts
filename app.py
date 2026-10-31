@@ -10254,6 +10254,7 @@ def _render_manual_crawler():
             "Run manual scrape",
             type="primary",
             width="stretch",
+            disabled=st.session_state.get("manual_visual_status") == "running",
         )
 
     if scrape:
@@ -10322,6 +10323,7 @@ def _render_manual_real_images():
             "Search real images",
             type="primary",
             width="stretch",
+            disabled=st.session_state.get("real_visual_status") == "running",
         )
 
     if search:
@@ -10394,6 +10396,7 @@ def _render_manual_ai_images():
             "Generate images",
             type="primary",
             width="stretch",
+            disabled=st.session_state.get("ai_visual_status") == "running",
         )
 
     if generate:
