@@ -375,7 +375,7 @@ def test_test_standard_visual_forms_prevent_duplicate_background_jobs():
     )
     ai = _section(
         "def _render_manual_ai_images():",
-        "@st.fragment\\ndef render_visuals():",
+        "def render_visuals():",
     )
 
     assert 'disabled=st.session_state.get("manual_visual_status") == "running"' in manual
