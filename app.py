@@ -6432,7 +6432,7 @@ def _render_live_script():
                     angle_data = angles[angle_index]
                     evidence_basis = str(angle_data.get("evidence_basis") or "").strip()
                     if evidence_basis and "Evidence basis:" not in selected_angle:
-                        selected_angle += "\\nEvidence basis: " + evidence_basis
+                        selected_angle += "\nEvidence basis: " + evidence_basis
             st.session_state.live_script_error = ""
             if standard_cricket_live:
                 st.session_state.live_script_data = None
