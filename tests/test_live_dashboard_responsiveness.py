@@ -173,3 +173,43 @@ def test_live_visual_layout_clicks_do_not_force_a_second_dashboard_run():
     studio_select = asset_pool[studio_button_start:studio_button_end]
     assert 'st.toast("Loaded image into Card Studio!"' in studio_select
     assert "st.rerun()" not in studio_select
+
+def test_cricket_live_script_generation_reuses_approved_angle_research_off_thread():
+    script_stage = _section(
+        "def _render_live_script():",
+        "def _render_live_upload():",
+    )
+    assert "if not universal_story:" in script_stage
+    assert "_live_background_executor().submit(" in script_stage
+    assert "_script_for_topic," in script_stage
+    assert "research_source=st.session_state.live_universal_angle_source" in script_stage
+    assert "Evidence basis from the approved research:" in script_stage
+    assert 'st.session_state.live_script_status = "running"' in script_stage
+    assert "Writing the Short in the background." in script_stage
+    # YT Trends and Niche Sports retain their existing synchronous generation path.
+    assert "_live_generate_script(" in script_stage
+    assert "else:" in script_stage
+
+    poller = _section(
+        "def _poll_live_background_jobs():",
+        "@st.cache_data(max_entries=128",
+    )
+    assert '"live_script_future"' in poller
+    assert '"live_script_status"' in poller
+    assert '"live_script_job_story_key"' in poller
+    assert 'if destination == "script":' in poller
+    assert "st.session_state.live_script_data = result" in poller
+
+    live_watcher = _section(
+        "@st.fragment(run_every=1.0)\ndef _watch_live_background_completion():",
+        "@st.fragment(run_every=1.0)\ndef _watch_test_visual_fetch_completion():",
+    )
+    assert '"live_script_future"' in live_watcher
+    assert "_poll_live_background_jobs()" in live_watcher
+
+    reset = _section(
+        "def _live_reset_downstream():",
+        "def _story_payload(",
+    )
+    assert '"live_script_future": None' in reset
+    assert '"live_script_status": "idle"' in reset
